@@ -1,0 +1,127 @@
+SpawnableEntityCollection:
+	public 
+
+EntitySerialisationRegistry.StartSynchronisingEntry, at beginning:
+
+	try
+	{
+		GameObject gameObject = entry.m_GameObject;
+		if (Injector.Server.CurrentFrameData.EntityRegistry == null)
+		{
+			Injector.Server.CurrentFrameData.EntityRegistry = new List<EntityRegistryData>();
+		}
+		EntityRegistryData entityRegistryData = new EntityRegistryData();
+		entityRegistryData.EntityId = (int)EntitySerialisationRegistry.GetId(gameObject);
+		entityRegistryData.Name = gameObject.name;
+		entityRegistryData.Pos = new Point
+		{
+			X = (double)gameObject.transform.position.x,
+			Y = (double)gameObject.transform.position.y,
+			Z = (double)gameObject.transform.position.z
+		};
+		entityRegistryData.SyncEntityTypes = new List<int>();
+		entityRegistryData.Components = (from c in gameObject.GetComponents<Component>()
+		select c.GetType().Name).ToList<string>();
+		if (gameObject.GetComponent<SpawnableEntityCollection>() != null)
+		{
+			SpawnableEntityCollection component = gameObject.GetComponent<SpawnableEntityCollection>();
+			entityRegistryData.SpawnNames = (from s in component.m_spawnables
+			select s.name).ToList<string>();
+		}
+		for (int i = 0; i < entry.m_ServerSynchronisedComponents.Count; i++)
+		{
+			entityRegistryData.SyncEntityTypes.Add((int)entry.m_ServerSynchronisedComponents._items[i].GetEntityType());
+		}
+		EntityRegistryData item = entityRegistryData;
+		Injector.Server.CurrentFrameData.EntityRegistry.Add(item);
+	}
+	catch (Exception ex)
+	{
+		Console.WriteLine(ex.Message);
+	}
+
+AudioManager, insert:
+
+	public void LateUpdate()
+	{
+		Injector.Server.CommitFrameIfNotCommitted();
+	}
+
+AudioManager, at beginning:
+
+	InputData currentInput = Injector.Server.CurrentInput;
+	if (Injector.Server.CurrentFrameData.Items == null)
+	{
+		Injector.Server.CurrentFrameData.Items = new Dictionary<int, ItemData>();
+	}
+	FastList<EntitySerialisationEntry> list = EntitySerialisationRegistry.m_EntitiesList;
+	for (int i = 0; i < list.Count; i++)
+	{
+		EntitySerialisationEntry entitySerialisationEntry = list._items[i];
+		Vector3 pos = entitySerialisationEntry.m_GameObject.transform.position;
+		Injector.Server.CurrentFrameData.Items[(int)entitySerialisationEntry.m_Header.m_uEntityID] = new ItemData
+		{
+			Pos = new Point
+			{
+				X = (double)pos.x,
+				Y = (double)pos.y,
+				Z = (double)pos.z
+			}
+		};
+	}
+
+ClientPlayerControlsImpl_Default.Update_Movement, after "float num2 = ..."
+
+    int id = this.m_controls.GetComponent<HpmvIdentifiable>().id;
+	Dictionary<int, OneInputData> input = Injector.Server.CurrentInput.Input;
+	if (input != null && input.ContainsKey(id))
+	{
+		OneInputData oneInputData = input[id];
+		if (oneInputData.Pad != null)
+		{
+			num += (float)oneInputData.Pad.X;
+			num2 += (float)oneInputData.Pad.Y;
+		}
+	}
+
+PlayerControls.Update, at beginning:
+
+	HpmvIdentifiable component = base.gameObject.GetComponent<HpmvIdentifiable>();
+	Injector.Server.CurrentInput.ToString();
+	if (Injector.Server.CurrentFrameData.CharPos == null)
+	{
+		Injector.Server.CurrentFrameData.CharPos = new Dictionary<int, CharPositionData>();
+	}
+	Injector.Server.CurrentFrameData.CharPos[component.id] = new CharPositionData
+	{
+		Pos = new Point
+		{
+			X = (double)base.gameObject.transform.position.x,
+			Y = (double)base.gameObject.transform.position.y,
+			Z = (double)base.gameObject.transform.position.z
+		}
+	};
+
+Server.BroadcastMessageToAll, at beginning:
+
+	if (Injector.Server.CurrentFrameData.ServerMessages == null)
+	{
+		Injector.Server.CurrentFrameData.ServerMessages = new List<ServerMessage>();
+	}
+	FastList<byte> fastList = new FastList<byte>();
+	BitStreamWriter writer = new BitStreamWriter(fastList);
+	message.Serialise(writer);
+	Injector.Server.CurrentFrameData.ServerMessages.Add(new ServerMessage
+	{
+		Type = (int)type,
+		Message = fastList.ToArray()
+	});
+
+PlayerControls.Start, at end
+
+	if (base.gameObject.GetComponent<HpmvIdentifiable>() == null)
+	{
+		base.gameObject.AddComponent<HpmvIdentifiable>();
+		Console.WriteLine("Added ID " + base.gameObject.GetComponent<HpmvIdentifiable>().id);
+	}
+
