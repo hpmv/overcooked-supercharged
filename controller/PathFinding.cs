@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using ClipperLib;
 using Dijkstra.NET.Graph;
 using Dijkstra.NET.ShortestPath;
@@ -13,7 +15,7 @@ namespace Hpmv {
             return (int) Math.Sqrt(xdiff * xdiff + ydiff * ydiff);
         }
 
-        public static List<IntPoint> ShortestPathAroundObstacles(List<List<IntPoint>> obstacles, IntPoint src, IntPoint dest) {
+        public static List<IntPoint> ShortestPathAroundObstacles(List<List<IntPoint>> obstacles, IntPoint src, List<IntPoint> dests) {
             List<int> belongingObstacle = new List<int>();
             List<HashSet<int>> alreadyAdded = new List<HashSet<int>>();
             var vertices = new List<IntPoint>();
@@ -25,11 +27,13 @@ namespace Hpmv {
                 }
             }
             vertices.Add(src);
-            vertices.Add(dest);
             belongingObstacle.Add(-1);
-            belongingObstacle.Add(-2);
             alreadyAdded.Add(new HashSet<int>());
-            alreadyAdded.Add(new HashSet<int>());
+            foreach (var dest in dests) {
+                vertices.Add(dest);
+                belongingObstacle.Add(-2);
+                alreadyAdded.Add(new HashSet<int>());
+            }
 
             var graph = new Graph<int, int>();
             for (int i = 0; i < vertices.Count; i++) {
@@ -79,12 +83,36 @@ namespace Hpmv {
                 }
             }
 
-            var result = graph.Dijkstra((uint) (vertices.Count - 2), (uint) (vertices.Count - 1));
+            var result = Enumerable.Range(vertices.Count - dests.Count, dests.Count).Select(i => {
+                return graph.Dijkstra((uint) (vertices.Count - dests.Count - 1), (uint) i);
+            }).OrderBy(r => {
+                if (!r.IsFounded) {
+                    return double.MaxValue;
+                }
+                double dist = 0;
+                IntPoint prev = new IntPoint(0, 0);
+                bool first = true;
+                foreach (uint u in r.GetPath()) {
+                    if (!first) {
+                        dist += DistanceApprox(vertices[(int) u], prev);
+                    }
+                    first = false;
+                    prev = vertices[(int) u];
+                }
+                return dist;
+            }).First();
             var pointResult = new List<IntPoint>();
             foreach (uint u in result.GetPath()) {
                 pointResult.Add(vertices[(int) u]);
             }
             return pointResult;
+        }
+
+        public static bool IsInside(IntPoint point, List<List<IntPoint>> poly) {
+            if (poly.Count > 1) {
+                throw new NotImplementedException("Does not yet support multiple polygons");
+            }
+            return Clipper.PointInPolygon(point, poly[0]) != 0;
         }
     }
 }

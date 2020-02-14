@@ -36,7 +36,7 @@ namespace controller.Pages {
             };
             var start = new IntPoint(100, 50);
             var end = new IntPoint(200, 530);
-            var path = PathFinding.ShortestPathAroundObstacles(obstacles, start, end);
+            var path = PathFinding.ShortestPathAroundObstacles(obstacles, start, new List<IntPoint> { end });
 
             await _context.BeginBatchAsync();
             await _context.SetStrokeStyleAsync("1px solid gray");

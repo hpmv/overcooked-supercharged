@@ -33,5 +33,13 @@ namespace Hpmv {
         public static Vector3 ToXZVector3(this(double x, double y) d) {
             return new Vector3((float) d.x, 0, (float) d.y);
         }
+
+        public static Vector3 ToXZVector3(this Vector2 d) {
+            return new Vector3(d.X, 0, d.Y);
+        }
+
+        public static Vector2 XZ(this Vector3 vector) {
+            return new Vector2(vector.X, vector.Z);
+        }
     }
 }

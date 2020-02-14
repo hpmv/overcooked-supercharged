@@ -72,9 +72,10 @@ namespace controller.Pages {
             CaptureMap parent;
 
             public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+                // TODO: fix.
                 await parent.InvokeAsync(() => {
                     foreach (var pos in output.CharPos) {
-                        parent.points.Add(pos.Value.Pos);
+                        // parent.points.Add(pos.Value.Pos);
                     }
                 });
                 return new InputData();

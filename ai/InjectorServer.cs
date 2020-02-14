@@ -42,10 +42,13 @@ namespace Hpmv {
                 OutputData output = null;
                 try {
                     var time = DateTime.Now;
+                    if (this.output.PeekSize() > 1) {
+                        Console.WriteLine("WEIRD!!!! Output queue size: " + this.output.PeekSize());
+                    }
                     output = this.output.Dequeue(TimeSpan.FromSeconds(4));
                     var delta = DateTime.Now - time;
                     if (delta.TotalMilliseconds > 10) {
-                        Console.WriteLine("Time taken to wait for output: " + delta);
+                        //Console.WriteLine("Time taken to wait for output: " + delta);
                     }
                 } catch (Exception) {
                     continue;
@@ -69,7 +72,7 @@ namespace Hpmv {
                     }
                     var delta = DateTime.Now - time;
                     if (delta.TotalMilliseconds > 2) {
-                        Console.WriteLine("Time taken to get rpc response: " + delta);
+                        //Console.WriteLine("Time taken to get rpc response: " + delta);
                     }
                 } catch (Exception e) {
                     Console.WriteLine(e.Message + "\n" + e.StackTrace);
@@ -88,11 +91,18 @@ namespace Hpmv {
                 if (currentInput == null) {
                     committed = false;
                     try {
+                        if (input.PeekSize() > 1) {
+                            Console.WriteLine("WEIRD!!!! Input queue size: " + input.PeekSize());
+                        }
                         currentInput = input.Dequeue(TimeSpan.FromSeconds(1));
                     } catch (Exception e) {
                         Console.WriteLine("Timeout: " + e.Message + "\n" + e.StackTrace);
                         currentInput = new InputData();
                     }
+                }
+                if (currentInput.ResetOrderSeed != 0) {
+                    Console.WriteLine("Resetting random seed to " + currentInput.ResetOrderSeed);
+                    OrderRandom.myRandom = new Random(currentInput.ResetOrderSeed);
                 }
                 return currentInput;
             }

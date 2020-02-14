@@ -3,15 +3,12 @@ using System.Collections.Generic;
 using System.Threading;
 
 namespace Hpmv {
-    class BlockingQueue<T>
-    {
+    class BlockingQueue<T> {
         private int _count = 0;
         private Queue<T> _queue = new Queue<T>();
 
-        public T Dequeue(TimeSpan timeout)
-        {
-            lock (_queue)
-            {
+        public T Dequeue(TimeSpan timeout) {
+            lock(_queue) {
                 while (_count <= 0) {
                     if (!Monitor.Wait(_queue, timeout)) {
                         throw new TimeoutException("Timeout");
@@ -22,15 +19,17 @@ namespace Hpmv {
             }
         }
 
-        public void Enqueue(T data)
-        {
+        public void Enqueue(T data) {
             if (data == null) throw new ArgumentNullException("data");
-            lock (_queue)
-            {
+            lock(_queue) {
                 _queue.Enqueue(data);
                 _count++;
                 Monitor.Pulse(_queue);
             }
+        }
+
+        public int PeekSize() {
+            return _queue.Count;
         }
     }
 }

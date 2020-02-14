@@ -65,8 +65,10 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntitySynchronisation, () => new EntitySynchronisationMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityEvent, () => new EntityEventMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.SpawnEntity, () => new SpawnEntityMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.SpawnPhysicalAttachment, () => new SpawnPhysicalAttachmentMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntity, () => new DestroyEntityMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntities, () => new DestroyEntitiesMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LevelLoadByIndex, () => new LevelLoadByIndexMessage());
         }
 
         public static Serialisable Deserialize(int type, byte[] bytes) {

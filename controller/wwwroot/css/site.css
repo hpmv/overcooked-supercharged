@@ -253,3 +253,53 @@ app {
 .level-visualization {
     position: relative;
 }
+
+.one-action {
+    color: #aaa;
+}
+
+.unstarted-action {
+    color: black;
+}
+
+.active-action {
+    color: red;
+}
+
+.one-action-drawing {
+    position: absolute;
+    font-size: 8px;
+    text-align: center;
+    width: 20px;
+}
+
+.one-action-chef--1 {
+    left: 10px;
+}
+
+.one-action-chef-97 {
+    left: 40px;
+}
+
+.one-action-chef-103 {
+    left: 70px;
+}
+
+.one-action-type-GotoAction {
+    background-color: rgb(255, 252, 235);
+    border: 1px solid rgb(255, 231, 127);
+}
+
+.one-action-type-InteractAction {
+    background-color: rgb(237, 255, 235);
+    border: 1px solid rgb(138, 255, 127);
+}
+
+.one-action-type-ThrowAction {
+    background-color: rgb(235, 241, 255);
+    border: 1px solid rgb(127, 157, 255);
+}
+.one-action-type-WaitForSpawnAction {
+    background-color: rgb(255, 235, 254);
+    border: 1px solid rgb(255, 127, 255);
+}

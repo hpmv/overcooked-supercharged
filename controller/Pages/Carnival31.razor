@@ -3,13 +3,60 @@
 
 <div class="level-visualization">
 <BECanvas Width="500" Height="500" @ref="_canvasReference" ></BECanvas>
+
+
+
+<div style="position: relative">
+    @if (handler.CurrentState != null) {
+    @foreach (var action in handler.CurrentState.States) {
+        @if (action.Duration != null) {
+            <div class="one-action-drawing one-action-chef-@(action.ChefId) one-action-type-@(action.Action.GetType().Name)" 
+             style="top: @(TimeToPx(action.StartTime.Value))px; height: @(TimeToPx(action.Duration.Value))px">
+                @(action.ActionId)</div>
+        }
+    }
+}
+</div>
+
+<div style="font-weight: bold; margin-left: 100px">
+@if (handler.CurrentState != null) {
+    @foreach (var action in handler.CurrentState.States) {
+        <div class="one-action @(action.IsActive ? "active-action" : "") @(action.StartTime == null ? "unstarted-action" : "")">[@(action.ActionId)] @(action.Description)</div>
+    }
+}
+</div>
+
+@* 
+@foreach (var chef in handler.entities.chefs) {
+    <div class="entity-box">
+        <div class="entity-title">@(chef.Key)</div>
+        <div class="entity-data-list">
+            <div class="entity-data">
+                <div class="entity-key">Highlighted for pickup</div>
+                <div class="entity-value">@(chef.Value.highlightedForPickup)</div>
+            </div>
+            <div class="entity-data">
+                <div class="entity-key">Highlighted for use</div>
+                <div class="entity-value">@(chef.Value.highlightedForUse)</div>
+            </div>
+            <div class="entity-data">
+                <div class="entity-key">Highlighted for placement</div>
+                <div class="entity-value">@(chef.Value.highlightedForPlacement)</div>
+            </div>
+        </div>
+    </div>
+} *@
+
 @foreach (var entity in handler.entities.entities) {
     <div class="entity-box">
-        <div class="entity-title">@(entity.Key)</div>
+        <div class="entity-title">@(entity.Key)
+            <br/>
+            @(entity.Value.spawnSourceEntityId == -1 ? "" : "^ " + entity.Value.spawnSourceEntityId)
+        </div>
         <div class="entity-data-list">
             <div class="entity-data">
                 <div class="entity-key">(Name & Pos)</div>
-                <div class="entity-value">@(entity.Value.name) (@(entity.Value.pos.x), @(entity.Value.pos.y), @(entity.Value.pos.z))</div>
+                <div class="entity-value">@(entity.Value.name) (@(entity.Value.pos.X), @(entity.Value.pos.Y), @(entity.Value.pos.Z))</div>
             </div>
             @foreach (var data in entity.Value.data) {
                 if (data.Key == EntityType.WorldObject) continue;
@@ -24,7 +71,7 @@
 
 
 @foreach (var entity in handler.entities.entities) {
-    <div class="entity-drawing-anchor" style="left: @(Render(entity.Value.pos.ToNumericsVector()).X)px; top:  @(Render(entity.Value.pos.ToNumericsVector()).Y)px;">
+    <div class="entity-drawing-anchor" style="left: @(Render(entity.Value.pos).X)px; top:  @(Render(entity.Value.pos).Y)px;">
         <div class="entity-drawing-holder">
             <div class="entity-drawing-content">
                 @(entity.Value.entityId)

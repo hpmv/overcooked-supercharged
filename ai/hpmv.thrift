@@ -17,17 +17,23 @@ struct OneInputData {
     2: bool pickDown,
     3: bool chopDown,
     4: bool dashDown,
+    5: bool throwDown,
+    6: bool throwUp,
 }
 
 struct InputData {
     1: map<i32, OneInputData> input,
+    2: i32 resetOrderSeed,
+    3: optional double gameSpeed,
 }
 
 struct CharPositionData {
-    1: Point pos,
-    2: double orientation,
+    1: Point forwardDirection,
     3: optional i32 attachment,
-    4: optional i32 highlighted,
+    4: optional i32 highlightedForPickup,
+    5: optional i32 highlightedForUse,
+    6: optional i32 highlightedForPlacement,
+    7: double dashTimer,
 }
 
 struct ItemData {
