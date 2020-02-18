@@ -5,12 +5,15 @@ namespace Hpmv {
     public class WaitForCookedAction : GameAction {
         public EntityToken Entity { get; set; }
 
-        public void InitializeState(GameActionState state) {
-            state.Action = this;
-            state.Description = $"Wait for {Entity} to be cooked";
+        public override string Describe() {
+            return $"Wait for cooked: {Entity}";
         }
 
-        public IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
+        public override void InitializeState(GameActionState state) {
+            state.Action = this;
+        }
+
+        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
             while (true) {
                 var entityId = Entity.GetEntityId(context);
                 var cookingState = (CookingStateMessage) context.Entities.entities[entityId].data[EntityType.CookingState];
@@ -28,12 +31,15 @@ namespace Hpmv {
     public class WaitForMixedAction : GameAction {
         public EntityToken Entity { get; set; }
 
-        public void InitializeState(GameActionState state) {
-            state.Action = this;
-            state.Description = $"Wait for {Entity} to be mixed";
+        public override string Describe() {
+            return $"Wait for mixed: {Entity}";
         }
 
-        public IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
+        public override void InitializeState(GameActionState state) {
+            state.Action = this;
+        }
+
+        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
             while (true) {
                 var entityId = Entity.GetEntityId(context);
                 var mixingState = (MixingStateMessage) context.Entities.entities[entityId].data[EntityType.MixingState];

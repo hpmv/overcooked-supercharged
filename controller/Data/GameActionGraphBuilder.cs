@@ -1,24 +1,31 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 
 namespace Hpmv {
     public class GameActionGraphBuilder {
-        private readonly GameActionGraph Graph;
+        private readonly GameActionSequences Sequences;
         private readonly GameMap Map;
-        public int Chef;
+        public int Chef = -1;
         public List<int> Deps;
 
-        private const int UNKNOWN_CHEF = -1;
-        private const int CHEF_1 = 97;
-        private const int CHEF_2 = 103;
-
-        public GameActionGraphBuilder(GameActionGraph graph, GameMap map, int chef, List<int> deps) {
-            Graph = graph;
+        public GameActionGraphBuilder(GameActionSequences sequences, GameMap map, int chef, List<int> deps) {
+            Sequences = sequences;
             Map = map;
             Chef = chef;
             Deps = deps;
+        }
+
+        public GameActionGraphBuilder Placeholder() {
+            return new GameActionGraphBuilder(Sequences, Map, -1, new List<int>());
+        }
+
+        public GameActionGraphBuilder Aka(GameActionGraphBuilder other) {
+            other.Chef = Chef;
+            other.Deps = Deps;
+            return this;
         }
 
         public GameActionGraphBuilder WaitFor(params GameActionGraphBuilder[] other) {
@@ -26,63 +33,74 @@ namespace Hpmv {
             foreach (var b in other) {
                 newDeps.AddRange(b.Deps);
             }
-            return new GameActionGraphBuilder(Graph, Map, Chef, newDeps);
+            return new GameActionGraphBuilder(Sequences, Map, Chef, newDeps);
         }
 
-        public GameActionGraphBuilder Chef1() {
-            return new GameActionGraphBuilder(Graph, Map, CHEF_1, Deps);
-        }
-        public GameActionGraphBuilder Chef2() {
-            return new GameActionGraphBuilder(Graph, Map, CHEF_2, Deps);
+        public GameActionGraphBuilder WithChef(int chef) {
+            return new GameActionGraphBuilder(Sequences, Map, chef, Deps);
         }
 
-        public GameActionGraphBuilder GotoPoint(float x, float y) {
-            return AddAction(new GotoAction { Chef = Chef, DesiredPosList = new List<Vector2> { new Vector2(x, y) } });
+        public GameActionGraphBuilder Goto(Vector2 v) {
+            return AddAction(new GotoAction { DesiredPos = new LiteralLocationToken(v) });
         }
 
         public GameActionGraphBuilder Goto(int x, int y) {
-            return AddAction(new GotoAction { Chef = Chef, DesiredPosList = new List<Vector2> { Map.GridPos(x, y) } });
+            return AddAction(new GotoAction { DesiredPos = new GridPosLocationToken(x, y) });
+        }
+
+        public GameActionGraphBuilder GotoNoDash(Vector2 v) {
+            return AddAction(new GotoAction { DesiredPos = new LiteralLocationToken(v), AllowDash = false });
+        }
+
+        public GameActionGraphBuilder GotoNoDash(int x, int y) {
+            return AddAction(new GotoAction { DesiredPos = new GridPosLocationToken(x, y), AllowDash = false });
         }
 
         public GameActionGraphBuilder Pickup(int entity) {
-            return AddAction(new InteractAction { Chef = Chef, Subject = new LiteralEntityToken(entity) });
+            return AddAction(new InteractAction { Subject = new LiteralEntityToken(entity), IsPickup = true });
         }
 
         public GameActionGraphBuilder Pickup(GameActionGraphBuilder dep) {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't pickup from multiple deps");
             }
-            return AddAction(new InteractAction { Chef = Chef, Subject = new SpawnedEntityToken(dep.Deps[0]) });
+            return AddAction(new InteractAction { Subject = new SpawnedEntityToken(dep.Deps[0]), IsPickup = true });
         }
 
         public GameActionGraphBuilder PrepareToPickup(int entity) {
-            return AddAction(new InteractAction { Chef = Chef, Subject = new LiteralEntityToken(entity), Prepare = true });
+            return AddAction(new InteractAction { Subject = new LiteralEntityToken(entity), Prepare = true });
         }
 
         public GameActionGraphBuilder PrepareToPickup(GameActionGraphBuilder dep) {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't pickup from multiple deps");
             }
-            return AddAction(new InteractAction { Chef = Chef, Subject = new SpawnedEntityToken(dep.Deps[0]), Prepare = true });
+            return AddAction(new InteractAction { Subject = new SpawnedEntityToken(dep.Deps[0]), Prepare = true });
         }
         public GameActionGraphBuilder PutOnto(int entity) {
-            return AddAction(new InteractAction { Chef = Chef, Subject = new LiteralEntityToken(entity) });
+            return AddAction(new InteractAction { Subject = new LiteralEntityToken(entity) });
+        }
+        public GameActionGraphBuilder PutOnto(GameActionGraphBuilder dep) {
+            if (dep.Deps.Count != 1) {
+                throw new ArgumentException("Can't put onto multiple deps");
+            }
+            return AddAction(new InteractAction { Subject = new SpawnedEntityToken(dep.Deps[0]) });
         }
 
         public GameActionGraphBuilder GetFromCrate(int entity) {
-            return AddAction(new InteractAction { Chef = Chef, Subject = new LiteralEntityToken(entity), ExpectSpawn = true });
+            return AddAction(new InteractAction { Subject = new LiteralEntityToken(entity), ExpectSpawn = true, IsPickup = true });
         }
 
         public GameActionGraphBuilder DoWork(int entity) {
-            return AddAction(new InteractAction { Chef = Chef, Subject = new LiteralEntityToken(entity), Primary = false });
+            return AddAction(new InteractAction { Subject = new LiteralEntityToken(entity), Primary = false });
         }
 
         public GameActionGraphBuilder ThrowTowards(int entity, Vector2 bias = default) {
-            return AddAction(new ThrowAction { Chef = Chef, Location = new EntityLocationToken(new LiteralEntityToken(entity)), Bias = bias });
+            return AddAction(new ThrowAction { Location = new EntityLocationToken(new LiteralEntityToken(entity)), Bias = bias });
         }
 
         public GameActionGraphBuilder ThrowTowards(int x, int y, Vector2 bias = default) {
-            return AddAction(new ThrowAction { Chef = Chef, Location = new LiteralLocationToken(Map.GridPos(x, y).ToXZVector3()), Bias = bias });
+            return AddAction(new ThrowAction { Location = new GridPosLocationToken(x, y), Bias = bias });
         }
 
         public GameActionGraphBuilder WaitForSpawn(int entity) {
@@ -112,13 +130,33 @@ namespace Hpmv {
             return AddAction(new WaitForMixedAction { Entity = new LiteralEntityToken(entity) });
         }
 
-        public GameActionGraphBuilder SetGameSpeed(double speed) {
-            return AddAction(new GameScaleAction { Scale = speed });
+        public GameActionGraphBuilder Sleep(int frames) {
+            return AddAction(new WaitAction { NumFrames = frames });
+        }
+
+        public GameActionGraphBuilder SetFps(int fps) {
+            return AddAction(new SetFpsAction { Fps = fps });
+        }
+
+        public GameActionGraphBuilder Catch(Vector2 direction) {
+            return AddAction(new CatchAction { FacingDirection = direction });
         }
 
         private GameActionGraphBuilder AddAction(GameAction action) {
-            var id = Graph.AddAction(action, Deps.ToArray());
-            return new GameActionGraphBuilder(Graph, Map, Chef, new List<int> { id });
+            action.Chef = Chef;
+            string diagInfo = "";
+            var trace = new StackTrace(true);
+            foreach (var frame in trace.GetFrames()) {
+                if (frame != null) {
+                    // Console.WriteLine(frame!);
+                    if (frame!.GetFileName()?.Contains(".razor.cs") ?? false) {
+                        diagInfo += $"script: {frame.GetFileLineNumber()}:{frame.GetFileColumnNumber()}";
+                    }
+                }
+            }
+            action.DiagInfo = diagInfo;
+            var id = Sequences.AddAction(Chef, action, Deps);
+            return new GameActionGraphBuilder(Sequences, Map, Chef, new List<int> { id });
         }
     }
 }

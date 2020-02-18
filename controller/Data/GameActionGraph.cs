@@ -22,17 +22,17 @@ namespace Hpmv {
             fwds[early].Add(late);
         }
 
-        public GameActionGraphBuilder Builder(GameMap map) {
-            return new GameActionGraphBuilder(this, map, -1, new List<int>());
-        }
-
         public GameActionGraphState NewState() {
             var state = new GameActionGraphState();
             for (int i = 0; i < actions.Count; i++) {
-                var oneState = new GameActionState();
-                oneState.ActionId = i;
-                actions[i].InitializeState(oneState);
-                state.States.Add(oneState);
+                if (actions[i] == null) {
+                    state.States.Add(null);
+                } else {
+                    var oneState = new GameActionState();
+                    oneState.ActionId = i;
+                    actions[i].InitializeState(oneState);
+                    state.States.Add(oneState);
+                }
             }
             return state;
         }

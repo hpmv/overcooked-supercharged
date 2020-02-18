@@ -6,5 +6,6 @@ namespace Hpmv {
         public GameMap Map;
         public Dictionary<int, int> EntityIdReturnValueForAction = new Dictionary<int, int>();
         public Dictionary<int, Humanizer> ChefHumanizers = new Dictionary<int, Humanizer>();
+        public FramerateController FramerateController;
     }
 }

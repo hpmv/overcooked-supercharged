@@ -3,11 +3,15 @@ using System.Collections.Generic;
 namespace Hpmv {
     class WaitForPlateAction : GameAction {
         public bool Dirty { get; set; }
-        public void InitializeState(GameActionState state) {
-            state.Action = this;
-            state.Description = $"Wait for {(Dirty ? "dirty" : "clean")} plate to spawn";
+
+        public override string Describe() {
+            return $"Wait for {(Dirty ? "dirty" : "clean")} plate";
         }
-        public IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
+
+        public override void InitializeState(GameActionState state) {
+            state.Action = this;
+        }
+        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
             while (true) {
                 foreach (var entity in context.Entities.entities) {
                     if (!entity.Value.spawnClaimed && entity.Value.spawnSourceEntityId != -1) {

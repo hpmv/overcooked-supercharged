@@ -1,10 +1,10 @@
-@page "/carnival31"
+@page "/carnival31-four"
 @using Team17.Online.Multiplayer.Messaging;
 
 <div class="level-visualization">
 <BECanvas Width="500" Height="500" @ref="_canvasReference" ></BECanvas>
 
-
+@* 
 
 <div style="position: relative">
     @if (handler.CurrentState != null) {
@@ -17,13 +17,38 @@
     }
 }
 </div>
+ *@
 
-<div style="font-weight: bold; margin-left: 100px">
-@if (handler.CurrentState != null) {
-    @foreach (var action in handler.CurrentState.States) {
-        <div class="one-action @(action.IsActive ? "active-action" : "") @(action.StartTime == null ? "unstarted-action" : "")">[@(action.ActionId)] @(action.Error)</div>
-    }
-}
+<div class="schedule-container">
+    <div class="schedule-background">
+        @foreach (var rift in handler.TimelineLayout.Rifts) {
+            <div class="timeline-rift"
+                style="margin-top: @(rift.margin)px; height: @(rift.height)px">
+            </div>
+        }
+    </div>
+    <div class="schedule">
+        @for (int i = 0; i < handler.sequences.Actions.Count; i++) {
+            <div class="chef-column">
+                <div class="chef-column-title">Chef @(handler.sequences.Chefs[i])</div>
+                <div class="chef-column-contents">
+                    @foreach (var node in handler.sequences.Actions[i])
+                    {
+                        string stateClass;
+                        if (handler.CurrentState != null) {
+                            var state = handler.CurrentState.States[node.Id];
+                            stateClass = state.IsActive ? "active-action" : state.StartTime == null ? "unstarted-action" : "";
+                        } else {
+                            stateClass = "unstarted-action";
+                        }
+                        <div class="one-action @(stateClass)"
+                            style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden">
+                            [@(node.Id)] @(node.Action.Describe())</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 @* 
@@ -46,7 +71,7 @@
         </div>
     </div>
 } *@
-
+@* 
 @foreach (var entity in handler.entities.entities) {
     <div class="entity-box">
         <div class="entity-title">@(entity.Key)
@@ -78,5 +103,5 @@
             </div>
         </div>
     </div>
-}
+} *@
 </div>

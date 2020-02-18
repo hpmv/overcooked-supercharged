@@ -254,8 +254,56 @@ app {
     position: relative;
 }
 
+.schedule-container {
+    position: relative;
+}
+
+.schedule-background {
+    position: absolute;
+    top: 50px;
+    height: calc(100% - 50px);
+    width: 100%;
+    background-color: rgb(9, 92, 160);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.timeline-rift {
+    background-color: rgb(106, 183, 255);
+}
+
+.schedule {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+}
+
+.chef-column {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chef-column-title{
+    font-weight: bold;
+    align-self: center;
+    height: 50px;
+}
+
+.chef-column-contents {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+}
+
 .one-action {
     color: #aaa;
+    border: 1px solid gray;
+    border-radius: 6px;
+    background-color: #eeeeee;
+    margin-left: 10px;
+    margin-right: 10px;
 }
 
 .unstarted-action {

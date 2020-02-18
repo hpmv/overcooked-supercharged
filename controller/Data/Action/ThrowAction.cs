@@ -3,25 +3,27 @@ using System.Numerics;
 
 namespace Hpmv {
     public class ThrowAction : GameAction {
-        public int Chef { get; set; }
         public LocationToken Location { get; set; }
         public Vector2 Bias { get; set; }
         public double AngleAllowance { get; set; } = 0.995;
 
-        public void InitializeState(GameActionState state) {
-            state.Action = this;
-            state.ChefId = Chef;
-            state.Description = $"Chef {Chef} throw towards {Location}" + (Bias == Vector2.Zero ? "" : $" with bias {Bias}");
+        public override string Describe() {
+            return $"Throw towards {Location}";
         }
 
-        public IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
+        public override void InitializeState(GameActionState state) {
+            state.Action = this;
+            state.ChefId = Chef;
+        }
+
+        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
             var humanizer = context.ChefHumanizers[Chef];
+            state.Error = "";
             while (true) {
-                var location = Location.GetLocation(context).XZ() + Bias;
-                state.Description = $"Chef {Chef} throw towards {location}";
+                var location = Location.GetLocation(context) [0] + Bias;
 
                 if (!context.Entities.entities.ContainsKey(Chef) || !context.Entities.chefs.ContainsKey(Chef)) {
-                    state.Description += " (no such chef)";
+                    state.Error = "No such chef";
                     yield return null;
                     continue;
                 }
