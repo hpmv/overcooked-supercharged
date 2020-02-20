@@ -2,18 +2,18 @@ using System.Numerics;
 
 namespace Hpmv {
     public interface LocationToken {
-        Vector2[] GetLocation(GameActionContext context);
+        Vector2[] GetLocation(GameActionInput input);
     }
 
     public class EntityLocationToken : LocationToken {
-        public EntityToken entity;
+        public IEntityReference entity;
 
-        public EntityLocationToken(EntityToken entity) {
+        public EntityLocationToken(IEntityReference entity) {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionContext context) {
-            return new [] { context.Entities.entities[entity.GetEntityId(context)].pos.XZ() };
+        public Vector2[] GetLocation(GameActionInput input) {
+            return new [] { entity.GetEntityRecord(input).position[input.Frame].XZ() };
         }
 
         public override string ToString() {
@@ -28,7 +28,7 @@ namespace Hpmv {
             this.location = location;
         }
 
-        public Vector2[] GetLocation(GameActionContext context) {
+        public Vector2[] GetLocation(GameActionInput input) {
             return new [] { location };
         }
 
@@ -46,8 +46,8 @@ namespace Hpmv {
             this.y = y;
         }
 
-        public Vector2[] GetLocation(GameActionContext context) {
-            return new [] { context.Map.GridPos(x, y) };
+        public Vector2[] GetLocation(GameActionInput input) {
+            return new [] { input.Map.GridPos(x, y) };
         }
 
         public override string ToString() {
@@ -56,14 +56,14 @@ namespace Hpmv {
     }
 
     public class InteractionPointsLocationToken : LocationToken {
-        public EntityToken entity;
+        public IEntityReference entity;
 
-        public InteractionPointsLocationToken(EntityToken entity) {
+        public InteractionPointsLocationToken(IEntityReference entity) {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionContext context) {
-            return context.Map.GetInteractionPointsForBlockEntity(context.Entities.entities[entity.GetEntityId(context)].pos.XZ()).ToArray();
+        public Vector2[] GetLocation(GameActionInput input) {
+            return input.Map.GetInteractionPointsForBlockEntity(entity.GetEntityRecord(input).position[input.Frame].XZ()).ToArray();
         }
 
         public override string ToString() {

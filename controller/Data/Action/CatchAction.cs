@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Numerics;
-using Team17.Online.Multiplayer.Messaging;
+﻿using System.Numerics;
 
 namespace Hpmv {
     class CatchAction : GameAction {
@@ -11,45 +9,19 @@ namespace Hpmv {
             return $"Catch {Label}";
         }
 
-        public override void InitializeState(GameActionState state) {
-            state.Action = this;
-        }
-
-        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
-            var humanizer = context.ChefHumanizers[Chef];
-            while (true) {
-                state.Error = "";
-                if (!context.Entities.entities.ContainsKey(Chef) || !context.Entities.chefs.ContainsKey(Chef)) {
-                    state.Error = "No such chef";
-                    yield return null;
-                    continue;
-                }
-
-                {
-                    var chefData = context.Entities.entities[Chef].data;
-                    if (chefData.ContainsKey(EntityType.ChefCarry)) {
-                        var carryData = chefData[EntityType.ChefCarry];
-                        if (carryData is ChefCarryMessage msg) {
-                            if (msg.m_carriableItem != 0) {
-                                context.EntityIdReturnValueForAction[state.ActionId] = (int) msg.m_carriableItem;
-                                yield break;
-                            }
-                        }
-                    }
-                }
-
-                {
-                    var chefData = context.Entities.chefs[Chef];
-                    if (Vector2.Dot(Vector2.Normalize(chefData.forward), FacingDirection) < 0.85) {
-                        yield return new ControllerInput {
-                            chef = Chef,
-                                axes = humanizer.HumanizeAxes(new Vector2(FacingDirection.X, -FacingDirection.Y))
-                        };
-                        continue;
-                    }
-                    yield return null;
-                }
+        public override GameActionOutput Step(GameActionInput input) {
+            if (Chef.data[input.Frame].carriedItem != null) {
+                return new GameActionOutput { Done = true };
             }
+            var chefState = Chef.chefState[input.Frame];
+            if (Vector2.Dot(Vector2.Normalize(chefState.forward), FacingDirection) < 0.85) {
+                return new GameActionOutput {
+                    ControllerInput = new DesiredControllerInput {
+                        axes = new Vector2(FacingDirection.X, -FacingDirection.Y)
+                    }
+                };
+            }
+            return default;
         }
     }
 }

@@ -1,29 +1,27 @@
-using System.Collections.Generic;
-
 namespace Hpmv {
-    class WaitForSpawnAction : GameAction {
-        public EntityToken SourceEntity;
+    class WaitForSpawnAction : GameAction, ISpawnClaimingAction {
+        public IEntityReference Spawner;
         public string Label { get; set; }
 
         public override string Describe() {
-            return $"Spawn {Label} from {SourceEntity}";
+            return $"Spawn {Label} from {Spawner}";
         }
 
-        public override void InitializeState(GameActionState state) {
-            state.Action = this;
+        public IEntityReference GetSpawner() {
+            return Spawner;
         }
-        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
-            var sourceId = SourceEntity.GetEntityId(context);
-            while (true) {
-                foreach (var entity in context.Entities.entities) {
-                    if (!entity.Value.spawnClaimed && entity.Value.spawnSourceEntityId == sourceId) {
-                        entity.Value.spawnClaimed = true;
-                        context.EntityIdReturnValueForAction[state.ActionId] = entity.Key;
-                        yield break;
-                    }
+
+        public override GameActionOutput Step(GameActionInput input) {
+            var entity = Spawner.GetEntityRecord(input);
+            foreach (var child in entity.spawned) {
+                if (child.spawnOwner[input.Frame] == null) {
+                    return new GameActionOutput {
+                        SpawningClaim = child,
+                        Done = true
+                    };
                 }
-                yield return null;
             }
+            return new GameActionOutput();
         }
     }
 }

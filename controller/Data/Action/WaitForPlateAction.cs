@@ -1,39 +1,80 @@
-using System.Collections.Generic;
-
 namespace Hpmv {
-    class WaitForPlateAction : GameAction {
-        public bool Dirty { get; set; }
+    class WaitForCleanPlateAction : GameAction, ISpawnClaimingAction {
+        class InnerHelper : ISpawnClaimingAction {
+            IEntityReference DryingPart;
+
+            public InnerHelper(GameEntityRecord dryingPart) {
+                DryingPart = new LiteralEntityReference(dryingPart);
+            }
+
+            public IEntityReference GetSpawner() {
+                return DryingPart;
+            }
+        }
+
+        public readonly GameEntityRecord DryingPart;
+        private readonly InnerHelper helper;
+        private readonly IEntityReference plateStack;
+
+
+        public WaitForCleanPlateAction(GameEntityRecord dryingPart) {
+            DryingPart = dryingPart;
+            helper = new InnerHelper(dryingPart);
+            plateStack = new SpawnedEntityReference(helper);
+        }
 
         public override string Describe() {
-            return $"Wait for {(Dirty ? "dirty" : "clean")} plate";
+            return $"Wait for clean plate";
         }
 
-        public override void InitializeState(GameActionState state) {
-            state.Action = this;
+        public IEntityReference GetSpawner() {
+            return plateStack;
         }
-        public override IEnumerator<ControllerInput> Perform(GameActionState state, GameActionContext context) {
-            while (true) {
-                foreach (var entity in context.Entities.entities) {
-                    if (!entity.Value.spawnClaimed && entity.Value.spawnSourceEntityId != -1) {
-                        var spawner = entity.Value.spawnSourceEntityId;
-                        if (context.Entities.entities.ContainsKey(spawner)) {
-                            var grandparent = context.Entities.entities[spawner].spawnSourceEntityId;
-                            if (grandparent != -1) {
-                                if (context.Entities.entities.ContainsKey(grandparent)) {
-                                    var grandparentData = context.Entities.entities[grandparent];
-                                    if ((Dirty && grandparentData.name.Contains("workstation_plate_return")) ||
-                                        (!Dirty && grandparentData.name.Contains("DryingPart"))) {
-                                        entity.Value.spawnClaimed = true;
-                                        context.EntityIdReturnValueForAction[state.ActionId] = Dirty ? spawner : entity.Key;
-                                        yield break;
-                                    }
-                                }
-                            }
-                        }
+
+        public override GameActionOutput Step(GameActionInput input) {
+            foreach (var stack in DryingPart.spawned) {
+                foreach (var plate in stack.spawned) {
+                    if (plate.spawnOwner[input.Frame] == null) {
+                        return new GameActionOutput {
+                            SpawningClaim = plate,
+                            Done = true
+                        };
                     }
                 }
-                yield return null;
             }
+            return default;
+        }
+    }
+
+    class WaitForDirtyPlateAction : GameAction, ISpawnClaimingAction {
+        public readonly GameEntityRecord DirtyPlateSpawner;
+        private readonly IEntityReference spawner;
+        public readonly int Count;
+
+        public WaitForDirtyPlateAction(GameEntityRecord dirtyPlateSpawner, int count) {
+            DirtyPlateSpawner = dirtyPlateSpawner;
+            Count = count;
+            this.spawner = new LiteralEntityReference(dirtyPlateSpawner);
+        }
+
+        public override string Describe() {
+            return $"Wait for {Count} dirty stack";
+        }
+
+        public IEntityReference GetSpawner() {
+            return spawner;
+        }
+
+        public override GameActionOutput Step(GameActionInput input) {
+            foreach (var stack in DirtyPlateSpawner.spawned) {
+                if (stack.spawnOwner[input.Frame] == null && stack.spawned.Count == Count) {
+                    return new GameActionOutput {
+                        SpawningClaim = stack,
+                        Done = true
+                    };
+                }
+            }
+            return default;
         }
     }
 }

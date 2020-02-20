@@ -1,38 +1,43 @@
 using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
-    public interface EntityToken {
-        int GetEntityId(GameActionContext context);
+
+    public interface IEntityReference {
+        GameEntityRecord GetEntityRecord(GameActionInput input);
     }
 
-    public class LiteralEntityToken : EntityToken {
-        public int EntityId;
+    public class LiteralEntityReference : IEntityReference {
+        public GameEntityRecord Record;
 
-        public LiteralEntityToken(int entityId) {
-            EntityId = entityId;
+        public LiteralEntityReference(GameEntityRecord record) {
+            Record = record;
         }
 
-        public int GetEntityId(GameActionContext context) {
-            return EntityId;
-        }
-
-        public override string ToString() {
-            return $"#{EntityId}";
+        public GameEntityRecord GetEntityRecord(GameActionInput input) {
+            return Record;
         }
     }
 
-    public class SpawnedEntityToken : EntityToken {
-        public int ActionId;
+    public interface ISpawnClaimingAction {
+        IEntityReference GetSpawner();
 
-        public SpawnedEntityToken(int actionId) {
-            ActionId = actionId;
+    }
+
+    public class SpawnedEntityReference : IEntityReference {
+        public ISpawnClaimingAction Spawner;
+
+        public SpawnedEntityReference(ISpawnClaimingAction spawner) {
+            Spawner = spawner;
         }
 
-        public int GetEntityId(GameActionContext context) {
-            return context.EntityIdReturnValueForAction[ActionId];
-        }
-        public override string ToString() {
-            return $"?{ActionId}";
+        public GameEntityRecord GetEntityRecord(GameActionInput input) {
+            var spawnerEntity = Spawner.GetSpawner().GetEntityRecord(input);
+            foreach (var child in spawnerEntity.spawned) {
+                if (child.spawnOwner[input.Frame] == Spawner) {
+                    return child;
+                }
+            }
+            return null;
         }
     }
 }

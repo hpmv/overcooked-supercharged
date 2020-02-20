@@ -21,24 +21,5 @@ namespace Hpmv {
             deps[late].Add(early);
             fwds[early].Add(late);
         }
-
-        public GameActionGraphState NewState() {
-            var state = new GameActionGraphState();
-            for (int i = 0; i < actions.Count; i++) {
-                if (actions[i] == null) {
-                    state.States.Add(null);
-                } else {
-                    var oneState = new GameActionState();
-                    oneState.ActionId = i;
-                    actions[i].InitializeState(oneState);
-                    state.States.Add(oneState);
-                }
-            }
-            return state;
-        }
-    }
-
-    public class GameActionGraphState {
-        public List<GameActionState> States = new List<GameActionState>();
     }
 }

@@ -184,10 +184,10 @@ namespace controller.Pages {
                 }, new Vector2(18f, -7.2f));
                 context.Entities = entities;
                 context.Map = map;
-                context.ChefHumanizers[CHEF1] = new Humanizer();
-                context.ChefHumanizers[CHEF2] = new Humanizer();
-                context.ChefHumanizers[CHEF3] = new Humanizer();
-                context.ChefHumanizers[CHEF4] = new Humanizer();
+                context.ChefHumanizers[CHEF1] = new ControllerState();
+                context.ChefHumanizers[CHEF2] = new ControllerState();
+                context.ChefHumanizers[CHEF3] = new ControllerState();
+                context.ChefHumanizers[CHEF4] = new ControllerState();
                 context.FramerateController = new FramerateController();
 
                 //var walk1 = graph.AddAction(new GotoAction { Chef = 103, DesiredPos = new Vector2(22, -10.8f) });
