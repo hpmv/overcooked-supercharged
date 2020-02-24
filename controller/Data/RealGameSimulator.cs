@@ -1,5 +1,7 @@
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
@@ -10,8 +12,9 @@ namespace Hpmv {
         public GameEntityRecords Records { get; set; }
         public GameActionSequences Timings { get; set; }
         public GameMap Map { get; set; }
+        public int Frame { get { return frame; } }
 
-        List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
+        public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
 
         Dictionary<int, GameEntityRecord> entityIdToRecord = new Dictionary<int, GameEntityRecord>();
 
@@ -56,6 +59,7 @@ namespace Hpmv {
 
                 var output = action.Step(gameActionInput);
                 if (output.SpawningClaim != null) {
+                    Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
                     output.SpawningClaim.spawnOwner.ChangeTo(action as ISpawnClaimingAction, frame);
                 }
                 newControllers[action.Chef] = output.ControllerInput;
@@ -96,59 +100,78 @@ namespace Hpmv {
 
 
         public void ApplyGameUpdate(Serialisable item) {
-            // Console.WriteLine("Got message " + (MessageType) msg.Type);
-            if (item is EntitySynchronisationMessage sync) {
-                var entityRecord = entityIdToRecord[(int)sync.m_Header.m_uEntityID];
-                var specificData = entityRecord.data.Last();
-                foreach (var (type, payload) in sync.m_Payloads) {
-                    if (payload is ChefCarryMessage ccm) {
-                        specificData.carriedItem = entityIdToRecord[(int)ccm.m_carriableItem];
-                    } else if (payload is MixingStateMessage msm) {
-                        specificData.progress = msm.m_mixingProgress;
-                    } else if (payload is CookingStateMessage csm) {
-                        specificData.progress = csm.m_cookingProgress;
-                    } else if (payload is PhysicalAttachMessage pam) {
-                        specificData.attachmentParent = pam.m_parent == -1 ? null : entityIdToRecord[pam.m_parent];
-                    }
-                }
-                entityRecord.data.ChangeTo(specificData, frame);
-            } else if (item is EntityEventMessage eem) {
-                var entityRecord = entityIdToRecord[(int)eem.m_Header.m_uEntityID];
-                var specificData = entityRecord.data.Last();
-                var payload = eem.m_Payload;
-                if (payload is ChefCarryMessage ccm) {
-                    specificData.carriedItem = entityIdToRecord[(int)ccm.m_carriableItem];
-                } else if (payload is MixingStateMessage msm) {
-                    specificData.progress = msm.m_mixingProgress;
-                } else if (payload is CookingStateMessage csm) {
-                    specificData.progress = csm.m_cookingProgress;
-                } else if (payload is PhysicalAttachMessage pam) {
-                    specificData.attachmentParent = pam.m_parent == -1 ? null : entityIdToRecord[pam.m_parent];
-                }
-                entityRecord.data.ChangeTo(specificData, frame);
-            } else if (item is SpawnEntityMessage sem) {
+            Action<SpawnEntityMessage> spawnHandler = (SpawnEntityMessage sem) => {
                 var spawner = entityIdToRecord[(int)sem.m_SpawnerHeader.m_uEntityID];
+                Console.WriteLine($"Spawning {sem.m_DesiredHeader.m_uEntityID}");
                 GameEntityRecord child = null;
-                foreach (var spawned in spawner.spawned) {
-                    if (!spawned.existed.Last()) {
-                        child = spawned;
-                        break;
-                    }
+                if (spawner.nextSpawnId.Last() < spawner.spawned.Count) {
+                    child = spawner.spawned[spawner.nextSpawnId.Last()];
                 }
                 if (child == null) {
+                    var spawnedPrefab = spawner.prefab.Spawns[sem.m_SpawnableID];
                     child = new GameEntityRecord {
                         path = new EntityPath {
                             id = spawner.spawned.Count,
                             parent = spawner.path
                         },
-                        spawner = spawner
+                        prefab = spawnedPrefab,
+                        spawner = spawner,
+                        existed = new Versioned<bool>(false),
+                        position = new Versioned<Vector3>(Vector3.Zero),
+                        displayName = spawnedPrefab.Name,
+                        className = spawnedPrefab.ClassName
                     };
                     spawner.spawned.Add(child);
                 }
                 child.existed.ChangeTo(true, frame);
+                child.position.ChangeTo(sem.m_Position.ToNumericsVector(), frame);
+                spawner.nextSpawnId.ChangeTo(spawner.nextSpawnId.Last() + 1, frame);
                 entityIdToRecord[(int)sem.m_DesiredHeader.m_uEntityID] = child;
-            } else if (item is SpawnPhysicalAttachmentMessage spem) {
+            };
 
+            // Console.WriteLine("Got message " + (MessageType) msg.Type);
+            if (item is EntitySynchronisationMessage sync) {
+                if (!entityIdToRecord.ContainsKey((int)sync.m_Header.m_uEntityID)) {
+                    Console.WriteLine("Ignoring entity sync event for " + sync.m_Header.m_uEntityID);
+                    return;
+                }
+                var entityRecord = entityIdToRecord[(int)sync.m_Header.m_uEntityID];
+                var specificData = entityRecord.data.Last();
+                foreach (var (type, payload) in sync.m_Payloads) {
+                    if (payload is ChefCarryMessage ccm) {
+                        specificData.carriedItem = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
+                    } else if (payload is MixingStateMessage msm) {
+                        specificData.progress = msm.m_mixingProgress;
+                    } else if (payload is CookingStateMessage csm) {
+                        specificData.progress = csm.m_cookingProgress;
+                    } else if (payload is PhysicalAttachMessage pam) {
+                        specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
+                    }
+                }
+                entityRecord.data.ChangeTo(specificData, frame);
+            } else if (item is EntityEventMessage eem) {
+                if (!entityIdToRecord.ContainsKey((int)eem.m_Header.m_uEntityID)) {
+                    Console.WriteLine("Ignoring entity event for " + eem.m_Header.m_uEntityID);
+                    return;
+                }
+                var entityRecord = entityIdToRecord[(int)eem.m_Header.m_uEntityID];
+                var specificData = entityRecord.data.Last();
+                var payload = eem.m_Payload;
+                if (payload is ChefCarryMessage ccm) {
+                    specificData.carriedItem = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
+                } else if (payload is MixingStateMessage msm) {
+                    specificData.progress = msm.m_mixingProgress;
+                } else if (payload is CookingStateMessage csm) {
+                    specificData.progress = csm.m_cookingProgress;
+                } else if (payload is PhysicalAttachMessage pam) {
+                    Console.WriteLine("Attachment msg for " + entityRecord + ": " + pam.m_parent);
+                    specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
+                }
+                entityRecord.data.ChangeTo(specificData, frame);
+            } else if (item is SpawnEntityMessage sem) {
+                spawnHandler(sem);
+            } else if (item is SpawnPhysicalAttachmentMessage spem) {
+                spawnHandler(spem.m_SpawnEntityData);
             } else if (item is DestroyEntityMessage dem) {
                 entityIdToRecord[(int)dem.m_Header.m_uEntityID].existed.ChangeTo(false, frame);
             } else if (item is DestroyEntitiesMessage dems) {
@@ -159,27 +182,41 @@ namespace Hpmv {
         }
 
         public void ApplyChefUpdate(int chefId, CharPositionData chef) {
+            if (chefId == 0) {
+                Console.WriteLine(chef);
+                return;
+            }
             var chefRecord = entityIdToRecord[chefId];
             var chefData = new ChefState {
                 forward = chef.ForwardDirection.ToNumericsVector().XZ(),
                 dashTimer = chef.DashTimer,
-                highlightedForPickup = chef.HighlightedForPickup == -1 ? null : entityIdToRecord[chef.HighlightedForPickup],
-                highlightedForPlacement = chef.HighlightedForPlacement == -1 ? null : entityIdToRecord[chef.HighlightedForPlacement],
-                highlightedForUse = chef.HighlightedForUse == -1 ? null : entityIdToRecord[chef.HighlightedForUse],
+                highlightedForPickup = chef.HighlightedForPickup <= 0 ? null : entityIdToRecord[chef.HighlightedForPickup],
+                highlightedForPlacement = chef.HighlightedForPlacement <= 0 ? null : entityIdToRecord[chef.HighlightedForPlacement],
+                highlightedForUse = chef.HighlightedForUse <= 0 ? null : entityIdToRecord[chef.HighlightedForUse],
             };
             chefRecord.chefState.ChangeTo(chefData, frame);
         }
 
-        public void ApplyEntityRegistryUpdate(EntityRegistryData data) {
+        public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data) {
+            // Console.WriteLine($"Applying early registry update for {data.EntityId}");
             FakeEntityRegistry.entityToTypes[data.EntityId] = data.SyncEntityTypes.Select(t => (EntityType)t).ToList();
+        }
+
+        public void ApplyEntityRegistryUpdateLate(EntityRegistryData data) {
+            // Console.WriteLine($"Applying late registry update for {data.EntityId}");
             if (!entityIdToRecord.ContainsKey(data.EntityId)) {
-                Records.RegisterKnownObject(data.Name, data.EntityId, data.Pos.ToNumericsVector().XZ());
+                Console.WriteLine("Ignoring entity registry update for " + data.EntityId + ": " + data.Name);
+                return;
             }
-            entityIdToRecord[data.EntityId].displayName = data.Name;
+            if (entityIdToRecord[data.EntityId].displayName == "") {
+                entityIdToRecord[data.EntityId].displayName = data.Name;
+            }
         }
 
         public void ApplyPositionUpdate(int entityId, ItemData data) {
-            entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);
+            if (entityIdToRecord.ContainsKey(entityId)) {
+                entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);
+            }
         }
     }
 }

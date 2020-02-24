@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 
 namespace Hpmv {
@@ -28,12 +29,14 @@ namespace Hpmv {
 
         public GameEntityRecord GetInteractableEntity(GameActionInput input) {
             var entity = Subject.GetEntityRecord(input);
+            // Console.WriteLine($"Entity for #{ActionId} is {entity}");
             while (true) {
                 var data = entity.data[input.Frame];
                 if (data.attachmentParent != null) {
                     entity = data.attachmentParent;
                     continue;
                 }
+                // Console.WriteLine($"Attachment root for #{ActionId} is {entity}");
                 return entity;
             }
         }
@@ -46,6 +49,7 @@ namespace Hpmv {
                 if (input.ControllerState.PrimaryButtonDown) {
                     if (ExpectSpawn) {
                         foreach (var child in subjectEntity.spawned) {
+                            // Console.WriteLine($"{child}: {child.existed[input.Frame]}, {child.spawnOwner[input.Frame]}");
                             if (child.existed[input.Frame] && child.spawnOwner[input.Frame] == null) {
                                 if (input.ControllerState.RequestButtonUp()) {
                                     return new GameActionOutput {

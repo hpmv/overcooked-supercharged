@@ -69,10 +69,11 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntity, () => new DestroyEntityMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntities, () => new DestroyEntitiesMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LevelLoadByIndex, () => new LevelLoadByIndexMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.GameState, () => new GameStateMessage());
         }
 
         public static Serialisable Deserialize(int type, byte[] bytes) {
-            var messageType = (MessageType) type;
+            var messageType = (MessageType)type;
             var bitstream = new BitStream.BitStreamReader(bytes);
             Serialisable result;
             if (!SerialisationRegistry<MessageType>.Deserialise(out result, messageType, bitstream)) {

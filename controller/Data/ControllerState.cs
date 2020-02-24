@@ -13,10 +13,10 @@ namespace Hpmv {
             get {
                 return new ControllerState {
                     buttonCooldown = TimeSpan.Zero,
-                        pickupCooldown = TimeSpan.Zero,
-                        primaryButtonDown = false,
-                        secondaryButtonDown = false,
-                        buttonDownDurationLeft = TimeSpan.Zero,
+                    pickupCooldown = TimeSpan.Zero,
+                    primaryButtonDown = false,
+                    secondaryButtonDown = false,
+                    buttonDownDurationLeft = TimeSpan.Zero,
                 };
             }
         }
@@ -63,7 +63,7 @@ namespace Hpmv {
         }
 
         public bool RequestButtonUp() {
-            if (!PrimaryButtonDown || !SecondaryButtonDown) {
+            if (!PrimaryButtonDown && !SecondaryButtonDown) {
                 throw new InvalidOperationException("Cannot request button up unless button is down");
             }
             if (buttonDownDurationLeft > TimeSpan.Zero) {
@@ -82,7 +82,7 @@ namespace Hpmv {
             return true;
         }
 
-        public(ControllerState, ActualControllerInput) ApplyInputAndAdvanceFrame(DesiredControllerInput input) {
+        public (ControllerState, ActualControllerInput) ApplyInputAndAdvanceFrame(DesiredControllerInput input) {
             var output = new ActualControllerInput();
             var copy = this;
             copy.axes = HumanizeAxes(copy.axes, input.axes);
@@ -104,7 +104,7 @@ namespace Hpmv {
                 copy.primaryButtonDown = false;
                 copy.buttonCooldown = BUTTON_COOLDOWN;
             } else if (input.secondaryUp) {
-                output.primary.justReleased = true;
+                output.secondary.justReleased = true;
                 copy.secondaryButtonDown = false;
                 copy.buttonCooldown = BUTTON_COOLDOWN;
             }

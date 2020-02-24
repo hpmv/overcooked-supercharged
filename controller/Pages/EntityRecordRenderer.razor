@@ -1,0 +1,19 @@
+<div class="one-record">
+    <div class="record-title @(Record.existed[Frame] ? "record-exists" : "record-does-not-exist")">
+        @(Record.displayName) [@(Record.path.id)]
+        @if (Record.spawnOwner[Frame] != null) {
+            <span> (o: @((Record.spawnOwner[Frame] as GameAction).ActionId))</span>
+        }
+        @{
+            var data = Record.data[Frame];            
+            if (data.progress > 0) {
+                <span> (p: @(data.progress))</span>
+            }
+        }
+    </div>
+    <div class="record-children">
+        @foreach (var spawned in Record.spawned) {
+            <EntityRecordRenderer Record="@spawned" Frame="@Frame"></EntityRecordRenderer>
+        }
+    </div>
+</div>

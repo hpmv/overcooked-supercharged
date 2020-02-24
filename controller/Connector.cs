@@ -18,9 +18,11 @@ namespace Hpmv {
         }
 
         public async Task Connect(CancellationToken token = default) {
+            Console.WriteLine("Began connect");
             var client = new TcpClient();
             client.NoDelay = true;
             await client.ConnectAsync("localhost", 14455);
+            Console.WriteLine("Connected");
 
             TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream());
             TProtocol protocol = new TBinaryProtocol(transport);

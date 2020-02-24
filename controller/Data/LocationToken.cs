@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 
 namespace Hpmv {
@@ -13,7 +14,7 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            return new [] { entity.GetEntityRecord(input).position[input.Frame].XZ() };
+            return new[] { entity.GetEntityRecord(input).position[input.Frame].XZ() };
         }
 
         public override string ToString() {
@@ -29,7 +30,7 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            return new [] { location };
+            return new[] { location };
         }
 
         public override string ToString() {
@@ -47,7 +48,7 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            return new [] { input.Map.GridPos(x, y) };
+            return new[] { input.Map.GridPos(x, y) };
         }
 
         public override string ToString() {

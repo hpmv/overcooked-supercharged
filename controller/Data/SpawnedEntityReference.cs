@@ -1,27 +1,6 @@
-using Team17.Online.Multiplayer.Messaging;
+﻿using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
-
-    public interface IEntityReference {
-        GameEntityRecord GetEntityRecord(GameActionInput input);
-    }
-
-    public class LiteralEntityReference : IEntityReference {
-        public GameEntityRecord Record;
-
-        public LiteralEntityReference(GameEntityRecord record) {
-            Record = record;
-        }
-
-        public GameEntityRecord GetEntityRecord(GameActionInput input) {
-            return Record;
-        }
-    }
-
-    public interface ISpawnClaimingAction {
-        IEntityReference GetSpawner();
-
-    }
 
     public class SpawnedEntityReference : IEntityReference {
         public ISpawnClaimingAction Spawner;
@@ -38,6 +17,21 @@ namespace Hpmv {
                 }
             }
             return null;
+        }
+
+        public PrefabRecord GetPrefabRecord() {
+            var prefab = Spawner.GetSpawner().GetPrefabRecord();
+            if (prefab != null && prefab.Spawns.Count > 0) {
+                return prefab.Spawns[0];
+            }
+            return null;
+        }
+
+        public override string ToString() {
+            if (GetPrefabRecord() is PrefabRecord rec) {
+                return rec.Name;
+            }
+            return $"Spawn of '{Spawner}'";
         }
     }
 }

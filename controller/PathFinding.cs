@@ -12,10 +12,14 @@ namespace Hpmv {
         private static int DistanceApprox(IntPoint a, IntPoint b) {
             long xdiff = a.X - b.X;
             long ydiff = a.Y - b.Y;
-            return (int) Math.Sqrt(xdiff * xdiff + ydiff * ydiff);
+            return (int)Math.Sqrt(xdiff * xdiff + ydiff * ydiff);
         }
 
         public static List<IntPoint> ShortestPathAroundObstacles(List<List<IntPoint>> obstacles, IntPoint src, List<IntPoint> dests) {
+            if (dests.Count == 0) {
+                return new List<IntPoint>();
+            }
+
             List<int> belongingObstacle = new List<int>();
             List<HashSet<int>> alreadyAdded = new List<HashSet<int>>();
             var vertices = new List<IntPoint>();
@@ -47,14 +51,16 @@ namespace Hpmv {
                     // if (belongingObstacle[i] == belongingObstacle[j]) continue;
                     var pA = vertices[i];
                     var pB = vertices[j];
-                    bool ok = false; {
+                    bool ok = false;
+                    {
                         clipper.Clear();
                         sol.Clear();
                         clipper.AddPath(new List<IntPoint> { pA, pB }, PolyType.ptSubject, false);
                         clipper.AddPaths(obstacles, PolyType.ptClip, true);
                         clipper.Execute(ClipType.ctDifference, sol, PolyFillType.pftEvenOdd);
                         ok = ok || sol.Total == 0;
-                    } {
+                    }
+                    {
                         clipper.Clear();
                         sol.Clear();
                         clipper.AddPath(new List<IntPoint> { pB, pA }, PolyType.ptSubject, false);
@@ -63,8 +69,8 @@ namespace Hpmv {
                         ok = ok || sol.Total == 0;
                     }
                     if (ok) {
-                        graph.Connect((uint) i, (uint) j, DistanceApprox(vertices[i], vertices[j]), 0);
-                        graph.Connect((uint) j, (uint) i, DistanceApprox(vertices[i], vertices[j]), 0);
+                        graph.Connect((uint)i, (uint)j, DistanceApprox(vertices[i], vertices[j]), 0);
+                        graph.Connect((uint)j, (uint)i, DistanceApprox(vertices[i], vertices[j]), 0);
                         alreadyAdded[i].Add(j);
                         alreadyAdded[j].Add(i);
                         // Console.WriteLine($"Connecting {vertices[i]} to {vertices[j]} with dist {DistanceApprox(vertices[i], vertices[j])}");
@@ -76,15 +82,15 @@ namespace Hpmv {
                 for (int i = 0; i < obstacle.Count; i++) {
                     int j = (i + 1) % obstacle.Count;
                     if (!alreadyAdded[i].Contains(j)) {
-                        graph.Connect((uint) i, (uint) j, DistanceApprox(vertices[i], vertices[j]), 0);
-                        graph.Connect((uint) j, (uint) i, DistanceApprox(vertices[i], vertices[j]), 0);
+                        graph.Connect((uint)i, (uint)j, DistanceApprox(vertices[i], vertices[j]), 0);
+                        graph.Connect((uint)j, (uint)i, DistanceApprox(vertices[i], vertices[j]), 0);
                         // Console.WriteLine($"Connecting {vertices[i]} to {vertices[j]} with dist {DistanceApprox(vertices[i], vertices[j])}");
                     }
                 }
             }
 
             var result = Enumerable.Range(vertices.Count - dests.Count, dests.Count).Select(i => {
-                return graph.Dijkstra((uint) (vertices.Count - dests.Count - 1), (uint) i);
+                return graph.Dijkstra((uint)(vertices.Count - dests.Count - 1), (uint)i);
             }).OrderBy(r => {
                 if (!r.IsFounded) {
                     return double.MaxValue;
@@ -94,16 +100,16 @@ namespace Hpmv {
                 bool first = true;
                 foreach (uint u in r.GetPath()) {
                     if (!first) {
-                        dist += DistanceApprox(vertices[(int) u], prev);
+                        dist += DistanceApprox(vertices[(int)u], prev);
                     }
                     first = false;
-                    prev = vertices[(int) u];
+                    prev = vertices[(int)u];
                 }
                 return dist;
             }).First();
             var pointResult = new List<IntPoint>();
             foreach (uint u in result.GetPath()) {
-                pointResult.Add(vertices[(int) u]);
+                pointResult.Add(vertices[(int)u]);
             }
             return pointResult;
         }

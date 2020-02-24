@@ -1,0 +1,5 @@
+namespace Hpmv {
+    class OfflineEmulator {
+
+    }
+}

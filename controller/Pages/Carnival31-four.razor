@@ -1,8 +1,10 @@
 @page "/carnival31-four"
+@inject IJSRuntime JSRuntime
+
 @using Team17.Online.Multiplayer.Messaging;
 
-<div class="level-visualization">
-<BECanvas Width="500" Height="500" @ref="_canvasReference" ></BECanvas>
+@* <div class="level-visualization">
+<BECanvas Width="500" Height="500" @ref="_canvasReference" ></BECanvas> *@
 
 @* 
 
@@ -19,38 +21,76 @@
 </div>
  *@
 
-<div class="schedule-container">
-    <div class="schedule-background">
-        @foreach (var rift in handler.TimelineLayout.Rifts) {
-            <div class="timeline-rift"
-                style="margin-top: @(rift.margin)px; height: @(rift.height)px">
-            </div>
-        }
+<div class="main-container">
+    <div class="entities">
+        @* @foreach (var record in handler.simulator.Records.FixedEntities)
+        {
+            <EntityRecordRenderer Record="@record" Frame="handler.CurrentFrame"></EntityRecordRenderer>
+        } *@
+        <EntityRecordVisualizer
+           Records="@(handler.simulator.Records)"
+           Frame="handler.EditorState.SelectedFrame"
+           Map="handler.simulator.Map"
+           EditorState="handler.EditorState">
+            
+        </EntityRecordVisualizer>
     </div>
-    <div class="schedule">
-        @for (int i = 0; i < handler.sequences.Actions.Count; i++) {
-            <div class="chef-column">
-                <div class="chef-column-title">Chef @(handler.sequences.Chefs[i])</div>
-                <div class="chef-column-contents">
-                    @foreach (var node in handler.sequences.Actions[i])
-                    {
-                        string stateClass;
-                        if (handler.CurrentState != null) {
-                            var state = handler.CurrentState.States[node.Id];
-                            stateClass = state.IsActive ? "active-action" : state.StartTime == null ? "unstarted-action" : "";
-                        } else {
-                            stateClass = "unstarted-action";
-                        }
-                        <div class="one-action @(stateClass)"
-                            style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden">
-                            [@(node.Id)] @(node.Action.Describe())</div>
-                    }
+
+    <div class="schedule-container">
+        <div class="schedule-background" @ref="scheduleBackgroundRef">
+            @foreach (var rift in handler.TimelineLayout.Rifts) {
+                <div class="timeline-rift"
+                    style="margin-top: @(rift.margin)px; height: @(rift.height)px">
                 </div>
-            </div>
-        }
+            }
+        </div>
+        <div class="timeline-line-container">
+            <div class="timeline-line"
+                style="top: @(handler.TimelineLayout.OffsetFromFrame(handler.EditorState.SelectedFrame))px"></div>
+        </div>
+        <div class="schedule">
+            @for (int i = 0; i < handler.sequences.Actions.Count; i++) {
+                var iCopy = i;
+                var actions = handler.sequences.Actions[i];
+                bool selectedChef = handler.EditorState.SelectedChef == handler.sequences.Chefs[i];
+                var lastFrame = 0;
+                <div class="chef-column @(selectedChef ? "selected-chef" : "")">
+                    <div class="chef-column-title">Chef @(handler.sequences.Chefs[i])</div>
+                    <div class="chef-column-contents">
+                        @for (int index = 0; index < actions.Count; index++)
+                        {
+                            var indexCopy = index;
+                            var node = actions[index];
+                            lastFrame = node.Predictions.EndFrame;
+                            string stateClass;
+                            if (handler.simulator.inProgress.Any((x) => x.actionId == node.Id)) {
+                                stateClass = "active-action";
+                            } else {
+                                stateClass = "unstarted-action";
+                            }
+                            string selectedClass;
+                            if (selectedChef && handler.EditorState.SelectedActionIndex == index) {
+                                selectedClass = "one-action-selected";
+                            } else {
+                                selectedClass = "";
+                            }
+                            <div class="one-action @(stateClass) @(selectedClass)"
+                                style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
+                                @onclick="() => HandleSelectAction(handler.sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame)">
+                                [@(node.Id)] @(node.Action.Describe())</div>
+                        }
+                        if (selectedChef && handler.EditorState.SelectedActionIndex >= actions.Count) {
+                            <div class="action-insertion-prompt-selected">(Inserting here...)</div>
+                        } else {
+                            <div class="action-insertion-prompt"
+                                @onclick="() => HandleSelectAction(handler.sequences.Chefs[iCopy], actions.Count, lastFrame)">Click to insert here</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </div>
-
 @* 
 @foreach (var chef in handler.entities.chefs) {
     <div class="entity-box">
@@ -104,4 +144,3 @@
         </div>
     </div>
 } *@
-</div>

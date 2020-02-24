@@ -261,7 +261,6 @@ app {
 .schedule-background {
     position: absolute;
     top: 50px;
-    height: calc(100% - 50px);
     width: 100%;
     background-color: rgb(9, 92, 160);
     display: flex;
@@ -277,12 +276,17 @@ app {
     position: relative;
     display: flex;
     flex-direction: row;
+    left: 30px;
 }
 
 .chef-column {
-    width: 300px;
+    width: 200px;
     display: flex;
     flex-direction: column;
+}
+
+.chef-column-selected {
+    background-color: rgba(255, 217, 146, 0.267);
 }
 
 .chef-column-title{
@@ -304,6 +308,8 @@ app {
     background-color: #eeeeee;
     margin-left: 10px;
     margin-right: 10px;
+    font-size: 12px;
+    margin-left: 4px;
 }
 
 .unstarted-action {
@@ -350,4 +356,196 @@ app {
 .one-action-type-WaitForSpawnAction {
     background-color: rgb(255, 235, 254);
     border: 1px solid rgb(255, 127, 255);
+}
+
+.one-action-selected {
+    background-color: rgb(174, 174, 255);
+    border-color: black;
+}
+
+
+
+.one-record {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.record-children {
+    margin-left: 20px;
+}
+
+.record-does-not-exist {
+    color: gray;
+}
+
+.timeline-line-container {
+    position: absolute;
+    top: 50px;
+    width: 100%;
+}
+
+.timeline-line {
+    background-color: red;
+    position: absolute;
+    width: 100%;
+    height: 1px;
+}
+
+.main-container {
+    display: flex;
+    align-items: flex-start;
+}
+
+.entity-record-renderer {
+    position: relative;
+    width: 700px;
+    height: 700px;
+    background: white;
+
+}
+
+.schedule-container {
+    flex: 1;
+    height: 99vh;
+    overflow: scroll;
+}
+
+
+.record-vis-anchor {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 1;
+    flex-grow: 0;
+    width: 0;
+    height: 0;
+}
+
+.record-vis-holder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 46px;
+    height: 46px;
+}
+
+
+.record-vis {
+    font-size: 12px;
+    border: 1px solid gray;
+    background-color: white;
+    overflow: hidden;
+    line-height: 14px;
+    text-align: center;
+    width: 46px;
+    height: 46px;
+    z-index: 0;
+
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.record-vis-type- {
+    width: 46px;
+    height: 46px;
+    z-index: 1
+}
+
+.record-vis-type-frier {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    background-color: lightyellow;
+    z-index: 3;
+}
+
+.record-vis-type-mixer {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background-color: #d6d5d5;
+    z-index: 3;
+}
+
+.record-vis-type-frier-station {
+    width: 46px;
+    height: 46px;
+    background-color: rgb(255, 218, 149);
+    z-index: 2;
+}
+
+.record-vis-type-mixer-station {
+    width: 46px;
+    height: 46px;
+    background-color: rgb(200, 200, 255);
+    z-index: 2;
+}
+
+.record-vis-type-chef-red,
+.record-vis-type-chef-green,
+.record-vis-type-chef-yellow,
+.record-vis-type-chef-blue
+{
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    border: 4px solid;
+    background-color: white;
+    z-index: 1;
+}
+
+.record-vis-type-chef-red {
+    border-color: red;
+}
+.record-vis-type-chef-yellow {
+    border-color: rgb(224, 202, 0);
+}
+.record-vis-type-chef-green {
+    border-color: green;
+}
+.record-vis-type-chef-blue {
+    border-color: blue;
+}
+
+.record-vis-type-egg,
+.record-vis-type-flour,
+.record-vis-type-berry,
+.record-vis-type-chocolate,
+.record-vis-type-honey {
+    border: 1px solid orange;
+    width: 26px;
+    height: 26px;
+    border-radius: 13px;
+    z-index: 5;
+}
+
+.record-vis-type-chopped-berry,
+.record-vis-type-chopped-chocolate,
+.record-vis-type-chopped-honey {
+    width: 26px;
+    height: 26px;
+    border-radius: 13px;
+    border: 1px solid rgb(180, 117, 0);
+    z-index: 5;
+}
+
+.record-vis-type-plate {
+    border: 2px solid darkgray;
+    background-color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    z-index: 4;
+}
+
+.record-vis-type-ignored {
+    display: none;
+}
+
+.record-vis-type-unknown {
+    color: white;
 }

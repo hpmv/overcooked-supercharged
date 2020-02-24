@@ -10,11 +10,4 @@ namespace Hpmv {
         public bool secondaryUp;
         public bool dash;
     }
-
-    public struct ActualControllerInput {
-        public Vector2 axes;
-        public ButtonOutput primary;
-        public ButtonOutput secondary;
-        public ButtonOutput dash;
-    }
 }
