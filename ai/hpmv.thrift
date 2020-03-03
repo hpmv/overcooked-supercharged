@@ -37,8 +37,9 @@ struct CharPositionData {
 }
 
 struct ItemData {
-    1: Point pos,
+    1: optional Point pos,
     2: map<i32, binary> data,
+    3: optional Point velocity,
 }
 
 struct EntityRegistryData {

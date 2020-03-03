@@ -8,20 +8,18 @@ public class IngredientAssembledNode : AssembledDefinitionNode {
     public IngredientAssembledNode() { }
 
     // Token: 0x06003509 RID: 13577 RVA: 0x00021CCE File Offset: 0x0001FECE
-    public IngredientAssembledNode(IngredientOrderNode _orderNode) {
-        this.m_ingriedientOrderNode = _orderNode;
+    public IngredientAssembledNode(int id) {
+        this.id = id;
     }
 
     // Token: 0x0600350A RID: 13578 RVA: 0x00021CDD File Offset: 0x0001FEDD
     public override void Serialise(BitStreamWriter writer) {
-        writer.Write((uint) this.m_ingriedientOrderNode.m_uID, 32);
+        writer.Write((uint)this.id, 32);
     }
 
     // Token: 0x0600350B RID: 13579 RVA: 0x000EAB5C File Offset: 0x000E8D5C
     public override bool Deserialise(BitStreamReader reader) {
-        OrderDefinitionNode orderDefinitionNode = new OrderDefinitionNode { m_uID = (int) reader.ReadUInt32(32) };
-        IngredientOrderNode ingriedientOrderNode = orderDefinitionNode as IngredientOrderNode;
-        this.m_ingriedientOrderNode = ingriedientOrderNode;
+        id = (int)reader.ReadUInt32(32);
         return true;
     }
 
@@ -34,18 +32,18 @@ public class IngredientAssembledNode : AssembledDefinitionNode {
     // Token: 0x0600350D RID: 13581 RVA: 0x000EABA4 File Offset: 0x000E8DA4
     protected override bool IsMatch(AssembledDefinitionNode _subject) {
         IngredientAssembledNode ingredientAssembledNode = _subject as IngredientAssembledNode;
-        return ingredientAssembledNode != null && this.m_ingriedientOrderNode.m_uID == ingredientAssembledNode.m_ingriedientOrderNode.m_uID;
+        return ingredientAssembledNode != null && this.id == ingredientAssembledNode.id;
     }
 
     // Token: 0x0600350E RID: 13582 RVA: 0x00021CF2 File Offset: 0x0001FEF2
     public override AssembledDefinitionNode Simpilfy() {
-        return new IngredientAssembledNode(this.m_ingriedientOrderNode);
+        return new IngredientAssembledNode(this.id);
     }
 
     // Token: 0x0600350F RID: 13583 RVA: 0x000EABD8 File Offset: 0x000E8DD8
     public override void ReplaceData(AssembledDefinitionNode _node) {
         IngredientAssembledNode ingredientAssembledNode = _node as IngredientAssembledNode;
-        this.m_ingriedientOrderNode = ingredientAssembledNode.m_ingriedientOrderNode;
+        this.id = ingredientAssembledNode.id;
         base.ReplaceData(_node);
     }
 
@@ -55,5 +53,5 @@ public class IngredientAssembledNode : AssembledDefinitionNode {
     }
 
     // Token: 0x04002C5C RID: 11356
-    public IngredientOrderNode m_ingriedientOrderNode;
+    public int id;
 }

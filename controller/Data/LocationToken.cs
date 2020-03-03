@@ -4,6 +4,7 @@ using System.Numerics;
 namespace Hpmv {
     public interface LocationToken {
         Vector2[] GetLocation(GameActionInput input);
+        Save.LocationToken ToProto();
     }
 
     public class EntityLocationToken : LocationToken {
@@ -20,6 +21,12 @@ namespace Hpmv {
         public override string ToString() {
             return entity.ToString();
         }
+
+        public Save.LocationToken ToProto() {
+            return new Save.LocationToken {
+                Entity = entity.ToProto()
+            };
+        }
     }
 
     public class LiteralLocationToken : LocationToken {
@@ -35,6 +42,12 @@ namespace Hpmv {
 
         public override string ToString() {
             return "coord: " + location;
+        }
+
+        public Save.LocationToken ToProto() {
+            return new Save.LocationToken {
+                Literal = location.ToProto()
+            };
         }
     }
 
@@ -54,6 +67,15 @@ namespace Hpmv {
         public override string ToString() {
             return $"({x}, {y})";
         }
+
+        public Save.LocationToken ToProto() {
+            return new Save.LocationToken {
+                Grid = new Save.GridPos {
+                    X = x,
+                    Y = y
+                }
+            };
+        }
     }
 
     public class InteractionPointsLocationToken : LocationToken {
@@ -64,11 +86,29 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            return input.Map.GetInteractionPointsForBlockEntity(entity.GetEntityRecord(input).position[input.Frame].XZ()).ToArray();
+            var locations = input.Map.GetInteractionPointsForBlockEntity(entity.GetEntityRecord(input).position[input.Frame].XZ()).ToArray();
+            // Console.WriteLine($"[{input.Frame}, {this}] {string.Join(" or ", locations)}");
+            return locations;
         }
 
         public override string ToString() {
             return "around " + entity;
+        }
+
+        public Save.LocationToken ToProto() {
+            throw new NotImplementedException();
+        }
+    }
+
+    public static class LocationTokenFromProto {
+        public static LocationToken FromProto(this Save.LocationToken token, LoadContext context) {
+            if (token.KindCase == Save.LocationToken.KindOneofCase.Entity) {
+                return new EntityLocationToken(token.Entity.FromProto(context));
+            } else if (token.KindCase == Save.LocationToken.KindOneofCase.Literal) {
+                return new LiteralLocationToken(token.Literal.FromProto());
+            } else {
+                return new GridPosLocationToken(token.Grid.X, token.Grid.Y);
+            }
         }
     }
 }

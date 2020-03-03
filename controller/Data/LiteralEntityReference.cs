@@ -14,8 +14,16 @@ namespace Hpmv {
             return Record.prefab;
         }
 
+        public Save.EntityReference ToProto() {
+            return new Save.EntityReference {
+                Literal = Record.path.ToProto()
+            };
+        }
+
         public override string ToString() {
             return Record.displayName;
         }
+
+
     }
 }

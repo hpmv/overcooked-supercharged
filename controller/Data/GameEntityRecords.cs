@@ -20,7 +20,7 @@ namespace Hpmv {
         public GameEntityRecord GetRecordFromPath(int[] path) {
             List<GameEntityRecord> rootEntitiesById = new List<GameEntityRecord>();
             foreach (var entity in FixedEntities) {
-                var id = entity.path.id;
+                var id = entity.path.ids[0];
                 while (rootEntitiesById.Count <= id) {
                     rootEntitiesById.Add(null);
                 }
@@ -62,12 +62,25 @@ namespace Hpmv {
                 displayName = name,
                 className = className,
                 prefab = prefab,
-                path = new EntityPath { id = entityId },
+                path = new EntityPath { ids = new[] { entityId } },
                 position = new Versioned<Vector3>(pos),
                 existed = new Versioned<bool>(true)
             };
             FixedEntities.Add(record);
             return record;
+        }
+
+        public void AttachInitialObjectTo(GameEntityRecord child, GameEntityRecord parent) {
+            // Using -1 is not the best thing to do but this is convenient because attachment/attachmentParent would produce
+            // a circular reference if we were to use constructor initialization.
+            child.data.AppendWith(-1, d => {
+                d.attachmentParent = parent;
+                return d;
+            });
+            parent.data.AppendWith(-1, d => {
+                d.attachment = child;
+                return d;
+            });
         }
 
         public void RegisterOtherInitialObjects() {
@@ -81,7 +94,7 @@ namespace Hpmv {
                 displayName = name,
                 className = prefab.ClassName,
                 prefab = prefab,
-                path = new EntityPath { id = entityId },
+                path = new EntityPath { ids = new[] { entityId } },
                 position = new Versioned<Vector3>(CapturedInitialPositions[entityId]),
                 existed = new Versioned<bool>(true),
                 chefState = new Versioned<ChefState>(new ChefState { forward = -Vector2.UnitY })
@@ -92,24 +105,9 @@ namespace Hpmv {
             return record;
         }
 
-        private void CleanRecordsFromFrame(GameEntityRecord record, int frame) {
-            record.spawnOwner.RemoveAllFrom(frame);
-            record.position.RemoveAllFrom(frame);
-            record.existed.RemoveAllFrom(frame);
-            record.data.RemoveAllFrom(frame);
-            record.nextSpawnId.RemoveAllFrom(frame);
-            if (record.chefState != null) {
-                record.chefState.RemoveAllFrom(frame);
-            }
-            foreach (var spawned in record.spawned) {
-                CleanRecordsFromFrame(spawned, frame);
-            }
-        }
-
-
         public void CleanRecordsFromFrame(int frame) {
             foreach (var entity in FixedEntities) {
-                CleanRecordsFromFrame(entity, frame);
+                entity.CleanRecordsFromFrameRecursively(frame);
             }
             foreach (var state in Chefs) {
                 state.Value.RemoveAllFrom(frame);

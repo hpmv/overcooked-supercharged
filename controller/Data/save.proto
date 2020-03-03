@@ -1,0 +1,291 @@
+syntax = "proto3";
+
+package Hpmv.Save;
+
+message Vector2 {
+    float x = 1;
+    float y = 2;
+}
+
+message Vector3 {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+
+message CatchAction {
+    Vector2 facing_direction = 1;
+    string label = 2;
+}
+
+message EntityPath {
+    repeated int32 path = 1;
+}
+
+message EntityReference {
+    oneof kind {
+        EntityPath literal = 1;
+        int32 spawner = 2;
+    }
+}
+
+message GridPos {
+    int32 x = 1;
+    int32 y = 2;
+}
+
+message LocationToken {
+    oneof kind {
+        EntityReference entity = 1;
+        Vector2 literal = 2;
+        GridPos grid = 3;
+    }
+}
+
+message GotoAction {
+    LocationToken location = 1;
+    float allowed_error = 2;
+    bool allow_dash = 3;
+}
+
+message InteractAction {
+    EntityReference subject = 1;
+    bool primary = 2;
+    bool prepare = 3;
+    bool is_pickup = 4;
+    bool expect_spawn = 5;
+    string spawn_label = 6;
+}
+
+message ThrowAction {
+    LocationToken location = 1;
+    Vector2 bias = 2;
+    double angle_allowance = 3;
+}
+
+message WaitAction {
+    int32 num_frames = 1;
+}
+
+message WaitForCleanPlateAction {
+    EntityPath drying_part = 1;
+}
+
+message WaitForDirtyPlateAction {
+    EntityPath dirty_plate_spawner = 1;
+    int32 count = 2;
+}
+
+message WaitForProgressAction {
+    EntityReference entity = 1;
+    double progress = 2;
+}
+
+message WaitForSpawnAction {
+    EntityReference spawner = 1;
+    string label = 2;
+}
+
+message GameActionPredictions {
+    int32 start_frame = 2;
+    int32 end_frame = 3;
+}
+
+message GameActionNode {
+    int32 chef_index = 1;
+    int32 action_id = 2;
+    repeated int32 deps = 3;
+    GameActionPredictions predictions = 4;
+    
+    oneof action {
+        CatchAction catch = 100;
+        GotoAction goto = 101;
+        InteractAction interact = 102;
+        ThrowAction throw = 103;
+        WaitAction wait = 104;
+        WaitForCleanPlateAction wait_for_clean_plate = 105;
+        WaitForDirtyPlateAction wait_for_dirty_plate = 106;
+        WaitForProgressAction wait_for_progress = 107;
+        WaitForSpawnAction wait_for_spawn = 108;
+    }
+}
+
+message VersionedInt {
+    repeated int32 frame = 1;
+    repeated int32 data = 2;
+    int32 initial_value = 3;
+}
+
+message VersionedISpawnClaimingAction {
+    repeated int32 frame = 1;
+    repeated int32 data = 2;
+    int32 initial_value = 3;
+}
+
+
+message VersionedVector3 {
+    repeated int32 frame = 1;
+    repeated Vector3 data = 2;
+    Vector3 initial_value = 3;
+}
+
+message VersionedBool {
+    repeated int32 frame = 1;
+    repeated bool data = 2;
+    bool initial_value = 3;
+}
+
+message VersionedDouble {
+    repeated int32 frame = 1;
+    repeated double data = 2;
+    double initial_value = 3;
+}
+
+message SpecificEntityData {
+    EntityPath attachment_parent = 1;
+    EntityPath attachment = 2;
+    repeated int32 contents = 3;
+    map<int32, double> chop_interacters = 4;
+    EntityPath item_being_chopped = 5;
+    repeated EntityPath washers = 6;
+}
+
+message ChefState {
+    Vector2 forward = 1;
+    EntityPath highlighted_for_pickup = 2;
+    EntityPath highlighted_for_use = 3;
+    EntityPath highlighted_for_placement = 4;
+    double dash_timer = 5;
+    bool is_aiming = 6;
+}
+
+message VersionedSpecificEntityData {
+    repeated int32 frame = 1;
+    repeated SpecificEntityData data = 2;
+    SpecificEntityData initial_value = 3;
+}
+
+message VersionedChefState {
+    repeated int32 frame = 1;
+    repeated ChefState data = 2;
+    ChefState initial_value = 3;
+}
+
+message ButtonOutput {
+    bool is_down = 1;
+    bool just_pressed = 2;
+    bool just_released = 3;
+}
+
+message ActualControllerInput {
+    Vector2 axes = 1;
+    ButtonOutput primary = 2;
+    ButtonOutput secondary = 3;
+    ButtonOutput dash = 4;
+}
+
+message VersionedActualControllerInput {
+    repeated int32 frame = 1;
+    repeated ActualControllerInput data = 2;
+    ActualControllerInput initial_value = 3;
+}
+
+message ControllerState {
+    Vector2 axes = 1;
+    double button_cooldown = 2;
+    double pickup_cooldown = 3;
+    bool primary_button_down = 4;
+    bool secondary_button_down = 5;
+    double button_down_duration_left = 6;
+}
+
+message VersionedControllerState {
+    repeated int32 frame = 1;
+    repeated ControllerState data = 2;
+    ControllerState initial_value = 3;
+}
+
+message PrefabRecord {
+    string name = 1;
+    string class_name = 2;
+    repeated PrefabRecord spawns = 3;
+    bool can_use = 4;
+    bool is_crate = 5;
+    double max_progress = 6;
+    bool can_contain_ingredients = 7;
+    int32 max_ingredient_count = 8;
+    bool is_ingredient = 9;
+    int32 ingredient_id = 10;
+    int32 cooking_stage = 11;
+    bool is_board = 12;
+    bool is_washing_station = 13;
+    bool is_mixer_station = 14;
+    bool is_heating_station = 15;
+    bool is_choppable = 16;
+    bool ignore = 17;
+}
+
+message GameEntityRecord {
+    EntityPath path = 1;
+    string display_name = 2;
+    string class_name = 3;
+    PrefabRecord prefab = 4;
+    EntityPath spawner = 13;
+    repeated EntityPath spawned = 14;
+    VersionedInt next_spawn_id = 5;
+    VersionedISpawnClaimingAction spawn_owner = 6;
+    VersionedVector3 position = 7;
+    VersionedVector3 velocity = 8;
+    VersionedBool existed = 9;
+    VersionedSpecificEntityData data = 10;
+    VersionedChefState chef_state = 11;
+    VersionedDouble progress = 12;
+}
+
+
+message GameEntityRecords {
+    repeated GameEntityRecord all_records = 1;
+    map<int32, VersionedControllerState> controllers = 2;
+}
+
+message GameActionChefList {
+    EntityPath chef = 1;
+    repeated GameActionNode actions = 2;
+}
+
+message GameActionSequences {
+    repeated GameActionChefList chefs = 1;
+}
+
+message Polygon {
+    repeated Vector2 points = 1;
+}
+
+message IntPoint {
+    int64 x = 1;
+    int64 y = 2;
+}
+
+message IntList {
+    repeated int32 values = 1;
+}
+
+message GameMap {
+    repeated Polygon polygons = 1;
+    Vector2 top_left = 2;
+    repeated bool precomputed_connectivity = 3;
+    repeated int32 precomputed_connectivity_dimensions = 4;
+    repeated IntPoint boundary_points = 5;
+    repeated IntList points_mesh = 6;
+}
+
+message InputHistory {
+    map<int32, VersionedActualControllerInput> frame_inputs = 1;
+}
+
+message GameSetup {
+    GameMap map = 1;
+    GameEntityRecords records = 2;
+    GameActionSequences sequences = 3;
+    InputHistory input_history = 4;
+}

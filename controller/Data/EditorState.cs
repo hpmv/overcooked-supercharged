@@ -6,6 +6,7 @@ namespace Hpmv {
         public GameEntityRecord SelectedChef { get; set; }
         public int SelectedActionIndex { get; set; }
         public int SelectedFrame { get; set; }
+        public int LastSimulatedFrame { get; set; }
 
         public GameActionSequences Sequences { get; set; }
         public GameEntityRecords Records { get; set; }

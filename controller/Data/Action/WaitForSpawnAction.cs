@@ -14,7 +14,7 @@ namespace Hpmv {
         public override GameActionOutput Step(GameActionInput input) {
             var entity = Spawner.GetEntityRecord(input);
             foreach (var child in entity.spawned) {
-                if (child.spawnOwner[input.Frame] == null) {
+                if (child.existed[input.Frame] && child.spawnOwner[input.Frame] == null) {
                     return new GameActionOutput {
                         SpawningClaim = child,
                         Done = true

@@ -8,6 +8,7 @@ function setUpScheduleBackgroundClick(scheduleBackground, component) {
     }
 
     scheduleBackground.addEventListener('mousedown', e => {
+        e.preventDefault();
         let rect = scheduleBackground.getBoundingClientRect();
         let x = e.clientX - rect.left;
         let y = e.clientY - rect.top;

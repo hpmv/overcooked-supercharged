@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -10,16 +11,13 @@ using Microsoft.JSInterop;
 namespace controller.Pages {
     partial class EntityRecordVisualizer {
         [Parameter]
-        public GameEntityRecords Records { get; set; }
-
-        [Parameter]
-        public int Frame { get; set; }
-
-        [Parameter]
-        public GameMap Map { get; set; }
+        public GameSetup Level { get; set; }
 
         [Parameter]
         public EditorState EditorState { get; set; }
+
+        [Parameter]
+        public EventCallback<bool> OnActionAdded { get; set; }
 
         private float SCALE = 50;
         private DotNetObjectReference<EntityRecordVisualizer> thisRef;
@@ -32,7 +30,7 @@ namespace controller.Pages {
         private List<GameEntityRecord> EntitiesForMenu = new List<GameEntityRecord>();
 
         private Vector2 Render(Vector2 point) {
-            var pos = Map.CoordsToGridPos(point);
+            var pos = Level.map.CoordsToGridPos(point);
             pos += new Vector2(1, 1);
             return pos * SCALE;
         }
@@ -47,7 +45,7 @@ namespace controller.Pages {
         [JSInvokable]
         public async Task HandleEntityClicks(string[] entityPaths, double x, double y) {
             EntitiesForMenu = entityPaths
-                .Select(path => Records.GetRecordFromPath(EntityPath.ParseEntityPath(path)))
+                .Select(path => Level.entityRecords.GetRecordFromPath(EntityPath.ParseEntityPath(path)))
                 .ToList();
             EntityMenuX = x;
             EntityMenuY = y;
@@ -57,8 +55,9 @@ namespace controller.Pages {
             );
         }
 
-        private void HandleTemplateClick(ActionTemplate template) {
+        private async Task HandleTemplateClick(ActionTemplate template) {
             EditorState.ApplyActionTemplate(template);
+            await OnActionAdded.InvokeAsync(false);
         }
     }
 }

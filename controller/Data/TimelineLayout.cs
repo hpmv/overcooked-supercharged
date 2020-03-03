@@ -44,8 +44,8 @@ namespace Hpmv {
                     var result = new List<(int time, bool start, GameActionNode node, int column)>();
                     var prevTime = 0;
                     foreach (var item in list) {
-                        var startTime = Math.Max(item.Predictions.StartFrame, prevTime);
-                        var endTime = Math.Max(item.Predictions.EndFrame, startTime);
+                        var startTime = item.Predictions.StartFrame ?? prevTime;
+                        var endTime = item.Predictions.EndFrame ?? startTime;
                         prevTime = endTime;
                         result.Add((startTime, true, item, column));
                         result.Add((endTime, false, item, column));
@@ -112,7 +112,7 @@ namespace Hpmv {
                         }
                         rifts.Add((currentFrame, extensionLength, currentLayoutFrame));
                     }
-                    node.Predictions.LayoutHeight = frameLength * PixelsPerFrame;
+                    node.Predictions.LayoutHeight = currentY - node.Predictions.LayoutTopOffset;
                     columnOffsets[column] = node.Predictions.LayoutTopOffset + node.Predictions.LayoutHeight;
                     columnLastLayoutFrames[column] = currentLayoutFrame;
                 }

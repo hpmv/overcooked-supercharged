@@ -60,5 +60,23 @@ namespace Hpmv {
         public override string Describe() {
             return $"Goto {DesiredPos}";
         }
+
+        public Save.GotoAction ToProto() {
+            return new Save.GotoAction {
+                Location = DesiredPos.ToProto(),
+                AllowedError = AllowedError,
+                AllowDash = AllowDash
+            };
+        }
+    }
+
+    public static class GotoActionFromProto {
+        public static GotoAction FromProto(this Save.GotoAction action, LoadContext context) {
+            return new GotoAction {
+                DesiredPos = action.Location.FromProto(context),
+                AllowedError = action.AllowedError,
+                AllowDash = action.AllowDash
+            };
+        }
     }
 }

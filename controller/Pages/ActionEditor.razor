@@ -1,0 +1,15 @@
+<div class="action-editor">
+    <div class="action-editor-title">[@(Node.Id)] @(Node.Action.Describe())</div>
+    <div class="action-editor-deps">
+        <div class="action-editor-deps-title">Dependencies:</div>
+        @foreach (var dep in Node.Deps) {
+            var depNode = Sequences.NodeById[dep];
+            <div class="action-editor-dep">
+                <div class="action-editor-dep-@(depNode.Action.Chef.className)"></div>
+                <div class="action-editor-dep-title">@(depNode.Action.Describe())</div>
+                <button class="action-editor-dep-delete" @onclick="() => HandleDelete(dep)">Delete</button>
+            </div>
+        }
+        <button class="action-editor-deps-add" @onclick="AddDependency">Add Dependency</button>
+    </div>
+</div>

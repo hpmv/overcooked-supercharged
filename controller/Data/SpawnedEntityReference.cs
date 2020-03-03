@@ -33,5 +33,11 @@ namespace Hpmv {
             }
             return $"Spawn of '{Spawner}'";
         }
+
+        public Save.EntityReference ToProto() {
+            return new Save.EntityReference {
+                Spawner = (Spawner as GameAction).ActionId
+            };
+        }
     }
 }

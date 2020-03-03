@@ -2,7 +2,7 @@ using System;
 using System.Numerics;
 
 namespace Hpmv {
-    class InteractAction : GameAction, ISpawnClaimingAction {
+    public class InteractAction : GameAction, ISpawnClaimingAction {
         public IEntityReference Subject { get; set; }
         public bool Primary { get; set; } = true;
         public bool Prepare { get; set; } = false;
@@ -29,20 +29,21 @@ namespace Hpmv {
 
         public GameEntityRecord GetInteractableEntity(GameActionInput input) {
             var entity = Subject.GetEntityRecord(input);
-            // Console.WriteLine($"Entity for #{ActionId} is {entity}");
+            // Console.WriteLine($"[{input.Frame}] Entity for #{ActionId} is {entity}");
             while (true) {
                 var data = entity.data[input.Frame];
                 if (data.attachmentParent != null) {
                     entity = data.attachmentParent;
                     continue;
                 }
-                // Console.WriteLine($"Attachment root for #{ActionId} is {entity}");
+                // Console.WriteLine($"[{input.Frame}] Attachment root for #{ActionId} is {entity}");
                 return entity;
             }
         }
 
         public override GameActionOutput Step(GameActionInput input) {
             var subjectEntity = GetInteractableEntity(input);
+            // Console.WriteLine($"[{input.Frame}] interactable entity for {Subject} is {subjectEntity.displayName}");
             var chefState = Chef.chefState[input.Frame];
 
             if (Primary) {
@@ -76,6 +77,11 @@ namespace Hpmv {
                 }
 
                 if (chefState.highlightedForPickup == subjectEntity || chefState.highlightedForPlacement == subjectEntity) {
+                    if (Prepare) {
+                        return new GameActionOutput {
+                            Done = true
+                        };
+                    }
                     // TODO: We can't store state for streak here, so we'd have to predict the highlight in the next frame
                     // with some humanizer information. For now just be inaccurate.
                     if (IsPickup ? input.ControllerState.RequestButtonDownForPickup() : input.ControllerState.RequestButtonDown()) {
@@ -104,6 +110,11 @@ namespace Hpmv {
                 }
 
                 if (chefState.highlightedForUse == subjectEntity) {
+                    if (Prepare) {
+                        return new GameActionOutput {
+                            Done = true
+                        };
+                    }
                     if (input.ControllerState.RequestButtonDown()) {
                         return new GameActionOutput {
                             ControllerInput = new DesiredControllerInput {
@@ -118,7 +129,7 @@ namespace Hpmv {
 
             GotoAction gotoAction = new GotoAction {
                 Chef = Chef,
-                DesiredPos = new InteractionPointsLocationToken(Subject)
+                DesiredPos = new InteractionPointsLocationToken(new LiteralEntityReference(subjectEntity))
             };
 
             var output = gotoAction.Step(input);
@@ -131,6 +142,30 @@ namespace Hpmv {
                 };
             }
             return output;
+        }
+
+        public Save.InteractAction ToProto() {
+            return new Save.InteractAction {
+                Subject = Subject.ToProto(),
+                Primary = Primary,
+                Prepare = Prepare,
+                IsPickup = IsPickup,
+                ExpectSpawn = ExpectSpawn,
+                SpawnLabel = SpawnLabel
+            };
+        }
+    }
+
+    public static class InteractActionFromProto {
+        public static InteractAction FromProto(this Save.InteractAction action, LoadContext context) {
+            return new InteractAction {
+                Subject = action.Subject.FromProto(context),
+                Primary = action.Primary,
+                Prepare = action.Prepare,
+                IsPickup = action.IsPickup,
+                ExpectSpawn = action.ExpectSpawn,
+                SpawnLabel = action.SpawnLabel
+            };
         }
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Newtonsoft.Json;
 using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
@@ -11,6 +12,7 @@ namespace Hpmv {
         Dictionary<int, int> depsRemaining = new Dictionary<int, int>();
         public GameEntityRecords Records { get; set; }
         public GameActionSequences Timings { get; set; }
+        public InputHistory InputHistory { get; set; }
         public GameMap Map { get; set; }
         public int Frame { get { return frame; } }
 
@@ -27,17 +29,15 @@ namespace Hpmv {
 
             Records.CleanRecordsFromFrame(0);
             foreach (var entry in Records.FixedEntities) {
-                entityIdToRecord[entry.path.id] = entry;
+                entityIdToRecord[entry.path.ids[0]] = entry;
             }
 
-            for (int i = 0; i < Graph.actions.Count; i++) {
-                if (Graph.actions[i] != null) {
-                    if (Graph.deps[i].Count == 0) {
-                        inProgress.Add((i, 0));
-                        Timings.NodeById[i].Predictions.StartFrame = frame;
-                    } else {
-                        depsRemaining[i] = Graph.deps[i].Count;
-                    }
+            foreach (var (i, action) in Graph.actions) {
+                if (Graph.deps[i].Count == 0) {
+                    inProgress.Add((i, 0));
+                    Timings.NodeById[i].Predictions.StartFrame = frame;
+                } else {
+                    depsRemaining[i] = Graph.deps[i].Count;
                 }
             }
         }
@@ -81,9 +81,11 @@ namespace Hpmv {
                 Input = new Dictionary<int, OneInputData>()
             };
             foreach (var entry in Records.Chefs) {
-                var chefId = entry.Key.path.id;
+
+                var chefId = entry.Key.path.ids[0];
                 var desiredInput = newControllers.GetValueOrDefault(entry.Key);
                 var (newState, actualInput) = entry.Value.Last().ApplyInputAndAdvanceFrame(desiredInput);
+                InputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame);
                 entry.Value.ChangeTo(newState, frame);
                 inputData.Input[chefId] = new OneInputData {
                     Pad = new PadDirection { X = actualInput.axes.X, Y = actualInput.axes.Y },
@@ -99,7 +101,60 @@ namespace Hpmv {
         }
 
 
+        private string toJson(Serialisable serialisable) {
+            if (serialisable == null) return "(null)";
+            string serialized;
+            try {
+                serialized = JsonConvert.SerializeObject(serialisable, new JsonSerializerSettings() {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                    Formatting = Formatting.Indented
+                });
+            } catch (Exception e) {
+                serialized = e.Message;
+            }
+            return serialized;
+        }
+
+
         public void ApplyGameUpdate(Serialisable item) {
+            Action<int, Serialisable> entityHandler = (int entityId, Serialisable payload) => {
+                if (!entityIdToRecord.ContainsKey(entityId)) {
+                    Console.WriteLine("Ignoring entity event for " + entityId);
+                    return;
+                }
+                var entityRecord = entityIdToRecord[entityId];
+                var specificData = entityRecord.data.Last();
+                if (payload is ChefCarryMessage ccm) {
+                    specificData.attachment = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
+                } else if (payload is MixingStateMessage msm) {
+                    entityRecord.progress.ChangeTo(msm.m_mixingProgress, frame);
+                } else if (payload is CookingStateMessage csm) {
+                    entityRecord.progress.ChangeTo(csm.m_cookingProgress, frame);
+                } else if (payload is PhysicalAttachMessage pam) {
+                    specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
+                } else if (payload is WorkstationMessage wm) {
+                    var interacter = (int)wm.m_interactorHeader.m_uEntityID;
+                    var board = entityRecord;
+                    var chef = entityIdToRecord[interacter];
+                    if (specificData.chopInteracters == null) {
+                        specificData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>();
+                    } else {
+                        specificData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>(specificData.chopInteracters);
+                    }
+                    if (wm.m_interacting) {
+                        specificData.chopInteracters[chef] = TimeSpan.FromSeconds(0.2);
+                        specificData.itemBeingChopped = entityIdToRecord[(int)wm.m_itemHeader.m_uEntityID];
+                    } else {
+                        specificData.chopInteracters.Remove(chef);
+                    }
+                } else if (payload is AttachStationMessage asm) {
+                    specificData.attachment = asm.m_item <= 0 ? null : entityIdToRecord[asm.m_item];
+                } else if (payload is IngredientContainerMessage icm) {
+                    specificData.contents = icm.Contents?.Flatten()?.ToList();
+                }
+                entityRecord.data.ChangeTo(specificData, frame);
+            };
+
             Action<SpawnEntityMessage> spawnHandler = (SpawnEntityMessage sem) => {
                 var spawner = entityIdToRecord[(int)sem.m_SpawnerHeader.m_uEntityID];
                 Console.WriteLine($"Spawning {sem.m_DesiredHeader.m_uEntityID}");
@@ -111,8 +166,7 @@ namespace Hpmv {
                     var spawnedPrefab = spawner.prefab.Spawns[sem.m_SpawnableID];
                     child = new GameEntityRecord {
                         path = new EntityPath {
-                            id = spawner.spawned.Count,
-                            parent = spawner.path
+                            ids = spawner.path.ids.Append(spawner.spawned.Count).ToArray(),
                         },
                         prefab = spawnedPrefab,
                         spawner = spawner,
@@ -131,43 +185,11 @@ namespace Hpmv {
 
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
             if (item is EntitySynchronisationMessage sync) {
-                if (!entityIdToRecord.ContainsKey((int)sync.m_Header.m_uEntityID)) {
-                    Console.WriteLine("Ignoring entity sync event for " + sync.m_Header.m_uEntityID);
-                    return;
-                }
-                var entityRecord = entityIdToRecord[(int)sync.m_Header.m_uEntityID];
-                var specificData = entityRecord.data.Last();
                 foreach (var (type, payload) in sync.m_Payloads) {
-                    if (payload is ChefCarryMessage ccm) {
-                        specificData.carriedItem = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
-                    } else if (payload is MixingStateMessage msm) {
-                        specificData.progress = msm.m_mixingProgress;
-                    } else if (payload is CookingStateMessage csm) {
-                        specificData.progress = csm.m_cookingProgress;
-                    } else if (payload is PhysicalAttachMessage pam) {
-                        specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
-                    }
+                    entityHandler((int)sync.m_Header.m_uEntityID, payload);
                 }
-                entityRecord.data.ChangeTo(specificData, frame);
             } else if (item is EntityEventMessage eem) {
-                if (!entityIdToRecord.ContainsKey((int)eem.m_Header.m_uEntityID)) {
-                    Console.WriteLine("Ignoring entity event for " + eem.m_Header.m_uEntityID);
-                    return;
-                }
-                var entityRecord = entityIdToRecord[(int)eem.m_Header.m_uEntityID];
-                var specificData = entityRecord.data.Last();
-                var payload = eem.m_Payload;
-                if (payload is ChefCarryMessage ccm) {
-                    specificData.carriedItem = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
-                } else if (payload is MixingStateMessage msm) {
-                    specificData.progress = msm.m_mixingProgress;
-                } else if (payload is CookingStateMessage csm) {
-                    specificData.progress = csm.m_cookingProgress;
-                } else if (payload is PhysicalAttachMessage pam) {
-                    Console.WriteLine("Attachment msg for " + entityRecord + ": " + pam.m_parent);
-                    specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
-                }
-                entityRecord.data.ChangeTo(specificData, frame);
+                entityHandler((int)eem.m_Header.m_uEntityID, eem.m_Payload);
             } else if (item is SpawnEntityMessage sem) {
                 spawnHandler(sem);
             } else if (item is SpawnPhysicalAttachmentMessage spem) {
@@ -178,6 +200,8 @@ namespace Hpmv {
                 foreach (var i in dems.m_ids) {
                     entityIdToRecord[(int)i].existed.ChangeTo(false, frame);
                 }
+            } else if (item is TimeSyncMessage tsm) {
+                Console.WriteLine(toJson(tsm));
             }
         }
 
@@ -215,7 +239,32 @@ namespace Hpmv {
 
         public void ApplyPositionUpdate(int entityId, ItemData data) {
             if (entityIdToRecord.ContainsKey(entityId)) {
-                entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);
+                if (data.__isset.pos) {
+                    entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);
+                }
+                if (data.__isset.velocity) {
+                    entityIdToRecord[entityId].velocity.ChangeTo(data.Velocity.ToNumericsVector(), frame);
+                }
+            }
+        }
+
+        public void AdvanceFrameAfterReceivingGameMessages() {
+            // Advance chopping board item progress.
+            foreach (var entity in Records.FixedEntities) {
+                var chopInteracters = entity.data.Last().chopInteracters;
+                if (chopInteracters != null) {
+                    var newData = entity.data.Last();
+                    newData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>(chopInteracters);
+                    foreach (var (chef, remain) in chopInteracters) {
+                        var newRemain = remain - TimeSpan.FromSeconds(1) / 60;
+                        if (newRemain < TimeSpan.Zero) {
+                            newData.itemBeingChopped.progress.ChangeTo(newData.itemBeingChopped.progress.Last() + 0.2, frame);
+                            newRemain += TimeSpan.FromSeconds(0.2);
+                        }
+                        newData.chopInteracters[chef] = newRemain;
+                    }
+                    entity.data.ChangeTo(newData, frame);
+                }
             }
         }
     }

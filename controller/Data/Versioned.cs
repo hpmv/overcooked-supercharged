@@ -3,13 +3,13 @@ using System.Collections.Generic;
 
 namespace Hpmv {
     public class Versioned<T> {
-        private T initialValue;
+        public readonly T initialValue;
 
         public Versioned(T initialValue) {
             this.initialValue = initialValue;
         }
 
-        private List<(int time, T value)> changes = new List<(int, T)>();
+        public List<(int time, T value)> changes = new List<(int, T)>();
 
         public void ChangeTo(T value, int time) {
             if (changes.Count > 0 && changes[changes.Count - 1].time > time) {
@@ -54,6 +54,10 @@ namespace Hpmv {
 
         public T Last() {
             return changes.Count == 0 ? initialValue : changes[changes.Count - 1].value;
+        }
+
+        public void AppendWith(int frame, Func<T, T> func) {
+            ChangeTo(func(Last()), frame);
         }
     }
 }

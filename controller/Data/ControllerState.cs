@@ -21,12 +21,12 @@ namespace Hpmv {
             }
         }
 
-        private Vector2 axes;
-        private TimeSpan buttonCooldown;
-        private TimeSpan pickupCooldown;
-        private bool primaryButtonDown;
-        private bool secondaryButtonDown;
-        private TimeSpan buttonDownDurationLeft;
+        public Vector2 axes;
+        public TimeSpan buttonCooldown;
+        public TimeSpan pickupCooldown;
+        public bool primaryButtonDown;
+        public bool secondaryButtonDown;
+        public TimeSpan buttonDownDurationLeft;
 
         private ControllerState AdvanceFrame() {
             //TimeSpan elapsed = DateTime.Now - prevTime;
@@ -112,6 +112,30 @@ namespace Hpmv {
             output.secondary.isDown = copy.secondaryButtonDown;
             output.dash.justPressed = input.dash;
             return (copy.AdvanceFrame(), output);
+        }
+
+        public Save.ControllerState ToProto() {
+            return new Save.ControllerState {
+                Axes = axes.ToProto(),
+                ButtonCooldown = buttonCooldown.TotalMilliseconds,
+                PickupCooldown = pickupCooldown.TotalMilliseconds,
+                PrimaryButtonDown = primaryButtonDown,
+                SecondaryButtonDown = secondaryButtonDown,
+                ButtonDownDurationLeft = buttonDownDurationLeft.TotalMilliseconds
+            };
+        }
+    }
+
+    public static class ControllerStateFromProto {
+        public static ControllerState FromProto(this Save.ControllerState state) {
+            return new ControllerState {
+                axes = state.Axes.FromProto(),
+                buttonCooldown = TimeSpan.FromMilliseconds(state.ButtonCooldown),
+                pickupCooldown = TimeSpan.FromMilliseconds(state.PickupCooldown),
+                primaryButtonDown = state.PrimaryButtonDown,
+                secondaryButtonDown = state.SecondaryButtonDown,
+                buttonDownDurationLeft = TimeSpan.FromMilliseconds(state.ButtonDownDurationLeft),
+            };
         }
     }
 }

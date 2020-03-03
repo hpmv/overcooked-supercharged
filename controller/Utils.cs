@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using Newtonsoft.Json;
+using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
     public static class CollectionsUtils {
@@ -19,19 +21,19 @@ namespace Hpmv {
         }
 
         public static UnityEngine.Vector3 ToUnityVector(this Point vector) {
-            return new UnityEngine.Vector3((float) vector.X, (float) vector.Y, (float) vector.Z);
+            return new UnityEngine.Vector3((float)vector.X, (float)vector.Y, (float)vector.Z);
         }
 
         public static Vector3 ToNumericsVector(this Point vector) {
-            return new Vector3((float) vector.X, (float) vector.Y, (float) vector.Z);
+            return new Vector3((float)vector.X, (float)vector.Y, (float)vector.Z);
         }
 
         public static UnityEngine.Vector3 ToUnityVector(this Vector3 vector) {
             return new UnityEngine.Vector3(vector.X, vector.Y, vector.Z);
         }
 
-        public static Vector3 ToXZVector3(this(double x, double y) d) {
-            return new Vector3((float) d.x, 0, (float) d.y);
+        public static Vector3 ToXZVector3(this (double x, double y) d) {
+            return new Vector3((float)d.x, 0, (float)d.y);
         }
 
         public static Vector3 ToXZVector3(this Vector2 d) {
@@ -40,6 +42,42 @@ namespace Hpmv {
 
         public static Vector2 XZ(this Vector3 vector) {
             return new Vector2(vector.X, vector.Z);
+        }
+    }
+
+    public static class JsonUtils {
+        public static string toJson(this Serialisable serialisable) {
+            if (serialisable == null) return "(null)";
+            string serialized;
+            try {
+                serialized = JsonConvert.SerializeObject(serialisable, new JsonSerializerSettings() {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                    Formatting = Formatting.Indented
+                });
+            } catch (Exception e) {
+                serialized = e.Message;
+            }
+            return serialized;
+        }
+    }
+
+    public static class IngredientsUtils {
+        public static IEnumerable<int> Flatten(this AssembledDefinitionNode[] nodes) {
+            foreach (var node in nodes) {
+                foreach (var item in node.Flatten()) {
+                    yield return item;
+                }
+            }
+        }
+
+        public static IEnumerable<int> Flatten(this AssembledDefinitionNode node) {
+            if (node is CompositeAssembledNode composite) {
+                foreach (var item in composite.m_composition.Flatten()) {
+                    yield return item;
+                }
+            } else if (node is IngredientAssembledNode ingredient) {
+                yield return ingredient.id;
+            }
         }
     }
 }

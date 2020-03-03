@@ -309,7 +309,19 @@ app {
     margin-left: 10px;
     margin-right: 10px;
     font-size: 12px;
-    margin-left: 4px;
+    margin-left: 10px;
+    display: flex;
+}
+
+.schedule-selecting .one-action {
+    opacity: 0.5;
+}
+
+.one-action:hover,
+.schedule-selecting .one-action:hover {
+    opacity: 1;
+    background-color: rgb(203, 203, 255);
+    border-color: rgb(0, 0, 0);
 }
 
 .unstarted-action {
@@ -327,17 +339,6 @@ app {
     width: 20px;
 }
 
-.one-action-chef--1 {
-    left: 10px;
-}
-
-.one-action-chef-97 {
-    left: 40px;
-}
-
-.one-action-chef-103 {
-    left: 70px;
-}
 
 .one-action-type-GotoAction {
     background-color: rgb(255, 252, 235);
@@ -363,7 +364,35 @@ app {
     border-color: black;
 }
 
+.one-action-text {
+    flex: 1;
+    text-overflow: ellipsis;
+}
 
+.one-action-dep {
+    margin-right: 2px;
+    font-size: 11px;
+    border-radius: 4px;
+    padding: 1px;
+    align-self: flex-start;
+    line-height: 8px;
+    padding: 2px;
+    margin-top: 2px;
+    color: white;
+}
+
+.one-action-dep-chef-red {
+    background-color: red;
+}
+.one-action-dep-chef-yellow {
+    background-color: rgb(224, 202, 0);
+}
+.one-action-dep-chef-green {
+    background-color: green;
+}
+.one-action-dep-chef-blue {
+    background-color: blue;
+}
 
 .one-record {
     display: flex;
@@ -449,6 +478,44 @@ app {
     flex-direction: column;
 }
 
+.record-vis-progress {
+    position: absolute;
+    top: 15px;
+    left: -20px;
+    height: 3px;
+    width: 40px;
+    z-index: 10;
+}
+
+.record-vis-interacters {
+    position: absolute;
+    display: flex;
+    flex-direction: row-reverse;
+    width: 46px;
+    top: -23px;
+    left: -23px;
+}
+
+.record-vis-interacter {
+    margin: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.record-vis-interacter-chef-red {
+    background-color: red;
+}
+.record-vis-interacter-chef-yellow {
+    background-color: rgb(224, 202, 0);
+}
+.record-vis-interacter-chef-green {
+    background-color: green;
+}
+.record-vis-interacter-chef-blue {
+    background-color: blue;
+}
+
 .record-vis-type- {
     width: 46px;
     height: 46px;
@@ -513,24 +580,52 @@ app {
 
 .record-vis-type-egg,
 .record-vis-type-flour,
-.record-vis-type-berry,
-.record-vis-type-chocolate,
-.record-vis-type-honey {
+.record-vis-type-chopped-berry,
+.record-vis-type-chopped-chocolate,
+.record-vis-type-chopped-honey {
     border: 1px solid orange;
     width: 26px;
     height: 26px;
     border-radius: 13px;
     z-index: 5;
+    background-size: contain;
+    color: transparent;
 }
 
-.record-vis-type-chopped-berry,
-.record-vis-type-chopped-chocolate,
+.record-vis-type-egg {
+    background-image: url('../images/egg_Icon-resources.assets-353.png');
+}
+.record-vis-type-flour {
+    background-image: url('../images/Flour_Icon-resources.assets-512.png');
+}
+.record-vis-type-chopped-berry {
+    background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
+}
+.record-vis-type-chopped-chocolate {
+    background-image: url('../images/chocolate_Icon-resources.assets-504.png');
+}
 .record-vis-type-chopped-honey {
-    width: 26px;
-    height: 26px;
-    border-radius: 13px;
-    border: 1px solid rgb(180, 117, 0);
+    background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
+}
+
+.record-vis-type-berry,
+.record-vis-type-chocolate,
+.record-vis-type-honey {
+    width: 32px;
+    height: 32px;
     z-index: 5;
+    color: transparent;
+    border: none;
+    background-size: contain;
+}
+.record-vis-type-berry {
+    background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
+}
+.record-vis-type-chocolate {
+    background-image: url('../images/chocolate_Icon-resources.assets-504.png');
+}
+.record-vis-type-honey {
+    background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
 }
 
 .record-vis-type-plate {
@@ -542,10 +637,170 @@ app {
     z-index: 4;
 }
 
-.record-vis-type-ignored {
+.record-vis-type-unknown {
+    color: white;
+}
+
+.record-vis-ingredient-container {
+    position: absolute;
+    top: -36px;
+    left: -25px;
+    height: 20px;
+    width: 50px;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.record-vis-ingredient {
+    width: 16px;
+    height: 16px;
+    color: transparent;
+    text-align: center;
+    background-size: contain;
+}
+
+
+.record-vis-ingredient-16620 {
+    background-image: url('../images/egg_Icon-resources.assets-353.png');
+}
+.record-vis-ingredient-18448 {
+    background-image: url('../images/Flour_Icon-resources.assets-512.png');
+}
+.record-vis-ingredient-129618 {
+    background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
+}
+.record-vis-ingredient-22804 {
+    background-image: url('../images/chocolate_Icon-resources.assets-504.png');
+}
+.record-vis-ingredient-19670 {
+    background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
+}
+
+.chef-input-vis {
+    display: flex;
+    align-items: center;
+}
+
+.input-axis-vis {
+    width: 40px;
+    height: 40px;
+    border: 1px solid gray;
+    border-radius: 50%;
+    position: relative;
+}
+
+.input-axis-dot {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: black;
+    margin-left: -1.5px;
+    margin-top: -1.5px;
+}
+
+.input-button-vis {
+    box-sizing: content-box;
+    width: 36px;
+    height: 24px;
+    text-align: center;
+    line-height: 24px;
+    border-radius: 6px;
+    background-color: rgb(189, 189, 189);
+    border: 1px solid gray;
+    margin: 2px;
+    margin-left: 22px;
+}
+
+.input-button-vis-down {
+    background-color: rgb(172, 172, 255);
+    border: 1px solid blue;
+}
+
+.input-button-vis-just-pressed {
+    border: 3px solid red;
+    margin: 0;
+    margin-left: 20px;
+}
+.input-button-vis-just-released {
+    border: 3px solid gray;
+    margin: 0;
+    margin-left: 20px;
+}
+
+
+.action-insertion-prompt {
+    border-radius: 6px;
+    background-color: white;
+    width: 180px;
+    border: 1px solid gray;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.action-insertion-prompt-selected {
+    border-radius: 6px;
+    background-color: yellow;
+    width: 180px;
+    border: 1px solid gray;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.schedule-selecting .action-insertion-prompt {
     display: none;
 }
 
-.record-vis-type-unknown {
-    color: white;
+.action-editor {
+    width: 200px;
+    margin: 10px;
+}
+
+.action-editor-title {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.action-editor-dep {
+    display: flex;
+    align-items: center;
+    border: 1px solid gray;
+    border-radius: 8px;
+    padding: 5px;
+    margin:4px;
+}
+
+.action-editor-dep-title {
+    flex: 1;
+}
+
+.action-editor-dep-chef-red,
+.action-editor-dep-chef-yellow,
+.action-editor-dep-chef-green,
+.action-editor-dep-chef-blue {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    margin: 4px;
+    margin-right: 8px;
+}
+
+.action-editor-dep-chef-red {
+    background-color: red;
+}
+.action-editor-dep-chef-yellow {
+    background-color: rgb(224, 202, 0);
+}
+.action-editor-dep-chef-green {
+    background-color: green;
+}
+.action-editor-dep-chef-blue {
+    background-color: blue;
+}
+
+.action-editor-dep-delete {
+    border: none;
+    border-radius: 4px;
 }

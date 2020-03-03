@@ -43,5 +43,23 @@ namespace Hpmv {
             }
             return default;
         }
+
+        public Save.ThrowAction ToProto() {
+            return new Save.ThrowAction {
+                Location = Location.ToProto(),
+                Bias = Bias.ToProto(),
+                AngleAllowance = AngleAllowance
+            };
+        }
+    }
+
+    public static class ThrowActionFromProto {
+        public static ThrowAction FromProto(this Save.ThrowAction action, LoadContext context) {
+            return new ThrowAction {
+                Location = action.Location.FromProto(context),
+                Bias = action.Bias.FromProto(),
+                AngleAllowance = action.AngleAllowance
+            };
+        }
     }
 }

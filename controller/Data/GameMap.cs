@@ -29,6 +29,10 @@ namespace Hpmv {
             return new Vector2((coord.X - topLeft.X) / 1.2f, (coord.Y - topLeft.Y) / -1.2f);
         }
 
+        public (int x, int y) CoordsToGridPosRounded(Vector2 coord) {
+            return ((int)Math.Round((coord.X - topLeft.X) / 1.2), (int)Math.Round((coord.Y - topLeft.Y) / -1.2));
+        }
+
         private bool[,,] precomputedConnectivity;
         private List<IntPoint> boundaryPoints = new List<IntPoint>();
         private List<List<int>> pointsMesh = new List<List<int>>();
@@ -132,7 +136,10 @@ namespace Hpmv {
         }
 
         public List<Vector2> FindPath(Vector2 start, List<Vector2> ends) {
-            debugConnectivity.Clear();
+            if (ends.Count == 0) {
+                return new List<Vector2>();
+            }
+            // debugConnectivity.Clear();
 
             var startDis = Discretize(start);
             var endDis = ends.Select(Discretize).ToList();
@@ -161,7 +168,7 @@ namespace Hpmv {
                     var dist = DistanceApprox(boundaryPoints[i], boundaryPoints[j]);
                     graph.Connect(boundaryIndices[i], boundaryIndices[j], dist, 0);
                     graph.Connect(boundaryIndices[j], boundaryIndices[i], dist, 0);
-                    debugConnectivity.Add((vertices[i], vertices[j]));
+                    // debugConnectivity.Add((vertices[i], vertices[j]));
                 }
             }
             for (int k = 0; k < boundaryPoints.Count; k++) {
@@ -171,7 +178,7 @@ namespace Hpmv {
                     var dist = DistanceApprox(startDis, boundaryPoints[k]);
                     graph.Connect(startIndex, boundaryIndices[k], dist, 0);
                     graph.Connect(boundaryIndices[k], startIndex, dist, 0);
-                    debugConnectivity.Add((vertices[boundaryPoints.Count], vertices[k]));
+                    // debugConnectivity.Add((vertices[boundaryPoints.Count], vertices[k]));
                 }
             }
             for (int i = 0; i < ends.Count; i++) {
@@ -183,14 +190,14 @@ namespace Hpmv {
                         var dist = DistanceApprox(endDis[i], boundaryPoints[k]);
                         graph.Connect(endIndices[i], boundaryIndices[k], dist, 0);
                         graph.Connect(boundaryIndices[k], endIndices[i], dist, 0);
-                        debugConnectivity.Add((vertices[boundaryPoints.Count + 1 + i], vertices[k]));
+                        // debugConnectivity.Add((vertices[boundaryPoints.Count + 1 + i], vertices[k]));
                     }
                 }
                 if (LineIsInsidePolygon(startDis, endDis[i])) {
                     var dist = DistanceApprox(startDis, endDis[i]);
                     graph.Connect(startIndex, endIndices[i], dist, 0);
                     graph.Connect(endIndices[i], startIndex, dist, 0);
-                    debugConnectivity.Add((vertices[boundaryPoints.Count], vertices[boundaryPoints.Count + 1 + i]));
+                    // debugConnectivity.Add((vertices[boundaryPoints.Count], vertices[boundaryPoints.Count + 1 + i]));
                 }
             }
 
@@ -210,14 +217,8 @@ namespace Hpmv {
             return pointResult;
         }
 
-        public Vector2 EnsureInsideMap(Vector2 initial) {
-            var offsets = new Vector2[] { Vector2.Zero, new Vector2(0.005f, 0.005f), new Vector2(0.005f, -0.005f), new Vector2(-0.005f, 0.005f), new Vector2(-0.005f, -0.005f) };
-            foreach (var offset in offsets) {
-                if (PathFinding.IsInside(Discretize(initial + offset), LevelPolygons)) {
-                    return initial + offset;
-                }
-            }
-            return initial;
+        public bool IsInsideMap(Vector2 v) {
+            return PathFinding.IsInside(Discretize(v), LevelPolygons);
         }
 
         private static double Distance(IntPoint a, IntPoint b) {

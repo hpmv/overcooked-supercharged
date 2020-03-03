@@ -9,8 +9,7 @@ namespace Hpmv {
 
         public override GameActionOutput Step(GameActionInput input) {
             var entity = Entity.GetEntityRecord(input);
-            var specific = entity.data[input.Frame];
-            if (specific.progress >= Progress) {
+            if (entity.progress[input.Frame] >= Progress) {
                 return new GameActionOutput {
                     Done = true,
                 };

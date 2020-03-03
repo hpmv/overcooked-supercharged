@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 
 namespace Hpmv {
-    class CatchAction : GameAction {
+    public class CatchAction : GameAction {
         public Vector2 FacingDirection { get; set; }
         public string Label { get; set; } = "?";
 
@@ -10,7 +10,7 @@ namespace Hpmv {
         }
 
         public override GameActionOutput Step(GameActionInput input) {
-            if (Chef.data[input.Frame].carriedItem != null) {
+            if (Chef.data[input.Frame].attachment != null) {
                 return new GameActionOutput { Done = true };
             }
             var chefState = Chef.chefState[input.Frame];
@@ -22,6 +22,22 @@ namespace Hpmv {
                 };
             }
             return default;
+        }
+
+        public Save.CatchAction ToProto() {
+            return new Save.CatchAction {
+                FacingDirection = FacingDirection.ToProto(),
+                Label = Label
+            };
+        }
+    }
+
+    public static class CatchActionFromProto {
+        public static CatchAction FromProto(this Save.CatchAction action) {
+            return new CatchAction {
+                FacingDirection = action.FacingDirection.FromProto(),
+                Label = action.Label
+            };
         }
     }
 }
