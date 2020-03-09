@@ -7,7 +7,6 @@ namespace Hpmv {
         public readonly List<GameEntityRecord> FixedEntities = new List<GameEntityRecord>();
         public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new Dictionary<GameEntityRecord, Versioned<ControllerState>>();
         public readonly Dictionary<int, Vector3> CapturedInitialPositions = new Dictionary<int, Vector3>();
-        public readonly Dictionary<int, PrefabRecord> PrefabRecords = new Dictionary<int, PrefabRecord>();
 
         public IEnumerable<GameEntityRecord> GenAllEntities() {
             foreach (var record in FixedEntities) {
@@ -35,15 +34,8 @@ namespace Hpmv {
             return item;
         }
 
-        public void RegisterPrefabRecord(int entityId, PrefabRecord record) {
-            PrefabRecords[entityId] = record;
-        }
-
         public GameEntityRecord RegisterKnownObject(int entityId) {
-            var prefab = PrefabRecords.ContainsKey(entityId) ? PrefabRecords[entityId] : null;
-            if (prefab == null) {
-                prefab = new PrefabRecord("", "unknown");
-            }
+            var prefab = new PrefabRecord("", "unknown");
             var pos = CapturedInitialPositions[entityId];
             CapturedInitialPositions.Remove(entityId);
             return RegisterKnownObject(prefab.Name, prefab.ClassName, entityId, pos, prefab);
@@ -112,6 +104,17 @@ namespace Hpmv {
             foreach (var state in Chefs) {
                 state.Value.RemoveAllFrom(frame);
             }
+        }
+
+        public Save.GameEntityRecords ToProto() {
+            var result = new Save.GameEntityRecords();
+            foreach (var entity in GenAllEntities()) {
+                result.AllRecords.Add(entity.ToProto());
+            }
+            foreach (var (chef, controller) in Chefs) {
+                result.Controllers[chef.path.ids[0]] = controller.ToProto();
+            }
+            return result;
         }
     }
 }

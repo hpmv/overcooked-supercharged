@@ -8,6 +8,31 @@ namespace Hpmv {
         public GameAction Action { get; set; }
         public List<int> Deps { get; set; }
         public GameActionPredictions Predictions { get; set; }
+
+        public Save.GameActionNode ToProto() {
+            var proto = new Save.GameActionNode {
+                ActionId = Id,
+                Action = Action.ToProto(),
+                ChefIndex = Action.Chef.path.ids[0],
+                Predictions = Predictions.ToProto(),
+            };
+            proto.Deps.AddRange(Deps);
+            return proto;
+        }
+    }
+
+    public static class GameActionNodeFromProto {
+        public static GameActionNode FromProto(this Save.GameActionNode node, LoadContext context) {
+            var result = new GameActionNode {
+                Id = node.ActionId,
+                Deps = node.Deps.ToList(),
+                Predictions = node.Predictions.FromProto(),
+                Action = node.Action.FromProto(context)
+            };
+            result.Action.ActionId = node.ActionId;
+            result.Action.Chef = context.GetRootRecord(node.ChefIndex);
+            return result;
+        }
     }
 
     public class GameActionSequences {
@@ -41,10 +66,10 @@ namespace Hpmv {
         public void CleanTimingsFromFrame(int frame) {
             foreach (var actions in Actions) {
                 foreach (var action in actions) {
-                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame > frame) {
+                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame >= frame) {
                         action.Predictions.StartFrame = null;
                     }
-                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame > frame) {
+                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame >= frame) {
                         action.Predictions.EndFrame = null;
                     }
                 }
@@ -66,7 +91,7 @@ namespace Hpmv {
                     if (action.Predictions.EndFrame == null) {
                         action.Predictions.EndFrame = lastFrame;
                     }
-                    lastFrame = action.Predictions.EndFrame ?? 0;
+                    lastFrame = (action.Predictions.EndFrame ?? 0) + 1;
                 }
             }
 
@@ -121,5 +146,37 @@ namespace Hpmv {
             return graph;
         }
 
+        public Save.GameActionSequences ToProto() {
+            var result = new Save.GameActionSequences();
+            foreach (var (chef, index) in ChefIndexByChef) {
+                var chefActions = new Save.GameActionChefList();
+                result.Chefs.Add(chefActions);
+                chefActions.Chef = chef.path.ToProto();
+                foreach (var action in Actions[index]) {
+                    chefActions.Actions.Add(action.ToProto());
+                }
+            }
+            return result;
+        }
+    }
+
+    public static class GameActionSequencesFromProto {
+        public static GameActionSequences FromProto(this Save.GameActionSequences sequences, LoadContext context) {
+            var result = new GameActionSequences();
+            foreach (var chef in sequences.Chefs) {
+                var chefEntity = chef.Chef.FromProtoRef(context);
+                result.ChefIndexByChef[chefEntity] = result.Chefs.Count;
+                result.Chefs.Add(chefEntity);
+                var actions = new List<GameActionNode>();
+                result.Actions.Add(actions);
+                foreach (var action in chef.Actions) {
+                    var node = action.FromProto(context);
+                    actions.Add(node);
+                    result.NodeById[node.Id] = node;
+                    result.NextId = Math.Max(result.NextId, node.Id + 1);
+                }
+            }
+            return result;
+        }
     }
 }

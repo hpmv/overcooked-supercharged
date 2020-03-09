@@ -2,66 +2,61 @@
 using BitStream;
 using Team17.Online.Multiplayer.Messaging;
 
-// Token: 0x02000621 RID: 1569
-public class WashingStationMessage : Serialisable
-{
-	// Token: 0x06001DD2 RID: 7634 RVA: 0x00090824 File Offset: 0x0008EC24
-	public void Serialise(BitStreamWriter writer)
-	{
-		writer.Write((uint)this.m_msgType, 2);
-		if (this.m_msgType == WashingStationMessage.MessageType.InteractionState)
-		{
-			writer.Write(this.m_interacting);
-			writer.Write(this.m_progress);
-		}
-		else
-		{
-			writer.Write((uint)this.m_plateCount, 4);
-		}
-	}
+// THIS CLASS IS MODIFIED FROM THE ORIGINAL.
+public class WashingStationMessage : Serialisable {
+    // Token: 0x06001FC9 RID: 8137
+    public void Serialise(BitStreamWriter writer) {
+        writer.Write((uint)this.m_msgType, 2);
+        if (this.m_msgType == WashingStationMessage.MessageType.InteractionState) {
+            writer.Write(this.m_interacting);
+            writer.Write(this.m_interacter, 32);
+            writer.Write(this.m_progress);
+            return;
+        }
+        writer.Write((uint)this.m_plateCount, 4);
+    }
 
-	// Token: 0x06001DD3 RID: 7635 RVA: 0x00090874 File Offset: 0x0008EC74
-	public bool Deserialise(BitStreamReader reader)
-	{
-		this.m_msgType = (WashingStationMessage.MessageType)reader.ReadUInt32(2);
-		if (this.m_msgType == WashingStationMessage.MessageType.InteractionState)
-		{
-			this.m_interacting = reader.ReadBit();
-			this.m_progress = reader.ReadFloat32();
-		}
-		else
-		{
-			this.m_plateCount = (int)reader.ReadUInt32(4);
-		}
-		return true;
-	}
+    // Token: 0x06001FCA RID: 8138
+    public bool Deserialise(BitStreamReader reader) {
+        this.m_msgType = (WashingStationMessage.MessageType)reader.ReadUInt32(2);
+        if (this.m_msgType == WashingStationMessage.MessageType.InteractionState) {
+            this.m_interacting = reader.ReadBit();
+            this.m_interacter = reader.ReadUInt32(32);
+            this.m_progress = reader.ReadFloat32();
+        } else {
+            this.m_plateCount = (int)reader.ReadUInt32(4);
+        }
+        return true;
+    }
 
-	// Token: 0x040016D5 RID: 5845
-	private const int c_msgTypeBits = 2;
+    // Token: 0x040019C3 RID: 6595
+    private const int c_msgTypeBits = 2;
 
-	// Token: 0x040016D6 RID: 5846
-	private const int c_plateCountBits = 4;
+    // Token: 0x040019C4 RID: 6596
+    private const int c_plateCountBits = 4;
 
-	// Token: 0x040016D7 RID: 5847
-	public WashingStationMessage.MessageType m_msgType;
+    // Token: 0x040019C5 RID: 6597
+    public WashingStationMessage.MessageType m_msgType;
 
-	// Token: 0x040016D8 RID: 5848
-	public bool m_interacting;
+    // Token: 0x040019C6 RID: 6598
+    public bool m_interacting;
 
-	// Token: 0x040016D9 RID: 5849
-	public float m_progress;
+    // Token: 0x040019C7 RID: 6599
+    public float m_progress;
 
-	// Token: 0x040016DA RID: 5850
-	public int m_plateCount;
+    // Token: 0x040019C8 RID: 6600
+    public int m_plateCount;
 
-	// Token: 0x02000622 RID: 1570
-	public enum MessageType
-	{
-		// Token: 0x040016DC RID: 5852
-		InteractionState,
-		// Token: 0x040016DD RID: 5853
-		AddPlates,
-		// Token: 0x040016DE RID: 5854
-		CleanedPlate
-	}
+    // Token: 0x040039FF RID: 14847
+    public uint m_interacter;
+
+    // Token: 0x02000697 RID: 1687
+    public enum MessageType {
+        // Token: 0x040019CA RID: 6602
+        InteractionState,
+        // Token: 0x040019CB RID: 6603
+        AddPlates,
+        // Token: 0x040019CC RID: 6604
+        CleanedPlate
+    }
 }

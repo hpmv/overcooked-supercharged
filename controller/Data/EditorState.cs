@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Hpmv {
     public class EditorState {
         public GameEntityRecord SelectedChef { get; set; }
         public int SelectedActionIndex { get; set; }
         public int SelectedFrame { get; set; }
-        public int LastSimulatedFrame { get; set; }
 
         public GameActionSequences Sequences { get; set; }
         public GameEntityRecords Records { get; set; }
+        public GameMap Map { get; set; }
 
         public List<ActionTemplate> GetActionTemplatesForEntity(GameEntityRecord entity) {
             var templates = new List<ActionTemplate>();
@@ -28,12 +29,29 @@ namespace Hpmv {
             }
             templates.Add(new PlaceItemActionTemplate(entity));
             templates.Add(new PrepareToInteractActionTemplate(entity));
-            if (entity.prefab.Spawns.Count > 0) {
-                templates.Add(new WaitForSpawnActionTemplate(entity));
+            if (entity.prefab.Name == "Dirty Plate Spawner") {
+                templates.Add(new WaitForDirtyPlateActionTemplate(entity, 1));
+                templates.Add(new WaitForDirtyPlateActionTemplate(entity, 2));
+                templates.Add(new WaitForDirtyPlateActionTemplate(entity, 3));
+            } else if (entity.prefab.Name == "Clean Plate Spawner") {
+                templates.Add(new WaitForCleanPlateActionTemplate(entity));
+            } else {
+                if (entity.prefab.Spawns.Count > 0) {
+                    templates.Add(new WaitForSpawnActionTemplate(entity));
+                }
+                if (entity.prefab.MaxProgress > 0) {
+                    templates.Add(new WaitForMaxProgressActionTemplate(entity));
+                }
             }
-            if (entity.prefab.MaxProgress > 0) {
-                templates.Add(new WaitForMaxProgressActionTemplate(entity));
-            }
+            return templates;
+        }
+
+        public List<ActionTemplate> GetActionTemplatesForPosition(Vector2 pos) {
+            var templates = new List<ActionTemplate>();
+            var (gridX, gridY) = Map.CoordsToGridPosRounded(pos);
+            templates.Add(new ThrowTowardsPositionActionTemplate(pos));
+            templates.Add(new GotoPosActionTemplate(gridX, gridY));
+            templates.Add(new WaitForFramesActionTemplate(5));
             return templates;
         }
 
@@ -43,6 +61,13 @@ namespace Hpmv {
                 Sequences.InsertAction(SelectedChef, SelectedActionIndex, action);
                 SelectedActionIndex++;
             }
+        }
+
+        public int ResimulationFrame() {
+            if (SelectedActionIndex == 0 || SelectedChef == null) {
+                return 0;
+            }
+            return Sequences.Actions[Sequences.ChefIndexByChef[SelectedChef]][SelectedActionIndex - 1].Predictions.EndFrame ?? 0;
         }
     }
 
@@ -66,6 +91,46 @@ namespace Hpmv {
             return new List<GameAction>{
                  new ThrowAction{
                      Location = new EntityLocationToken(Record.ReverseEngineerStableEntityReference(frame))}
+                 };
+        }
+    }
+
+    public class ThrowTowardsPositionActionTemplate : ActionTemplate {
+        public Vector2 Pos { get; set; }
+
+        public ThrowTowardsPositionActionTemplate(Vector2 pos) {
+            Pos = pos;
+        }
+
+        public string Describe() {
+            return $"Throw towards {Pos}";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                 new ThrowAction{
+                     Location = new LiteralLocationToken(Pos)}
+                 };
+        }
+    }
+
+    public class GotoPosActionTemplate : ActionTemplate {
+        public int GridX { get; set; }
+        public int GridY { get; set; }
+
+        public GotoPosActionTemplate(int gridX, int gridY) {
+            GridX = gridX;
+            GridY = gridY;
+        }
+
+        public string Describe() {
+            return $"Goto grid ({GridX}, {GridY})";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                 new GotoAction{
+                     DesiredPos = new GridPosLocationToken(GridX, GridY)}
                  };
         }
     }
@@ -208,6 +273,71 @@ namespace Hpmv {
                 new WaitForProgressAction {
                     Entity = Record.ReverseEngineerStableEntityReference(frame),
                     Progress = Record.prefab.MaxProgress
+                }
+            };
+        }
+    }
+
+    public class WaitForDirtyPlateActionTemplate : ActionTemplate {
+        public GameEntityRecord Spawner { get; set; }
+        public int NumPlates { get; set; }
+
+        public WaitForDirtyPlateActionTemplate(GameEntityRecord spawner, int numPlates) {
+            Spawner = spawner;
+            NumPlates = numPlates;
+        }
+
+        public string Describe() {
+            return $"Wait for {NumPlates} dirty plates";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitForDirtyPlateAction {
+                    DirtyPlateSpawner = Spawner,
+                    Count = NumPlates
+                }
+            };
+        }
+    }
+
+    public class WaitForCleanPlateActionTemplate : ActionTemplate {
+        public GameEntityRecord Spawner { get; set; }
+
+        public WaitForCleanPlateActionTemplate(GameEntityRecord spawner) {
+            Spawner = spawner;
+        }
+
+        public string Describe() {
+            return $"Wait for clean plate";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitForCleanPlateAction {
+                    DryingPart = Spawner,
+                }
+            };
+        }
+    }
+
+
+    public class WaitForFramesActionTemplate : ActionTemplate {
+        public int Frames { get; set; } = 10;
+
+        public WaitForFramesActionTemplate(int frames) {
+            Frames = frames;
+        }
+
+
+        public string Describe() {
+            return $"Sleep {Frames} frames";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitAction {
+                    NumFrames = Frames
                 }
             };
         }

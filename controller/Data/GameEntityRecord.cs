@@ -14,7 +14,7 @@ namespace Hpmv {
         public GameEntityRecord spawner = null;
         public List<GameEntityRecord> spawned = new List<GameEntityRecord>();
         public Versioned<int> nextSpawnId = new Versioned<int>(0);
-        public Versioned<ISpawnClaimingAction> spawnOwner = new Versioned<ISpawnClaimingAction>(null);
+        public Versioned<int> spawnOwner = new Versioned<int>(-1);
         public Versioned<Vector3> position;
         public Versioned<Vector3> velocity = new Versioned<Vector3>(default);
         public Versioned<bool> existed;
@@ -48,7 +48,7 @@ namespace Hpmv {
             spawner = record.Spawner.FromProtoRef(context);
             spawned = record.Spawned.Select(s => s.FromProtoRef(context)).ToList();
             nextSpawnId = record.NextSpawnId.FromProto();
-            spawnOwner = record.SpawnOwner.FromProto(context);
+            spawnOwner = record.SpawnOwner.FromProto();
             position = record.Position.FromProto();
             velocity = record.Velocity.FromProto();
             existed = record.Existed.FromProto();
@@ -100,52 +100,6 @@ namespace Hpmv {
                 return null;
             }
             return new SpawnedEntityReference(spawnOwner[frame]);
-        }
-    }
-
-    public struct SpecificEntityData {
-        public GameEntityRecord attachmentParent;
-        public GameEntityRecord attachment;
-        public List<int> contents;
-        // 0.2 seconds per interaction, 7 max progress.
-        public Dictionary<GameEntityRecord, TimeSpan> chopInteracters;
-        public GameEntityRecord itemBeingChopped;
-        public HashSet<GameEntityRecord> washers;
-
-        public Save.SpecificEntityData ToProto() {
-            var result = new Save.SpecificEntityData {
-                AttachmentParent = attachmentParent?.path?.ToProto(),
-                Attachment = attachment?.path?.ToProto(),
-                ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
-            };
-            if (contents != null) {
-                result.Contents.AddRange(contents);
-            }
-            if (chopInteracters != null) {
-                foreach (var (chef, time) in chopInteracters) {
-                    result.ChopInteracters[chef.path.ids[0]] = time.TotalMilliseconds;
-                }
-            }
-            if (washers != null) {
-                foreach (var washer in washers) {
-                    result.Washers.Add(washer.path.ToProto());
-                }
-            }
-            return result;
-        }
-    }
-
-    public static class SpecificEntityDataFromProto {
-        public static SpecificEntityData FromProto(this Save.SpecificEntityData data, LoadContext context) {
-            return new SpecificEntityData {
-                attachmentParent = data.AttachmentParent.FromProtoRef(context),
-                attachment = data.Attachment.FromProtoRef(context),
-                itemBeingChopped = data.ItemBeingChopped.FromProtoRef(context),
-                contents = data.Contents.Count == 0 ? null : data.Contents.ToList(),
-                chopInteracters = data.ChopInteracters.Count == 0 ? null :
-                    data.ChopInteracters.ToDictionary(kv => context.GetRootRecord(kv.Key), kv => TimeSpan.FromMilliseconds(kv.Value)),
-                washers = data.Washers.Count == 0 ? null : data.Washers.Select(washer => washer.FromProtoRef(context)).ToHashSet()
-            };
         }
     }
 

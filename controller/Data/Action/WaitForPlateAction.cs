@@ -1,40 +1,17 @@
+using System.Linq;
+
 namespace Hpmv {
-    class WaitForCleanPlateAction : GameAction, ISpawnClaimingAction {
-        class InnerHelper : ISpawnClaimingAction {
-            IEntityReference DryingPart;
-
-            public InnerHelper(GameEntityRecord dryingPart) {
-                DryingPart = new LiteralEntityReference(dryingPart);
-            }
-
-            public IEntityReference GetSpawner() {
-                return DryingPart;
-            }
-        }
-
-        public readonly GameEntityRecord DryingPart;
-        private readonly InnerHelper helper;
-        private readonly IEntityReference plateStack;
-
-
-        public WaitForCleanPlateAction(GameEntityRecord dryingPart) {
-            DryingPart = dryingPart;
-            helper = new InnerHelper(dryingPart);
-            plateStack = new SpawnedEntityReference(helper);
-        }
+    public class WaitForCleanPlateAction : GameAction {
+        public GameEntityRecord DryingPart { get; set; }
 
         public override string Describe() {
             return $"Wait for clean plate";
         }
 
-        public IEntityReference GetSpawner() {
-            return plateStack;
-        }
-
         public override GameActionOutput Step(GameActionInput input) {
             foreach (var stack in DryingPart.spawned) {
                 foreach (var plate in stack.spawned) {
-                    if (plate.spawnOwner[input.Frame] == null) {
+                    if (plate.existed[input.Frame] && plate.spawnOwner[input.Frame] == -1) {
                         return new GameActionOutput {
                             SpawningClaim = plate,
                             Done = true
@@ -44,30 +21,31 @@ namespace Hpmv {
             }
             return default;
         }
+
+        public new Save.WaitForCleanPlateAction ToProto() {
+            return new Save.WaitForCleanPlateAction {
+                DryingPart = DryingPart.path.ToProto()
+            };
+        }
     }
 
-    class WaitForDirtyPlateAction : GameAction, ISpawnClaimingAction {
-        public readonly GameEntityRecord DirtyPlateSpawner;
-        private readonly IEntityReference spawner;
-        public readonly int Count;
-
-        public WaitForDirtyPlateAction(GameEntityRecord dirtyPlateSpawner, int count) {
-            DirtyPlateSpawner = dirtyPlateSpawner;
-            Count = count;
-            this.spawner = new LiteralEntityReference(dirtyPlateSpawner);
+    public static class WaitForCleanPlateActionFromProto {
+        public static WaitForCleanPlateAction FromProto(this Save.WaitForCleanPlateAction action, LoadContext context) {
+            return new WaitForCleanPlateAction { DryingPart = action.DryingPart.FromProtoRef(context) };
         }
+    }
+
+    public class WaitForDirtyPlateAction : GameAction {
+        public GameEntityRecord DirtyPlateSpawner { get; set; }
+        public int Count { get; set; }
 
         public override string Describe() {
             return $"Wait for {Count} dirty stack";
         }
 
-        public IEntityReference GetSpawner() {
-            return spawner;
-        }
-
         public override GameActionOutput Step(GameActionInput input) {
             foreach (var stack in DirtyPlateSpawner.spawned) {
-                if (stack.spawnOwner[input.Frame] == null && stack.spawned.Count == Count) {
+                if (stack.existed[input.Frame] && stack.spawnOwner[input.Frame] == -1 && stack.spawned.Count(s => s.existed[input.Frame]) >= Count) {
                     return new GameActionOutput {
                         SpawningClaim = stack,
                         Done = true
@@ -75,6 +53,19 @@ namespace Hpmv {
                 }
             }
             return default;
+        }
+
+        public new Save.WaitForDirtyPlateAction ToProto() {
+            return new Save.WaitForDirtyPlateAction {
+                DirtyPlateSpawner = DirtyPlateSpawner.path.ToProto(),
+                Count = Count
+            };
+        }
+    }
+
+    public static class WaitForDirtyPlateActionFromProto {
+        public static WaitForDirtyPlateAction FromProto(this Save.WaitForDirtyPlateAction action, LoadContext context) {
+            return new WaitForDirtyPlateAction { DirtyPlateSpawner = action.DirtyPlateSpawner.FromProtoRef(context), Count = action.Count };
         }
     }
 }

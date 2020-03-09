@@ -151,24 +151,6 @@ namespace Hpmv {
             return result;
         }
 
-        public static Save.VersionedISpawnClaimingAction ToProto(this Versioned<ISpawnClaimingAction> ver) {
-            var result = new Save.VersionedISpawnClaimingAction { InitialValue = (ver.initialValue as GameAction).ActionId };
-            foreach (var (frame, value) in ver.changes) {
-                result.Frame.Add(frame);
-                result.Data.Add((value as GameAction).ActionId);
-            }
-            return result;
-        }
-
-        public static Versioned<ISpawnClaimingAction> FromProto(this Save.VersionedISpawnClaimingAction ver, LoadContext context) {
-            var result = new Versioned<ISpawnClaimingAction>(context.ActionById[ver.InitialValue] as ISpawnClaimingAction);
-            for (int i = 0; i < ver.Frame.Count; i++) {
-                result.ChangeTo(context.ActionById[ver.Data[i]] as ISpawnClaimingAction, ver.Frame[i]);
-            }
-            return result;
-        }
-
-
         public static Save.VersionedActualControllerInput ToProto(this Versioned<ActualControllerInput> ver) {
             var result = new Save.VersionedActualControllerInput { InitialValue = ver.initialValue.ToProto() };
             foreach (var (frame, value) in ver.changes) {
@@ -207,16 +189,13 @@ namespace Hpmv {
 
     public class LoadContext {
         public readonly Dictionary<string, GameEntityRecord> PathToRecord = new Dictionary<string, GameEntityRecord>();
-        public readonly Dictionary<int, PrefabRecord> PrefabById = new Dictionary<int, PrefabRecord>();
-        public readonly Dictionary<int, GameActionNode> ActionById = new Dictionary<int, GameActionNode>();
         public readonly GameEntityRecords Records = new GameEntityRecords();
-        public readonly GameActionSequences Sequences = new GameActionSequences();
 
         public GameEntityRecord GetRootRecord(int id) {
             return PathToRecord[id.ToString()];
         }
 
-        public void Load(Save.GameEntityRecords records, Save.GameActionSequences sequences) {
+        public void Load(Save.GameEntityRecords records) {
             foreach (var record in records.AllRecords) {
                 var obj = new GameEntityRecord {
                     path = record.Path.FromProto(),
@@ -229,8 +208,6 @@ namespace Hpmv {
                     Records.FixedEntities.Add(obj);
                 }
             }
-
-            // TODO: deserialize actions.
 
             foreach (var record in records.AllRecords) {
                 PathToRecord[record.Path.FromProto().ToString()].ReadMutableDataFromProto(record, this);

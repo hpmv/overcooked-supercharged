@@ -34,6 +34,7 @@ function setUpScheduleBackgroundClick(scheduleBackground, component) {
 
 function setUpEntityRecordVisualizerHandlers(component, container) {
     container.addEventListener('mousedown', e => {
+        e.preventDefault();
         let x = e.clientX;
         let y = e.clientY;
 

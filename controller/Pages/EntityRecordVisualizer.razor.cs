@@ -17,7 +17,7 @@ namespace controller.Pages {
         public EditorState EditorState { get; set; }
 
         [Parameter]
-        public EventCallback<bool> OnActionAdded { get; set; }
+        public EventCallback<int> OnActionAdded { get; set; }
 
         private float SCALE = 50;
         private DotNetObjectReference<EntityRecordVisualizer> thisRef;
@@ -27,12 +27,19 @@ namespace controller.Pages {
         private double EntityMenuY;
 
         private BaseMatMenu Menu;
+        private bool EntityMenuOpen { get; set; }
         private List<GameEntityRecord> EntitiesForMenu = new List<GameEntityRecord>();
+
+        private bool ShowControls { get; set; }
 
         private Vector2 Render(Vector2 point) {
             var pos = Level.map.CoordsToGridPos(point);
             pos += new Vector2(1, 1);
             return pos * SCALE;
+        }
+
+        private Vector2 InverseRender(Vector2 pos) {
+            return Level.map.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender) {
@@ -50,14 +57,19 @@ namespace controller.Pages {
             EntityMenuX = x;
             EntityMenuY = y;
             StateHasChanged();
-            await InvokeAsync(async () =>
-                await Menu.OpenAsync(EntityMenuAnchor)
-            );
+            await InvokeAsync(async () => {
+                EntityMenuOpen = true;
+                await Menu.OpenAsync(EntityMenuAnchor);
+            });
         }
 
         private async Task HandleTemplateClick(ActionTemplate template) {
-            EditorState.ApplyActionTemplate(template);
-            await OnActionAdded.InvokeAsync(false);
+            if (EditorState.SelectedChef != null) {
+                var frame = EditorState.ResimulationFrame();
+                EditorState.ApplyActionTemplate(template);
+                await OnActionAdded.InvokeAsync(frame + 1);
+            }
+            EntityMenuOpen = false;
         }
     }
 }

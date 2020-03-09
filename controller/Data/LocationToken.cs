@@ -15,7 +15,11 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            return new[] { entity.GetEntityRecord(input).position[input.Frame].XZ() };
+            var e = entity.GetEntityRecord(input);
+            if (e != null) {
+                return new[] { e.position[input.Frame].XZ() };
+            }
+            return new[] { new Vector2() };
         }
 
         public override string ToString() {
@@ -86,7 +90,11 @@ namespace Hpmv {
         }
 
         public Vector2[] GetLocation(GameActionInput input) {
-            var locations = input.Map.GetInteractionPointsForBlockEntity(entity.GetEntityRecord(input).position[input.Frame].XZ()).ToArray();
+            var ent = entity.GetEntityRecord(input);
+            if (ent == null) {
+                return new Vector2[0];
+            }
+            var locations = input.Map.GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
             // Console.WriteLine($"[{input.Frame}, {this}] {string.Join(" or ", locations)}");
             return locations;
         }

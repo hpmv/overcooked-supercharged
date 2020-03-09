@@ -5,7 +5,7 @@
 }
 <div class="entity-record-renderer" @ref="canvasRef">
     @foreach (var record in Level.entityRecords.GenAllEntities()) {
-        if (record.existed[frame] && !record.displayName.Contains("Rigidbody") && !record.displayName.Contains("Content") && !record.prefab.Ignore) {
+        if (record.existed[frame] && !record.displayName.Contains("Rigidbody") && !record.displayName.Contains("Content") && !record.prefab.Ignore && record.prefab.Name != "Dirty Plate") {
             var pos = record.position[frame].XZ();
             var rendered = Render(pos);
             <div class="record-vis-anchor"
@@ -14,7 +14,13 @@
                     <div class="record-vis record-vis-type-@(record.className)"
                         data-entity-path="@(record.path)"
                         style="@(record.chefState != null ? "transform: rotate(" + (-Math.Atan2(record.chefState[frame].forward.Y, record.chefState[frame].forward.X) + Math.PI / 2) + "rad)" : "")">
-                        @(record.displayName)
+                        @if (record.prefab.Name == "Dirty Plate Stack") {
+                            @(record.spawned.Count(s => s.existed[frame]))
+                        } else if (record.prefab.Name == "Sink") {
+                            @(record.data[frame].numPlates)
+                        } else {
+                            @(record.displayName)
+                        }
                     </div>
                     @if (record.progress[frame] != 0) {
                         <div class="record-vis-progress">
@@ -41,6 +47,15 @@
                             }
                         </div>
                     }
+                    @if (record.data[frame].plateRespawnTimers is List<TimeSpan> timers) {
+                        <div class="record-vis-plate-respawn-timers">
+                            @foreach (var timer in timers) {
+                                <div class="record-vis-plate-respawn-timer">
+                                    @(Math.Ceiling(timer.TotalSeconds))
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -48,37 +63,63 @@
     <div @ref="EntityMenuAnchor" style="position: absolute; left: @(EntityMenuX)px; top: @(EntityMenuY)px;"></div>
 </div>
 
+
 <MatMenu @ref="Menu">
-    @foreach (var entity in EntitiesForMenu) {
-        var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
-        <MatListGroup>
-            <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
-            <MatList>
-                @foreach (var template in actionTemplates) {
-                    <MatListItem OnClick="() => HandleTemplateClick(template)">
-                        <div style="margin-left: 20px">@(template.Describe())</div>
-                    </MatListItem>
-                }
-            </MatList>
-        </MatListGroup>
+    @if (EntityMenuOpen) {
+        @foreach (var entity in EntitiesForMenu) {
+            var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
+            <MatListGroup>
+                <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
+                <MatList>
+                    @foreach (var template in actionTemplates) {
+                        <MatListItem OnClick="() => HandleTemplateClick(template)">
+                            <div style="margin-left: 20px">@(template.Describe())</div>
+                        </MatListItem>
+                    }
+                </MatList>
+            </MatListGroup>
+        }
+        if (Level != null) {
+            var pos = InverseRender(new System.Numerics.Vector2((float)EntityMenuX, (float)EntityMenuY));
+            var actionTemplates = EditorState.GetActionTemplatesForPosition(pos);
+            
+            <MatListGroup>
+                <MatListGroupSubHeader>Position @(pos)</MatListGroupSubHeader>
+                <MatList>
+                    @foreach (var template in actionTemplates) {
+                        <MatListItem OnClick="() => HandleTemplateClick(template)">
+                            <div style="margin-left: 20px">@(template.Describe())</div>
+                        </MatListItem>
+                    }
+                </MatList>
+            </MatListGroup>
+        }
     }
 </MatMenu>
 
 <span>Frame: @(frame), Time: @(TimeSpan.FromMinutes(4.5) - TimeSpan.FromSeconds(1)/60 * frame)</span>
 <button @onclick="(e) => EditorState.SelectedFrame--">&lt;&lt;</button>
 <button @onclick="(e) => EditorState.SelectedFrame++">&gt;&gt;</button>
-@foreach (var (chef, _) in Level.entityRecords.Chefs) {
-    var state = chef.chefState[frame];
-    <div>@(chef.displayName): Pickup: @(state.highlightedForPickup?.path), Use: @(state.highlightedForUse?.path), Dash timer: @(state.dashTimer)</div>
-    var input = Level.inputHistory.FrameInputs[chef][frame];
-    <div class="chef-input-vis">
-        <div class="input-axis-vis">
-            <div class="input-axis-dot" style="left: @((input.axes.X + 1) * 20)px; top: @((input.axes.Y + 1) * 20)px"></div>
-        </div>
-        @foreach (var (title, button) in new[]{("P", input.primary), ("S", input.secondary), ("D", input.dash)}) {
-            <div class="input-button-vis @(button.isDown ? "input-button-vis-down" : "") @(button.justPressed ? "input-button-vis-just-pressed" : "") @(button.justReleased ? "input-button-vis-just-released" : "")">
-                @(title)
+
+<button @onclick="() => ShowControls = !ShowControls">@(ShowControls ? "Hide Inputs" : "Show Inputs")</button>
+@if (ShowControls) {
+    @foreach (var (chef, _) in Level.entityRecords.Chefs) {
+        var state = chef.chefState[frame];
+        var input = Level.inputHistory.FrameInputs[chef][frame];
+        var controller = Level.entityRecords.Chefs[chef][frame];
+        <div>@(chef.displayName): Pickup: @(state.highlightedForPickup?.path), Use: @(state.highlightedForUse?.path), Dash timer: @(state.dashTimer)</div>
+        <div class="chef-input-vis">
+            <div class="input-axis-vis">
+                <div class="input-axis-dot" style="left: @((input.axes.X + 1) * 20)px; top: @((input.axes.Y + 1) * 20)px"></div>
             </div>
-        }
-    </div>
+            @foreach (var (title, button) in new[]{("P", input.primary), ("S", input.secondary), ("D", input.dash)}) {
+                <div class="input-button-vis @(button.isDown ? "input-button-vis-down" : "") @(button.justPressed ? "input-button-vis-just-pressed" : "") @(button.justReleased ? "input-button-vis-just-released" : "")">
+                    @(title)
+                </div>
+            }
+        </div>
+        @* <div>
+            Vel: @(controller.axesVelocity) Accel: @(controller.axesAcceleration) Down: @(controller.axesDown) Cooldown: @(controller.axesCooldown)
+        </div> *@
+    }
 }

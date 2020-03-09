@@ -39,7 +39,7 @@ namespace Hpmv {
                     for (int i = 1; i < path.Count; i++) {
                         remainDistance += (path[i - 1] - path[i]).Length();
                     }
-                    if (AllowDash && remainDistance > USE_DASH_IF_REMAIN * DASH_SPEED * DASH_TIME * 0.5) {
+                    if (AllowDash && remainDistance > USE_DASH_IF_REMAIN * DASH_SPEED * DASH_TIME * 0.8) {
                         if (Vector2.Dot(Vector2.Normalize(chefState.forward), direction) > 0.8) {
                             dash = true;
                         }

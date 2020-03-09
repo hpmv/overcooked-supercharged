@@ -64,7 +64,7 @@ namespace Hpmv {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't pickup from multiple deps");
             }
-            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action as ISpawnClaimingAction), IsPickup = true });
+            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action.ActionId), IsPickup = true });
         }
 
         public GameActionGraphBuilder PrepareToPickup(GameEntityRecord entity) {
@@ -75,7 +75,7 @@ namespace Hpmv {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't pickup from multiple deps");
             }
-            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action as ISpawnClaimingAction), Prepare = true });
+            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action.ActionId), Prepare = true });
         }
         public GameActionGraphBuilder PutOnto(GameEntityRecord entity) {
             return AddAction(new InteractAction { Subject = new LiteralEntityReference(entity) });
@@ -84,7 +84,7 @@ namespace Hpmv {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't put onto multiple deps");
             }
-            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action as ISpawnClaimingAction) });
+            return AddAction(new InteractAction { Subject = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action.ActionId) });
         }
 
         public GameActionGraphBuilder GetFromCrate(GameEntityRecord entity) {
@@ -111,15 +111,15 @@ namespace Hpmv {
             if (dep.Deps.Count != 1) {
                 throw new ArgumentException("Can't pickup from multiple deps");
             }
-            return AddAction(new WaitForSpawnAction { Spawner = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action as ISpawnClaimingAction) });
+            return AddAction(new WaitForSpawnAction { Spawner = new SpawnedEntityReference(Sequences.NodeById[dep.Deps[0]].Action.ActionId) });
         }
 
         public GameActionGraphBuilder WaitForDirtyPlate(GameEntityRecord dirtyPlateSpawner, int count) {
-            return AddAction(new WaitForDirtyPlateAction(dirtyPlateSpawner, count));
+            return AddAction(new WaitForDirtyPlateAction { DirtyPlateSpawner = dirtyPlateSpawner, Count = count });
         }
 
         public GameActionGraphBuilder WaitForCleanPlate(GameEntityRecord dryingPart) {
-            return AddAction(new WaitForCleanPlateAction(dryingPart));
+            return AddAction(new WaitForCleanPlateAction { DryingPart = dryingPart });
         }
 
         public GameActionGraphBuilder WaitForCooked(GameEntityRecord entity) {

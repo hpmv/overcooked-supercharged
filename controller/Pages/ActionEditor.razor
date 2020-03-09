@@ -1,5 +1,14 @@
 <div class="action-editor">
     <div class="action-editor-title">[@(Node.Id)] @(Node.Action.Describe())</div>
+    <div class="action-editor-predictions">
+        Start: @(Node.Predictions.StartFrame ?? -1); End: @(Node.Predictions.EndFrame ?? -1)
+    </div>
+    @if (Node.Action is WaitAction wait) {
+        <div class="action-editor-property">
+            Change to <input @bind="NumFramesEditing"/>
+            <button @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }">Change</button>
+        </div>
+    }
     <div class="action-editor-deps">
         <div class="action-editor-deps-title">Dependencies:</div>
         @foreach (var dep in Node.Deps) {

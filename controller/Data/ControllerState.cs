@@ -8,6 +8,7 @@ namespace Hpmv {
         private static TimeSpan BUTTON_MIN_HOLD = TimeSpan.FromMilliseconds(40);
         private static TimeSpan BUTTON_COOLDOWN = TimeSpan.FromMilliseconds(70);
         private static TimeSpan PICKUP_COOLDOWN = TimeSpan.FromMilliseconds(500);
+        private static TimeSpan AXIS_COOLDOWN = TimeSpan.FromMilliseconds(50);
 
         private static ControllerState Initial {
             get {
@@ -27,6 +28,14 @@ namespace Hpmv {
         public bool primaryButtonDown;
         public bool secondaryButtonDown;
         public TimeSpan buttonDownDurationLeft;
+        public Vector2 axesVelocity;
+        public Vector2 axesAcceleration;
+        public TimeSpan axesCooldown;
+        public bool axesDown;
+
+        private const float desiredAccel = 1500;
+        private const float accelerationDeltaSpeed = 80000;
+        private const float axesRestoreSpeed = 20;
 
         private ControllerState AdvanceFrame() {
             //TimeSpan elapsed = DateTime.Now - prevTime;
@@ -35,10 +44,55 @@ namespace Hpmv {
             copy.buttonCooldown -= elapsed;
             copy.pickupCooldown -= elapsed;
             copy.buttonDownDurationLeft -= elapsed;
+            copy.axesCooldown -= elapsed;
             return copy;
         }
 
-        private static Vector2 HumanizeAxes(Vector2 axes, Vector2 newAxes) {
+        private void HumanizeAxes(Vector2 newAxes) {
+            // var elapsed = 1.0f / 60;
+            // bool shouldHold = newAxes.Length() > 0.01;
+            // if (shouldHold && (axesDown || axesCooldown <= TimeSpan.Zero)) {
+            //     axesDown = true;
+            //     var targetPos = newAxes * 2f;
+            //     var targetAccel = Vector2.Normalize(targetPos - axes) * desiredAccel;
+            //     var accelDelta = targetAccel - axesAcceleration;
+            //     Vector2 actualAccel;
+            //     if (accelDelta.Length() <= accelerationDeltaSpeed * elapsed) {
+            //         actualAccel = targetAccel;
+            //     } else {
+            //         actualAccel = axesAcceleration + Vector2.Normalize(accelDelta) * (accelerationDeltaSpeed * elapsed);
+            //     }
+            //     axesAcceleration = actualAccel;
+            //     // if (axes.Length() >= 0.99) {
+            //     //     var tangentAccel = axesAcceleration - Vector2.Dot(axesAcceleration, Vector2.Normalize(axes)) * axes;
+            //     //     axesAcceleration = (axesAcceleration - tangentAccel) + tangentAccel * 0.5f;  // friction.
+            //     // }
+            //     axesVelocity += axesAcceleration * elapsed;
+            //     axes += axesVelocity * elapsed;
+            //     if (axes.Length() > 1) {
+            //         axes = Vector2.Normalize(axes);
+            //         axesVelocity = axesVelocity - Vector2.Dot(axesVelocity, axes) * axes;
+            //         if ((axes - newAxes).Length() < 0.1) {
+            //             axes = newAxes;
+            //             axesVelocity = default;
+            //         }
+            //     }
+            // }
+            // if (!shouldHold && axesDown) {
+            //     axesDown = false;
+            //     axesCooldown = AXIS_COOLDOWN;
+            // }
+
+            // if (!axesDown) {
+            //     if (axes.Length() > axesRestoreSpeed * elapsed) {
+            //         axes -= Vector2.Normalize(axes) * (axesRestoreSpeed * elapsed);
+            //     } else {
+            //         axes = Vector2.Zero;
+            //     }
+            //     axesAcceleration = Vector2.Zero;
+            //     axesVelocity = Vector2.Zero;
+            // }
+
             TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / 60);
             Vector2 direction = newAxes - axes;
             if (direction.Length() <= 2.0 / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) {
@@ -46,7 +100,6 @@ namespace Hpmv {
             } else {
                 axes = direction / direction.Length() * (2.0f / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) + axes;
             }
-            return axes;
         }
 
         public bool PrimaryButtonDown { get { return primaryButtonDown; } }
@@ -54,7 +107,8 @@ namespace Hpmv {
 
         public bool RequestButtonDown() {
             if (PrimaryButtonDown || SecondaryButtonDown) {
-                throw new InvalidOperationException("Cannot request button down when any button is down");
+                return false;
+                // throw new InvalidOperationException("Cannot request button down when any button is down");
             }
             if (buttonCooldown > TimeSpan.Zero) {
                 return false;
@@ -64,7 +118,8 @@ namespace Hpmv {
 
         public bool RequestButtonUp() {
             if (!PrimaryButtonDown && !SecondaryButtonDown) {
-                throw new InvalidOperationException("Cannot request button up unless button is down");
+                return false;
+                // throw new InvalidOperationException("Cannot request button up unless button is down");
             }
             if (buttonDownDurationLeft > TimeSpan.Zero) {
                 return false;
@@ -74,7 +129,8 @@ namespace Hpmv {
 
         public bool RequestButtonDownForPickup() {
             if (PrimaryButtonDown || SecondaryButtonDown) {
-                throw new InvalidOperationException("Cannot request button down when button is down");
+                return false;
+                // throw new InvalidOperationException("Cannot request button down when button is down");
             }
             if (buttonCooldown > TimeSpan.Zero || pickupCooldown > TimeSpan.Zero) {
                 return false;
@@ -85,7 +141,7 @@ namespace Hpmv {
         public (ControllerState, ActualControllerInput) ApplyInputAndAdvanceFrame(DesiredControllerInput input) {
             var output = new ActualControllerInput();
             var copy = this;
-            copy.axes = HumanizeAxes(copy.axes, input.axes);
+            copy.HumanizeAxes(input.axes);
             output.axes = copy.axes;
 
             if (input.primaryDown) {
@@ -121,7 +177,11 @@ namespace Hpmv {
                 PickupCooldown = pickupCooldown.TotalMilliseconds,
                 PrimaryButtonDown = primaryButtonDown,
                 SecondaryButtonDown = secondaryButtonDown,
-                ButtonDownDurationLeft = buttonDownDurationLeft.TotalMilliseconds
+                ButtonDownDurationLeft = buttonDownDurationLeft.TotalMilliseconds,
+                AxesVelocity = axesVelocity.ToProto(),
+                AxesAcceleration = axesAcceleration.ToProto(),
+                AxesDown = axesDown,
+                AxesCooldown = axesCooldown.TotalMilliseconds,
             };
         }
     }
@@ -135,6 +195,10 @@ namespace Hpmv {
                 primaryButtonDown = state.PrimaryButtonDown,
                 secondaryButtonDown = state.SecondaryButtonDown,
                 buttonDownDurationLeft = TimeSpan.FromMilliseconds(state.ButtonDownDurationLeft),
+                axesVelocity = state.AxesVelocity?.FromProto() ?? default,
+                axesAcceleration = state.AxesAcceleration?.FromProto() ?? default,
+                axesDown = state.AxesDown,
+                axesCooldown = TimeSpan.FromMilliseconds(state.AxesCooldown),
             };
         }
     }

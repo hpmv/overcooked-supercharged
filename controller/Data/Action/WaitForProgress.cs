@@ -9,12 +9,30 @@ namespace Hpmv {
 
         public override GameActionOutput Step(GameActionInput input) {
             var entity = Entity.GetEntityRecord(input);
-            if (entity.progress[input.Frame] >= Progress) {
-                return new GameActionOutput {
-                    Done = true,
-                };
+            if (entity != null) {
+                if (entity.progress[input.Frame] >= Progress) {
+                    return new GameActionOutput {
+                        Done = true,
+                    };
+                }
             }
             return default;
+        }
+
+        public Save.WaitForProgressAction ToProto() {
+            return new Save.WaitForProgressAction {
+                Entity = Entity.ToProto(),
+                Progress = Progress
+            };
+        }
+    }
+
+    public static class WaitForProgressActionFromProto {
+        public static WaitForProgressAction FromProto(this Save.WaitForProgressAction action, LoadContext context) {
+            return new WaitForProgressAction {
+                Entity = action.Entity.FromProto(context),
+                Progress = action.Progress
+            };
         }
     }
 }

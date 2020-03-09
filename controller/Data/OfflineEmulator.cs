@@ -8,10 +8,7 @@ namespace Hpmv {
     public class OfflineEmulator {
         public GameActionGraph Graph;
         int frame = 0;
-        public GameEntityRecords Records { get; set; }
-        public GameActionSequences Timings { get; set; }
-        public GameMap Map { get; set; }
-        public InputHistory InputHistory { get; set; }
+        private GameSetup setup;
         public int Frame { get { return frame; } }
 
         public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
@@ -19,28 +16,27 @@ namespace Hpmv {
         public HashSet<int> CompletedActions = new HashSet<int>();
 
         public OfflineEmulator(GameSetup level) {
-            Map = level.map;
-            Records = level.entityRecords;
-            Timings = level.sequences;
-            InputHistory = level.inputHistory;
+            this.setup = level;
         }
 
         private void ResetToFrame(int frame) {
-            Graph = Timings.ToGraph();
+            Graph = setup.sequences.ToGraph();
             FakeEntityRegistry.entityToTypes.Clear();
             this.frame = frame;
             depsRemaining.Clear();
             inProgress.Clear();
 
-            Records.CleanRecordsFromFrame(frame);
-            Timings.CleanTimingsFromFrame(frame);
-            InputHistory.CleanHistoryFromFrame(frame);
+            setup.entityRecords.CleanRecordsFromFrame(frame + 1);
+            setup.sequences.CleanTimingsFromFrame(frame);
+            setup.inputHistory.CleanHistoryFromFrame(frame);
+            setup.LastSimulatedFrame = Math.Max(0, frame - 1);  // hand wavy...
+            setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, setup.LastSimulatedFrame);
 
             foreach (var (i, action) in Graph.actions) {
                 depsRemaining[i] = Graph.deps[i].Count;
             }
             foreach (var (i, action) in Graph.actions) {
-                var timing = Timings.NodeById[i];
+                var timing = setup.sequences.NodeById[i];
                 if (timing.Predictions.EndFrame < frame) {
                     CompletedActions.Add(i);
                     foreach (var fwd in Graph.fwds[i]) {
@@ -52,8 +48,8 @@ namespace Hpmv {
             foreach (var (i, action) in Graph.actions) {
                 if (depsRemaining[i] == 0 && !CompletedActions.Contains(i)) {
                     inProgress.Add((i, 0));
-                    var predictions = Timings.NodeById[i].Predictions;
-                    if (predictions.StartFrame >= frame) {
+                    var predictions = setup.sequences.NodeById[i].Predictions;
+                    if (predictions.StartFrame == null || predictions.StartFrame >= frame) {
                         predictions.StartFrame = frame;
                     }
                 }
@@ -62,6 +58,7 @@ namespace Hpmv {
         }
 
         public void SimulateEntireSchedule(int startFrame) {
+            Console.WriteLine($"Offline simulating from frame {startFrame}");
             ResetToFrame(startFrame);
 
             int lastActionFrame = frame;
@@ -72,12 +69,12 @@ namespace Hpmv {
                     lastActionFrame = frame;
                 }
                 foreach (var (chef, input) in inputs) {
-                    InputHistory.FrameInputs[chef].ChangeTo(input, Frame);
+                    setup.inputHistory.FrameInputs[chef].ChangeTo(input, Frame);
                 }
                 ApplyInputData(inputs);
             }
 
-            Timings.FillSaneFutureTimings(frame);
+            setup.sequences.FillSaneFutureTimings(frame);
         }
 
         public Dictionary<GameEntityRecord, ActualControllerInput> Step(out bool madeProgress) {
@@ -89,26 +86,26 @@ namespace Hpmv {
                 var action = Graph.actions[actionId];
 
                 var gameActionInput = new GameActionInput {
-                    ControllerState = Records.Chefs[action.Chef].Last(),
-                    Entities = Records,
+                    ControllerState = setup.entityRecords.Chefs[action.Chef].Last(),
+                    Entities = setup.entityRecords,
                     Frame = frame,
                     FrameWithinAction = actionFrame,
-                    Map = Map
+                    Map = setup.map
                 };
 
                 var output = action.Step(gameActionInput);
                 if (output.SpawningClaim != null) {
-                    Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
-                    output.SpawningClaim.spawnOwner.ChangeTo(action as ISpawnClaimingAction, frame);
+                    // Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
+                    output.SpawningClaim.spawnOwner.ChangeTo(action.ActionId, frame);
                 }
                 newControllers[action.Chef] = output.ControllerInput;
                 if (output.Done) {
-                    Timings.NodeById[actionId].Predictions.EndFrame = frame;
+                    setup.sequences.NodeById[actionId].Predictions.EndFrame = frame;
                     foreach (var fwd in Graph.fwds[actionId]) {
                         if (--depsRemaining[fwd] == 0) {
                             madeProgress = true;
                             newInProgress.Add((fwd, 0));
-                            Timings.NodeById[fwd].Predictions.StartFrame = frame;
+                            setup.sequences.NodeById[fwd].Predictions.StartFrame = frame + 1;
                         }
                     }
                 } else {
@@ -119,7 +116,7 @@ namespace Hpmv {
 
             var inputData = new Dictionary<GameEntityRecord, ActualControllerInput>();
 
-            foreach (var entry in Records.Chefs) {
+            foreach (var entry in setup.entityRecords.Chefs) {
                 var desiredInput = newControllers.GetValueOrDefault(entry.Key);
                 var (newState, actualInput) = entry.Value.Last().ApplyInputAndAdvanceFrame(desiredInput);
                 entry.Value.ChangeTo(newState, frame);
@@ -129,23 +126,30 @@ namespace Hpmv {
         }
 
         public void ApplyInputData(Dictionary<GameEntityRecord, ActualControllerInput> input) {
+            setup.LastSimulatedFrame = frame;
             frame++;
-            var allEntities = Records.GenAllEntities().Where(e => e.existed.Last()).ToList();
+            var allEntities = setup.entityRecords.GenAllEntities().Where(e => e.existed.Last()).ToList();
+            UpdateItemPositionsAccordingToVelocity(allEntities);
             foreach (var (chef, inputData) in input) {
                 UpdateNearbyObjects(chef, allEntities);
-                UpdateCarry(chef, inputData);
+                UpdateCarry(chef, inputData, allEntities);
                 UpdateInteract(chef, allEntities, inputData);
                 UpdateThrow(chef, inputData);
                 UpdateAim(chef, inputData);
                 UpdateMovement(chef, inputData);
             }
             UpdateAttachmentPositions(allEntities);
-            UpdateItemPositionsAccordingToVelocity(allEntities);
             UpdateCatches(allEntities);
             UpdateProgresses(allEntities);
         }
 
-        private void UpdateNearbyObjects(GameEntityRecord chef, List<GameEntityRecord> entities) {
+        public static (Vector2 pos, Vector2 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector2 position, Vector2 velocity, GameMap map, ActualControllerInput input) {
+            var newPosition = CalculateNewChefPositionAfterMovement(position, velocity, map);
+            var (newVelocity, forward) = CalculateNewChefVelocityAndForward(chefState, input);
+            return (newPosition, newVelocity, forward);
+        }
+
+        public static ChefState CalculateHighlightedObjects(Vector2 position, Vector2 forward, GameMap map, IEnumerable<GameEntityRecord> entities) {
             // Find objects:
             //   - Grid objects:
             //       - Get discrete grid pos of chef, then look at four neighbors, score by
@@ -159,35 +163,58 @@ namespace Hpmv {
             // the closest one by position.
 
             // TODO. We'll only do grid selection for now. Much easier.
-            var chefForward = chef.chefState.Last().forward;
-            var coord = Map.CoordsToGridPosRounded(chef.position.Last().XZ());
+            var coord = map.CoordsToGridPosRounded(position);
             GameEntityRecord best = null;
             double bestDot = -1;
             foreach (var entity in entities) {
-                var entityCoord = Map.CoordsToGridPosRounded(entity.position.Last().XZ());
-                if (Math.Abs(entityCoord.x - coord.x) + Math.Abs(entityCoord.y - coord.y) == 1) {
-                    if (entity.data.Last().attachmentParent == null) {
-                        var gridOffsetDirection = new Vector2(1.0f * (entityCoord.x - coord.x), -1.0f * (entityCoord.y - coord.y));
-                        var dot = Vector2.Dot(gridOffsetDirection, chefForward);
-                        if (best == null || dot > bestDot) {
-                            best = entity;
-                            bestDot = dot;
+                if (entity.chefState != null) {
+                    continue;
+                }
+                if (entity.prefab.Name == "Dirty Plate") {
+                    // This is a bug - in real simulation, somehow I couldn't get dirty plates to destroy themselves.
+                    continue;
+                }
+                foreach (var occupiedGridOffset in entity.prefab.OccupiedGridPoints) {
+                    var entityCoord = map.CoordsToGridPosRounded(entity.position.Last().XZ() + occupiedGridOffset);
+                    if (Math.Abs(entityCoord.x - coord.x) + Math.Abs(entityCoord.y - coord.y) == 1) {
+                        if (entity.data.Last().attachmentParent == null) {
+                            var gridOffsetDirection = new Vector2(1.0f * (entityCoord.x - coord.x), -1.0f * (entityCoord.y - coord.y));
+                            var dot = Vector2.Dot(gridOffsetDirection, forward);
+                            if (best == null || dot > bestDot) {
+                                best = entity;
+                                bestDot = dot;
+                            }
                         }
                     }
                 }
             }
 
-            var newChefState = chef.chefState.Last();
-            newChefState.highlightedForPickup = best;
-            newChefState.highlightedForPlacement = best;
-            newChefState.highlightedForUse = null;
-            if (best.prefab.IsBoard) {
-                if (best.data.Last().attachment is GameEntityRecord attachment && attachment.prefab.IsChoppable && attachment.prefab.MaxProgress > 0) {
-                    newChefState.highlightedForUse = best;
+            var chefState = new ChefState();
+            chefState.highlightedForPickup = best;
+            chefState.highlightedForPlacement = best;
+            chefState.highlightedForUse = null;
+            if (best != null) {
+                if (best.prefab.IsBoard) {
+                    if (best.data.Last().attachment is GameEntityRecord attachment && attachment.prefab.IsChoppable && attachment.prefab.MaxProgress > 0) {
+                        chefState.highlightedForUse = best;
+                    }
+                } else if (best.prefab.IsWashingStation) {
+                    if (best.data.Last().numPlates > 0) {
+                        chefState.highlightedForUse = best;
+                    }
                 }
             }
-            // TODO: washing case.
-            chef.chefState.ChangeTo(newChefState, frame);
+            return chefState;
+        }
+
+        private void UpdateNearbyObjects(GameEntityRecord chef, List<GameEntityRecord> entities) {
+            var newChefState = CalculateHighlightedObjects(chef.position.Last().XZ(), chef.chefState.Last().forward, setup.map, entities);
+            chef.chefState.AppendWith(frame, state => {
+                state.highlightedForPickup = newChefState.highlightedForPickup;
+                state.highlightedForPlacement = newChefState.highlightedForPlacement;
+                state.highlightedForUse = newChefState.highlightedForUse;
+                return state;
+            });
         }
 
 
@@ -197,11 +224,53 @@ namespace Hpmv {
             rhs = temp;
         }
 
-        private void UpdateCarry(GameEntityRecord chef, ActualControllerInput input) {
+        private void UpdateCarry(GameEntityRecord chef, ActualControllerInput input, List<GameEntityRecord> allEntities) {
             if (input.primary.justPressed) {
                 {
                     if (chef.data.Last().attachment is GameEntityRecord from
                         && chef.chefState.Last().highlightedForPickup is GameEntityRecord placer) {
+                        if (placer.prefab.Name == "Serve" && from.prefab.Name == "Plate") {
+                            placer.data.AppendWith(frame, d => {
+                                d.plateRespawnTimers = d.plateRespawnTimers == null ? new List<TimeSpan>() :
+                                     new List<TimeSpan>(d.plateRespawnTimers);
+                                d.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
+                                return d;
+                            });
+                            from.existed.ChangeTo(false, frame);
+                            from.data.AppendWith(frame, d => {
+                                d.attachmentParent = null;
+                                return d;
+                            });
+                            chef.data.AppendWith(frame, d => {
+                                d.attachment = null;
+                                return d;
+                            });
+                            return;
+                        }
+                        if ((placer.prefab.Name == "Sink" || placer.prefab.Name == "Clean Plate Spawner")
+                           && from.prefab.Name == "Dirty Plate Stack") {
+                            placer = allEntities.Where(s => s.prefab.Name == "Sink").First();
+                            placer.data.AppendWith(frame, d => {
+                                d.numPlates += from.spawned.Count(s => s.existed.Last());
+                                return d;
+                            });
+                            foreach (var spawn in from.spawned) {
+                                if (spawn.existed.Last()) {
+                                    spawn.existed.ChangeTo(false, frame);
+                                }
+                            }
+                            from.existed.ChangeTo(false, frame);
+                            from.data.AppendWith(frame, d => {
+                                d.attachmentParent = null;
+                                return d;
+                            });
+                            chef.data.AppendWith(frame, d => {
+                                d.attachment = null;
+                                return d;
+                            });
+
+                            return;
+                        }
                         // if (placer.data.Last().attachment is GameEntityRecord innerPlacer && innerPlacer.prefab.IsMixerStation) {
                         //     // Special case for mixer station.
                         //     placer = innerPlacer;
@@ -269,6 +338,8 @@ namespace Hpmv {
                             to.data.ChangeTo(toData, frame);
                             from.progress.ChangeTo(fromProgress, frame);
                             to.progress.ChangeTo(toProgress, frame);
+                        } else if (from.prefab.Name == "Dirty Plate Stack" && to.prefab.Name == "Dirty Plate Stack") {
+                            // TODO.
                         }
 
                         return;
@@ -277,10 +348,35 @@ namespace Hpmv {
 
                 {
                     if (chef.chefState.Last().highlightedForPickup is GameEntityRecord placer) {
-                        // if (placer.data.Last().attachment is GameEntityRecord innerPlacer && innerPlacer.prefab.IsMixerStation) {
-                        //     // Special case for mixer station.
-                        //     placer = innerPlacer;
-                        // }
+                        if (placer.prefab.Name == "Sink" || placer.prefab.Name == "Clean Plate Spawner") {
+                            placer = allEntities.Where(s => s.prefab.Name == "Clean Plate Spawner").First();
+                            if (placer.data.Last().attachment is GameEntityRecord plateStack) {
+                                var plate = plateStack.spawned.Where(s => s.existed.Last() && s.data.Last().attachmentParent == plateStack)
+                                    .LastOrDefault();
+                                if (plate != null) {
+                                    chef.data.AppendWith(frame, d => {
+                                        d.attachment = plate;
+                                        return d;
+                                    });
+                                    plate.data.AppendWith(frame, d => {
+                                        d.attachmentParent = chef;
+                                        return d;
+                                    });
+                                    if (!plateStack.spawned.Any(s => s.existed.Last() && s.data.Last().attachmentParent == plateStack)) {
+                                        plateStack.data.AppendWith(frame, d => {
+                                            d.attachmentParent = null;
+                                            return d;
+                                        });
+                                        plateStack.existed.ChangeTo(false, frame);
+                                        placer.data.AppendWith(frame, d => {
+                                            d.attachment = null;
+                                            return d;
+                                        });
+                                    }
+                                }
+                            }
+                            return;
+                        }
 
                         // TODO: the case of picking from the floor is not handled yet.
                         if (placer.data.Last().attachment is GameEntityRecord attachment) {
@@ -409,41 +505,48 @@ namespace Hpmv {
             }
         }
 
-        private void UpdateMovement(GameEntityRecord chef, ActualControllerInput input) {
+
+        public static (Vector2 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, ActualControllerInput input) {
             var axes = new Vector2(input.axes.X, -input.axes.Y);
             if (axes.Length() < 0.01) {
                 axes = default;
             } else {
                 axes = Vector2.Normalize(axes);
             }
-            UpdateRotation(chef, axes);
-            var chefState = chef.chefState.Last();
+            var newForward = CalculateNewChefRotation(chefState.forward, axes);
             // Skipping movement suppression, gravity force, wind force.
             var desiredVelocity = axes * 6;  // run speed
             if (chefState.isAiming) {
                 desiredVelocity = default;
             }
             if (chefState.dashTimer > 0) {
-                var dashVelocity = chefState.forward * 18; // dash speed
+                var dashVelocity = newForward * 18; // dash speed
                 var ratio = MathUtils.SinusoidalSCurve((float)(chefState.dashTimer / 0.3));  // dash time
                 desiredVelocity = (1 - ratio) * desiredVelocity + ratio * dashVelocity;
             }
-            chefState.dashTimer -= (1.0 / 60);
             // skipping impact timer
             if (Vector2.Distance(desiredVelocity, default) > 18) { // max speed
                 desiredVelocity = Vector2.Normalize(desiredVelocity) * 18;
             }
             // Ignoring ProgressVelocityWrtFriction.
-            chef.velocity.ChangeTo(desiredVelocity.ToXZVector3(), frame);
-            if (input.dash.justPressed && chefState.dashTimer < 0.1) {  // dash time minus cooldown
-                chefState.dashTimer = 0.3;  // dash time
-            }
-            chef.chefState.ChangeTo(chefState, frame);
+            return (desiredVelocity, newForward);
         }
 
-        private void UpdateRotation(GameEntityRecord chef, Vector2 input) {
+        private void UpdateMovement(GameEntityRecord chef, ActualControllerInput input) {
+            var (velocity, forward) = CalculateNewChefVelocityAndForward(chef.chefState.Last(), input);
+            chef.velocity.ChangeTo(velocity.ToXZVector3(), frame);
+            chef.chefState.AppendWith(frame, chefState => {
+                if (input.dash.justPressed && chefState.dashTimer <= -0.1) {  // dash time minus cooldown
+                    chefState.dashTimer = 0.3;  // dash time
+                }
+                chefState.dashTimer -= (1.0 / 60);
+                chefState.forward = forward;
+                return chefState;
+            });
+        }
+
+        public static Vector2 CalculateNewChefRotation(Vector2 forward, Vector2 input) {
             if (input != default) {
-                var forward = chef.chefState.Last().forward;
                 var cross = forward.X * input.Y - input.X * forward.Y;
                 var dot = Vector2.Dot(input, forward);
                 if (Math.Abs(cross) < 1e-6) {
@@ -453,8 +556,15 @@ namespace Hpmv {
                 var angle = Math.Min(20 * (1.0 / 60), maxAngle);
                 var actualAngle = (float)(cross > 0 ? angle : -angle);
                 var newForward = Vector2.TransformNormal(forward, Matrix3x2.CreateRotation(actualAngle));
+                return newForward;
+            }
+            return forward;
+        }
+
+        private void UpdateRotation(GameEntityRecord chef, Vector2 input) {
+            if (input != default) {
                 chef.chefState.AppendWith(frame, s => {
-                    s.forward = newForward;
+                    s.forward = CalculateNewChefRotation(s.forward, input);
                     return s;
                 });
             }
@@ -472,23 +582,28 @@ namespace Hpmv {
             }
         }
 
+        public static Vector2 CalculateNewChefPositionAfterMovement(Vector2 position, Vector2 velocity, GameMap map) {
+            var desired = position + velocity * (1.0f / 60);
+            if (!map.IsInsideMap(desired)) {
+                desired = position + new Vector2(velocity.X, 0) * (1.0f / 60);
+                if (!map.IsInsideMap(desired)) {
+                    desired = position + new Vector2(0, velocity.Y) * (1.0f / 60);
+                    if (!map.IsInsideMap(desired)) {
+                        desired = position;
+                    }
+                }
+            }
+            return desired;
+        }
 
         private void UpdateItemPositionsAccordingToVelocity(List<GameEntityRecord> entities) {
             foreach (var entity in entities) {
                 if (entity.data.Last().attachmentParent == null) {
                     if (entity.velocity.Last().Length() > 0) {
                         if (entity.IsChef()) {
-                            var desired = entity.position.Last() + entity.velocity.Last() * (1.0f / 60);
-                            if (!Map.IsInsideMap(desired.XZ())) {
-                                desired = entity.position.Last() + new Vector3(entity.velocity.Last().X, 0, 0) * (1.0f / 60);
-                                if (!Map.IsInsideMap(desired.XZ())) {
-                                    desired = entity.position.Last() + new Vector3(0, 0, entity.velocity.Last().Z) * (1.0f / 60);
-                                    if (!Map.IsInsideMap(desired.XZ())) {
-                                        desired = entity.position.Last();
-                                    }
-                                }
-                            }
-                            entity.position.ChangeTo(desired, frame);
+                            entity.position.ChangeTo(
+                                CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.map).ToXZVector3(),
+                                frame);
                         } else {
                             entity.position.ChangeTo(entity.position.Last() + entity.velocity.Last() * (1.0f / 60), frame);
                         }
@@ -499,9 +614,9 @@ namespace Hpmv {
 
         private void UpdateCatches(List<GameEntityRecord> entities) {
             foreach (var entity in entities) {
-                foreach (var candidate in entities) {
-                    if (entity.prefab.CanContainIngredients && (entity.data.Last().contents?.Count ?? 0) < entity.prefab.MaxIngredientCount) {
-                        if (candidate.prefab.IsIngredient && candidate.data.Last().attachmentParent == null) {
+                if (entity.existed.Last() && entity.prefab.CanContainIngredients && (entity.data.Last().contents?.Count ?? 0) < entity.prefab.MaxIngredientCount) {
+                    foreach (var candidate in entities) {
+                        if (candidate.existed.Last() && candidate.prefab.IsIngredient && candidate.data.Last().attachmentParent == null) {
                             if (Vector2.Distance(candidate.position.Last().XZ(), entity.position.Last().XZ()) < 0.8) {  // approximate
                                 entity.data.AppendWith(frame, d => {
                                     d.contents = d.contents == null ? new List<int>() : new List<int>(d.contents);
@@ -516,6 +631,31 @@ namespace Hpmv {
             }
         }
 
+        private GameEntityRecord SpawnChild(GameEntityRecord item) {
+            GameEntityRecord child = null;
+            if (item.nextSpawnId.Last() < item.spawned.Count) {
+                child = item.spawned[item.nextSpawnId.Last()];
+            }
+            if (child == null) {
+                var spawnedPrefab = item.prefab.Spawns[0];
+                child = new GameEntityRecord {
+                    path = new EntityPath {
+                        ids = item.path.ids.Append(item.spawned.Count).ToArray(),
+                    },
+                    prefab = spawnedPrefab,
+                    spawner = item,
+                    existed = new Versioned<bool>(false),
+                    position = new Versioned<Vector3>(Vector3.Zero),
+                    displayName = spawnedPrefab.Name,
+                    className = spawnedPrefab.ClassName
+                };
+                item.spawned.Add(child);
+            }
+            child.existed.ChangeTo(true, frame);
+            child.position.ChangeTo(item.position.Last(), frame);
+            item.nextSpawnId.ChangeTo(item.nextSpawnId.Last() + 1, frame);
+            return child;
+        }
 
         private void UpdateProgresses(List<GameEntityRecord> entities) {
             foreach (var entity in entities) {
@@ -523,7 +663,7 @@ namespace Hpmv {
                     if (entity.data.Last().attachmentParent is GameEntityRecord parent && (parent.prefab.IsMixerStation || parent.prefab.IsHeatingStation)) {
                         entity.progress.AppendWith(frame, p => p + (1.0 / 60));
                     }
-                } else if (entity.prefab.IsBoard && entity.data.Last().itemBeingChopped != null) {
+                } else if (entity.prefab.IsBoard && entity.data.Last().itemBeingChopped is GameEntityRecord chopped && chopped.existed.Last()) {
                     var chopInteracters = entity.data.Last().chopInteracters;
                     if (chopInteracters != null) {
                         // Console.Write($"[{frame} {entity.path}] Chop interacters: {string.Join(", ", chopInteracters.Select(s => (s.Key.path, s.Value)))}");
@@ -541,32 +681,11 @@ namespace Hpmv {
                     }
                     var item = entity.data.Last().itemBeingChopped;
                     if (item.progress.Last() >= item.prefab.MaxProgress) {
-                        GameEntityRecord child = null;
-                        if (item.nextSpawnId.Last() < item.spawned.Count) {
-                            child = item.spawned[item.nextSpawnId.Last()];
-                        }
-                        if (child == null) {
-                            var spawnedPrefab = item.prefab.Spawns[0];
-                            child = new GameEntityRecord {
-                                path = new EntityPath {
-                                    ids = item.path.ids.Append(item.spawned.Count).ToArray(),
-                                },
-                                prefab = spawnedPrefab,
-                                spawner = item,
-                                existed = new Versioned<bool>(false),
-                                position = new Versioned<Vector3>(Vector3.Zero),
-                                displayName = spawnedPrefab.Name,
-                                className = spawnedPrefab.ClassName
-                            };
-                            item.spawned.Add(child);
-                        }
-                        child.existed.ChangeTo(true, frame);
-                        child.position.ChangeTo(item.position.Last(), frame);
+                        GameEntityRecord child = SpawnChild(item);
                         child.data.AppendWith(frame, d => {
                             d.attachmentParent = entity;
                             return d;
                         });
-                        item.nextSpawnId.ChangeTo(item.nextSpawnId.Last() + 1, frame);
 
                         item.existed.ChangeTo(false, frame);
                         item.data.AppendWith(frame, d => {
@@ -579,6 +698,72 @@ namespace Hpmv {
                             d.itemBeingChopped = null;
                             return d;
                         }));
+                    }
+                } else if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
+                    List<TimeSpan> newTimers = new List<TimeSpan>();
+                    foreach (var timer in timers) {
+                        var newTimer = timer - TimeSpan.FromSeconds(1) / 60;
+                        if (newTimer < TimeSpan.Zero) {
+                            foreach (var spawner in entities) {
+                                if (spawner.prefab.Name == "Dirty Plate Spawner") {
+                                    var maybeStack = spawner.spawned.Where(e => e.existed.Last() && e.data.Last().attachmentParent == spawner).FirstOrDefault();
+                                    if (maybeStack == null) {
+                                        maybeStack = SpawnChild(spawner);
+                                        maybeStack.data.AppendWith(frame, d => {
+                                            d.attachmentParent = spawner;
+                                            return d;
+                                        });
+                                        spawner.data.AppendWith(frame, d => {
+                                            d.attachment = maybeStack;
+                                            return d;
+                                        });
+                                    }
+                                    var plate = SpawnChild(maybeStack);
+                                    plate.data.AppendWith(frame, d => {
+                                        d.attachmentParent = maybeStack;
+                                        return d;
+                                    });
+                                    break;
+                                }
+                            }
+                        } else {
+                            newTimers.Add(newTimer);
+                        }
+                    }
+                    entity.data.AppendWith(frame, d => {
+                        d.plateRespawnTimers = newTimers;
+                        return d;
+                    });
+                } else if (entity.data.Last().washers is HashSet<GameEntityRecord> washers) {
+                    var spawner = entities.Where(e => e.prefab.Name == "Clean Plate Spawner").First();
+                    var speed = (TimeSpan.FromSeconds(1) / 60 * washers.Count).TotalSeconds;
+                    entity.progress.ChangeTo(entity.progress.Last() + speed, frame);
+                    if (entity.progress.Last() >= entity.prefab.MaxProgress) {
+                        entity.progress.ChangeTo(0, frame);
+                        entity.data.AppendWith(frame, d => {
+                            d.numPlates--;
+                            if (d.numPlates == 0) {
+                                d.washers = null;
+                            }
+                            return d;
+                        });
+                        var maybeStack = spawner.spawned.Where(e => e.existed.Last() && e.data.Last().attachmentParent == spawner).FirstOrDefault();
+                        if (maybeStack == null) {
+                            maybeStack = SpawnChild(spawner);
+                            maybeStack.data.AppendWith(frame, d => {
+                                d.attachmentParent = spawner;
+                                return d;
+                            });
+                            spawner.data.AppendWith(frame, d => {
+                                d.attachment = maybeStack;
+                                return d;
+                            });
+                        }
+                        var plate = SpawnChild(maybeStack);
+                        plate.data.AppendWith(frame, d => {
+                            d.attachmentParent = maybeStack;
+                            return d;
+                        });
                     }
                 }
             }

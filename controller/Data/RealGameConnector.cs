@@ -4,11 +4,8 @@ using System.Threading.Tasks;
 
 namespace Hpmv {
     class RealGameConnector : Interceptor.IAsync {
-        private GameMap map;
-        private GameEntityRecords records;
         private FramerateController FramerateController = new FramerateController { Delay = TimeSpan.FromSeconds(1) / 60 };
-        public GameActionSequences sequences;
-        private InputHistory inputHistory;
+        private GameSetup setup;
         public RealGameSimulator simulator = new RealGameSimulator();
         public bool started = false;
         public bool waitingForStart = false;
@@ -26,29 +23,28 @@ namespace Hpmv {
 
         public void Stop() {
             cancellationTokenSource.Cancel();
-            sequences.FillSaneFutureTimings(simulator.Frame);
+            setup.sequences.FillSaneFutureTimings(simulator.Frame);
         }
 
         public RealGameConnector(GameSetup level) {
-            this.map = level.map;
-            this.records = level.entityRecords;
-            this.sequences = level.sequences;
-            this.inputHistory = level.inputHistory;
+            this.setup = level;
 
-            simulator.Graph = sequences.ToGraph();
-            simulator.Map = map;
-            simulator.Timings = sequences;
-            simulator.Records = records;
-            simulator.InputHistory = inputHistory;
+            simulator.Graph = setup.sequences.ToGraph();
+            simulator.Map = setup.map;
+            simulator.Timings = setup.sequences;
+            simulator.Records = setup.entityRecords;
+            simulator.InputHistory = setup.inputHistory;
 
             FakeEntityRegistry.entityToTypes.Clear(); // sigh.
         }
 
         private void RestartLevel() {
             simulator.Reset();
-            records.CleanRecordsFromFrame(0);
-            sequences.CleanTimingsFromFrame(0);
-            inputHistory.CleanHistoryFromFrame(0);
+            setup.entityRecords.CleanRecordsFromFrame(0);
+            setup.sequences.CleanTimingsFromFrame(0);
+            setup.inputHistory.CleanHistoryFromFrame(0);
+            setup.LastEmpiricalFrame = 0;
+            setup.LastSimulatedFrame = 0;
             waitingForStart = true;
             started = false;
         }
@@ -106,6 +102,7 @@ namespace Hpmv {
 
             InputData inputs;
             if (started) {
+                setup.LastEmpiricalFrame = setup.LastSimulatedFrame = simulator.Frame;
                 inputs = simulator.Step();
             } else {
                 inputs = new InputData();
@@ -117,7 +114,7 @@ namespace Hpmv {
             }
 
             if (restarted) inputs.ResetOrderSeed = 12347;
-            FramerateController.WaitTillNextFrame();
+            //FramerateController.WaitTillNextFrame();
             return inputs;
         }
     }

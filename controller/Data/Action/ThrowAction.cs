@@ -4,7 +4,7 @@ namespace Hpmv {
     public class ThrowAction : GameAction {
         public LocationToken Location { get; set; }
         public Vector2 Bias { get; set; }
-        public double AngleAllowance { get; set; } = 0.995;
+        public double AngleAllowance { get; set; } = 0.999;
 
         public override string Describe() {
             return $"Throw towards {Location}";

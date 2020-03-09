@@ -54,7 +54,6 @@ message InteractAction {
     bool prepare = 3;
     bool is_pickup = 4;
     bool expect_spawn = 5;
-    string spawn_label = 6;
 }
 
 message ThrowAction {
@@ -83,7 +82,6 @@ message WaitForProgressAction {
 
 message WaitForSpawnAction {
     EntityReference spawner = 1;
-    string label = 2;
 }
 
 message GameActionPredictions {
@@ -91,12 +89,7 @@ message GameActionPredictions {
     int32 end_frame = 3;
 }
 
-message GameActionNode {
-    int32 chef_index = 1;
-    int32 action_id = 2;
-    repeated int32 deps = 3;
-    GameActionPredictions predictions = 4;
-    
+message GameAction {
     oneof action {
         CatchAction catch = 100;
         GotoAction goto = 101;
@@ -108,6 +101,14 @@ message GameActionNode {
         WaitForProgressAction wait_for_progress = 107;
         WaitForSpawnAction wait_for_spawn = 108;
     }
+}
+
+message GameActionNode {
+    int32 chef_index = 1;
+    int32 action_id = 2;
+    repeated int32 deps = 3;
+    GameActionPredictions predictions = 4;
+    GameAction action = 5;
 }
 
 message VersionedInt {
@@ -148,6 +149,8 @@ message SpecificEntityData {
     map<int32, double> chop_interacters = 4;
     EntityPath item_being_chopped = 5;
     repeated EntityPath washers = 6;
+    int32 num_plates = 8;
+    repeated double plate_respawn_timers = 7;
 }
 
 message ChefState {
@@ -197,6 +200,10 @@ message ControllerState {
     bool primary_button_down = 4;
     bool secondary_button_down = 5;
     double button_down_duration_left = 6;
+    Vector2 axes_velocity = 7;
+    Vector2 axes_acceleration = 8;
+    bool axes_down = 9;
+    double axes_cooldown = 10;
 }
 
 message VersionedControllerState {
@@ -223,6 +230,7 @@ message PrefabRecord {
     bool is_heating_station = 15;
     bool is_choppable = 16;
     bool ignore = 17;
+    repeated Vector2 occupied_grid_points = 18;
 }
 
 message GameEntityRecord {
@@ -233,7 +241,7 @@ message GameEntityRecord {
     EntityPath spawner = 13;
     repeated EntityPath spawned = 14;
     VersionedInt next_spawn_id = 5;
-    VersionedISpawnClaimingAction spawn_owner = 6;
+    VersionedInt spawn_owner = 6;
     VersionedVector3 position = 7;
     VersionedVector3 velocity = 8;
     VersionedBool existed = 9;
@@ -288,4 +296,6 @@ message GameSetup {
     GameEntityRecords records = 2;
     GameActionSequences sequences = 3;
     InputHistory input_history = 4;
+    int32 last_empirical_frame = 5;
+    int32 last_simulated_frame = 6;
 }

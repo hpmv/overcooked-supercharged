@@ -29,6 +29,10 @@ namespace Hpmv {
             return new Vector2((coord.X - topLeft.X) / 1.2f, (coord.Y - topLeft.Y) / -1.2f);
         }
 
+        public Vector2 GridPosToCoords(Vector2 gridPos) {
+            return new Vector2(1.2f * gridPos.X + topLeft.X, -1.2f * gridPos.Y + topLeft.Y);
+        }
+
         public (int x, int y) CoordsToGridPosRounded(Vector2 coord) {
             return ((int)Math.Round((coord.X - topLeft.X) / 1.2), (int)Math.Round((coord.Y - topLeft.Y) / -1.2));
         }
@@ -62,6 +66,7 @@ namespace Hpmv {
             }
             return ok;
         }
+
 
         public GameMap(Vector2[][] polygons, Vector2 topLeft, Vector2 size) {
             this.polygons = polygons;
@@ -274,6 +279,56 @@ namespace Hpmv {
                 Console.WriteLine($"Trying to find interaction points around unreachable entity at {center}");
             }
             return results;
+        }
+
+        public Save.GameMap ToProto() {
+            var result = new Save.GameMap();
+            result.TopLeft = topLeft.ToProto();
+            result.Polygons.AddRange(polygons.Select(polygon => {
+                var proto = new Save.Polygon();
+                proto.Points.AddRange(polygon.Select(p => p.ToProto()));
+                return proto;
+            }));
+            result.BoundaryPoints.AddRange(boundaryPoints.Select(p => p.ToProto()));
+            result.PointsMesh.AddRange(pointsMesh.Select(mesh => {
+                var list = new Save.IntList();
+                list.Values.AddRange(mesh);
+                return list;
+            }));
+            foreach (var val in precomputedConnectivity) {
+                result.PrecomputedConnectivity.Add(val);
+            }
+            result.PrecomputedConnectivityDimensions.Add(precomputedConnectivity.GetLength(0));
+            result.PrecomputedConnectivityDimensions.Add(precomputedConnectivity.GetLength(1));
+            result.PrecomputedConnectivityDimensions.Add(precomputedConnectivity.GetLength(2));
+            return result;
+        }
+
+        public GameMap(Save.GameMap proto) {
+            topLeft = proto.TopLeft.FromProto();
+            polygons = proto.Polygons.Select(polygon => polygon.Points.Select(p => p.FromProto()).ToArray()).ToArray();
+            boundaryPoints = proto.BoundaryPoints.Select(p => p.FromProto()).ToList();
+            pointsMesh = proto.PointsMesh.Select(list => list.Values.ToList()).ToList();
+            var dim = proto.PrecomputedConnectivityDimensions;
+            precomputedConnectivity = new bool[dim[0], dim[1], dim[2]];
+            int ptr = 0;
+            for (int i = 0; i < dim[0]; i++) {
+                for (int j = 0; j < dim[1]; j++) {
+                    for (int k = 0; k < dim[2]; k++) {
+                        precomputedConnectivity[i, j, k] = proto.PrecomputedConnectivity[ptr];
+                        ptr++;
+                    }
+                }
+            }
+            LevelPolygons =
+                polygons.Select(polygon => polygon.Select(Discretize).ToList()).ToList();
+            topLeftDiscrete = Discretize(topLeft);
+        }
+    }
+
+    public static class GameMapFromProto {
+        public static GameMap FromProto(this Save.GameMap proto) {
+            return new GameMap(proto);
         }
     }
 }

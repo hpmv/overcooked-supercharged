@@ -176,17 +176,14 @@ namespace Hpmv {
             var clean_plate_spawner_prefab = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner");
             clean_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Clean Plate Stack", "clean-plate-stack"));
             clean_plate_spawner_prefab.Spawns[0].Spawns.Add(plate_prefab);
-            var washing_part_prefab = new PrefabRecord("Sink", "sink") { CanUse = true };
-            var serve_prefab = new PrefabRecord("Serve", "serve");
+            var washing_part_prefab = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true };
+            var serve_prefab = new PrefabRecord("Serve", "serve") { OccupiedGridPoints = new Vector2[] { new Vector2(-0.6f, 0f), new Vector2(0.6f, 0) } };
             var chef_red_prefab = new PrefabRecord("Chef Red", "chef-red");
             var chef_green_prefab = new PrefabRecord("Chef Green", "chef-green");
             var chef_yellow_prefab = new PrefabRecord("Chef Yellow", "chef-yellow");
             var chef_blue_prefab = new PrefabRecord("Chef Blue", "chef-blue");
-            var ignore_prefab = new PrefabRecord("", "ignored") { Ignore = true };
+            var ignore_prefab = new PrefabRecord("Ignored", "ignored") { Ignore = true };
 
-            entityRecords.RegisterPrefabRecord(68, mixer_station_prefab);
-            entityRecords.RegisterPrefabRecord(69, mixer_station_prefab);
-            entityRecords.RegisterPrefabRecord(67, mixer_station_prefab);
             var MIXER_STATION1 = entityRecords.RegisterKnownObject(68, mixer_station_prefab);
             var MIXER_STATION2 = entityRecords.RegisterKnownObject(69, mixer_station_prefab);
             var MIXER_STATION3 = entityRecords.RegisterKnownObject(67, mixer_station_prefab);

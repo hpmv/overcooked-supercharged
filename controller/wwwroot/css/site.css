@@ -431,7 +431,7 @@ app {
     width: 700px;
     height: 700px;
     background: white;
-
+    cursor: crosshair;
 }
 
 .schedule-container {
@@ -550,6 +550,23 @@ app {
     height: 46px;
     background-color: rgb(200, 200, 255);
     z-index: 2;
+}
+
+.record-vis-type-clean-plate-stack {
+    display: none;
+}
+
+.record-vis-type-dirty-plate {
+    display: none;
+}
+
+.record-vis-type-dirty-plate-stack {
+    border: 2px solid rgb(150, 134, 115);
+    background-color: rgb(247, 237, 220);
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    z-index: 4;
 }
 
 .record-vis-type-chef-red,
@@ -678,6 +695,25 @@ app {
     background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
 }
 
+.record-vis-plate-respawn-timers {
+    position: absolute;
+    top: -36px;
+    left: -25px;
+    height: 20px;
+    width: 50px;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.record-vis-plate-respawn-timer {
+    width: 16px;
+    height: 16px;
+    text-align: center;
+    background-size: contain;
+    border: 1px solid blue;
+}
+
 .chef-input-vis {
     display: flex;
     align-items: center;
@@ -803,4 +839,13 @@ app {
 .action-editor-dep-delete {
     border: none;
     border-radius: 4px;
+}
+
+.control-row {
+    display: flex;
+    margin-top: 10px;
+}
+
+.mdc-linear-progress__bar {
+    transition: none !important;
 }

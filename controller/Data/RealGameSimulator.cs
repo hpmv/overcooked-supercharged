@@ -59,8 +59,8 @@ namespace Hpmv {
 
                 var output = action.Step(gameActionInput);
                 if (output.SpawningClaim != null) {
-                    Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
-                    output.SpawningClaim.spawnOwner.ChangeTo(action as ISpawnClaimingAction, frame);
+                    // Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
+                    output.SpawningClaim.spawnOwner.ChangeTo(action.ActionId, frame);
                 }
                 newControllers[action.Chef] = output.ControllerInput;
                 if (output.Done) {
@@ -131,7 +131,19 @@ namespace Hpmv {
                 } else if (payload is CookingStateMessage csm) {
                     entityRecord.progress.ChangeTo(csm.m_cookingProgress, frame);
                 } else if (payload is PhysicalAttachMessage pam) {
+                    if (specificData.attachmentParent != null) {
+                        specificData.attachmentParent.data.AppendWith(frame, d => {
+                            d.attachment = null;
+                            return d;
+                        });
+                    }
                     specificData.attachmentParent = pam.m_parent <= 0 ? null : entityIdToRecord[pam.m_parent];
+                    if (specificData.attachmentParent != null) {
+                        specificData.attachmentParent.data.AppendWith(frame, d => {
+                            d.attachment = entityRecord;
+                            return d;
+                        });
+                    }
                 } else if (payload is WorkstationMessage wm) {
                     var interacter = (int)wm.m_interactorHeader.m_uEntityID;
                     var board = entityRecord;
@@ -151,6 +163,27 @@ namespace Hpmv {
                     specificData.attachment = asm.m_item <= 0 ? null : entityIdToRecord[asm.m_item];
                 } else if (payload is IngredientContainerMessage icm) {
                     specificData.contents = icm.Contents?.Flatten()?.ToList();
+                } else if (payload is PlateStationMessage message) {
+                    specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
+                    specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
+                    entityIdToRecord[(int)message.m_delivered].existed.ChangeTo(false, frame);
+                } else if (payload is WashingStationMessage wsm) {
+                    // Console.WriteLine($"[{frame}] " + toJson(payload));
+                    if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
+                        specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
+                        var interacter = entityIdToRecord[(int)wsm.m_interacter];
+                        if (specificData.washers.Contains(interacter)) {
+                            specificData.washers.Remove(interacter);
+                        } else {
+                            specificData.washers.Add(interacter);
+                        }
+                        entityRecord.progress.ChangeTo(wsm.m_progress, frame);
+                    } else {
+                        specificData.numPlates = wsm.m_plateCount;
+                        if (wsm.m_msgType == WashingStationMessage.MessageType.CleanedPlate) {
+                            entityRecord.progress.ChangeTo(0, frame);
+                        }
+                    }
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -183,6 +216,15 @@ namespace Hpmv {
                 entityIdToRecord[(int)sem.m_DesiredHeader.m_uEntityID] = child;
             };
 
+            Action<GameEntityRecord> destroyEntity = r => {
+                r.existed.ChangeTo(false, frame);
+                foreach (var entity in Records.GenAllEntities()) {
+                    if (entity.existed.Last() && entity.data.Last().attachmentParent == r) {
+                        entity.existed.ChangeTo(false, frame);
+                    }
+                }
+            };
+
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
             if (item is EntitySynchronisationMessage sync) {
                 foreach (var (type, payload) in sync.m_Payloads) {
@@ -195,13 +237,14 @@ namespace Hpmv {
             } else if (item is SpawnPhysicalAttachmentMessage spem) {
                 spawnHandler(spem.m_SpawnEntityData);
             } else if (item is DestroyEntityMessage dem) {
-                entityIdToRecord[(int)dem.m_Header.m_uEntityID].existed.ChangeTo(false, frame);
+                // Console.WriteLine($"[{frame}] " + toJson(item));
+                destroyEntity(entityIdToRecord[(int)dem.m_Header.m_uEntityID]);
             } else if (item is DestroyEntitiesMessage dems) {
+                // Console.WriteLine($"[{frame}] " + toJson(item));
+                destroyEntity(entityIdToRecord[(int)dems.m_rootId]);
                 foreach (var i in dems.m_ids) {
-                    entityIdToRecord[(int)i].existed.ChangeTo(false, frame);
+                    destroyEntity(entityIdToRecord[(int)i]);
                 }
-            } else if (item is TimeSyncMessage tsm) {
-                Console.WriteLine(toJson(tsm));
             }
         }
 
@@ -264,6 +307,16 @@ namespace Hpmv {
                         newData.chopInteracters[chef] = newRemain;
                     }
                     entity.data.ChangeTo(newData, frame);
+                }
+                if (entity.data.Last().washers is HashSet<GameEntityRecord> washers && washers.Count > 0) {
+                    entity.progress.AppendWith(frame, p => p + washers.Count * 1.0 / 60);
+                }
+                if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
+                    entity.data.AppendWith(frame, d => {
+                        d.plateRespawnTimers = d.plateRespawnTimers
+                            .Select(t => t - TimeSpan.FromSeconds(1) / 60).Where(t => t > TimeSpan.Zero).ToList();
+                        return d;
+                    });
                 }
             }
         }

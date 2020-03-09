@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace Hpmv {
     public class PrefabRecord {
@@ -20,6 +21,7 @@ namespace Hpmv {
         public bool IsHeatingStation { get; set; }
         public bool IsChoppable { get; set; }
         public bool Ignore { get; set; }
+        public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
         public PrefabRecord(string name, string className) {
             Name = name;
@@ -48,6 +50,7 @@ namespace Hpmv {
             foreach (var prefab in Spawns) {
                 result.Spawns.Add(prefab.ToProto());
             }
+            result.OccupiedGridPoints.AddRange(OccupiedGridPoints.Select(x => x.ToProto()));
             return result;
         }
     }
@@ -70,6 +73,7 @@ namespace Hpmv {
                 IsHeatingStation = record.IsHeatingStation,
                 IsChoppable = record.IsChoppable,
                 Ignore = record.Ignore,
+                OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };
         }
     }

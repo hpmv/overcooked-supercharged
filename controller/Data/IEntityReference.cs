@@ -1,7 +1,7 @@
 namespace Hpmv {
     public interface IEntityReference {
         GameEntityRecord GetEntityRecord(GameActionInput input);
-        PrefabRecord GetPrefabRecord();
+        // PrefabRecord GetPrefabRecord();
         Save.EntityReference ToProto();
     }
 
@@ -10,7 +10,7 @@ namespace Hpmv {
             if (r.KindCase == Save.EntityReference.KindOneofCase.Literal) {
                 return new LiteralEntityReference(r.Literal.FromProtoRef(context));
             } else {
-                return new SpawnedEntityReference(context.ActionById[r.Spawner] as ISpawnClaimingAction);
+                return new SpawnedEntityReference(r.Spawner);
             }
         }
     }

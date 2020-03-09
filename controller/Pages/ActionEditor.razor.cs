@@ -13,17 +13,24 @@ namespace controller.Pages {
         [Parameter]
         public GameActionSequences Sequences { get; set; }
 
+        [Parameter]
+        public EventCallback<bool> DependenciesChanged { get; set; }
+
+        private int NumFramesEditing { get; set; } = 5;
+
         private async Task AddDependency() {
             StateHasChanged();
             var dep = await Selector.BeginSelect();
             if (dep != null) {
                 Node.Deps.Add(dep.Id);
+                await DependenciesChanged.InvokeAsync(false);
             }
         }
 
         private void HandleDelete(int dep) {
             Node.Deps.Remove(dep);
             StateHasChanged();
+            DependenciesChanged.InvokeAsync(false);
         }
     }
 }
