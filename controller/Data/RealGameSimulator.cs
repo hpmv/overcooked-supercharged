@@ -171,17 +171,28 @@ namespace Hpmv {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
                         specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
-                        var interacter = entityIdToRecord[(int)wsm.m_interacter];
-                        if (specificData.washers.Contains(interacter)) {
-                            specificData.washers.Remove(interacter);
-                        } else {
-                            specificData.washers.Add(interacter);
-                        }
                         entityRecord.progress.ChangeTo(wsm.m_progress, frame);
                     } else {
                         specificData.numPlates = wsm.m_plateCount;
                         if (wsm.m_msgType == WashingStationMessage.MessageType.CleanedPlate) {
                             entityRecord.progress.ChangeTo(0, frame);
+                        }
+                    }
+                } else if (payload is InputEventMessage iem) {
+                    if (iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction
+                        || iem.inputEventType == InputEventMessage.InputEventType.EndInteraction) {
+                        if (entityIdToRecord.ContainsKey((int)iem.entityId)) {
+                            var entity = entityIdToRecord[(int)iem.entityId];
+                            if (entity.className == "sink") // hacky
+                            {
+                                specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
+                                var interacter = entityIdToRecord[entityId];
+                                if (specificData.washers.Contains(interacter) && iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction) {
+                                    specificData.washers.Remove(interacter);
+                                } else {
+                                    specificData.washers.Add(interacter);
+                                }
+                            }
                         }
                     }
                 }

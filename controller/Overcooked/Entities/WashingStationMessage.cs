@@ -9,7 +9,6 @@ public class WashingStationMessage : Serialisable {
         writer.Write((uint)this.m_msgType, 2);
         if (this.m_msgType == WashingStationMessage.MessageType.InteractionState) {
             writer.Write(this.m_interacting);
-            writer.Write(this.m_interacter, 32);
             writer.Write(this.m_progress);
             return;
         }
@@ -21,7 +20,6 @@ public class WashingStationMessage : Serialisable {
         this.m_msgType = (WashingStationMessage.MessageType)reader.ReadUInt32(2);
         if (this.m_msgType == WashingStationMessage.MessageType.InteractionState) {
             this.m_interacting = reader.ReadBit();
-            this.m_interacter = reader.ReadUInt32(32);
             this.m_progress = reader.ReadFloat32();
         } else {
             this.m_plateCount = (int)reader.ReadUInt32(4);
@@ -46,9 +44,6 @@ public class WashingStationMessage : Serialisable {
 
     // Token: 0x040019C8 RID: 6600
     public int m_plateCount;
-
-    // Token: 0x040039FF RID: 14847
-    public uint m_interacter;
 
     // Token: 0x02000697 RID: 1687
     public enum MessageType {
