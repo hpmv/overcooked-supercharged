@@ -598,6 +598,7 @@ app {
 .record-vis-type-egg,
 .record-vis-type-flour,
 .record-vis-type-chopped-berry,
+.record-vis-type-chopped-blueberry,
 .record-vis-type-chopped-chocolate,
 .record-vis-type-chopped-honey {
     border: 1px solid orange;
@@ -618,6 +619,9 @@ app {
 .record-vis-type-chopped-berry {
     background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
 }
+.record-vis-type-chopped-blueberry {
+    background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
+}
 .record-vis-type-chopped-chocolate {
     background-image: url('../images/chocolate_Icon-resources.assets-504.png');
 }
@@ -626,6 +630,7 @@ app {
 }
 
 .record-vis-type-berry,
+.record-vis-type-blueberry,
 .record-vis-type-chocolate,
 .record-vis-type-honey {
     width: 32px;
@@ -637,6 +642,9 @@ app {
 }
 .record-vis-type-berry {
     background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
+}
+.record-vis-type-blueberry {
+    background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
 }
 .record-vis-type-chocolate {
     background-image: url('../images/chocolate_Icon-resources.assets-504.png');
@@ -693,6 +701,9 @@ app {
 }
 .record-vis-ingredient-19670 {
     background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
+}
+.record-vis-ingredient-83234 {
+    background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
 }
 
 .record-vis-plate-respawn-timers {
@@ -848,4 +859,88 @@ app {
 
 .mdc-linear-progress__bar {
     transition: none !important;
+}
+
+.analysis-row {
+    background-color: rgb(248, 248, 248);
+    position: relative;
+    box-sizing: border-box;
+}
+
+.analysis-block {
+    position: absolute;
+    top: 5px;
+    height: 30px;
+    border: 1px solid rgb(255, 202, 104);
+    background: rgb(255, 252, 244);
+    display: flex;
+    align-items: stretch;
+    flex-direction: row;
+    box-sizing: border-box;
+}
+
+.analysis-range {
+
+    box-sizing: border-box;
+}
+
+.analysis-range-kind-10000 {
+    background: rgb(255, 252, 244);
+}
+
+.analysis-range-kind-10001 {
+    background: rgb(215, 247, 255);
+}
+
+.analysis-range-kind-10002 {
+    background: rgb(163, 237, 255);
+}
+
+.analysis-range-kind-10003 {
+    background: rgb(123, 229, 255);
+}
+
+.analysis-results {
+    width: 100%;
+}
+
+.analysis-row-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    height: 40px;
+    border: 1px solid rgb(218, 218, 218);
+    box-sizing: border-box;
+}
+
+.analysis-row-container:not(:last-child) {
+    border-bottom: none;
+}
+
+.analysis-row-header {
+    width: 100px;
+    border-right: 1px solid rgb(218, 218, 218);
+    box-sizing: border-box;
+}
+
+.analysis-row {
+    flex: 1;
+    box-sizing: border-box;
+}
+
+.right-side-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.right-top-content {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex: 1;
+}
+
+.right-bottom-content {
+    max-height: 500px;
 }

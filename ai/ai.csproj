@@ -176,7 +176,4 @@
   <Target Name="PreBuild" BeforeTargets="_GenerateRestoreProjectSpec;Restore;Compile">
     <Exec Command="thrift -gen csharp hpmv.thrift" />
   </Target>
-  <Target Name="PostBuild" AfterTargets="Build">
-    <Exec Command="copy bin\Debug\net35\ai.dll &quot;C:\Program Files (x86)\Steam\steamapps\common\Overcooked! 2\Overcooked2_Data\Managed&quot;" />
-  </Target>
 </Project>

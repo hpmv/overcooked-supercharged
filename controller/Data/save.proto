@@ -299,3 +299,32 @@ message GameSetup {
     int32 last_empirical_frame = 5;
     int32 last_simulated_frame = 6;
 }
+
+message AnalysisRange {
+    int32 id = 1;
+    int32 start_frame = 2;
+    int32 end_frame = 3;
+    int32 kind = 4;
+    repeated int32 dependencies = 5;
+    bool has_value = 8;
+    double start_value = 6;
+    double end_value = 7;
+}
+
+message AnalysisBlock {
+    int32 start_frame = 1;
+    int32 end_frame = 2;
+    repeated int32 ranges = 3;
+    repeated int32 recipe_annotation = 4;
+}
+
+message AnalysisRow {
+    repeated AnalysisBlock blocks = 1;
+    repeated AnalysisRange ranges = 2;
+    string name = 3;
+    int32 kind = 4;
+}
+
+message Analysis {
+    repeated AnalysisRow rows = 1;
+}

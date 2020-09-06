@@ -10,6 +10,10 @@
            OnActionAdded="SimulateInResponseToEditorChange">
         </EntityRecordVisualizer>
         
+    </div>
+
+    <div class="right-side-content">
+
         <button @onclick="() => ShowRecordDebug = !ShowRecordDebug">
             @(ShowRecordDebug? "Hide " : "Show ") Record Debug</button>
         @if (ShowRecordDebug) {
@@ -18,6 +22,12 @@
                 <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"></EntityRecordRenderer>
             }
         } 
+
+        @if (realGameConnector != null) {
+            foreach (var entry in realGameConnector.simulator.Stats.messageTypeStats) {
+                <div>@(entry.Key): @(entry.Value)</div>
+            }
+        }
 
         <div class="control-row">
             <button @onclick="(e) => StartRealSimulation()">Simulate Real</button>
@@ -48,86 +58,98 @@
             <button @onclick="InitializeNewLevel">Initialize New Level</button>
             <button @onclick="PatchPrefab">Patch Prefabs</button>
         </div>
+        <div class="control-row">
+            <button @onclick="Analyze">Analyze Gameplay</button>
+        </div>
     </div>
 
-    <div class="schedule-container">
-        <div class="schedule-background" @ref="scheduleBackgroundRef" style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastSimulatedFrame) + 500)px">
-            @foreach (var rift in TimelineLayout.Rifts) {
-                <div class="timeline-rift"
-                    style="margin-top: @(rift.margin)px; height: @(rift.height)px">
+    <div class="right-side-content" style="display: none">
+        <div class="right-top-content">
+            <div class="schedule-container">
+                <div class="schedule-background" @ref="scheduleBackgroundRef" style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastSimulatedFrame) + 500)px">
+                    @foreach (var rift in TimelineLayout.Rifts) {
+                        <div class="timeline-rift"
+                            style="margin-top: @(rift.margin)px; height: @(rift.height)px">
+                        </div>
+                    }
                 </div>
-            }
-        </div>
-        <div class="timeline-line-container">
-            <div class="timeline-line"
-                style="top: @(TimelineLayout.OffsetFromFrame(EditorState.SelectedFrame))px"></div>
-        </div>
-        <div class="schedule @(nodeSelector.IsSelecting ? "schedule-selecting" : "")">
-            @{
-                var sequences = level.sequences;
-            }
-            @for (int i = 0; i < sequences.Actions.Count; i++) {
-                var iCopy = i;
-                var actions = sequences.Actions[i];
-                bool selectedChef = EditorState.SelectedChef == sequences.Chefs[i];
-                var lastFrame = -1;
-                <div class="chef-column @(selectedChef ? "selected-chef" : "")">
-                    <div class="chef-column-title">Chef @(sequences.Chefs[i])</div>
-                    <div class="chef-column-contents">
-                        @for (int index = 0; index < actions.Count; index++)
-                        {
-                            var indexCopy = index;
-                            var node = actions[index];
-                            string stateClass;
-                            if (realGameConnector != null && realGameConnector.simulator.inProgress.Any((x) => x.actionId == node.Id)) {
-                                stateClass = "active-action";
-                            } else {
-                                stateClass = "unstarted-action";
-                            }
-                            string selectedClass;
-                            if (selectedChef && EditorState.SelectedActionIndex == index) {
-                                selectedClass = "one-action-selected";
-                            } else {
-                                selectedClass = "";
-                            }
-                            <div class="one-action @(stateClass) @(selectedClass)"
-                                style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
-                                @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
-                                <div class="one-action-text">[@(node.Id)] @(node.Action.Describe())</div>
-                                @foreach (var dep in node.Deps) {
-                                    var depNode = sequences.NodeById[dep];
-                                    <div class="one-action-dep one-action-dep-@(depNode.Action.Chef.className)">
-                                        @(dep)
+                <div class="timeline-line-container">
+                    <div class="timeline-line"
+                        style="top: @(TimelineLayout.OffsetFromFrame(EditorState.SelectedFrame))px"></div>
+                </div>
+                <div class="schedule @(nodeSelector.IsSelecting ? "schedule-selecting" : "")">
+                    @{
+                        var sequences = level.sequences;
+                    }
+                    @for (int i = 0; i < sequences.Actions.Count; i++) {
+                        var iCopy = i;
+                        var actions = sequences.Actions[i];
+                        bool selectedChef = EditorState.SelectedChef == sequences.Chefs[i];
+                        var lastFrame = -1;
+                        <div class="chef-column @(selectedChef ? "selected-chef" : "")">
+                            <div class="chef-column-title">Chef @(sequences.Chefs[i])</div>
+                            <div class="chef-column-contents">
+                                @for (int index = 0; index < actions.Count; index++)
+                                {
+                                    var indexCopy = index;
+                                    var node = actions[index];
+                                    string stateClass;
+                                    if (realGameConnector != null && realGameConnector.simulator.inProgress.Any((x) => x.actionId == node.Id)) {
+                                        stateClass = "active-action";
+                                    } else {
+                                        stateClass = "unstarted-action";
+                                    }
+                                    string selectedClass;
+                                    if (selectedChef && EditorState.SelectedActionIndex == index) {
+                                        selectedClass = "one-action-selected";
+                                    } else {
+                                        selectedClass = "";
+                                    }
+                                    <div class="one-action @(stateClass) @(selectedClass)"
+                                        style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
+                                        @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
+                                        <div class="one-action-text">[@(node.Id)] @(node.Action.Describe())</div>
+                                        @foreach (var dep in node.Deps) {
+                                            var depNode = sequences.NodeById[dep];
+                                            <div class="one-action-dep one-action-dep-@(depNode.Action.Chef.className)">
+                                                @(dep)
+                                            </div>
+                                        }
                                     </div>
+                                    lastFrame = Math.Max(lastFrame, node.Predictions.EndFrame ?? -1);
+                                }
+                                @if (selectedChef && EditorState.SelectedActionIndex >= actions.Count) {
+                                    <div class="action-insertion-prompt-selected">(Inserting here...)</div>
+                                } else {
+                                    <div class="action-insertion-prompt"
+                                        @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], actions.Count, lastFrame + 1)">Click to insert here</div>
                                 }
                             </div>
-                            lastFrame = Math.Max(lastFrame, node.Predictions.EndFrame ?? -1);
-                        }
-                        @if (selectedChef && EditorState.SelectedActionIndex >= actions.Count) {
-                            <div class="action-insertion-prompt-selected">(Inserting here...)</div>
-                        } else {
-                            <div class="action-insertion-prompt"
-                                @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], actions.Count, lastFrame + 1)">Click to insert here</div>
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
-            }
-        </div>
-    </div>
+            </div>
 
-    <div class="action-editor-panel">
-        @if (EditorState.SelectedChef is GameEntityRecord chef && EditorState.SelectedActionIndex < sequences.Actions[sequences.ChefIndexByChef[chef]].Count) {
-            <ActionEditor
-             Selector="nodeSelector"
-              Sequences="sequences"
-               Node="sequences.Actions[sequences.ChefIndexByChef[chef]][EditorState.SelectedActionIndex]"
-               DependenciesChanged="OnDependenciesChanged">
-            </ActionEditor>
-            <button @onclick="HandleDeleteAction">Delete Action</button>
-        }
+            <div class="action-editor-panel">
+                @if (EditorState.SelectedChef is GameEntityRecord chef && EditorState.SelectedActionIndex < sequences.Actions[sequences.ChefIndexByChef[chef]].Count) {
+                    <ActionEditor
+                    Selector="nodeSelector"
+                    Sequences="sequences"
+                    Node="sequences.Actions[sequences.ChefIndexByChef[chef]][EditorState.SelectedActionIndex]"
+                    DependenciesChanged="OnDependenciesChanged">
+                    </ActionEditor>
+                    <button @onclick="HandleDeleteAction">Delete Action</button>
+                }
+            </div>
+        </div>
     </div>
 </div>
 
+@if (Analysis != null) {
+    <div class="right-bottom-content">
+        <AnalysisResultsViewer Analysis="Analysis"></AnalysisResultsViewer>
+    </div>
+}
 @* 
 @foreach (var entity in entities.entities) {
     <div class="entity-box">

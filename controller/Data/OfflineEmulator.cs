@@ -539,7 +539,7 @@ namespace Hpmv {
                 if (input.dash.justPressed && chefState.dashTimer <= -0.1) {  // dash time minus cooldown
                     chefState.dashTimer = 0.3;  // dash time
                 }
-                chefState.dashTimer -= (1.0 / 60);
+                chefState.dashTimer -= (1.0 / Config.FRAMERATE);
                 chefState.forward = forward;
                 return chefState;
             });
@@ -553,7 +553,7 @@ namespace Hpmv {
                     cross = 1;
                 }
                 var maxAngle = Math.Acos(Math.Clamp(dot, -1, 1));
-                var angle = Math.Min(20 * (1.0 / 60), maxAngle);
+                var angle = Math.Min(20 * (1.0 / Config.FRAMERATE), maxAngle);
                 var actualAngle = (float)(cross > 0 ? angle : -angle);
                 var newForward = Vector2.TransformNormal(forward, Matrix3x2.CreateRotation(actualAngle));
                 return newForward;
@@ -583,11 +583,11 @@ namespace Hpmv {
         }
 
         public static Vector2 CalculateNewChefPositionAfterMovement(Vector2 position, Vector2 velocity, GameMap map) {
-            var desired = position + velocity * (1.0f / 60);
+            var desired = position + velocity * (1.0f / Config.FRAMERATE);
             if (!map.IsInsideMap(desired)) {
-                desired = position + new Vector2(velocity.X, 0) * (1.0f / 60);
+                desired = position + new Vector2(velocity.X, 0) * (1.0f / Config.FRAMERATE);
                 if (!map.IsInsideMap(desired)) {
-                    desired = position + new Vector2(0, velocity.Y) * (1.0f / 60);
+                    desired = position + new Vector2(0, velocity.Y) * (1.0f / Config.FRAMERATE);
                     if (!map.IsInsideMap(desired)) {
                         desired = position;
                     }
@@ -605,7 +605,7 @@ namespace Hpmv {
                                 CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.map).ToXZVector3(),
                                 frame);
                         } else {
-                            entity.position.ChangeTo(entity.position.Last() + entity.velocity.Last() * (1.0f / 60), frame);
+                            entity.position.ChangeTo(entity.position.Last() + entity.velocity.Last() * (1.0f / Config.FRAMERATE), frame);
                         }
                     }
                 }
@@ -661,7 +661,7 @@ namespace Hpmv {
             foreach (var entity in entities) {
                 if (entity.prefab.MaxProgress > 0 && entity.prefab.CanContainIngredients && (entity.data.Last().contents?.Count ?? 0) > 0) {
                     if (entity.data.Last().attachmentParent is GameEntityRecord parent && (parent.prefab.IsMixerStation || parent.prefab.IsHeatingStation)) {
-                        entity.progress.AppendWith(frame, p => p + (1.0 / 60));
+                        entity.progress.AppendWith(frame, p => p + (1.0 / Config.FRAMERATE));
                     }
                 } else if (entity.prefab.IsBoard && entity.data.Last().itemBeingChopped is GameEntityRecord chopped && chopped.existed.Last()) {
                     var chopInteracters = entity.data.Last().chopInteracters;
@@ -670,7 +670,7 @@ namespace Hpmv {
                         var newData = entity.data.Last();
                         newData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>(chopInteracters);
                         foreach (var (chef, remain) in chopInteracters) {
-                            var newRemain = remain - TimeSpan.FromSeconds(1) / 60;
+                            var newRemain = remain - TimeSpan.FromSeconds(1) / Config.FRAMERATE;
                             if (newRemain < TimeSpan.Zero) {
                                 newData.itemBeingChopped.progress.ChangeTo(newData.itemBeingChopped.progress.Last() + 0.2, frame);
                                 newRemain += TimeSpan.FromSeconds(0.2);
@@ -702,7 +702,7 @@ namespace Hpmv {
                 } else if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
                     List<TimeSpan> newTimers = new List<TimeSpan>();
                     foreach (var timer in timers) {
-                        var newTimer = timer - TimeSpan.FromSeconds(1) / 60;
+                        var newTimer = timer - TimeSpan.FromSeconds(1) / Config.FRAMERATE;
                         if (newTimer < TimeSpan.Zero) {
                             foreach (var spawner in entities) {
                                 if (spawner.prefab.Name == "Dirty Plate Spawner") {
@@ -736,7 +736,7 @@ namespace Hpmv {
                     });
                 } else if (entity.data.Last().washers is HashSet<GameEntityRecord> washers) {
                     var spawner = entities.Where(e => e.prefab.Name == "Clean Plate Spawner").First();
-                    var speed = (TimeSpan.FromSeconds(1) / 60 * washers.Count).TotalSeconds;
+                    var speed = (TimeSpan.FromSeconds(1) / Config.FRAMERATE * washers.Count).TotalSeconds;
                     entity.progress.ChangeTo(entity.progress.Last() + speed, frame);
                     if (entity.progress.Last() >= entity.prefab.MaxProgress) {
                         entity.progress.ChangeTo(0, frame);

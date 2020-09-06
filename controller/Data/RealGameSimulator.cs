@@ -15,6 +15,7 @@ namespace Hpmv {
         public InputHistory InputHistory { get; set; }
         public GameMap Map { get; set; }
         public int Frame { get { return frame; } }
+        public readonly MessageStats Stats = new MessageStats();
 
         public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
 
@@ -26,6 +27,7 @@ namespace Hpmv {
             depsRemaining.Clear();
             inProgress.Clear();
             entityIdToRecord.Clear();
+            Stats.Clear();
 
             Records.CleanRecordsFromFrame(0);
             foreach (var entry in Records.FixedEntities) {
@@ -117,7 +119,9 @@ namespace Hpmv {
 
 
         public void ApplyGameUpdate(Serialisable item) {
+            Stats.CountMessage(item?.GetType()?.Name ?? "message null");
             Action<int, Serialisable> entityHandler = (int entityId, Serialisable payload) => {
+                Stats.CountMessage(payload?.GetType()?.Name ?? "entity null");
                 if (!entityIdToRecord.ContainsKey(entityId)) {
                     Console.WriteLine("Ignoring entity event for " + entityId);
                     return;
@@ -179,19 +183,30 @@ namespace Hpmv {
                         }
                     }
                 } else if (payload is InputEventMessage iem) {
-                    if (iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction
-                        || iem.inputEventType == InputEventMessage.InputEventType.EndInteraction) {
+                    if (iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction) {
                         if (entityIdToRecord.ContainsKey((int)iem.entityId)) {
                             var entity = entityIdToRecord[(int)iem.entityId];
                             if (entity.className == "sink") // hacky
                             {
-                                specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
+                                // This is different from the other cases above - here we alter the state of a different entity!
+                                var washerData = entity.data.Last();
+                                washerData.washers = washerData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(washerData.washers);
                                 var interacter = entityIdToRecord[entityId];
-                                if (specificData.washers.Contains(interacter) && iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction) {
-                                    specificData.washers.Remove(interacter);
-                                } else {
-                                    specificData.washers.Add(interacter);
-                                }
+                                washerData.washers.Add(interacter);
+                                entity.data.ChangeTo(washerData, frame);
+                            }
+                        }
+                    } else if (iem.inputEventType == InputEventMessage.InputEventType.EndInteraction) {
+                        // When ending interaction, unfortunately we don't get the object being originally interacted with,
+                        // so we just have to iterate through all entities.
+                        var interacter = entityIdToRecord[entityId];
+                        foreach (var entity in Records.GenAllEntities()) {
+                            if (entity.existed.Last() && entity.data.Last().washers != null && entity.data.Last().washers.Contains(interacter)) {
+                                entity.data.AppendWith(frame, d => {
+                                    d.washers = new HashSet<GameEntityRecord>(d.washers);
+                                    d.washers.Remove(interacter);
+                                    return d;
+                                });
                             }
                         }
                     }
@@ -276,7 +291,7 @@ namespace Hpmv {
         }
 
         public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data) {
-            // Console.WriteLine($"Applying early registry update for {data.EntityId}");
+            Console.WriteLine($"Applying early registry update for {data.EntityId} {string.Join(", ", data.SyncEntityTypes.Select(t => ((EntityType)t).ToString()))}");
             FakeEntityRegistry.entityToTypes[data.EntityId] = data.SyncEntityTypes.Select(t => (EntityType)t).ToList();
         }
 
@@ -310,7 +325,7 @@ namespace Hpmv {
                     var newData = entity.data.Last();
                     newData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>(chopInteracters);
                     foreach (var (chef, remain) in chopInteracters) {
-                        var newRemain = remain - TimeSpan.FromSeconds(1) / 60;
+                        var newRemain = remain - TimeSpan.FromSeconds(1) / Config.FRAMERATE;
                         if (newRemain < TimeSpan.Zero) {
                             newData.itemBeingChopped.progress.ChangeTo(newData.itemBeingChopped.progress.Last() + 0.2, frame);
                             newRemain += TimeSpan.FromSeconds(0.2);
@@ -320,12 +335,12 @@ namespace Hpmv {
                     entity.data.ChangeTo(newData, frame);
                 }
                 if (entity.data.Last().washers is HashSet<GameEntityRecord> washers && washers.Count > 0) {
-                    entity.progress.AppendWith(frame, p => p + washers.Count * 1.0 / 60);
+                    entity.progress.AppendWith(frame, p => p + washers.Count * 1.0 / Config.FRAMERATE);
                 }
                 if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
                     entity.data.AppendWith(frame, d => {
                         d.plateRespawnTimers = d.plateRespawnTimers
-                            .Select(t => t - TimeSpan.FromSeconds(1) / 60).Where(t => t > TimeSpan.Zero).ToList();
+                            .Select(t => t - TimeSpan.FromSeconds(1) / Config.FRAMERATE).Where(t => t > TimeSpan.Zero).ToList();
                         return d;
                     });
                 }

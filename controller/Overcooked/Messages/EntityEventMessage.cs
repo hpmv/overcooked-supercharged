@@ -28,6 +28,11 @@ namespace Team17.Online.Multiplayer.Messaging {
             this.m_ComponentId = (uint) reader.ReadByte(4);
             var entry = FakeEntityRegistry.entityToTypes.GetValueOrDefault((int) this.m_Header.m_uEntityID);
             if (entry != null) {
+                if ((int)this.m_ComponentId >= entry.Count || (int)this.m_ComponentId < 0) {
+                    Console.WriteLine(
+                        $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}");
+                        return false;
+                }
                 m_EntityType = entry[(int) this.m_ComponentId];
                 return SerialisationRegistry<EntityType>.Deserialise(out this.m_Payload, entry[(int) this.m_ComponentId], reader);
             }

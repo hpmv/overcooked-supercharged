@@ -50,3 +50,49 @@ function setUpEntityRecordVisualizerHandlers(component, container) {
         component.invokeMethodAsync('HandleEntityClicks', paths, x - outerRect.left, y - outerRect.top);
     });
 }
+
+function setUpAnalysisResultsVisualizerHandlers(component, container) {
+    container.addEventListener('mousewheel', e => {
+        e.preventDefault();
+        
+        let rect = container.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+         
+        component.invokeMethodAsync('OnMouseWheel', e.deltaY, x, y); 
+    });
+
+    
+    var isWaiting = false;
+    var lastXY = null;
+    async function maybeCall(x, y) {
+        // poor man's debounce.
+        if (isWaiting) return;
+        await component.invokeMethodAsync('OnMouseDrag', x - lastXY.x, y - lastXY.y);
+        lastXY = {x, y};
+        isWaiting = false;
+    }
+    container.addEventListener('mousedown', e => {
+        e.preventDefault();
+        let rect = container.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        lastXY = {x, y};
+
+        var moveListener = e => {
+            let rect = container.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            maybeCall(x, y);
+        };
+
+        document.addEventListener('mousemove', moveListener);
+
+        var upListener = e => {
+            document.removeEventListener('mousemove', moveListener);
+            document.removeEventListener('mouseup', upListener);
+        };
+
+        document.addEventListener('mouseup', upListener);
+    });
+}

@@ -71,6 +71,7 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LevelLoadByIndex, () => new LevelLoadByIndexMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.GameState, () => new GameStateMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.TimeSync, () => new TimeSyncMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LatencyMeasure, () => new LatencyMessage());
         }
 
         public static Serialisable Deserialize(int type, byte[] bytes) {
@@ -78,7 +79,7 @@ namespace Hpmv {
             var bitstream = new BitStream.BitStreamReader(bytes);
             Serialisable result;
             if (!SerialisationRegistry<MessageType>.Deserialise(out result, messageType, bitstream)) {
-                //Console.WriteLine($"Failed to deserialize {messageType}");
+                Console.WriteLine($"Failed to deserialize {messageType}");
                 return null;
             }
             return result;

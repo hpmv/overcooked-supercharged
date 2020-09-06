@@ -117,10 +117,16 @@ namespace Hpmv {
             }
         }
 
+        public OutputData OpenCurrentFrameDataForWrite() {
+            // Ensure previous input is drained.
+            var currentInput = CurrentInput;
+            return CurrentFrameData;
+        }
+
         private BlockingQueue<OutputData> output = new BlockingQueue<OutputData>();
         private BlockingQueue<InputData> input = new BlockingQueue<InputData>();
 
-        public OutputData CurrentFrameData { get; private set; } = new OutputData();
+        private OutputData CurrentFrameData { get; set; } = new OutputData();
         private bool committed = false;
         private InputData currentInput = new InputData();
         private object sync = new object();

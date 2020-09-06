@@ -1,0 +1,16 @@
+@inject IJSRuntime JSRuntime
+
+<div class="analysis-results"
+    @ref="containerRef"
+    >
+    @foreach (var row in Analysis.Rows)
+    {
+        <div class="analysis-row-container">
+            <div class="analysis-row-header">
+                @(row.Name)
+            </div>
+            <AnalysisRowVisualizer Row="row" StartFrame="StartFrame" PixelsPerFrame="PixelsPerFrame">
+            </AnalysisRowVisualizer>
+        </div>
+    }
+</div>

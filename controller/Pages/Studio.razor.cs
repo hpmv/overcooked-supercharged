@@ -122,11 +122,11 @@ namespace controller.Pages {
             EditorState.SelectedFrame = 0;
             realGameConnector = new RealGameConnector(level);
             realGameConnector.OnFrameUpdate += () => {
-                // InvokeAsync(() => {
-                //     EditorState.SelectedFrame = level.LastEmpiricalFrame;
-                //     TimelineLayout.DoLayout();
-                //     StateHasChanged();
-                // });
+                InvokeAsync(() => {
+                    EditorState.SelectedFrame = level.LastEmpiricalFrame;
+                    TimelineLayout.DoLayout();
+                    StateHasChanged();
+                });
             };
             realGameConnector.Start();
         }
@@ -168,7 +168,8 @@ namespace controller.Pages {
         private string SaveFileName { get; set; }
 
         private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type> {
-            ["carnival31-four"] = typeof(Carnival31FourLevel)
+            ["carnival31-four"] = typeof(Carnival31FourLevel),
+            ["campfire14-two"] = typeof(Campture14TwoLevel),
         };
 
         private async Task LoadLevel() {
@@ -216,6 +217,20 @@ namespace controller.Pages {
                     entity.prefab = val;
                 }
             }
+        }
+
+        private Hpmv.Save.Analysis Analysis {get; set;}
+        private void Analyze() {
+            var analysis = new Hpmv.Save.Analysis();
+            var analyzers = new IAnalyzer[] {
+                new MixerAnalyzer()
+            };
+            foreach (var analyzer in analyzers) {
+                foreach (var row in analyzer.Analyze(EditorState.Records, level.LastSimulatedFrame)) {
+                    analysis.Rows.Add(row);
+                }
+            }
+            Analysis = analysis;
         }
     }
 }

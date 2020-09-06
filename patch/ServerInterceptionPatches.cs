@@ -1,4 +1,5 @@
-﻿using BitStream;
+﻿using BepInEx.Harmony;
+using BitStream;
 using HarmonyLib;
 using Hpmv;
 using System;
@@ -13,6 +14,10 @@ namespace SuperchargedPatch
 {
     public static class ServerInterceptionPatches
     {
+        public static void PatchAll() {
+
+        }
+
         public static void LateUpdate()
         {
             Injector.Server.CommitFrameIfNotCommitted();
@@ -25,15 +30,16 @@ namespace SuperchargedPatch
 
         public static void Update()
         {
+            var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
             Vector3 _velocity;
-            if (EnableInputInjection && Injector.Server.CurrentInput.ResetOrderSeed != 0)
+            if (Injector.Server.CurrentInput.ResetOrderSeed != 0)
             {
                 prevCachedLocation = new Dictionary<int, Vector3>();
                 prevCachedVelocity = new Dictionary<int, Vector3>();
             }
-            if (Injector.Server.CurrentFrameData.Items == null)
+            if (currentFrameData.Items == null)
             {
-                Injector.Server.CurrentFrameData.Items = new Dictionary<int, ItemData>();
+                currentFrameData.Items = new Dictionary<int, ItemData>();
             }
             if (prevCachedLocation != null && prevCachedVelocity != null)
             {
@@ -53,7 +59,7 @@ namespace SuperchargedPatch
                     }
                     Vector3 vector3 = _velocity;
                     int mUEntityID = (int)t.m_Header.m_uEntityID;
-                    Dictionary<int, ItemData> items = Injector.Server.CurrentFrameData.Items;
+                    Dictionary<int, ItemData> items = currentFrameData.Items;
                     if (!prevCachedLocation.ContainsKey(mUEntityID) || prevCachedLocation[mUEntityID] != _position)
                     {
                         prevCachedLocation[mUEntityID] = _position;
@@ -186,18 +192,19 @@ namespace SuperchargedPatch
                 bool flag7 = ___m_controlScheme.IsUseJustReleased() | flag3;
                 if (flag)
                 {
+                    var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
                     ___m_controls.UpdateNearbyObjects();
-                    if (Injector.Server.CurrentFrameData.CharPos == null)
+                    if (currentFrameData.CharPos == null)
                     {
-                        Injector.Server.CurrentFrameData.CharPos = new Dictionary<int, CharPositionData>();
+                        currentFrameData.CharPos = new Dictionary<int, CharPositionData>();
                     }
-                    if (!Injector.Server.CurrentFrameData.CharPos.ContainsKey(id))
+                    if (!currentFrameData.CharPos.ContainsKey(id))
                     {
-                        Injector.Server.CurrentFrameData.CharPos[id] = new CharPositionData();
+                        currentFrameData.CharPos[id] = new CharPositionData();
                     }
-                    Injector.Server.CurrentFrameData.CharPos[id].HighlightedForPickup = (___m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(___m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup) : -1);
-                    Injector.Server.CurrentFrameData.CharPos[id].HighlightedForUse = (___m_controls.CurrentInteractionObjects.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(___m_controls.CurrentInteractionObjects.m_interactable.gameObject) : -1);
-                    Injector.Server.CurrentFrameData.CharPos[id].HighlightedForPlacement = (___m_controls.CurrentInteractionObjects.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)___m_controls.CurrentInteractionObjects.m_iHandlePlacement).gameObject) : -1);
+                    currentFrameData.CharPos[id].HighlightedForPickup = (___m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(___m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup) : -1);
+                    currentFrameData.CharPos[id].HighlightedForUse = (___m_controls.CurrentInteractionObjects.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(___m_controls.CurrentInteractionObjects.m_interactable.gameObject) : -1);
+                    currentFrameData.CharPos[id].HighlightedForPlacement = (___m_controls.CurrentInteractionObjects.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)___m_controls.CurrentInteractionObjects.m_iHandlePlacement).gameObject) : -1);
                     f_Update_Carry.Invoke(__instance, new object[0]);
                     f_Update_Interact.Invoke(__instance, new object[] { deltaTime, flag5, flag6 });
                     f_Update_Throw.Invoke(__instance, new object[] { deltaTime, flag5, flag7, flag4 });
@@ -331,44 +338,46 @@ namespace SuperchargedPatch
         [HarmonyPatch(typeof(PlayerControls), "Update")]
         public static void PlayerControlsUpdatePatch(PlayerControls __instance, PlayerControlsImpl_Default ___m_impl_default)
         {
-            if (EnableInputInjection)
+            var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
+            if (currentFrameData.CharPos == null)
             {
-                InputData currentInput = Injector.Server.CurrentInput; // ensure frame input read... TODO: necessary??
-            }
-            if (Injector.Server.CurrentFrameData.CharPos == null)
-            {
-                Injector.Server.CurrentFrameData.CharPos = new Dictionary<int, CharPositionData>();
+                currentFrameData.CharPos = new Dictionary<int, CharPositionData>();
             }
             int id = (int)EntitySerialisationRegistry.GetId(__instance.gameObject);
-            if (!Injector.Server.CurrentFrameData.CharPos.ContainsKey(id))
+            if (!currentFrameData.CharPos.ContainsKey(id))
             {
-                Injector.Server.CurrentFrameData.CharPos[id] = new CharPositionData();
+                currentFrameData.CharPos[id] = new CharPositionData();
             }
-            Injector.Server.CurrentFrameData.CharPos[id].ForwardDirection = new Point()
+            currentFrameData.CharPos[id].ForwardDirection = new Point()
             {
                 X = __instance.gameObject.transform.forward.x,
                 Y = __instance.gameObject.transform.forward.y,
                 Z = __instance.gameObject.transform.forward.z
             };
-            Injector.Server.CurrentFrameData.CharPos[id].DashTimer = (float)m_ClientPlayerControlsImpl_Default_dashTimer.GetValue(___m_impl_default.m_clientImpl);
+            currentFrameData.CharPos[id].DashTimer = (float)m_ClientPlayerControlsImpl_Default_dashTimer.GetValue(___m_impl_default.m_clientImpl);
         }
 
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(Server), "BroadcastMessageToAll")]
-        public static void ServerBroadcastMessageToAllPatch(MessageType type, Serialisable message)
-        {
-            if (Injector.Server.CurrentFrameData.ServerMessages == null)
-            {
-                Injector.Server.CurrentFrameData.ServerMessages = new List<ServerMessage>();
-            }
-            FastList<byte> fastList = new FastList<byte>();
-            message.Serialise(new BitStreamWriter(fastList));
-            Injector.Server.CurrentFrameData.ServerMessages.Add(new ServerMessage()
-            {
-                Type = (int)type,
-                Message = fastList.ToArray()
-            });
-        }
+        private static Type t_ServerMessenger = typeof(ServerTime).Assembly.GetType("ServerMessenger");
+        private static FieldInfo m_m_LocalServer = t_ServerMessenger.GetField("m_LocalServer", BindingFlags.Static | BindingFlags.NonPublic);
+
+        //[HarmonyPrefix]
+        //[HarmonyPatch(typeof(Server), "BroadcastMessageToAll")]
+        //public static void ServerBroadcastMessageToAllPatch(MessageType type, Serialisable message) {
+        //    // Only intercept server messages if we are the server. 
+        //    if (m_m_LocalServer.GetValue(null) == null) {
+        //        return;
+        //    }
+
+        //    if (Injector.Server.CurrentFrameData.ServerMessages == null) {
+        //        Injector.Server.CurrentFrameData.ServerMessages = new List<ServerMessage>();
+        //    }
+        //    FastList<byte> fastList = new FastList<byte>();
+        //    message.Serialise(new BitStreamWriter(fastList));
+        //    Injector.Server.CurrentFrameData.ServerMessages.Add(new ServerMessage() {
+        //        Type = (int)type,
+        //        Message = fastList.ToArray()
+        //    });
+        //}
 
         private static FieldInfo m_m_spawnables = typeof(SpawnableEntityCollection).GetField("m_spawnables", BindingFlags.NonPublic | BindingFlags.Instance);
 
@@ -376,12 +385,12 @@ namespace SuperchargedPatch
         [HarmonyPatch(typeof(EntitySerialisationRegistry), "StartSynchronisingEntry")]
         public static void EntitySerialisationRegistryStartSynchronisingEntryPatch(EntitySerialisationEntry entry)
         {
-            try
-            {
+            try {
+                var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
                 GameObject mGameObject = entry.m_GameObject;
-                if (Injector.Server.CurrentFrameData.EntityRegistry == null)
+                if (currentFrameData.EntityRegistry == null)
                 {
-                    Injector.Server.CurrentFrameData.EntityRegistry = new List<EntityRegistryData>();
+                    currentFrameData.EntityRegistry = new List<EntityRegistryData>();
                 }
                 EntityRegistryData entityRegistryDatum = new EntityRegistryData()
                 {
@@ -405,11 +414,10 @@ namespace SuperchargedPatch
                         from s in (List<GameObject>)m_m_spawnables.GetValue(component)
                         select s.name).ToList<string>();
                 }
-                for (int i = 0; i < entry.m_ServerSynchronisedComponents.Count; i++)
-                {
-                    entityRegistryDatum.SyncEntityTypes.Add((int)entry.m_ServerSynchronisedComponents._items[i].GetEntityType());
+                for (int i = 0; i < entry.m_ClientSynchronisedComponents.Count; i++) {
+                    entityRegistryDatum.SyncEntityTypes.Add((int)entry.m_ClientSynchronisedComponents._items[i].GetEntityType());
                 }
-                Injector.Server.CurrentFrameData.EntityRegistry.Add(entityRegistryDatum);
+                currentFrameData.EntityRegistry.Add(entityRegistryDatum);
             }
             catch (Exception exception)
             {
@@ -432,6 +440,57 @@ namespace SuperchargedPatch
             ((int[])m_CumulativeFrequencies.GetValue(_data))[weightedRandomElement.Key]++;
             __result = new RecipeList.Entry[] { weightedRandomElement.Value };
             return false;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(WorkstationMessage), "Serialise")]
+        public static bool WorkstationMessageSerialisePatch(BitStreamWriter writer, WorkstationMessage __instance) {
+            // This patch is needed because WorkstationMessage is not supposed to be reserialized on the client side.
+            // Not all messages do this... this is perhaps an exception.
+            writer.Write(__instance.m_interacting);
+            if (__instance.m_interactor != null) {
+                __instance.m_interactor.m_Header.Serialise(writer);
+            } else {
+                __instance.m_interactorHeader.Serialise(writer);
+            }
+            if (__instance.m_interacting) {
+                if (__instance.m_item != null) {
+                    __instance.m_item.m_Header.Serialise(writer);
+                } else {
+                    __instance.m_itemHeader.Serialise(writer);
+                }
+            }
+            return false;
+        }
+    }
+
+    [HarmonyPatch]
+    public static class PatchOnMessageReceived {
+        public static MethodBase TargetMethod() {
+            return typeof(Server).Assembly.GetType("Mailbox")
+                .GetMethod("OnMessageReceived", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+
+        public static void Prefix(MessageType type, Serialisable message) {
+            try {
+                var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
+                if (currentFrameData.ServerMessages == null) {
+                    currentFrameData.ServerMessages = new List<ServerMessage>();
+                }
+                FastList<byte> fastList = new FastList<byte>();
+                if (message == null) {
+                    Console.WriteLine("Message of type " + type + " is null!");
+                    return;
+                }
+                message.Serialise(new BitStreamWriter(fastList));
+                currentFrameData.ServerMessages.Add(new ServerMessage() {
+                    Type = (int)type,
+                    Message = fastList.ToArray()
+                });
+            } catch (Exception e) {
+                Console.WriteLine(e);
+                throw;
+            }
         }
     }
 }

@@ -71,5 +71,24 @@ namespace controller.Pages {
             }
             EntityMenuOpen = false;
         }
+
+        private bool IsAutoplaying {get; set;}
+
+        private async Task StartAutoplay() {
+            IsAutoplaying = true;
+            DateTime nextFrame = DateTime.Now;
+            while (IsAutoplaying) {
+                nextFrame += TimeSpan.FromSeconds(1) / Config.FRAMERATE;
+                DateTime now = DateTime.Now;
+                await Task.Delay(now > nextFrame ? TimeSpan.Zero : (nextFrame - now));
+                if (EditorState.SelectedFrame < Level.LastSimulatedFrame) {
+                    EditorState.SelectedFrame++;
+                    StateHasChanged();
+                } else {
+                    break;
+                }
+            }
+            IsAutoplaying = false;
+        }
     }
 }

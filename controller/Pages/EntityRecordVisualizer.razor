@@ -24,7 +24,7 @@
                     </div>
                     @if (record.progress[frame] != 0) {
                         <div class="record-vis-progress">
-                            <MatProgressBar Progress="@(record.progress[frame] / record.prefab.MaxProgress)"></MatProgressBar>
+                            <MatProgressBar Progress="@(record.progress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
                         </div>
                     }
                     @{
@@ -97,9 +97,14 @@
     }
 </MatMenu>
 
-<span>Frame: @(frame), Time: @(TimeSpan.FromMinutes(4.5) - TimeSpan.FromSeconds(1)/60 * frame)</span>
+<span>Frame: @(frame), Time: @(TimeSpan.FromMinutes(4.5) - TimeSpan.FromSeconds(1)/Config.FRAMERATE * frame)</span>
 <button @onclick="(e) => EditorState.SelectedFrame--">&lt;&lt;</button>
 <button @onclick="(e) => EditorState.SelectedFrame++">&gt;&gt;</button>
+@if (!IsAutoplaying) {
+    <button @onclick="StartAutoplay">▶</button>
+} else {
+    <button @onclick="(e) => IsAutoplaying = false">⏸</button>
+}
 
 <button @onclick="() => ShowControls = !ShowControls">@(ShowControls ? "Hide Inputs" : "Show Inputs")</button>
 @if (ShowControls) {

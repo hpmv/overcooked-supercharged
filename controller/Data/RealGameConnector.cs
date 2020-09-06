@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace Hpmv {
     class RealGameConnector : Interceptor.IAsync {
-        private FramerateController FramerateController = new FramerateController { Delay = TimeSpan.FromSeconds(1) / 60 };
+        private FramerateController FramerateController = new FramerateController { Delay = TimeSpan.FromSeconds(1) / Config.FRAMERATE };
         private GameSetup setup;
         public RealGameSimulator simulator = new RealGameSimulator();
         public bool started = false;
@@ -114,7 +114,7 @@ namespace Hpmv {
             }
 
             if (restarted) inputs.ResetOrderSeed = 12347;
-            //FramerateController.WaitTillNextFrame();
+            FramerateController.WaitTillNextFrame();
             return inputs;
         }
     }

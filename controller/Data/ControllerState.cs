@@ -39,7 +39,7 @@ namespace Hpmv {
 
         private ControllerState AdvanceFrame() {
             //TimeSpan elapsed = DateTime.Now - prevTime;
-            TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / 60);
+            TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / Config.FRAMERATE);
             var copy = this;
             copy.buttonCooldown -= elapsed;
             copy.pickupCooldown -= elapsed;
@@ -49,7 +49,7 @@ namespace Hpmv {
         }
 
         private void HumanizeAxes(Vector2 newAxes) {
-            // var elapsed = 1.0f / 60;
+            // var elapsed = 1.0f / Config.FRAMERATE;
             // bool shouldHold = newAxes.Length() > 0.01;
             // if (shouldHold && (axesDown || axesCooldown <= TimeSpan.Zero)) {
             //     axesDown = true;
@@ -93,7 +93,7 @@ namespace Hpmv {
             //     axesVelocity = Vector2.Zero;
             // }
 
-            TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / 60);
+            TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / Config.FRAMERATE);
             Vector2 direction = newAxes - axes;
             if (direction.Length() <= 2.0 / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) {
                 axes = newAxes;

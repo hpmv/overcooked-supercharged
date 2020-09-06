@@ -1,0 +1,17 @@
+<div class="analysis-row">
+    @foreach (var block in Row.Blocks)
+    {
+        var lastFrame = 0;
+        <div class="analysis-block"
+            style="left: @(OffsetToPixel(block.StartFrame))px; width: @(LengthToPixel(block.EndFrame - block.StartFrame))px">
+            @foreach (var rangeId in block.Ranges) {
+                var range = Row.Ranges[rangeId];
+                <div class="analysis-range analysis-range-kind-@(range.Kind)"
+                    style="margin-left: @(LengthToPixel(range.StartFrame - lastFrame))px;
+                           width: @(LengthToPixel(range.EndFrame - range.StartFrame))px">
+                </div>
+                lastFrame = range.EndFrame;
+            }
+        </div>
+    }
+</div>
