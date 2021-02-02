@@ -1,0 +1,8 @@
+.vs
+aitest
+packages
+thrift
+controller/Saves
+patch/Libs
+patch/bin
+patch/obj

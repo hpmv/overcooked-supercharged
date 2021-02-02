@@ -85,7 +85,7 @@ namespace controller.Pages {
                 if (output.Items != null) {
                     foreach (var pos in output.Items) {
                         var line = $"entityRecords.CapturedInitialPositions[{pos.Key}] = new Vector3({(float)pos.Value.Pos.X}f, {(float)pos.Value.Pos.Y}f, {(float)pos.Value.Pos.Z}f);";
-                        // Console.WriteLine(line);
+                        Console.WriteLine(line);
                         posCache[pos.Key] = line;
                         // parent.points.Add(pos.Value.Pos);
                     }
@@ -93,7 +93,7 @@ namespace controller.Pages {
                 if (output.EntityRegistry != null) {
                     foreach (var reg in output.EntityRegistry) {
                         var line = $"entityRecords.CapturedInitialPositions[{reg.EntityId}] = new Vector3({(float)reg.Pos.X}f, {(float)reg.Pos.Y}f, {(float)reg.Pos.Z}f);";
-                        // Console.WriteLine(line);
+                        Console.WriteLine(line);
                         posCache[reg.EntityId] = line;
                         // parent.points.Add(pos.Value.Pos);
                     }
