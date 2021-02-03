@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace Hpmv {
     public interface LocationToken {
-        Vector2[] GetLocation(GameActionInput input);
+        Vector2[] GetLocation(GameActionInput input, int chef);
         Save.LocationToken ToProto();
     }
 
@@ -14,7 +14,7 @@ namespace Hpmv {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionInput input) {
+        public Vector2[] GetLocation(GameActionInput input, int chef) {
             var e = entity.GetEntityRecord(input);
             if (e != null) {
                 return new[] { e.position[input.Frame].XZ() };
@@ -40,7 +40,7 @@ namespace Hpmv {
             this.location = location;
         }
 
-        public Vector2[] GetLocation(GameActionInput input) {
+        public Vector2[] GetLocation(GameActionInput input, int chef) {
             return new[] { location };
         }
 
@@ -64,8 +64,8 @@ namespace Hpmv {
             this.y = y;
         }
 
-        public Vector2[] GetLocation(GameActionInput input) {
-            return new[] { input.Map.GridPos(x, y) };
+        public Vector2[] GetLocation(GameActionInput input, int chef) {
+            return new[] { input.Geometry.GridPos(x, y) };
         }
 
         public override string ToString() {
@@ -89,12 +89,12 @@ namespace Hpmv {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionInput input) {
+        public Vector2[] GetLocation(GameActionInput input, int chef) {
             var ent = entity.GetEntityRecord(input);
             if (ent == null) {
                 return new Vector2[0];
             }
-            var locations = input.Map.GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
+            var locations = input.MapByChef[chef].GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
             // Console.WriteLine($"[{input.Frame}, {this}] {string.Join(" or ", locations)}");
             return locations;
         }

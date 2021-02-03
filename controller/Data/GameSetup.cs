@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+
 namespace Hpmv {
     public class GameSetup {
-        public GameMap map;
+        public GameMapGeometry geometry;
+        public Dictionary<int, GameMap> mapByChef = new Dictionary<int, GameMap>();
         public GameEntityRecords entityRecords = new GameEntityRecords();
         public GameActionSequences sequences = new GameActionSequences();
         public InputHistory inputHistory = new InputHistory();
@@ -14,7 +17,9 @@ namespace Hpmv {
 
         public Save.GameSetup ToProto() {
             var result = new Save.GameSetup();
-            result.Map = map.ToProto();
+            foreach (var kv in mapByChef) {
+                result.MapByChef.Add(kv.Key, kv.Value.ToProto());
+            }
             result.Records = entityRecords.ToProto();
             result.Sequences = sequences.ToProto();
             result.InputHistory = inputHistory.ToProto();
@@ -28,9 +33,21 @@ namespace Hpmv {
         public static GameSetup FromProto(this Save.GameSetup proto) {
             var loadContext = new LoadContext();
             loadContext.Load(proto.Records);
+            Dictionary<int, GameMap> mapByChef = new Dictionary<int, GameMap>();
+            if (proto.Map != null) {
+                // compatibility with old format
+                var map = proto.Map.FromProto(new GameMapGeometry(proto.Map.TopLeft.FromProto(), new System.Numerics.Vector2()));
+                foreach (var chef in proto.Sequences.Chefs) {
+                    mapByChef[chef.Chef.Path[0]] = map;
+                }
+            } else {
+                foreach (var map in proto.MapByChef) {
+                    mapByChef[map.Key] = map.Value.FromProto(proto.Geometry.FromProto());
+                }
+            }
             return new GameSetup {
                 entityRecords = loadContext.Records,
-                map = proto.Map.FromProto(),
+                mapByChef = mapByChef,
                 sequences = proto.Sequences.FromProto(loadContext),
                 inputHistory = proto.InputHistory.FromProto(loadContext),
                 LastEmpiricalFrame = proto.LastEmpiricalFrame,

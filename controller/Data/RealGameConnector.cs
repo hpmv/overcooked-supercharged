@@ -30,7 +30,8 @@ namespace Hpmv {
             this.setup = level;
 
             simulator.Graph = setup.sequences.ToGraph();
-            simulator.Map = setup.map;
+            simulator.Geometry = setup.geometry;
+            simulator.MapByChef = setup.mapByChef;
             simulator.Timings = setup.sequences;
             simulator.Records = setup.entityRecords;
             simulator.InputHistory = setup.inputHistory;
@@ -87,6 +88,7 @@ namespace Hpmv {
                 }
                 if (output.CharPos != null) {
                     foreach (var entry in output.CharPos) {
+                        // Console.WriteLine(new {entry.Key, entry.Value});
                         simulator.ApplyChefUpdate(entry.Key, entry.Value);
                     }
                 }

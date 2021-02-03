@@ -20,6 +20,7 @@ namespace Hpmv {
         public bool IsMixerStation { get; set; }
         public bool IsHeatingStation { get; set; }
         public bool IsChoppable { get; set; }
+        public bool IsButton { get; set; }
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
@@ -45,6 +46,7 @@ namespace Hpmv {
                 IsMixerStation = IsMixerStation,
                 IsHeatingStation = IsHeatingStation,
                 IsChoppable = IsChoppable,
+                IsButton = IsButton,
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
@@ -72,6 +74,7 @@ namespace Hpmv {
                 IsMixerStation = record.IsMixerStation,
                 IsHeatingStation = record.IsHeatingStation,
                 IsChoppable = record.IsChoppable,
+                IsButton = record.IsButton,
                 Ignore = record.Ignore,
                 OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };

@@ -1,3 +1,3 @@
 public static class Config {
-    public const int FRAMERATE = 144; 
+    public const int FRAMERATE = 60; 
 }

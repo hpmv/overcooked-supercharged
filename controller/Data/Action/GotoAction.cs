@@ -18,12 +18,12 @@ namespace Hpmv {
             var time = DateTime.Now;
             try {
                 var chefPos = Chef.position[input.Frame].XZ();
-                var desired = DesiredPos.GetLocation(input);
+                var desired = DesiredPos.GetLocation(input, Chef.path.ids[0]);
                 // Console.WriteLine($"Stepping for chef {Chef} and frame {input.Frame} to {desired.Length}");
                 if (desired.Any(DesiredPos => (chefPos - DesiredPos).Length() < AllowedError)) {
                     return new GameActionOutput { Done = true };
                 }
-                var path = input.Map.FindPath(chefPos, desired.ToList());
+                var path = input.MapByChef[Chef.path.ids[0]].FindPath(chefPos, desired.ToList());
                 if (path.Count < 2) {
                     Console.WriteLine($"Failed to find path from {chefPos} to {string.Join(',', desired)}");
                     return new GameActionOutput();

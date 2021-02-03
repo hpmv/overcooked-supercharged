@@ -25,7 +25,8 @@ namespace controller.Pages {
             EditorState.SelectedChef = null;
             EditorState.SelectedActionIndex = -1;
             EditorState.SelectedFrame = 0;
-            EditorState.Map = level.map;
+            EditorState.Geometry = level.geometry;
+            EditorState.MapByChef = level.mapByChef;
             TimelineLayout.DoLayout();
         }
 
@@ -170,6 +171,7 @@ namespace controller.Pages {
         private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type> {
             ["carnival31-four"] = typeof(Carnival31FourLevel),
             ["campfire14-two"] = typeof(Campture14TwoLevel),
+            ["horde13-two"] = typeof(Horde13TwoLevel),
         };
 
         private async Task LoadLevel() {

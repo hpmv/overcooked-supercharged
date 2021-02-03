@@ -6,7 +6,8 @@ namespace Hpmv {
         public GameEntityRecords Entities;
         public int Frame;
         public int FrameWithinAction;
-        public GameMap Map;
+        public GameMapGeometry Geometry;  // no path finding
+        public Dictionary<int, GameMap> MapByChef;
         public ControllerState ControllerState;
     }
 }

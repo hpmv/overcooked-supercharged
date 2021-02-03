@@ -10,7 +10,8 @@ namespace Hpmv {
 
         public GameActionSequences Sequences { get; set; }
         public GameEntityRecords Records { get; set; }
-        public GameMap Map { get; set; }
+        public Dictionary<int, GameMap> MapByChef { get; set; }
+        public GameMapGeometry Geometry {get; set;}
 
         public List<ActionTemplate> GetActionTemplatesForEntity(GameEntityRecord entity) {
             var templates = new List<ActionTemplate>();
@@ -48,7 +49,7 @@ namespace Hpmv {
 
         public List<ActionTemplate> GetActionTemplatesForPosition(Vector2 pos) {
             var templates = new List<ActionTemplate>();
-            var (gridX, gridY) = Map.CoordsToGridPosRounded(pos);
+            var (gridX, gridY) = Geometry.CoordsToGridPosRounded(pos);
             templates.Add(new ThrowTowardsPositionActionTemplate(pos));
             templates.Add(new GotoPosActionTemplate(gridX, gridY));
             templates.Add(new WaitForFramesActionTemplate(5));

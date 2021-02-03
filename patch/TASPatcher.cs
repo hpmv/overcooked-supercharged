@@ -15,11 +15,11 @@ namespace SuperchargedPatch
     {
         public void Awake()
         {
-            ServerInterceptionPatches.EnableInputInjection = false;
+            ServerInterceptionPatches.EnableInputInjection = true;
 
-            HarmonyWrapper.PatchAll();
             var patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll();
+            patcher.PatchAll(Assembly.GetCallingAssembly());
             foreach (var patched in Harmony.GetAllPatchedMethods()) {
                 Console.WriteLine("Patched: " + patched.FullDescription());
             }

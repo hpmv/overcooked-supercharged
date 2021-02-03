@@ -70,18 +70,18 @@ namespace Hpmv {
                     chefState,
                     Chef.position[input.Frame].XZ(),
                     Chef.velocity[input.Frame].XZ(),
-                    input.Map,
+                    input.MapByChef[Chef.path.ids[0]],
                     input.ControllerState.ApplyInputAndAdvanceFrame(wouldBeInput).Item2);
             // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
             var predictedHighlightingOnNextFrame =
-                OfflineEmulator.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Map, input.Entities.GenAllEntities());
+                OfflineEmulator.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Geometry, input.Entities.GenAllEntities());
             // var predictedHighlightingOnNextNextFrame =
             //     OfflineEmulator.CalculateHighlightedObjects(predictedPosition2, predictedForward, input.Map, input.Entities.GenAllEntities());
             // var prepareToInteractHighlightings = OfflineEmulator.CalculateHighlightedObjects(Chef.position.Last().XZ(), chefState.forward, input.Map, input.Entities.GenAllEntities());
 
-            var gridPosOfChef = input.Map.CoordsToGridPosRounded(Chef.position.Last().XZ());
-            var gridPosOfEntity = input.Map.CoordsToGridPosRounded(subjectEntity.position.Last().XZ());
-            var gridDirection = input.Map.GridPos(gridPosOfEntity.x, gridPosOfEntity.y) - input.Map.GridPos(gridPosOfChef.x, gridPosOfChef.y);
+            var gridPosOfChef = input.Geometry.CoordsToGridPosRounded(Chef.position.Last().XZ());
+            var gridPosOfEntity = input.Geometry.CoordsToGridPosRounded(subjectEntity.position.Last().XZ());
+            var gridDirection = input.Geometry.GridPos(gridPosOfEntity.x, gridPosOfEntity.y) - input.Geometry.GridPos(gridPosOfChef.x, gridPosOfChef.y);
             var directionCheck = Vector2.Dot(Vector2.Normalize(gridDirection), Vector2.Normalize(chefState.forward)) > 0.05;
 
             if (Primary) {

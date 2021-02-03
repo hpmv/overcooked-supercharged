@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace Hpmv {
-    class Carnival32Three : GameSetup {
+namespace Hpmv
+{
+    class Carnival32Three : GameSetup
+    {
 
         public (double x, double y)[] levelShape = {
                 (1, 1),
@@ -12,11 +14,14 @@ namespace Hpmv {
                 (1, 2),
             };
 
-        public Carnival32Three() {
-
-            map = new GameMap(new Vector2[][] {
+        public Carnival32Three()
+        {
+            geometry = new GameMapGeometry(new Vector2(0f, 0f), new Vector2(1.2f * 12, 1.2f * 10));
+            var map = new GameMap(new Vector2[][] {
                     levelShape.Select(v => new Vector2((float) v.x, (float) v.y)).ToArray()
-                }, new Vector2(0f, 0f), new Vector2(1.2f * 12, 1.2f * 10));
+                }, geometry);
+            mapByChef[54] = map;
+            mapByChef[56] = map;
             entityRecords.CapturedInitialPositions[1] = new Vector3(21.62f, 0.448f, -15.6f);
             entityRecords.CapturedInitialPositions[2] = new Vector3(20.410002f, 0.51f, -13.229998f);
             entityRecords.CapturedInitialPositions[3] = new Vector3(20.42f, 0.448f, -15.6f);

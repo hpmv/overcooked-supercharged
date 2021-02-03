@@ -50,9 +50,10 @@ namespace controller.Pages {
         protected override async Task OnAfterRenderAsync(bool firstRender) {
             this._context = await this._canvasReference.CreateCanvas2DAsync();
 
+            var geometry = new GameMapGeometry(new Vector2(16.8f, -6f), new Vector2(1.2f * 12, 1.2f * 10));
             map = new GameMap(new Vector2[][] {
                     levelShape.Select(v => new Vector2((float) v.x, (float) v.y)).ToArray()
-                }, new Vector2(16.8f, -6f), new Vector2(1.2f * 12, 1.2f * 10));
+                }, geometry);
 
             var path = map.FindPath(new Vector2(20.113993f, -7.0000005f), map.GetInteractionPointsForBlockEntity(new Vector2(30.2f, -11.301f)));
 

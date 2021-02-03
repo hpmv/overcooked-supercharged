@@ -90,7 +90,8 @@ namespace Hpmv {
                     Entities = setup.entityRecords,
                     Frame = frame,
                     FrameWithinAction = actionFrame,
-                    Map = setup.map
+                    Geometry = setup.geometry,
+                    MapByChef = setup.mapByChef
                 };
 
                 var output = action.Step(gameActionInput);
@@ -149,7 +150,7 @@ namespace Hpmv {
             return (newPosition, newVelocity, forward);
         }
 
-        public static ChefState CalculateHighlightedObjects(Vector2 position, Vector2 forward, GameMap map, IEnumerable<GameEntityRecord> entities) {
+        public static ChefState CalculateHighlightedObjects(Vector2 position, Vector2 forward, GameMapGeometry geometry, IEnumerable<GameEntityRecord> entities) {
             // Find objects:
             //   - Grid objects:
             //       - Get discrete grid pos of chef, then look at four neighbors, score by
@@ -163,7 +164,7 @@ namespace Hpmv {
             // the closest one by position.
 
             // TODO. We'll only do grid selection for now. Much easier.
-            var coord = map.CoordsToGridPosRounded(position);
+            var coord = geometry.CoordsToGridPosRounded(position);
             GameEntityRecord best = null;
             double bestDot = -1;
             foreach (var entity in entities) {
@@ -175,7 +176,7 @@ namespace Hpmv {
                     continue;
                 }
                 foreach (var occupiedGridOffset in entity.prefab.OccupiedGridPoints) {
-                    var entityCoord = map.CoordsToGridPosRounded(entity.position.Last().XZ() + occupiedGridOffset);
+                    var entityCoord = geometry.CoordsToGridPosRounded(entity.position.Last().XZ() + occupiedGridOffset);
                     if (Math.Abs(entityCoord.x - coord.x) + Math.Abs(entityCoord.y - coord.y) == 1) {
                         if (entity.data.Last().attachmentParent == null) {
                             var gridOffsetDirection = new Vector2(1.0f * (entityCoord.x - coord.x), -1.0f * (entityCoord.y - coord.y));
@@ -208,7 +209,7 @@ namespace Hpmv {
         }
 
         private void UpdateNearbyObjects(GameEntityRecord chef, List<GameEntityRecord> entities) {
-            var newChefState = CalculateHighlightedObjects(chef.position.Last().XZ(), chef.chefState.Last().forward, setup.map, entities);
+            var newChefState = CalculateHighlightedObjects(chef.position.Last().XZ(), chef.chefState.Last().forward, setup.geometry, entities);
             chef.chefState.AppendWith(frame, state => {
                 state.highlightedForPickup = newChefState.highlightedForPickup;
                 state.highlightedForPlacement = newChefState.highlightedForPlacement;
@@ -602,7 +603,7 @@ namespace Hpmv {
                     if (entity.velocity.Last().Length() > 0) {
                         if (entity.IsChef()) {
                             entity.position.ChangeTo(
-                                CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.map).ToXZVector3(),
+                                CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.mapByChef[entity.path.ids[0]]).ToXZVector3(),
                                 frame);
                         } else {
                             entity.position.ChangeTo(entity.position.Last() + entity.velocity.Last() * (1.0f / Config.FRAMERATE), frame);

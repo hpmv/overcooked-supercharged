@@ -33,13 +33,13 @@ namespace controller.Pages {
         private bool ShowControls { get; set; }
 
         private Vector2 Render(Vector2 point) {
-            var pos = Level.map.CoordsToGridPos(point);
+            var pos = Level.geometry.CoordsToGridPos(point);
             pos += new Vector2(1, 1);
             return pos * SCALE;
         }
 
         private Vector2 InverseRender(Vector2 pos) {
-            return Level.map.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
+            return Level.geometry.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender) {

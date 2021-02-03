@@ -13,7 +13,8 @@ namespace Hpmv {
         public GameEntityRecords Records { get; set; }
         public GameActionSequences Timings { get; set; }
         public InputHistory InputHistory { get; set; }
-        public GameMap Map { get; set; }
+        public GameMapGeometry Geometry {get; set;}
+        public Dictionary<int, GameMap> MapByChef { get; set; }
         public int Frame { get { return frame; } }
         public readonly MessageStats Stats = new MessageStats();
 
@@ -56,7 +57,8 @@ namespace Hpmv {
                     Entities = Records,
                     Frame = frame,
                     FrameWithinAction = actionFrame,
-                    Map = Map
+                    Geometry = Geometry,
+                    MapByChef = MapByChef
                 };
 
                 var output = action.Step(gameActionInput);
@@ -259,6 +261,7 @@ namespace Hpmv {
             } else if (item is EntityEventMessage eem) {
                 entityHandler((int)eem.m_Header.m_uEntityID, eem.m_Payload);
             } else if (item is SpawnEntityMessage sem) {
+                Console.WriteLine(sem);
                 spawnHandler(sem);
             } else if (item is SpawnPhysicalAttachmentMessage spem) {
                 spawnHandler(spem.m_SpawnEntityData);
@@ -280,6 +283,7 @@ namespace Hpmv {
                 return;
             }
             var chefRecord = entityIdToRecord[chefId];
+            try {
             var chefData = new ChefState {
                 forward = chef.ForwardDirection.ToNumericsVector().XZ(),
                 dashTimer = chef.DashTimer,
@@ -288,6 +292,7 @@ namespace Hpmv {
                 highlightedForUse = chef.HighlightedForUse <= 0 ? null : entityIdToRecord[chef.HighlightedForUse],
             };
             chefRecord.chefState.ChangeTo(chefData, frame);
+            }catch (Exception e) {}
         }
 
         public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data) {

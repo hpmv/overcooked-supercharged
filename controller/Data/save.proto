@@ -229,6 +229,7 @@ message PrefabRecord {
     bool is_mixer_station = 14;
     bool is_heating_station = 15;
     bool is_choppable = 16;
+    bool is_button = 19;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }
@@ -278,6 +279,10 @@ message IntList {
     repeated int32 values = 1;
 }
 
+message GameMapGeometry {
+    Vector2 top_left = 1;
+}
+
 message GameMap {
     repeated Polygon polygons = 1;
     Vector2 top_left = 2;
@@ -293,6 +298,8 @@ message InputHistory {
 
 message GameSetup {
     GameMap map = 1;
+    map<int32, GameMap> map_by_chef = 7;
+    GameMapGeometry geometry = 8;
     GameEntityRecords records = 2;
     GameActionSequences sequences = 3;
     InputHistory input_history = 4;

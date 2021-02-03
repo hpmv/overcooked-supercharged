@@ -13,10 +13,12 @@ namespace Hpmv {
             };
 
         public Campture14TwoLevel() {
-
-            map = new GameMap(new Vector2[][] {
+            geometry = new GameMapGeometry(new Vector2(0f, 0f), new Vector2(1.2f * 12, 1.2f * 10));
+            var map = new GameMap(new Vector2[][] {
                     levelShape.Select(v => new Vector2((float) v.x, (float) v.y)).ToArray()
-                }, new Vector2(0f, 0f), new Vector2(1.2f * 12, 1.2f * 10));
+                }, geometry);
+            mapByChef[54] = map;
+            mapByChef[56] = map;
 
             entityRecords.CapturedInitialPositions[1] = new Vector3(3.592f, 0.6f, -0.195f);
             entityRecords.CapturedInitialPositions[2] = new Vector3(5.992f, 0.6f, -0.195f);

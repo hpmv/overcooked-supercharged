@@ -7,9 +7,46 @@ using Dijkstra.NET.Graph;
 using Dijkstra.NET.ShortestPath;
 
 namespace Hpmv {
+    public class GameMapGeometry {
+        public readonly Vector2 topLeft;
+        public readonly Vector2 size;
+        public GameMapGeometry(Vector2 topLeft, Vector2 size) {
+            this.topLeft = topLeft;
+            this.size = size;
+        }
+
+        public Vector2 CoordsToGridPos(Vector2 coord) {
+            return new Vector2((coord.X - topLeft.X) / 1.2f, (coord.Y - topLeft.Y) / -1.2f);
+        }
+
+        public Vector2 GridPosToCoords(Vector2 gridPos) {
+            return new Vector2(1.2f * gridPos.X + topLeft.X, -1.2f * gridPos.Y + topLeft.Y);
+        }
+        
+        public Vector2 GridPos(int x, int y) {
+            return new Vector2(1.2f * x, -1.2f * y) + topLeft;
+        }
+
+        public (int x, int y) CoordsToGridPosRounded(Vector2 coord) {
+            return ((int)Math.Round((coord.X - topLeft.X) / 1.2), (int)Math.Round((coord.Y - topLeft.Y) / -1.2));
+        }
+
+        public Save.GameMapGeometry ToProto() {
+            return new Save.GameMapGeometry {
+                TopLeft = topLeft.ToProto(),
+            };
+        }
+    }
+
+    public static class GameMapGeometryFromProto {
+        public static GameMapGeometry FromProto(this Save.GameMapGeometry proto) {
+            return new GameMapGeometry(proto.TopLeft.FromProto(), Vector2.Zero);
+        }
+    }
+
     public class GameMap {
         public Vector2[][] polygons;
-        private Vector2 topLeft;
+        public GameMapGeometry geometry;
         private IntPoint topLeftDiscrete;
 
         private const int SCALE = 1000;
@@ -23,18 +60,6 @@ namespace Hpmv {
             var x = (p.X - topLeftDiscrete.X + RESOLUTION / 2) / RESOLUTION;
             var y = (-(p.Y - topLeftDiscrete.Y) + RESOLUTION / 2) / RESOLUTION;
             return ((int)x, (int)y);
-        }
-
-        public Vector2 CoordsToGridPos(Vector2 coord) {
-            return new Vector2((coord.X - topLeft.X) / 1.2f, (coord.Y - topLeft.Y) / -1.2f);
-        }
-
-        public Vector2 GridPosToCoords(Vector2 gridPos) {
-            return new Vector2(1.2f * gridPos.X + topLeft.X, -1.2f * gridPos.Y + topLeft.Y);
-        }
-
-        public (int x, int y) CoordsToGridPosRounded(Vector2 coord) {
-            return ((int)Math.Round((coord.X - topLeft.X) / 1.2), (int)Math.Round((coord.Y - topLeft.Y) / -1.2));
         }
 
         private bool[,,] precomputedConnectivity;
@@ -68,9 +93,9 @@ namespace Hpmv {
         }
 
 
-        public GameMap(Vector2[][] polygons, Vector2 topLeft, Vector2 size) {
+        public GameMap(Vector2[][] polygons, GameMapGeometry geometry) {
             this.polygons = polygons;
-            this.topLeft = topLeft;
+            this.geometry = geometry;
 
             LevelPolygons =
                 polygons.Select(polygon => polygon.Select(Discretize).ToList()).ToList();
@@ -112,11 +137,11 @@ namespace Hpmv {
                 ii += obstacle.Count;
             }
 
-            int numX = (int)Math.Ceiling(size.X * SCALE / RESOLUTION);
-            int numY = (int)Math.Ceiling(size.Y * SCALE / RESOLUTION);
+            int numX = (int)Math.Ceiling(geometry.size.X * SCALE / RESOLUTION);
+            int numY = (int)Math.Ceiling(geometry.size.Y * SCALE / RESOLUTION);
 
             precomputedConnectivity = new bool[numX, numY, boundaryPoints.Count];
-            topLeftDiscrete = Discretize(topLeft);
+            topLeftDiscrete = Discretize(geometry.topLeft);
             for (int i = 0; i < numX; i++) {
                 for (int j = 0; j < numY; j++) {
                     var point = new IntPoint(topLeftDiscrete.X + i * RESOLUTION, topLeftDiscrete.Y - j * RESOLUTION);
@@ -130,9 +155,6 @@ namespace Hpmv {
             }
         }
 
-        public Vector2 GridPos(int x, int y) {
-            return new Vector2(1.2f * x, -1.2f * y) + topLeft;
-        }
 
         private static int DistanceApprox(IntPoint a, IntPoint b) {
             long xdiff = a.X - b.X;
@@ -283,7 +305,6 @@ namespace Hpmv {
 
         public Save.GameMap ToProto() {
             var result = new Save.GameMap();
-            result.TopLeft = topLeft.ToProto();
             result.Polygons.AddRange(polygons.Select(polygon => {
                 var proto = new Save.Polygon();
                 proto.Points.AddRange(polygon.Select(p => p.ToProto()));
@@ -304,8 +325,8 @@ namespace Hpmv {
             return result;
         }
 
-        public GameMap(Save.GameMap proto) {
-            topLeft = proto.TopLeft.FromProto();
+        public GameMap(Save.GameMap proto, GameMapGeometry geometry) {
+            this.geometry = geometry;
             polygons = proto.Polygons.Select(polygon => polygon.Points.Select(p => p.FromProto()).ToArray()).ToArray();
             boundaryPoints = proto.BoundaryPoints.Select(p => p.FromProto()).ToList();
             pointsMesh = proto.PointsMesh.Select(list => list.Values.ToList()).ToList();
@@ -322,13 +343,13 @@ namespace Hpmv {
             }
             LevelPolygons =
                 polygons.Select(polygon => polygon.Select(Discretize).ToList()).ToList();
-            topLeftDiscrete = Discretize(topLeft);
+            topLeftDiscrete = Discretize(geometry.topLeft);
         }
     }
 
     public static class GameMapFromProto {
-        public static GameMap FromProto(this Save.GameMap proto) {
-            return new GameMap(proto);
+        public static GameMap FromProto(this Save.GameMap proto, GameMapGeometry geometry) {
+            return new GameMap(proto, geometry);
         }
     }
 }
