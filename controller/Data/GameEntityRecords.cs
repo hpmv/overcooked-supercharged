@@ -35,7 +35,7 @@ namespace Hpmv {
         }
 
         public GameEntityRecord RegisterKnownObject(int entityId) {
-            var prefab = new PrefabRecord("", "unknown");
+            var prefab = new PrefabRecord("", "unknown") { IsAttachStation = true };
             var pos = CapturedInitialPositions[entityId];
             CapturedInitialPositions.Remove(entityId);
             return RegisterKnownObject(prefab.Name, prefab.ClassName, entityId, pos, prefab);

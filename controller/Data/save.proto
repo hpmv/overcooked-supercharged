@@ -62,6 +62,11 @@ message ThrowAction {
     double angle_allowance = 3;
 }
 
+message DropAction {
+    LocationToken location = 1;
+    double angle_allowance = 2;
+}
+
 message WaitAction {
     int32 num_frames = 1;
 }
@@ -95,6 +100,7 @@ message GameAction {
         GotoAction goto = 101;
         InteractAction interact = 102;
         ThrowAction throw = 103;
+        DropAction drop = 109;
         WaitAction wait = 104;
         WaitForCleanPlateAction wait_for_clean_plate = 105;
         WaitForDirtyPlateAction wait_for_dirty_plate = 106;
@@ -230,6 +236,7 @@ message PrefabRecord {
     bool is_heating_station = 15;
     bool is_choppable = 16;
     bool is_button = 19;
+    bool is_attach_station = 20;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

@@ -11,7 +11,27 @@
             <div class="record-vis-anchor"
                 style="left: @(rendered.X)px; top: @(rendered.Y)px;">
                 <div class="record-vis-holder">
-                    <div class="record-vis record-vis-type-@(record.className)"
+                    @{
+                        var tempPrefab = record.prefab;
+                        string ingredientClass = "";
+                        while (tempPrefab.Spawns.Count > 0) {
+                            tempPrefab = tempPrefab.Spawns[0];
+                        }
+                        if (tempPrefab.IsIngredient) {
+                            ingredientClass = "record-vis-ingredient-" + tempPrefab.IngredientId;
+                        }
+                        var recordClass = "";
+                        if (record.prefab.IsCrate) {
+                            recordClass = "record-vis-type-crate";
+                        } else if (record.prefab.IsIngredient) {
+                            recordClass = "record-vis-type-ingredient";
+                        } else if (record.prefab.IsChoppable) {
+                            recordClass = "record-vis-type-unchopped-ingredient";
+                        } else {
+                            recordClass = "record-vis-type-" + record.className;
+                        }
+                    }
+                    <div class="record-vis @(recordClass) @(ingredientClass)"
                         data-entity-path="@(record.path)"
                         style="@(record.chefState != null ? "transform: rotate(" + (-Math.Atan2(record.chefState[frame].forward.Y, record.chefState[frame].forward.X) + Math.PI / 2) + "rad)" : "")">
                         @if (record.prefab.Name == "Dirty Plate Stack") {
@@ -98,8 +118,8 @@
 </MatMenu>
 
 <span>Frame: @(frame), Time: @(TimeSpan.FromMinutes(4.5) - TimeSpan.FromSeconds(1)/Config.FRAMERATE * frame)</span>
-<button @onclick="(e) => EditorState.SelectedFrame--">&lt;&lt;</button>
-<button @onclick="(e) => EditorState.SelectedFrame++">&gt;&gt;</button>
+<button @onclick="GotoPrevFrame">&lt;&lt;</button>
+<button @onclick="GotoNextFrame">&gt;&gt;</button>
 @if (!IsAutoplaying) {
     <button @onclick="StartAutoplay">▶</button>
 } else {

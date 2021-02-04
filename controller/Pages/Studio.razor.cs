@@ -152,6 +152,11 @@ namespace controller.Pages {
             }
         }
 
+        private void OnFrameChanged(int frame) {
+            EditorState.SelectedFrame = frame;
+            StateHasChanged();
+        }
+
 
         private List<string> availableSaveFiles = new List<string>();
         private void RefreshAvailableSaveFiles() {
@@ -221,7 +226,7 @@ namespace controller.Pages {
             }
         }
 
-        private Hpmv.Save.Analysis Analysis {get; set;}
+        private Hpmv.Save.Analysis Analysis { get; set; }
         private void Analyze() {
             var analysis = new Hpmv.Save.Analysis();
             var analyzers = new IAnalyzer[] {

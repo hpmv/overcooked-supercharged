@@ -21,10 +21,11 @@ namespace Hpmv {
         public bool IsHeatingStation { get; set; }
         public bool IsChoppable { get; set; }
         public bool IsButton { get; set; }
+        public bool IsAttachStation { get; set; }
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
-        public PrefabRecord(string name, string className) {
+        public PrefabRecord(string name, string className = "") {
             Name = name;
             ClassName = className;
         }
@@ -47,6 +48,7 @@ namespace Hpmv {
                 IsHeatingStation = IsHeatingStation,
                 IsChoppable = IsChoppable,
                 IsButton = IsButton,
+                IsAttachStation = IsAttachStation,
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
@@ -75,6 +77,7 @@ namespace Hpmv {
                 IsHeatingStation = record.IsHeatingStation,
                 IsChoppable = record.IsChoppable,
                 IsButton = record.IsButton,
+                IsAttachStation = record.IsAttachStation,
                 Ignore = record.Ignore,
                 OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };

@@ -11,7 +11,7 @@ namespace Hpmv {
         public GameActionSequences Sequences { get; set; }
         public GameEntityRecords Records { get; set; }
         public Dictionary<int, GameMap> MapByChef { get; set; }
-        public GameMapGeometry Geometry {get; set;}
+        public GameMapGeometry Geometry { get; set; }
 
         public List<ActionTemplate> GetActionTemplatesForEntity(GameEntityRecord entity) {
             var templates = new List<ActionTemplate>();
@@ -34,6 +34,7 @@ namespace Hpmv {
                 templates.Add(new WaitForDirtyPlateActionTemplate(entity, 1));
                 templates.Add(new WaitForDirtyPlateActionTemplate(entity, 2));
                 templates.Add(new WaitForDirtyPlateActionTemplate(entity, 3));
+                templates.Add(new WaitForDirtyPlateActionTemplate(entity, 4));
             } else if (entity.prefab.Name == "Clean Plate Spawner") {
                 templates.Add(new WaitForCleanPlateActionTemplate(entity));
             } else {
@@ -51,6 +52,7 @@ namespace Hpmv {
             var templates = new List<ActionTemplate>();
             var (gridX, gridY) = Geometry.CoordsToGridPosRounded(pos);
             templates.Add(new ThrowTowardsPositionActionTemplate(pos));
+            templates.Add(new DropTowardsPositionActionTemplate(pos));
             templates.Add(new GotoPosActionTemplate(gridX, gridY));
             templates.Add(new WaitForFramesActionTemplate(5));
             return templates;
@@ -92,6 +94,25 @@ namespace Hpmv {
             return new List<GameAction>{
                  new ThrowAction{
                      Location = new EntityLocationToken(Record.ReverseEngineerStableEntityReference(frame))}
+                 };
+        }
+    }
+
+    public class DropTowardsPositionActionTemplate : ActionTemplate {
+        public Vector2 Pos { get; set; }
+
+        public DropTowardsPositionActionTemplate(Vector2 pos) {
+            Pos = pos;
+        }
+
+        public string Describe() {
+            return $"Drop towards {Pos}";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                 new DropAction{
+                     Location = new LiteralLocationToken(Pos)}
                  };
         }
     }

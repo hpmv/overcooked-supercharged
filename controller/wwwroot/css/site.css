@@ -595,12 +595,7 @@ app {
     border-color: blue;
 }
 
-.record-vis-type-egg,
-.record-vis-type-flour,
-.record-vis-type-chopped-berry,
-.record-vis-type-chopped-blueberry,
-.record-vis-type-chopped-chocolate,
-.record-vis-type-chopped-honey {
+.record-vis-type-ingredient {
     border: 1px solid orange;
     width: 26px;
     height: 26px;
@@ -610,47 +605,23 @@ app {
     color: transparent;
 }
 
-.record-vis-type-egg {
-    background-image: url('../images/egg_Icon-resources.assets-353.png');
-}
-.record-vis-type-flour {
-    background-image: url('../images/Flour_Icon-resources.assets-512.png');
-}
-.record-vis-type-chopped-berry {
-    background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
-}
-.record-vis-type-chopped-blueberry {
-    background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
-}
-.record-vis-type-chopped-chocolate {
-    background-image: url('../images/chocolate_Icon-resources.assets-504.png');
-}
-.record-vis-type-chopped-honey {
-    background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
-}
-
-.record-vis-type-berry,
-.record-vis-type-blueberry,
-.record-vis-type-chocolate,
-.record-vis-type-honey {
+.record-vis-type-unchopped-ingredient {
     width: 32px;
     height: 32px;
     z-index: 5;
     color: transparent;
+    background-color: transparent;
     border: none;
     background-size: contain;
 }
-.record-vis-type-berry {
-    background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
-}
-.record-vis-type-blueberry {
-    background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
-}
-.record-vis-type-chocolate {
-    background-image: url('../images/chocolate_Icon-resources.assets-504.png');
-}
-.record-vis-type-honey {
-    background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
+
+.record-vis-type-crate {
+    width: 46px;
+    height: 46px;
+    background-color: rgb(211, 191, 175);
+    color: transparent;
+    z-index: 2;
+    background-size: contain;
 }
 
 .record-vis-type-plate {
@@ -705,6 +676,22 @@ app {
 .record-vis-ingredient-83234 {
     background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
 }
+.record-vis-ingredient-109880 {
+    background-image: url('../images/Potato_Icon-resources.assets-532.png');
+}
+.record-vis-ingredient-17708 {
+    background-image: url('../images/Carrot_Icon-resources.assets-312.png');
+}
+.record-vis-ingredient-112986 {
+    background-image: url('../images/Broccoli_Icon-resources.assets-496.png');
+}
+.record-vis-ingredient-54456 {
+    background-image: url('../images/BeefJoint_Icon-resources.assets-376.png');
+}
+.record-vis-ingredient-32308 {
+    background-image: url('../images/Chicken_Icon-resources.assets-235.png');
+}
+
 
 .record-vis-plate-respawn-timers {
     position: absolute;

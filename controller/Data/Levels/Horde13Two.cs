@@ -108,23 +108,23 @@ namespace Hpmv
             var roating_tray_prefab = new PrefabRecord("Tray", "roating-tray") { MaxProgress = 12, CanContainIngredients = true, MaxIngredientCount = 4, CookingStage = 2 };
             var oven_prefab = new PrefabRecord("Oven", "oven") { IsHeatingStation = true };
             var beef_prefab = new PrefabRecord("Beef", "beef") { IsIngredient = true, IngredientId = 54456 };
-            var chicken_prefab = new PrefabRecord("Chicken", "chicken") { IsIngredient = true, IngredientId = 32308 };
-            var beef_crate_prefab = new PrefabRecord("Beef Crate", "beef-crate") { IsCrate = true };
+            var chicken_prefab = new PrefabRecord("Chicken") { IsIngredient = true, IngredientId = 32308 };
+            var beef_crate_prefab = new PrefabRecord("Beef Crate") { IsCrate = true };
             beef_crate_prefab.Spawns.Add(beef_prefab);
-            var chicken_crate_prefab = new PrefabRecord("Chicken Crate", "chicken-crate") { IsCrate = true };
+            var chicken_crate_prefab = new PrefabRecord("Chicken Crate") { IsCrate = true };
             chicken_crate_prefab.Spawns.Add(chicken_prefab);
-            var chopped_potato_prefab = new PrefabRecord("Chopped Potato", "chopped-potato") { IsIngredient = true, IngredientId = 109880 };
-            var chopped_carrot_prefab = new PrefabRecord("Chopped Carrot", "chopped-carrot") { IsIngredient = true, IngredientId = 17708 };
-            var chopped_brocolli_prefab = new PrefabRecord("Chopped Brocolli", "chopped-brocolli") { IsIngredient = true, IngredientId = 112986 };
-            var potato_prefab = new PrefabRecord("Potato", "potato") { MaxProgress = 1.4, IsChoppable = true };
-            var carrot_prefab = new PrefabRecord("Carrot", "carrot") { MaxProgress = 1.4, IsChoppable = true };
-            var brocolli_prefab = new PrefabRecord("Brocolli", "brocolli") { MaxProgress = 1.4, IsChoppable = true };
+            var chopped_potato_prefab = new PrefabRecord("Chopped Potato") { IsIngredient = true, IngredientId = 109880 };
+            var chopped_carrot_prefab = new PrefabRecord("Chopped Carrot") { IsIngredient = true, IngredientId = 17708 };
+            var chopped_brocolli_prefab = new PrefabRecord("Chopped Brocolli") { IsIngredient = true, IngredientId = 112986 };
+            var potato_prefab = new PrefabRecord("Potato") { MaxProgress = 1.4, IsChoppable = true };
+            var carrot_prefab = new PrefabRecord("Carrot") { MaxProgress = 1.4, IsChoppable = true };
+            var brocolli_prefab = new PrefabRecord("Brocolli") { MaxProgress = 1.4, IsChoppable = true };
             potato_prefab.Spawns.Add(chopped_potato_prefab);
             carrot_prefab.Spawns.Add(chopped_carrot_prefab);
             brocolli_prefab.Spawns.Add(chopped_brocolli_prefab);
-            var potato_crate_prefab = new PrefabRecord("Potato Crate", "potato-crate") { IsCrate = true };
-            var carrot_crate_prefab = new PrefabRecord("Carrot Crate", "carrot-crate") { IsCrate = true };
-            var brocolli_crate_prefab = new PrefabRecord("Brocolli Crate", "brocolli-crate") { IsCrate = true };
+            var potato_crate_prefab = new PrefabRecord("Potato Crate") { IsCrate = true };
+            var carrot_crate_prefab = new PrefabRecord("Carrot Crate") { IsCrate = true };
+            var brocolli_crate_prefab = new PrefabRecord("Brocolli Crate") { IsCrate = true };
             potato_crate_prefab.Spawns.Add(potato_prefab);
             carrot_crate_prefab.Spawns.Add(carrot_prefab);
             brocolli_crate_prefab.Spawns.Add(brocolli_prefab);
@@ -180,6 +180,8 @@ namespace Hpmv
             entityRecords.RegisterKnownObject(61, ignore_prefab);
             entityRecords.RegisterKnownObject(54, ignore_prefab);
             entityRecords.RegisterKnownObject(52, ignore_prefab);
+            entityRecords.RegisterKnownObject(47, ignore_prefab);
+            entityRecords.RegisterKnownObject(48, ignore_prefab);
 
 
             RegisterChef(entityRecords.RegisterChef("blue", 60, chef_blue_prefab));

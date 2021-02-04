@@ -312,6 +312,7 @@ namespace Hpmv {
         }
 
         public void ApplyPositionUpdate(int entityId, ItemData data) {
+            Console.WriteLine($"{entityId} received {data}");
             if (entityIdToRecord.ContainsKey(entityId)) {
                 if (data.__isset.pos) {
                     entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);

@@ -45,7 +45,7 @@ namespace SuperchargedPatch
                 {
                     var t = mEntitiesList._items[i];
                     Vector3 _position = t.m_GameObject.transform.position;
-                    Rigidbody component = t.m_GameObject.GetComponent<Rigidbody>();
+                    Rigidbody component = t.m_GameObject.GetComponentInParent<Rigidbody>();
                     if (component != null)
                     {
                         _velocity = component.velocity;

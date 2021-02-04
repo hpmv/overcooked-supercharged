@@ -130,7 +130,6 @@ namespace Hpmv {
             setup.LastSimulatedFrame = frame;
             frame++;
             var allEntities = setup.entityRecords.GenAllEntities().Where(e => e.existed.Last()).ToList();
-            UpdateItemPositionsAccordingToVelocity(allEntities);
             foreach (var (chef, inputData) in input) {
                 UpdateNearbyObjects(chef, allEntities);
                 UpdateCarry(chef, inputData, allEntities);
@@ -142,6 +141,7 @@ namespace Hpmv {
             UpdateAttachmentPositions(allEntities);
             UpdateCatches(allEntities);
             UpdateProgresses(allEntities);
+            UpdateItemPhysics(allEntities);
         }
 
         public static (Vector2 pos, Vector2 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector2 position, Vector2 velocity, GameMap map, ActualControllerInput input) {
@@ -173,6 +173,10 @@ namespace Hpmv {
                 }
                 if (entity.prefab.Name == "Dirty Plate") {
                     // This is a bug - in real simulation, somehow I couldn't get dirty plates to destroy themselves.
+                    continue;
+                }
+                if (entity.path.ids.Length > 1) {
+                    // Spawned items generally don't occupy a grid position.
                     continue;
                 }
                 foreach (var occupiedGridOffset in entity.prefab.OccupiedGridPoints) {
@@ -225,8 +229,35 @@ namespace Hpmv {
             rhs = temp;
         }
 
+        private void Detach(GameEntityRecord child, int frame) {
+            var parent = child.data.Last().attachmentParent;
+            if (parent != null) {
+                child.data.AppendWith(frame, d => {
+                    d.attachmentParent = null;
+                    return d;
+                });
+                parent.data.AppendWith(frame, d => {
+                    d.attachment = null;
+                    return d;
+                });
+            }
+        }
+
+        private void Attach(GameEntityRecord child, GameEntityRecord parent, int frame) {
+            Detach(child, frame);
+            child.data.AppendWith(frame, d => {
+                d.attachmentParent = parent;
+                return d;
+            });
+            parent.data.AppendWith(frame, d => {
+                d.attachment = child;
+                return d;
+            });
+        }
+
         private void UpdateCarry(GameEntityRecord chef, ActualControllerInput input, List<GameEntityRecord> allEntities) {
             if (input.primary.justPressed) {
+                #region Holding an item, placing another item
                 {
                     if (chef.data.Last().attachment is GameEntityRecord from
                         && chef.chefState.Last().highlightedForPickup is GameEntityRecord placer) {
@@ -238,14 +269,7 @@ namespace Hpmv {
                                 return d;
                             });
                             from.existed.ChangeTo(false, frame);
-                            from.data.AppendWith(frame, d => {
-                                d.attachmentParent = null;
-                                return d;
-                            });
-                            chef.data.AppendWith(frame, d => {
-                                d.attachment = null;
-                                return d;
-                            });
+                            Detach(from, frame);
                             return;
                         }
                         if ((placer.prefab.Name == "Sink" || placer.prefab.Name == "Clean Plate Spawner")
@@ -261,27 +285,12 @@ namespace Hpmv {
                                 }
                             }
                             from.existed.ChangeTo(false, frame);
-                            from.data.AppendWith(frame, d => {
-                                d.attachmentParent = null;
-                                return d;
-                            });
-                            chef.data.AppendWith(frame, d => {
-                                d.attachment = null;
-                                return d;
-                            });
-
+                            Detach(from, frame);
                             return;
                         }
-                        // if (placer.data.Last().attachment is GameEntityRecord innerPlacer && innerPlacer.prefab.IsMixerStation) {
-                        //     // Special case for mixer station.
-                        //     placer = innerPlacer;
-                        // }
-                        // TODO: the case of picking from the floor is not handled yet.
                         var to = placer.data.Last().attachment;
-                        if (to == null) {
-                            placer.data.AppendWith(frame, (data) => { data.attachment = from; return data; });
-                            from.data.AppendWith(frame, (data) => { data.attachmentParent = placer; return data; });
-                            chef.data.AppendWith(frame, (data) => { data.attachment = null; return data; });
+                        if (to == null && placer.prefab.IsAttachStation) {
+                            Attach(from, placer, frame);
                         } else if (from.prefab.IsIngredient && to.prefab.CanContainIngredients) {
                             // Adding ingredient
                             to.data.AppendWith(frame, (data) => {
@@ -292,23 +301,20 @@ namespace Hpmv {
                             if (to.prefab.MaxProgress != 0) {
                                 to.progress.AppendWith(frame, (progress) => Math.Min(to.prefab.MaxProgress, progress) / 2);
                             }
-                            chef.data.AppendWith(frame, (data) => { data.attachment = null; return data; });
-                            from.data.AppendWith(frame, (data) => { data.attachmentParent = null; return data; });
+                            Detach(from, frame);
                             from.existed.ChangeTo(false, frame);
                         } else if (from.prefab.CanContainIngredients && to.prefab.IsIngredient) {
                             // Putting container onto ingredient.
                             from.data.AppendWith(frame, (data) => {
                                 data.contents = data.contents == null ? new List<int>() : new List<int>(data.contents);
                                 data.contents.Add(to.prefab.IngredientId);
-                                data.attachmentParent = placer;
                                 return data;
                             });
                             if (from.prefab.MaxProgress != 0) {
                                 from.progress.AppendWith(frame, (progress) => Math.Min(from.prefab.MaxProgress, progress) / 2);
                             }
-                            placer.data.AppendWith(frame, (data) => { data.attachment = from; return data; });
-                            chef.data.AppendWith(frame, (data) => { data.attachment = null; return data; });
-                            to.data.AppendWith(frame, (data) => { data.attachmentParent = null; return data; });
+                            Detach(to, frame);
+                            Attach(from, placer, frame);
                             to.existed.ChangeTo(false, frame);
                         } else if (from.prefab.CanContainIngredients && to.prefab.CanContainIngredients) {
                             // Ingredient transfer.
@@ -346,7 +352,9 @@ namespace Hpmv {
                         return;
                     }
                 }
+                #endregion
 
+                #region Not holding an item, placing an item
                 {
                     if (chef.chefState.Last().highlightedForPickup is GameEntityRecord placer) {
                         if (placer.prefab.Name == "Sink" || placer.prefab.Name == "Clean Plate Spawner") {
@@ -355,82 +363,60 @@ namespace Hpmv {
                                 var plate = plateStack.spawned.Where(s => s.existed.Last() && s.data.Last().attachmentParent == plateStack)
                                     .LastOrDefault();
                                 if (plate != null) {
-                                    chef.data.AppendWith(frame, d => {
-                                        d.attachment = plate;
-                                        return d;
-                                    });
-                                    plate.data.AppendWith(frame, d => {
-                                        d.attachmentParent = chef;
-                                        return d;
-                                    });
+                                    Attach(plate, chef, frame);
                                     if (!plateStack.spawned.Any(s => s.existed.Last() && s.data.Last().attachmentParent == plateStack)) {
-                                        plateStack.data.AppendWith(frame, d => {
-                                            d.attachmentParent = null;
-                                            return d;
-                                        });
+                                        Detach(plateStack, frame);
                                         plateStack.existed.ChangeTo(false, frame);
-                                        placer.data.AppendWith(frame, d => {
-                                            d.attachment = null;
-                                            return d;
-                                        });
                                     }
                                 }
                             }
                             return;
                         }
 
-                        // TODO: the case of picking from the floor is not handled yet.
                         if (placer.data.Last().attachment is GameEntityRecord attachment) {
-                            placer.data.AppendWith(frame, d => {
-                                d.attachment = null;
-                                return d;
-                            });
-
-                            attachment.data.AppendWith(frame, d => {
-                                d.attachmentParent = chef;
-                                return d;
-                            });
-
-                            chef.data.AppendWith(frame, d => {
-                                d.attachment = attachment;
-                                return d;
-                            });
-                        } else {
-                            if (placer.prefab.IsCrate) {
-                                GameEntityRecord child = null;
-                                if (placer.nextSpawnId.Last() < placer.spawned.Count) {
-                                    child = placer.spawned[placer.nextSpawnId.Last()];
-                                }
-                                if (child == null) {
-                                    var spawnedPrefab = placer.prefab.Spawns[0];
-                                    child = new GameEntityRecord {
-                                        path = new EntityPath {
-                                            ids = placer.path.ids.Append(placer.spawned.Count).ToArray(),
-                                        },
-                                        prefab = spawnedPrefab,
-                                        spawner = placer,
-                                        existed = new Versioned<bool>(false),
-                                        position = new Versioned<Vector3>(Vector3.Zero),
-                                        displayName = spawnedPrefab.Name,
-                                        className = spawnedPrefab.ClassName
-                                    };
-                                    placer.spawned.Add(child);
-                                }
-                                child.existed.ChangeTo(true, frame);
-                                child.position.ChangeTo(placer.position.Last(), frame);
-                                placer.nextSpawnId.ChangeTo(placer.nextSpawnId.Last() + 1, frame);
-                                chef.data.AppendWith(frame, d => {
-                                    d.attachment = child;
-                                    return d;
-                                });
-                                child.data.AppendWith(frame, d => {
-                                    d.attachmentParent = chef;
-                                    return d;
-                                });
+                            Attach(attachment, chef, frame);
+                        } else if (placer.prefab.IsCrate) {
+                            GameEntityRecord child = null;
+                            if (placer.nextSpawnId.Last() < placer.spawned.Count) {
+                                child = placer.spawned[placer.nextSpawnId.Last()];
+                            }
+                            if (child == null) {
+                                var spawnedPrefab = placer.prefab.Spawns[0];
+                                child = new GameEntityRecord {
+                                    path = new EntityPath {
+                                        ids = placer.path.ids.Append(placer.spawned.Count).ToArray(),
+                                    },
+                                    prefab = spawnedPrefab,
+                                    spawner = placer,
+                                    existed = new Versioned<bool>(false),
+                                    position = new Versioned<Vector3>(Vector3.Zero),
+                                    displayName = spawnedPrefab.Name,
+                                    className = spawnedPrefab.ClassName
+                                };
+                                placer.spawned.Add(child);
+                            }
+                            child.existed.ChangeTo(true, frame);
+                            child.position.ChangeTo(placer.position.Last(), frame);
+                            placer.nextSpawnId.ChangeTo(placer.nextSpawnId.Last() + 1, frame);
+                            Attach(child, chef, frame);
+                        } else if (placer.data.Last().attachmentParent is null) {
+                            // TODO: Ideally here we would check whether something is pickup-able. Instead we just list a few cases.
+                            if (placer.prefab.IsChoppable || placer.prefab.CanContainIngredients || placer.prefab.IsIngredient) {
+                                Attach(placer, chef, frame);
                             }
                         }
+                        return;
                     }
                 }
+                #endregion
+
+                #region dropping an item
+                {
+                    if (chef.data.Last().attachment is GameEntityRecord from) {
+                        Detach(from, frame);
+                    }
+                }
+                #endregion
             }
         }
 
@@ -576,9 +562,10 @@ namespace Hpmv {
                 if (entity.data.Last().attachmentParent is GameEntityRecord parent) {
                     var attachPoint = parent.position.Last();
                     if (parent.IsChef()) {
-                        attachPoint += 0.2f * parent.chefState.Last().forward.ToXZVector3();  // 0.2 is approximate
+                        attachPoint += 0.2f * parent.chefState.Last().forward.ToXZVector3() + new Vector3(0, 0.54f, 0);  // 0.2 is approximate
                     }
                     entity.position.ChangeTo(attachPoint, frame);
+                    entity.velocity.ChangeTo(parent.velocity.Last(), frame);
                 }
             }
         }
@@ -597,7 +584,29 @@ namespace Hpmv {
             return desired;
         }
 
-        private void UpdateItemPositionsAccordingToVelocity(List<GameEntityRecord> entities) {
+        private void UpdateItemPhysics(List<GameEntityRecord> entities) {
+            // Update velocity
+            foreach (var entity in entities) {
+                if (entity.data.Last().attachmentParent == null) {
+                    if (entity.velocity.Last().Length() > 0) {
+                        if (!entity.IsChef()) {
+                            // Heuristic for whether object is on floor.
+                            if (entity.position.Last().Y < 1 && entity.velocity.Last().Y >= -0.1 && entity.velocity.Last().Y <= 0.7) {
+                                var newVelocity = entity.velocity.Last() * (float)Math.Pow(0.1298857935, 1.0 / Config.FRAMERATE);
+                                newVelocity.Y = 0;
+                                entity.velocity.ChangeTo(newVelocity, frame);
+                            } else {
+                                var newVelocity = entity.velocity.Last() * (float)Math.Pow(0.1747536969, 1.0 / Config.FRAMERATE);
+                                newVelocity.Y -= 9.4176f / Config.FRAMERATE; // gravity
+                                entity.velocity.ChangeTo(newVelocity, frame);
+                            }
+                            if (entity.velocity.Last().Length() < 0.007f) {
+                                entity.velocity.ChangeTo(Vector3.Zero, frame);
+                            }
+                        }
+                    }
+                }
+            }
             foreach (var entity in entities) {
                 if (entity.data.Last().attachmentParent == null) {
                     if (entity.velocity.Last().Length() > 0) {
@@ -606,7 +615,16 @@ namespace Hpmv {
                                 CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.mapByChef[entity.path.ids[0]]).ToXZVector3(),
                                 frame);
                         } else {
-                            entity.position.ChangeTo(entity.position.Last() + entity.velocity.Last() * (1.0f / Config.FRAMERATE), frame);
+                            var newPosition = entity.position.Last() + entity.velocity.Last() * (1.0f / Config.FRAMERATE);
+                            if (newPosition.Y < 0.1 && entity.velocity.Last().Y < -1) {
+                                // Heuristic for collision with floor.
+                                var newVelocity = entity.velocity.Last();
+                                newVelocity.Y = 0;
+                                newVelocity.X *= 0.68f;
+                                newVelocity.Z *= 0.68f;
+                                entity.velocity.ChangeTo(newVelocity, frame);
+                            }
+                            entity.position.ChangeTo(newPosition, frame);
                         }
                     }
                 }

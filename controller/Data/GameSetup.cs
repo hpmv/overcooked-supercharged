@@ -20,6 +20,7 @@ namespace Hpmv {
             foreach (var kv in mapByChef) {
                 result.MapByChef.Add(kv.Key, kv.Value.ToProto());
             }
+            result.Geometry = geometry.ToProto();
             result.Records = entityRecords.ToProto();
             result.Sequences = sequences.ToProto();
             result.InputHistory = inputHistory.ToProto();
@@ -47,6 +48,7 @@ namespace Hpmv {
             }
             return new GameSetup {
                 entityRecords = loadContext.Records,
+                geometry = proto.Geometry.FromProto(),
                 mapByChef = mapByChef,
                 sequences = proto.Sequences.FromProto(loadContext),
                 inputHistory = proto.InputHistory.FromProto(loadContext),

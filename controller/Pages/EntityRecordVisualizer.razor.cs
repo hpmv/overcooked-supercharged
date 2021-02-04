@@ -19,6 +19,9 @@ namespace controller.Pages {
         [Parameter]
         public EventCallback<int> OnActionAdded { get; set; }
 
+        [Parameter]
+        public EventCallback<int> OnFrameChanged { get; set; }
+
         private float SCALE = 50;
         private DotNetObjectReference<EntityRecordVisualizer> thisRef;
         private ElementReference canvasRef;
@@ -60,6 +63,7 @@ namespace controller.Pages {
             await InvokeAsync(async () => {
                 EntityMenuOpen = true;
                 await Menu.OpenAsync(EntityMenuAnchor);
+                StateHasChanged();
             });
         }
 
@@ -72,7 +76,7 @@ namespace controller.Pages {
             EntityMenuOpen = false;
         }
 
-        private bool IsAutoplaying {get; set;}
+        private bool IsAutoplaying { get; set; }
 
         private async Task StartAutoplay() {
             IsAutoplaying = true;
@@ -82,13 +86,19 @@ namespace controller.Pages {
                 DateTime now = DateTime.Now;
                 await Task.Delay(now > nextFrame ? TimeSpan.Zero : (nextFrame - now));
                 if (EditorState.SelectedFrame < Level.LastSimulatedFrame) {
-                    EditorState.SelectedFrame++;
-                    StateHasChanged();
+                    await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame + 1);
                 } else {
                     break;
                 }
             }
             IsAutoplaying = false;
         }
+        private async Task GotoPrevFrame() {
+            await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame - 1);
+        }
+        private async Task GotoNextFrame() {
+            await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame + 1);
+        }
     }
+
 }
