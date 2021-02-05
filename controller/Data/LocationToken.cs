@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace Hpmv {
     public interface LocationToken {
-        Vector2[] GetLocation(GameActionInput input, int chef);
+        Vector2[] GetLocation(GameActionInput input, GameEntityRecord chef);
         Save.LocationToken ToProto();
     }
 
@@ -14,7 +14,7 @@ namespace Hpmv {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionInput input, int chef) {
+        public Vector2[] GetLocation(GameActionInput input, GameEntityRecord chef) {
             var e = entity.GetEntityRecord(input);
             if (e != null) {
                 return new[] { e.position[input.Frame].XZ() };
@@ -40,7 +40,7 @@ namespace Hpmv {
             this.location = location;
         }
 
-        public Vector2[] GetLocation(GameActionInput input, int chef) {
+        public Vector2[] GetLocation(GameActionInput input, GameEntityRecord chef) {
             return new[] { location };
         }
 
@@ -64,7 +64,7 @@ namespace Hpmv {
             this.y = y;
         }
 
-        public Vector2[] GetLocation(GameActionInput input, int chef) {
+        public Vector2[] GetLocation(GameActionInput input, GameEntityRecord chef) {
             return new[] { input.Geometry.GridPos(x, y) };
         }
 
@@ -89,14 +89,17 @@ namespace Hpmv {
             this.entity = entity;
         }
 
-        public Vector2[] GetLocation(GameActionInput input, int chef) {
+        public Vector2[] GetLocation(GameActionInput input, GameEntityRecord chef) {
             var ent = entity.GetEntityRecord(input);
             if (ent == null) {
                 return new Vector2[0];
             }
-            var locations = input.MapByChef[chef].GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
-            // Console.WriteLine($"[{input.Frame}, {this}] {string.Join(" or ", locations)}");
-            return locations;
+            if (ent.IsGridOccupant()) {
+                return input.MapByChef[chef.path.ids[0]].GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
+            } else {
+                // return input.MapByChef[chef.path.ids[0]].GetInteractionPointsForFreeEntity(ent.position[input.Frame].XZ(), chef.position[input.Frame].XZ(), 1.36).ToArray();
+                return new Vector2[] { ent.position[input.Frame].XZ() };
+            }
         }
 
         public override string ToString() {

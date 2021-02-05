@@ -22,7 +22,7 @@ namespace Hpmv {
         public Vector2 GridPosToCoords(Vector2 gridPos) {
             return new Vector2(1.2f * gridPos.X + topLeft.X, -1.2f * gridPos.Y + topLeft.Y);
         }
-        
+
         public Vector2 GridPos(int x, int y) {
             return new Vector2(1.2f * x, -1.2f * y) + topLeft;
         }

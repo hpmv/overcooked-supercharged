@@ -92,6 +92,12 @@ namespace Hpmv {
             return chefState != null;
         }
 
+        public bool IsGridOccupant() {
+            // Heuristic: all initial static objects are grid occupants.
+            // Except some cases like ingredient containers.
+            return path.ids.Length == 1 && !prefab.CanContainIngredients;
+        }
+
         public IEntityReference ReverseEngineerStableEntityReference(int frame) {
             if (spawner == null) {
                 return new LiteralEntityReference(this);

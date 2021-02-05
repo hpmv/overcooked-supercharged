@@ -24,7 +24,7 @@ namespace Hpmv {
             }
             var chefFwd = Chef.chefState[input.Frame].forward;
             var chefPos = Chef.position[input.Frame].XZ();
-            var location = Location.GetLocation(input, Chef.path.ids[0])[0];
+            var location = Location.GetLocation(input, Chef)[0];
             if (Vector2.Dot(Vector2.Normalize(chefFwd), Vector2.Normalize(location - chefPos)) >= AngleAllowance) {
                 if (ctrl.RequestButtonDown()) {
                     return new GameActionOutput {

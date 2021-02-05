@@ -144,13 +144,13 @@ namespace Hpmv {
             UpdateItemPhysics(allEntities);
         }
 
-        public static (Vector2 pos, Vector2 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector2 position, Vector2 velocity, GameMap map, ActualControllerInput input) {
+        public static (Vector3 pos, Vector3 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector3 position, Vector3 velocity, GameMap map, ActualControllerInput input) {
             var newPosition = CalculateNewChefPositionAfterMovement(position, velocity, map);
             var (newVelocity, forward) = CalculateNewChefVelocityAndForward(chefState, input);
             return (newPosition, newVelocity, forward);
         }
 
-        public static ChefState CalculateHighlightedObjects(Vector2 position, Vector2 forward, GameMapGeometry geometry, IEnumerable<GameEntityRecord> entities) {
+        public static ChefState CalculateHighlightedObjects(Vector3 position, Vector2 forward, GameMapGeometry geometry, IEnumerable<GameEntityRecord> entities) {
             // Find objects:
             //   - Grid objects:
             //       - Get discrete grid pos of chef, then look at four neighbors, score by
@@ -164,19 +164,21 @@ namespace Hpmv {
             // the closest one by position.
 
             // TODO. We'll only do grid selection for now. Much easier.
-            var coord = geometry.CoordsToGridPosRounded(position);
-            GameEntityRecord best = null;
+            var coord = geometry.CoordsToGridPosRounded(position.XZ());
+            GameEntityRecord bestGrid = null;
             double bestDot = -1;
             foreach (var entity in entities) {
                 if (entity.chefState != null) {
+                    continue;
+                }
+                if (entity.prefab.Ignore) {
                     continue;
                 }
                 if (entity.prefab.Name == "Dirty Plate") {
                     // This is a bug - in real simulation, somehow I couldn't get dirty plates to destroy themselves.
                     continue;
                 }
-                if (entity.path.ids.Length > 1) {
-                    // Spawned items generally don't occupy a grid position.
+                if (!entity.IsGridOccupant()) {
                     continue;
                 }
                 foreach (var occupiedGridOffset in entity.prefab.OccupiedGridPoints) {
@@ -185,14 +187,46 @@ namespace Hpmv {
                         if (entity.data.Last().attachmentParent == null) {
                             var gridOffsetDirection = new Vector2(1.0f * (entityCoord.x - coord.x), -1.0f * (entityCoord.y - coord.y));
                             var dot = Vector2.Dot(gridOffsetDirection, forward);
-                            if (best == null || dot > bestDot) {
-                                best = entity;
+                            if (bestGrid == null || dot > bestDot) {
+                                bestGrid = entity;
                                 bestDot = dot;
                             }
                         }
                     }
                 }
             }
+
+            var eligible = new List<GameEntityRecord>();
+            if (bestGrid != null) {
+                eligible.Add(bestGrid);
+            }
+
+            foreach (var entity in entities) {
+                if (entity.chefState != null) {
+                    continue;
+                }
+                if (entity.prefab.Ignore) {
+                    continue;
+                }
+                if (entity.IsGridOccupant()) {
+                    continue;
+                }
+                if (entity.data.Last().attachmentParent != null) {
+                    continue;
+                }
+                if ((entity.position.Last() - position).LengthSquared() > 4) {
+                    continue;
+                }
+                var dist = (entity.position.Last() - position).XZ().LengthSquared();
+                if (dist > 1.36f * 1.36f) {
+                    continue;
+                }
+                if (Vector2.Dot((entity.position.Last() - position).XZ(), forward) < 0) {
+                    continue;
+                }
+                eligible.Add(entity);
+            }
+            var best = eligible.OrderBy(entity => (entity.position.Last() - position).LengthSquared()).FirstOrDefault();
 
             var chefState = new ChefState();
             chefState.highlightedForPickup = best;
@@ -213,7 +247,7 @@ namespace Hpmv {
         }
 
         private void UpdateNearbyObjects(GameEntityRecord chef, List<GameEntityRecord> entities) {
-            var newChefState = CalculateHighlightedObjects(chef.position.Last().XZ(), chef.chefState.Last().forward, setup.geometry, entities);
+            var newChefState = CalculateHighlightedObjects(chef.position.Last(), chef.chefState.Last().forward, setup.geometry, entities);
             chef.chefState.AppendWith(frame, state => {
                 state.highlightedForPickup = newChefState.highlightedForPickup;
                 state.highlightedForPlacement = newChefState.highlightedForPlacement;
@@ -490,7 +524,7 @@ namespace Hpmv {
         }
 
 
-        public static (Vector2 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, ActualControllerInput input) {
+        public static (Vector3 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, ActualControllerInput input) {
             var axes = new Vector2(input.axes.X, -input.axes.Y);
             if (axes.Length() < 0.01) {
                 axes = default;
@@ -513,12 +547,12 @@ namespace Hpmv {
                 desiredVelocity = Vector2.Normalize(desiredVelocity) * 18;
             }
             // Ignoring ProgressVelocityWrtFriction.
-            return (desiredVelocity, newForward);
+            return (desiredVelocity.ToXZVector3(), newForward);
         }
 
         private void UpdateMovement(GameEntityRecord chef, ActualControllerInput input) {
             var (velocity, forward) = CalculateNewChefVelocityAndForward(chef.chefState.Last(), input);
-            chef.velocity.ChangeTo(velocity.ToXZVector3(), frame);
+            chef.velocity.ChangeTo(velocity, frame);
             chef.chefState.AppendWith(frame, chefState => {
                 if (input.dash.justPressed && chefState.dashTimer <= -0.1) {  // dash time minus cooldown
                     chefState.dashTimer = 0.3;  // dash time
@@ -567,13 +601,13 @@ namespace Hpmv {
             }
         }
 
-        public static Vector2 CalculateNewChefPositionAfterMovement(Vector2 position, Vector2 velocity, GameMap map) {
+        public static Vector3 CalculateNewChefPositionAfterMovement(Vector3 position, Vector3 velocity, GameMap map) {
             var desired = position + velocity * (1.0f / Config.FRAMERATE);
-            if (!map.IsInsideMap(desired)) {
-                desired = position + new Vector2(velocity.X, 0) * (1.0f / Config.FRAMERATE);
-                if (!map.IsInsideMap(desired)) {
-                    desired = position + new Vector2(0, velocity.Y) * (1.0f / Config.FRAMERATE);
-                    if (!map.IsInsideMap(desired)) {
+            if (!map.IsInsideMap(desired.XZ())) {
+                desired = position + new Vector3(velocity.X, 0, 0) * (1.0f / Config.FRAMERATE);
+                if (!map.IsInsideMap(desired.XZ())) {
+                    desired = position + new Vector3(0, 0, velocity.Z) * (1.0f / Config.FRAMERATE);
+                    if (!map.IsInsideMap(desired.XZ())) {
                         desired = position;
                     }
                 }
@@ -608,7 +642,7 @@ namespace Hpmv {
                     if (entity.velocity.Last().Length() > 0) {
                         if (entity.IsChef()) {
                             entity.position.ChangeTo(
-                                CalculateNewChefPositionAfterMovement(entity.position.Last().XZ(), entity.velocity.Last().XZ(), setup.mapByChef[entity.path.ids[0]]).ToXZVector3(),
+                                CalculateNewChefPositionAfterMovement(entity.position.Last(), entity.velocity.Last(), setup.mapByChef[entity.path.ids[0]]),
                                 frame);
                         } else {
                             var newPosition = entity.position.Last() + entity.velocity.Last() * (1.0f / Config.FRAMERATE);

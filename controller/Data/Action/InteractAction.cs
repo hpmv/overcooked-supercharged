@@ -68,8 +68,8 @@ namespace Hpmv {
             var (predictedPosition, predictedVelocity, predictedForward) =
                 OfflineEmulator.PredictChefPositionAfterInput(
                     chefState,
-                    Chef.position[input.Frame].XZ(),
-                    Chef.velocity[input.Frame].XZ(),
+                    Chef.position[input.Frame],
+                    Chef.velocity[input.Frame],
                     input.MapByChef[Chef.path.ids[0]],
                     input.ControllerState.ApplyInputAndAdvanceFrame(wouldBeInput).Item2);
             // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
