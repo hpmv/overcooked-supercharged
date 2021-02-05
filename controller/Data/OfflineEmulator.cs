@@ -465,13 +465,10 @@ namespace Hpmv {
                     var direction = chef.chefState.Last().forward;
                     var throwSpeed = 18 * (direction.ToXZVector3() + new Vector3(0, (float)Math.Tan(0.0174532924 * 12), 0));
                     item.velocity.ChangeTo(throwSpeed, frame);
-                    item.data.AppendWith(frame, data => {
-                        data.attachmentParent = null;
-                        return data;
-                    });
-                    chef.data.AppendWith(frame, data => {
-                        data.attachment = null;
-                        return data;
+                    Detach(item, frame);
+                    item.data.AppendWith(frame, d => {
+                        d.isFlying = true;
+                        return d;
                     });
                 }
             }
@@ -590,8 +587,7 @@ namespace Hpmv {
                 if (entity.data.Last().attachmentParent == null) {
                     if (entity.velocity.Last().Length() > 0) {
                         if (!entity.IsChef()) {
-                            // Heuristic for whether object is on floor.
-                            if (entity.position.Last().Y < 1 && entity.velocity.Last().Y >= -0.1 && entity.velocity.Last().Y <= 0.7) {
+                            if (!entity.data.Last().isFlying) {
                                 var newVelocity = entity.velocity.Last() * (float)Math.Pow(0.1298857935, 1.0 / Config.FRAMERATE);
                                 newVelocity.Y = 0;
                                 entity.velocity.ChangeTo(newVelocity, frame);
@@ -623,6 +619,10 @@ namespace Hpmv {
                                 newVelocity.X *= 0.68f;
                                 newVelocity.Z *= 0.68f;
                                 entity.velocity.ChangeTo(newVelocity, frame);
+                                entity.data.AppendWith(frame, d => {
+                                    d.isFlying = false;
+                                    return d;
+                                });
                             }
                             entity.position.ChangeTo(newPosition, frame);
                         }

@@ -516,6 +516,22 @@ app {
     background-color: blue;
 }
 
+.record-vis-flying {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    font-family: Roboto;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    left: 7px;
+    top: -19px;
+    z-index: 6;
+    background-color: white;
+    border-radius: 50%;
+    border: 1px solid gray;
+}
+
 .record-vis-type- {
     width: 46px;
     height: 46px;

@@ -13,12 +13,14 @@ namespace Hpmv {
         public HashSet<GameEntityRecord> washers;
         public int numPlates;
         public List<TimeSpan> plateRespawnTimers;
+        public bool isFlying;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
                 AttachmentParent = attachmentParent?.path?.ToProto(),
                 Attachment = attachment?.path?.ToProto(),
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
+                IsFlying = isFlying,
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -55,6 +57,7 @@ namespace Hpmv {
                 washers = data.Washers.Count == 0 ? null : data.Washers.Select(washer => washer.FromProtoRef(context)).ToHashSet(),
                 numPlates = data.NumPlates,
                 plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
+                isFlying = data.IsFlying,
             };
         }
     }

@@ -13,7 +13,7 @@ namespace Hpmv {
         public GameEntityRecords Records { get; set; }
         public GameActionSequences Timings { get; set; }
         public InputHistory InputHistory { get; set; }
-        public GameMapGeometry Geometry {get; set;}
+        public GameMapGeometry Geometry { get; set; }
         public Dictionary<int, GameMap> MapByChef { get; set; }
         public int Frame { get { return frame; } }
         public readonly MessageStats Stats = new MessageStats();
@@ -212,6 +212,8 @@ namespace Hpmv {
                             }
                         }
                     }
+                } else if (payload is ThrowableItemMessage tim) {
+                    specificData.isFlying = tim.m_inFlight;
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -284,15 +286,15 @@ namespace Hpmv {
             }
             var chefRecord = entityIdToRecord[chefId];
             try {
-            var chefData = new ChefState {
-                forward = chef.ForwardDirection.ToNumericsVector().XZ(),
-                dashTimer = chef.DashTimer,
-                highlightedForPickup = chef.HighlightedForPickup <= 0 ? null : entityIdToRecord[chef.HighlightedForPickup],
-                highlightedForPlacement = chef.HighlightedForPlacement <= 0 ? null : entityIdToRecord[chef.HighlightedForPlacement],
-                highlightedForUse = chef.HighlightedForUse <= 0 ? null : entityIdToRecord[chef.HighlightedForUse],
-            };
-            chefRecord.chefState.ChangeTo(chefData, frame);
-            }catch (Exception e) {}
+                var chefData = new ChefState {
+                    forward = chef.ForwardDirection.ToNumericsVector().XZ(),
+                    dashTimer = chef.DashTimer,
+                    highlightedForPickup = chef.HighlightedForPickup <= 0 ? null : entityIdToRecord[chef.HighlightedForPickup],
+                    highlightedForPlacement = chef.HighlightedForPlacement <= 0 ? null : entityIdToRecord[chef.HighlightedForPlacement],
+                    highlightedForUse = chef.HighlightedForUse <= 0 ? null : entityIdToRecord[chef.HighlightedForUse],
+                };
+                chefRecord.chefState.ChangeTo(chefData, frame);
+            } catch (Exception e) { }
         }
 
         public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data) {

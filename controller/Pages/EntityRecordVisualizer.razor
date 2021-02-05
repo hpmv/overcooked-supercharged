@@ -58,6 +58,9 @@
                             </div>
                         }
                     }
+                    @if (record.data[frame].isFlying) {
+                        <div class="record-vis-flying">▲</div>
+                    }
                     @if (record.prefab.CanContainIngredients && record.data[frame].contents is List<int> contents) {
                         <div class="record-vis-ingredient-container">
                             @foreach (var ingredient in contents) {

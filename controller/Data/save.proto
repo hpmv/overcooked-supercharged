@@ -157,6 +157,7 @@ message SpecificEntityData {
     repeated EntityPath washers = 6;
     int32 num_plates = 8;
     repeated double plate_respawn_timers = 7;
+    bool is_flying = 9;
 }
 
 message ChefState {
