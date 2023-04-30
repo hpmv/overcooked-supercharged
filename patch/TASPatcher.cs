@@ -19,7 +19,7 @@ namespace SuperchargedPatch
 
             var patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll();
-            patcher.PatchAll(Assembly.GetCallingAssembly());
+            patcher.PatchAll(Assembly.GetExecutingAssembly());
             foreach (var patched in Harmony.GetAllPatchedMethods()) {
                 Console.WriteLine("Patched: " + patched.FullDescription());
             }

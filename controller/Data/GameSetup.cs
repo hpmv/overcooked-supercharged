@@ -35,20 +35,23 @@ namespace Hpmv {
             var loadContext = new LoadContext();
             loadContext.Load(proto.Records);
             Dictionary<int, GameMap> mapByChef = new Dictionary<int, GameMap>();
+            GameMapGeometry geometry;
             if (proto.Map != null) {
                 // compatibility with old format
-                var map = proto.Map.FromProto(new GameMapGeometry(proto.Map.TopLeft.FromProto(), new System.Numerics.Vector2()));
+                geometry = new GameMapGeometry(proto.Map.TopLeft.FromProto(), new System.Numerics.Vector2());
+                var map = proto.Map.FromProto(geometry);
                 foreach (var chef in proto.Sequences.Chefs) {
                     mapByChef[chef.Chef.Path[0]] = map;
                 }
             } else {
+                geometry = proto.Geometry.FromProto();
                 foreach (var map in proto.MapByChef) {
                     mapByChef[map.Key] = map.Value.FromProto(proto.Geometry.FromProto());
                 }
             }
             return new GameSetup {
                 entityRecords = loadContext.Records,
-                geometry = proto.Geometry.FromProto(),
+                geometry = geometry,
                 mapByChef = mapByChef,
                 sequences = proto.Sequences.FromProto(loadContext),
                 inputHistory = proto.InputHistory.FromProto(loadContext),

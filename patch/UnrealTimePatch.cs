@@ -26,6 +26,8 @@ namespace SuperchargedPatch
         private static Type t_ServerMessenger = typeof(ServerTime).Assembly.GetType("ServerMessenger");
         private static MethodInfo f_TimeSync = t_ServerMessenger.GetMethod("TimeSync", BindingFlags.Static | BindingFlags.Public);
 
+        public static TimeManager CurrentTimeManager { get; private set; }
+
         public static void Update()
         {
             if (!ENABLE_TIME_PATCH) return;
@@ -95,8 +97,9 @@ namespace SuperchargedPatch
         public static class TimeManagerUpdatePatch
         {
             [HarmonyPrefix]
-            public static bool Prefix()
+            public static bool Prefix(TimeManager __instance)
             {
+                CurrentTimeManager = __instance;
                 if (!ENABLE_TIME_PATCH) return true;
                 return false;
             }

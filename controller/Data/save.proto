@@ -219,10 +219,16 @@ message VersionedControllerState {
     ControllerState initial_value = 3;
 }
 
+message SpawningPath {
+    int32 initial_fixed_entity_id = 1;
+    repeated int32 spawnable_ids = 2;
+}
+
 message PrefabRecord {
     string name = 1;
     string class_name = 2;
     repeated PrefabRecord spawns = 3;
+    SpawningPath spawning_path = 21;
     bool can_use = 4;
     bool is_crate = 5;
     double max_progress = 6;

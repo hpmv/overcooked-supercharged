@@ -132,6 +132,35 @@ namespace controller.Pages {
             realGameConnector.Start();
         }
 
+        private void PauseRealSimulation() {
+            if (realGameConnector == null) {
+                return;
+            }
+            realGameConnector.RequestPause();
+        }
+
+        private void ResumeRealSimulation() {
+            if (realGameConnector == null) {
+                return;
+            }
+            realGameConnector.RequestResume();
+        }
+
+        private bool IsSimulationRunning() {
+            return realGameConnector != null && realGameConnector.state == RealGameState.Running;
+        }
+
+        private bool IsSimulationPaused() {
+            return realGameConnector != null && realGameConnector.state == RealGameState.Paused;
+        }
+
+        private string GetRealGameState() {
+            if (realGameConnector == null) {
+                return "Not connected";
+            }
+            return realGameConnector.state.ToString();
+        }
+
         private void DoOfflineSimulation() {
             var offlineSimulator = new OfflineEmulator(level);
             offlineSimulator.SimulateEntireSchedule(EditorState.SelectedFrame);

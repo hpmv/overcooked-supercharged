@@ -24,16 +24,15 @@
             }
         } 
 
-        @if (realGameConnector != null) {
-            foreach (var entry in realGameConnector.simulator.Stats.messageTypeStats) {
-                <div>@(entry.Key): @(entry.Value)</div>
-            }
-        }
-
         <div class="control-row">
             <button @onclick="(e) => StartRealSimulation()">Simulate Real</button>
             <button @onclick="(e) => StopRealSimulation()">Stop Real</button>
             <button @onclick="(e) => DoOfflineSimulation()">Simulate Offline</button>
+        </div>
+        <div class="control-row">
+            <button @onclick="(e) => PauseRealSimulation()" disabled="@(!IsSimulationRunning())">Pause Real</button>
+            <button @onclick="(e) => ResumeRealSimulation()" disabled="@(!IsSimulationPaused())">Resume Real</button>
+            <span>Real Game State: @(GetRealGameState())</span>
         </div>
         
         <div class="control-row">
@@ -62,6 +61,12 @@
         <div class="control-row">
             <button @onclick="Analyze">Analyze Gameplay</button>
         </div>
+
+        @if (realGameConnector != null) {
+            foreach (var entry in realGameConnector.simulator.Stats.messageTypeStats) {
+                <div>@(entry.Key): @(entry.Value)</div>
+            }
+        }
     </div>
 
     <div class="right-side-content">

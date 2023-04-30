@@ -106,6 +106,20 @@ namespace Hpmv {
             }
         }
 
+        public void CalculateSpawningPathsForPrefabs() {
+            foreach (var entity in FixedEntities) {
+                if (entity.prefab != null) {
+                    for (int i = 0; i < entity.prefab.Spawns.Count; i++) {
+                        var spawn = entity.prefab.Spawns[i];
+                        if (spawn.SpawningPath == null) {
+                            spawn.SpawningPath = new SpawningPath{InitialFixedEntityId = entity.path.ids[0], SpawnableIds = {i}};
+                            spawn.CalculateSpawningPathsForSpawnsRecursively();
+                        }
+                    }
+                }
+            }
+        }
+
         public Save.GameEntityRecords ToProto() {
             var result = new Save.GameEntityRecords();
             foreach (var entity in GenAllEntities()) {

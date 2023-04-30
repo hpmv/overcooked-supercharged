@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -7,6 +8,7 @@ namespace Hpmv {
         public string Name { get; set; }
         public string ClassName { get; set; }
         public List<PrefabRecord> Spawns = new List<PrefabRecord>();
+        public SpawningPath SpawningPath { get; set; }
         public bool CanUse { get; set; }
         public bool IsCrate { get; set; }
         public double MaxProgress { get; set; }
@@ -34,6 +36,7 @@ namespace Hpmv {
             var result = new Save.PrefabRecord {
                 Name = Name,
                 ClassName = ClassName,
+                SpawningPath = SpawningPath?.ToProto(),
                 CanUse = CanUse,
                 IsCrate = IsCrate,
                 MaxProgress = MaxProgress,
@@ -57,12 +60,23 @@ namespace Hpmv {
             result.OccupiedGridPoints.AddRange(OccupiedGridPoints.Select(x => x.ToProto()));
             return result;
         }
+
+        public void CalculateSpawningPathsForSpawnsRecursively()
+        {
+            if (SpawningPath == null) {return;}
+            for (int i = 0; i < Spawns.Count; i++)
+            {
+                Spawns[i].SpawningPath = SpawningPath.Concat(i);
+                Spawns[i].CalculateSpawningPathsForSpawnsRecursively();
+            }
+        }
     }
 
     public static class PrefabRecordFromProto {
         public static PrefabRecord FromProto(this Save.PrefabRecord record) {
             return new PrefabRecord(record.Name, record.ClassName) {
                 Spawns = record.Spawns.Select(s => s.FromProto()).ToList(),
+                SpawningPath = record.SpawningPath?.FromProto(),
                 CanUse = record.CanUse,
                 IsCrate = record.IsCrate,
                 MaxProgress = record.MaxProgress,

@@ -17,13 +17,29 @@ namespace SuperchargedPatch
     {
         public static void LateUpdate()
         {
+            var data = Injector.Server.OpenCurrentFrameDataForWrite();
+            data.LastFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
+            if (Injector.Server.CurrentInput.RequestPause)
+            {
+                UnrealTimePatch.CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, true, timeManagerPauseArbitration);
+            } else if (Injector.Server.CurrentInput.RequestResume)
+            {
+                UnrealTimePatch.CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, false, timeManagerPauseArbitration);
+            }
+
+            data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrameIfNotCommitted();
         }
 
+        // Just an arbitrary object to tell TimeManager whose pause we're resuming.
+        private static object timeManagerPauseArbitration = new object();
+
+        // TODO: Consider how the caching should behave when pausing/resuming/restoring. At least after
+        // restoring these should be cleared.
         private static Dictionary<int, Vector3> prevCachedLocation;
         private static Dictionary<int, Vector3> prevCachedVelocity;
 
-        public static bool EnableInputInjection = false;
+        public static bool EnableInputInjection = true;
 
         public static void Update()
         {

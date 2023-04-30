@@ -323,9 +323,11 @@ namespace Hpmv {
                             return;
                         }
                         var to = placer.data.Last().attachment;
-                        if (to == null && placer.prefab.IsAttachStation) {
-                            Attach(from, placer, frame);
-                        } else if (from.prefab.IsIngredient && to.prefab.CanContainIngredients) {
+                        if (to == null) {
+                            if (placer.prefab.IsAttachStation || placer.prefab.IsBoard || placer.prefab.IsCrate || placer.prefab.IsMixerStation || placer.prefab.IsHeatingStation) {
+                                Attach(from, placer, frame);
+                            }
+                        }  else if (from.prefab.IsIngredient && to.prefab.CanContainIngredients) {
                             // Adding ingredient
                             to.data.AppendWith(frame, (data) => {
                                 data.contents = data.contents == null ? new List<int>() : new List<int>(data.contents);
