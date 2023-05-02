@@ -20,16 +20,20 @@ namespace Hpmv {
             return new Vector3(vector.x, vector.y, vector.z);
         }
 
-        public static UnityEngine.Vector3 ToUnityVector(this Point vector) {
-            return new UnityEngine.Vector3((float)vector.X, (float)vector.Y, (float)vector.Z);
-        }
-
-        public static Vector3 ToNumericsVector(this Point vector) {
+        public static Vector3 FromThrift(this Point vector) {
             return new Vector3((float)vector.X, (float)vector.Y, (float)vector.Z);
         }
 
-        public static UnityEngine.Vector3 ToUnityVector(this Vector3 vector) {
-            return new UnityEngine.Vector3(vector.X, vector.Y, vector.Z);
+        public static Point ToThrift(this Vector3 vector) {
+            return new Point { X = vector.X, Y = vector.Y, Z = vector.Z };
+        }
+
+        public static System.Numerics.Quaternion FromThrift(this Quaternion quaternion) {
+            return new System.Numerics.Quaternion((float)quaternion.X, (float)quaternion.Y, (float)quaternion.Z, (float)quaternion.W);
+        }
+
+        public static Quaternion ToThrift(this System.Numerics.Quaternion quaternion) {
+            return new Quaternion { X = quaternion.X, Y = quaternion.Y, Z = quaternion.Z, W = quaternion.W };
         }
 
         public static Vector3 ToXZVector3(this (double x, double y) d) {

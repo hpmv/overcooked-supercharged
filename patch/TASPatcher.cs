@@ -28,7 +28,6 @@ namespace SuperchargedPatch
         public void Update()
         {
             UnrealTimePatch.Update();
-            ServerInterceptionPatches.Update();
         }
 
         public void LateUpdate()

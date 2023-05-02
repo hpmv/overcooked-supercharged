@@ -28,6 +28,19 @@ namespace Hpmv {
             return new Vector3(v.X, v.Y, v.Z);
         }
 
+        public static Save.Quaternion ToProto(this System.Numerics.Quaternion q) {
+            return new Save.Quaternion {
+                X = q.X,
+                Y = q.Y,
+                Z = q.Z,
+                W = q.W,
+            };
+        }
+
+        public static System.Numerics.Quaternion FromProto(this Save.Quaternion q) {
+            return new System.Numerics.Quaternion(q.X, q.Y, q.Z, q.W);
+        }
+
         public static Save.IntPoint ToProto(this IntPoint p) {
             return new Save.IntPoint {
                 X = p.X,
@@ -102,6 +115,23 @@ namespace Hpmv {
 
         public static Versioned<Vector3> FromProto(this Save.VersionedVector3 ver) {
             var result = new Versioned<Vector3>(ver.InitialValue.FromProto());
+            for (int i = 0; i < ver.Frame.Count; i++) {
+                result.ChangeTo(ver.Data[i].FromProto(), ver.Frame[i]);
+            }
+            return result;
+        }
+
+        public static Save.VersionedQuaternion ToProto(this Versioned<System.Numerics.Quaternion> ver) {
+            var result = new Save.VersionedQuaternion { InitialValue = ver.initialValue.ToProto() };
+            foreach (var (frame, value) in ver.changes) {
+                result.Frame.Add(frame);
+                result.Data.Add(value.ToProto());
+            }
+            return result;
+        }
+
+        public static Versioned<System.Numerics.Quaternion> FromProto(this Save.VersionedQuaternion ver) {
+            var result = new Versioned<System.Numerics.Quaternion>(ver.InitialValue.FromProto());
             for (int i = 0; i < ver.Frame.Count; i++) {
                 result.ChangeTo(ver.Data[i].FromProto(), ver.Frame[i]);
             }

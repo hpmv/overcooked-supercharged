@@ -13,6 +13,13 @@ message Vector3 {
     float z = 3;
 }
 
+message Quaternion {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float w = 4;
+}
+
 message CatchAction {
     Vector2 facing_direction = 1;
     string label = 2;
@@ -134,6 +141,12 @@ message VersionedVector3 {
     repeated int32 frame = 1;
     repeated Vector3 data = 2;
     Vector3 initial_value = 3;
+}
+
+message VersionedQuaternion {
+    repeated int32 frame = 1;
+    repeated Quaternion data = 2;
+    Quaternion initial_value = 3;
 }
 
 message VersionedBool {
@@ -259,6 +272,8 @@ message GameEntityRecord {
     VersionedInt spawn_owner = 6;
     VersionedVector3 position = 7;
     VersionedVector3 velocity = 8;
+    VersionedVector3 angular_velocity = 16;
+    VersionedQuaternion rotation = 15;
     VersionedBool existed = 9;
     VersionedSpecificEntityData data = 10;
     VersionedChefState chef_state = 11;

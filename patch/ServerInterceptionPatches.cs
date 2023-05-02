@@ -15,10 +15,25 @@ namespace SuperchargedPatch
 {
     public static class ServerInterceptionPatches
     {
+        private static bool IsPaused()
+        {
+            return TimeManager.IsPaused(TimeManager.PauseLayer.Main);
+        }
+
         public static void LateUpdate()
         {
+            if (IsPaused())
+            {
+                WarpHandler.HandleWarpRequestIfAny();
+            }
             var data = Injector.Server.OpenCurrentFrameDataForWrite();
-            data.LastFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
+            if (!IsPaused())
+            {
+                frameNumber++;
+            }
+            data.FrameNumber = frameNumber;
+            CollectPhysicsDataForFrame(data);
+            data.LastFramePaused = IsPaused();
             if (Injector.Server.CurrentInput.RequestPause)
             {
                 UnrealTimePatch.CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, true, timeManagerPauseArbitration);
@@ -36,70 +51,100 @@ namespace SuperchargedPatch
 
         // TODO: Consider how the caching should behave when pausing/resuming/restoring. At least after
         // restoring these should be cleared.
-        private static Dictionary<int, Vector3> prevCachedLocation;
-        private static Dictionary<int, Vector3> prevCachedVelocity;
+        private static Dictionary<int, Vector3> prevCachedLocation = new Dictionary<int, Vector3>();
+        private static Dictionary<int, UnityEngine.Quaternion> prevCachedRotation = new Dictionary<int, UnityEngine.Quaternion>();
+        private static Dictionary<int, Vector3> prevCachedVelocity = new Dictionary<int, Vector3>();
+        private static Dictionary<int, Vector3> prevCachedAngularVelocity = new Dictionary<int, Vector3>();
+        private static Dictionary<int, EntityPathReference> prevCachedEntityPathReference = new Dictionary<int, EntityPathReference>();
+        private static int frameNumber = -1;
 
         public static bool EnableInputInjection = true;
 
-        public static void Update()
+        public static void CollectPhysicsDataForFrame(OutputData currentFrameData)
         {
-            var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
-            Vector3 _velocity;
-            if (Injector.Server.CurrentInput.ResetOrderSeed != 0)
+            if (frameNumber < 0)
             {
-                prevCachedLocation = new Dictionary<int, Vector3>();
-                prevCachedVelocity = new Dictionary<int, Vector3>();
+                return;
+            }
+            if (frameNumber == 0)
+            {
+                prevCachedLocation.Clear();
+                prevCachedRotation.Clear();
+                prevCachedVelocity.Clear();
+                prevCachedAngularVelocity.Clear();
+                prevCachedEntityPathReference.Clear();
             }
             if (currentFrameData.Items == null)
             {
                 currentFrameData.Items = new Dictionary<int, ItemData>();
             }
-            if (prevCachedLocation != null && prevCachedVelocity != null)
+            FastList<EntitySerialisationEntry> mEntitiesList = EntitySerialisationRegistry.m_EntitiesList;
+            for (int i = 0; i < mEntitiesList.Count; i++)
             {
-                FastList<EntitySerialisationEntry> mEntitiesList = EntitySerialisationRegistry.m_EntitiesList;
-                for (int i = 0; i < mEntitiesList.Count; i++)
+                var t = mEntitiesList._items[i];
+
+                Vector3 position = t.m_GameObject.transform.position;
+                UnityEngine.Quaternion rotation = t.m_GameObject.transform.rotation;
+                Vector3 velocity = Vector3.zero;
+                Vector3 angularVelocity = Vector3.zero;
+                if (t.m_GameObject.GetPhysicsContainerIfExists() is Rigidbody container) {
+                    position = container.transform.position;
+                    rotation = container.transform.rotation;
+                    velocity = container.velocity;
+                    angularVelocity = container.angularVelocity;
+                    // TODO: isKinematic, etc?
+                }
+                EntityPathReference entityPathReference = null;
+                if (t.m_GameObject.GetComponent<EntityPathReferenceMarker>() is EntityPathReferenceMarker marker)
                 {
-                    var t = mEntitiesList._items[i];
-                    Vector3 _position = t.m_GameObject.transform.position;
-                    Rigidbody component = t.m_GameObject.GetComponentInParent<Rigidbody>();
-                    if (component != null)
+                    entityPathReference = marker.EntityPath;
+                }
+                int mUEntityID = (int)t.m_Header.m_uEntityID;
+                Dictionary<int, ItemData> items = currentFrameData.Items;
+                if (!prevCachedLocation.ContainsKey(mUEntityID) || prevCachedLocation[mUEntityID] != position)
+                {
+                    prevCachedLocation[mUEntityID] = position;
+                    if (!items.ContainsKey(mUEntityID))
                     {
-                        _velocity = component.velocity;
+                        items[mUEntityID] = new ItemData();
                     }
-                    else
+                    items[mUEntityID].Pos = position.ToThrift();
+                }
+                if (!prevCachedRotation.ContainsKey(mUEntityID) || prevCachedRotation[mUEntityID] != rotation)
+                {
+                    prevCachedRotation[mUEntityID] = rotation;
+                    if (!items.ContainsKey(mUEntityID))
                     {
-                        _velocity = new Vector3();
+                        items[mUEntityID] = new ItemData();
                     }
-                    Vector3 vector3 = _velocity;
-                    int mUEntityID = (int)t.m_Header.m_uEntityID;
-                    Dictionary<int, ItemData> items = currentFrameData.Items;
-                    if (!prevCachedLocation.ContainsKey(mUEntityID) || prevCachedLocation[mUEntityID] != _position)
+                    items[mUEntityID].Rotation = rotation.ToThrift();
+                }
+                if (!prevCachedVelocity.ContainsKey(mUEntityID) || prevCachedVelocity[mUEntityID] != velocity)
+                {
+                    prevCachedVelocity[mUEntityID] = velocity;
+                    if (!items.ContainsKey(mUEntityID))
                     {
-                        prevCachedLocation[mUEntityID] = _position;
-                        items[mUEntityID] = new ItemData()
-                        {
-                            Pos = new Point()
-                            {
-                                X = _position.x,
-                                Y = _position.y,
-                                Z = _position.z
-                            }
-                        };
+                        items[mUEntityID] = new ItemData();
                     }
-                    if (!prevCachedVelocity.ContainsKey(mUEntityID) || prevCachedVelocity[mUEntityID] != vector3)
+                    items[mUEntityID].Velocity = velocity.ToThrift();
+                }
+                if (!prevCachedAngularVelocity.ContainsKey(mUEntityID) || prevCachedAngularVelocity[mUEntityID] != angularVelocity)
+                {
+                    prevCachedAngularVelocity[mUEntityID] = angularVelocity;
+                    if (!items.ContainsKey(mUEntityID))
                     {
-                        prevCachedVelocity[mUEntityID] = vector3;
-                        if (!items.ContainsKey(mUEntityID))
-                        {
-                            items[mUEntityID] = new ItemData();
-                        }
-                        items[mUEntityID].Velocity = new Point()
-                        {
-                            X = vector3.x,
-                            Y = vector3.y,
-                            Z = vector3.z
-                        };
+                        items[mUEntityID] = new ItemData();
                     }
+                    items[mUEntityID].AngularVelocity = angularVelocity.ToThrift();
+                }
+                if (!prevCachedEntityPathReference.ContainsKey(mUEntityID) ||  prevCachedEntityPathReference[mUEntityID] != entityPathReference)
+                {
+                    prevCachedEntityPathReference[mUEntityID] = entityPathReference;
+                    if (!items.ContainsKey(mUEntityID))
+                    {
+                        items[mUEntityID] = new ItemData();
+                    }
+                    items[mUEntityID].EntityPathReference = entityPathReference.ToThrift();
                 }
             }
         }
@@ -424,12 +469,7 @@ namespace SuperchargedPatch
                     {
                         EntityId = (int)EntitySerialisationRegistry.GetId(mGameObject),
                         Name = mGameObject.name,
-                        Pos = new Point()
-                        {
-                            X = (double)mGameObject.transform.position.x,
-                            Y = (double)mGameObject.transform.position.y,
-                            Z = (double)mGameObject.transform.position.z
-                        },
+                        Pos = mGameObject.transform.position.ToThrift(),  // TODO: needed?
                         SyncEntityTypes = new List<int>(),
                         Components = (
                             from c in mGameObject.GetComponents<Component>()

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 
 namespace Hpmv {
@@ -14,6 +15,11 @@ namespace Hpmv {
             var result = new Save.EntityPath();
             result.Path.AddRange(ids);
             return result;
+        }
+
+        internal EntityPathReference ToThrift()
+        {
+            return new EntityPathReference { Ids = ids.ToList() };
         }
     }
 

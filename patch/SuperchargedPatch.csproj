@@ -77,10 +77,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="EntityPathReference.cs" />
+    <Compile Include="EntityPathReferenceMarker.cs" />
+    <Compile Include="Helpers.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TASPatcher.cs" />
     <Compile Include="UnrealTimePatch.cs" />
+    <Compile Include="WarpHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ai\ai.csproj">

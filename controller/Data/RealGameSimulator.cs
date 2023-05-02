@@ -287,7 +287,7 @@ namespace Hpmv {
             var chefRecord = entityIdToRecord[chefId];
             try {
                 var chefData = new ChefState {
-                    forward = chef.ForwardDirection.ToNumericsVector().XZ(),
+                    forward = chef.ForwardDirection.FromThrift().XZ(),
                     dashTimer = chef.DashTimer,
                     highlightedForPickup = chef.HighlightedForPickup <= 0 ? null : entityIdToRecord[chef.HighlightedForPickup],
                     highlightedForPlacement = chef.HighlightedForPlacement <= 0 ? null : entityIdToRecord[chef.HighlightedForPlacement],
@@ -317,10 +317,16 @@ namespace Hpmv {
             Console.WriteLine($"{entityId} received {data}");
             if (entityIdToRecord.ContainsKey(entityId)) {
                 if (data.__isset.pos) {
-                    entityIdToRecord[entityId].position.ChangeTo(data.Pos.ToNumericsVector(), frame);
+                    entityIdToRecord[entityId].position.ChangeTo(data.Pos.FromThrift(), frame);
+                }
+                if (data.__isset.rotation) {
+                    entityIdToRecord[entityId].rotation.ChangeTo(data.Rotation.FromThrift(), frame);
                 }
                 if (data.__isset.velocity) {
-                    entityIdToRecord[entityId].velocity.ChangeTo(data.Velocity.ToNumericsVector(), frame);
+                    entityIdToRecord[entityId].velocity.ChangeTo(data.Velocity.FromThrift(), frame);
+                }
+                if (data.__isset.angularVelocity) {
+                    entityIdToRecord[entityId].angularVelocity.ChangeTo(data.AngularVelocity.FromThrift(), frame);
                 }
             }
         }
