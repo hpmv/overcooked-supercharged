@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +10,10 @@ namespace Hpmv {
         private GameSetup setup;
         public RealGameSimulator simulator = new RealGameSimulator();
         public RealGameState state = RealGameState.NotInLevel;
-        private Queue<RealGameStateRequest> requests = new Queue<RealGameStateRequest>();
+
+        // Queue of state transition requests; enqueued by the UI thread, dequeued by the RPC handling thread.
+        private ConcurrentQueue<RealGameStateRequest> requests = new ConcurrentQueue<RealGameStateRequest>();
+        // Current request that is being processed by the RPC handling thread; only used by RPC handling thread.
         private RealGameStateRequest currentRequest;
 
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
@@ -32,11 +36,7 @@ namespace Hpmv {
             this.setup = level;
 
             simulator.Graph = setup.sequences.ToGraph();
-            simulator.Geometry = setup.geometry;
-            simulator.MapByChef = setup.mapByChef;
-            simulator.Timings = setup.sequences;
-            simulator.Records = setup.entityRecords;
-            simulator.InputHistory = setup.inputHistory;
+            simulator.setup = setup;
 
             FakeEntityRegistry.entityToTypes.Clear(); // sigh.
         }
@@ -62,6 +62,16 @@ namespace Hpmv {
                     }
                 }
             }
+            var entityIdToPathWhenRestoringState = new Dictionary<int, EntityPath>();
+            if (state == RealGameState.RestoringState) {
+                foreach (var entry in output.Items) {
+                    if (entry.Value.__isset.entityPathReference) {
+                        var path =  entry.Value.EntityPathReference.FromThrift();
+                        entityIdToPathWhenRestoringState[entry.Key] = path;
+                    }
+                }
+            }
+
             if (output.ServerMessages != null) {
                 foreach (var msg in output.ServerMessages) {
                     var item = Deserializer.Deserialize(msg.Type, msg.Message);
@@ -74,8 +84,10 @@ namespace Hpmv {
                             state = RealGameState.Running;
                         }
                     } else {
-                        if (state == RealGameState.Running || state == RealGameState.AwaitingStart) {
+                        if (state == RealGameState.Running) {
                             simulator.ApplyGameUpdate(item);
+                        } else if (state == RealGameState.RestoringState) {
+                            simulator.ApplyGameUpdateWhenRestoringState(item, entityIdToPathWhenRestoringState);
                         }
                     }
                 }
@@ -102,6 +114,13 @@ namespace Hpmv {
                 simulator.AdvanceFrameAfterReceivingGameMessages();
             }
 
+            if (state == RealGameState.Running || state == RealGameState.AwaitingStart) {
+                var temp = OnFrameUpdate;
+                if (temp != null) {
+                    temp();
+                }
+            }
+
             InputData inputs;
             if (state == RealGameState.Running) {
                 setup.LastEmpiricalFrame = setup.LastSimulatedFrame = simulator.Frame;
@@ -109,7 +128,8 @@ namespace Hpmv {
             } else {
                 inputs = new InputData();
             }
-
+            if (restarted) inputs.ResetOrderSeed = 12347;
+            
             if (currentRequest != null) {
                 switch (currentRequest.Kind) {
                     case RealGameStateRequestKind.Pause:
@@ -135,18 +155,21 @@ namespace Hpmv {
                         }
                         break;
                     case RealGameStateRequestKind.RestoreState:
+                        Console.WriteLine($"Current state: {state}; frame is {output.FrameNumber}");
                         if (state != RealGameState.RestoringState) {
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
                         }
                         // TODO: check that the frame is correct
+                        state = RealGameState.Paused;
                         currentRequest.Completed.SetResult(true);
                         currentRequest = null;
                         break;
                 }
             } else {
-                if (requests.Count > 0) {
-                    currentRequest = requests.Dequeue();
+                RealGameStateRequest request;
+                if (requests.TryDequeue(out request)) {
+                    currentRequest = request;
                     switch (currentRequest.Kind) {
                         case RealGameStateRequestKind.Pause:
                             inputs.RequestPause = true;
@@ -157,33 +180,35 @@ namespace Hpmv {
                             state = RealGameState.AwaitingResume;
                             break;
                         case RealGameStateRequestKind.RestoreState:
-                            // TODO.
+                            var warp = WarpCalculator.CalculateWarp(simulator.entityIdToRecord, setup.entityRecords, simulator.Frame, request.FrameToRestoreTo);
+                            inputs.Warp = warp;
                             state = RealGameState.RestoringState;
+                            simulator.ChangeStateAfterWarping(warp);
                             break;
                     }
                 }
             }
 
-            var temp = OnFrameUpdate;
-            if (temp != null) {
-                temp();
-            }
-
-            if (restarted) inputs.ResetOrderSeed = 12347;
             FramerateController.WaitTillNextFrame();
             return inputs;
         }
 
-        public void RequestPause() {
-            requests.Enqueue(RealGameStateRequest.Pause());
+        public Task<bool> RequestPause() {
+            var request = RealGameStateRequest.Pause();
+            requests.Enqueue(request);
+            return request.Completed.Task;
         }
 
-        public void RequestResume() {
-            requests.Enqueue(RealGameStateRequest.Resume());
+        public Task RequestResume() {
+            var request = RealGameStateRequest.Resume();
+            requests.Enqueue(request);
+            return request.Completed.Task;
         }
 
-        public void RequestRestoreState(int frame) {
-            requests.Enqueue(RealGameStateRequest.RestoreState(frame));
+        public Task RequestRestoreState(int frame) {
+            var request = RealGameStateRequest.RestoreState(frame);
+            requests.Enqueue(request);
+            return request.Completed.Task;
         }
     }
 }

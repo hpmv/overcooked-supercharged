@@ -7,6 +7,6 @@ namespace SuperchargedPatch
 {
     public class EntityPathReferenceMarker : UnityEngine.MonoBehaviour
     {
-        public EntityPathReference EntityPath { get; }
+        public EntityPathReference EntityPath { get; set; }
     }
 }

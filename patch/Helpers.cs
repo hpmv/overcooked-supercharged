@@ -10,6 +10,27 @@ namespace SuperchargedPatch
 {
     internal static class Helpers
     {
+        public static bool IsPaused()
+        {
+            return TimeManager.IsPaused(TimeManager.PauseLayer.Main);
+        }
+
+
+        // Just an arbitrary object to tell TimeManager whose pause we're resuming.
+        private static object timeManagerPauseArbitration = new object();
+
+        public static TimeManager CurrentTimeManager { get; set; }
+
+        public static void Pause()
+        {
+            CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, true, timeManagerPauseArbitration);
+        }
+
+        public static void Resume()
+        {
+            CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, false, timeManagerPauseArbitration);
+        }
+
         public static GameObject GetSpawnableEntityByIndex(this SpawnableEntityCollection collection, int index)
         {
             FieldInfo m_spawnables = typeof(SpawnableEntityCollection).GetField("m_spawnables", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -26,13 +47,13 @@ namespace SuperchargedPatch
         /// Otherwise return null. The container may not be the parent if the object is currently attached to a parent
         /// object (chef, AttachStation, etc.).
         /// </summary>
-        public static GameObject GetPhysicsContainerIfExists(this GameObject gameObject)
+        public static Rigidbody GetPhysicsContainerIfExists(this GameObject gameObject)
         {
             if (gameObject.GetComponent<PhysicalAttachment>() is PhysicalAttachment attachment)
             {
-                if (gameObject.transform.parent.gameObject == attachment.m_container.gameObject)
+                if (gameObject.transform.parent == attachment.m_container.transform)
                 {
-                    return attachment.m_container.gameObject;
+                    return attachment.m_container;
                 }
             }
             return null;

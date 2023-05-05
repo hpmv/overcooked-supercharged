@@ -55,9 +55,9 @@ namespace Hpmv {
             nextSpawnId = record.NextSpawnId.FromProto();
             spawnOwner = record.SpawnOwner.FromProto();
             position = record.Position.FromProto();
-            rotation = record.Rotation.FromProto();
+            rotation = record.Rotation?.FromProto() ?? new Versioned<System.Numerics.Quaternion>(System.Numerics.Quaternion.Identity);
             velocity = record.Velocity.FromProto();
-            angularVelocity = record.AngularVelocity.FromProto();
+            angularVelocity = record.AngularVelocity?.FromProto() ?? new Versioned<Vector3>(default);
             existed = record.Existed.FromProto();
             data = record.Data.FromProto(context);
             chefState = record.ChefState?.FromProto(context);

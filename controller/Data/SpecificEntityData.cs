@@ -14,6 +14,7 @@ namespace Hpmv {
         public int numPlates;
         public List<TimeSpan> plateRespawnTimers;
         public bool isFlying;
+        public bool isUnwarpable;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -21,6 +22,7 @@ namespace Hpmv {
                 Attachment = attachment?.path?.ToProto(),
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
                 IsFlying = isFlying,
+                IsUnwarpable = isUnwarpable,
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -58,6 +60,7 @@ namespace Hpmv {
                 numPlates = data.NumPlates,
                 plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
                 isFlying = data.IsFlying,
+                isUnwarpable = data.IsUnwarpable,
             };
         }
     }

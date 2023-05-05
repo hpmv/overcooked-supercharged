@@ -154,39 +154,39 @@ namespace Hpmv {
             entityRecords.CapturedInitialPositions[108] = new Vector3(18.002998f, 0.269f, -6f);
 
 
-            var mixer_prefab = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 2 };
+            var mixer_prefab = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 2, CanBeAttached = true };
             var mixer_station_prefab = new PrefabRecord("Mixer Station", "mixer-station") { IsMixerStation = true };
-            var frier_prefab = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 3 };
+            var frier_prefab = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 3, CanBeAttached = true };
             var frier_station_prefab = new PrefabRecord("Frier Station", "frier-station") { IsHeatingStation = true };
             var board_prefab = new PrefabRecord("Board", "board") { CanUse = true, IsBoard = true };
             var counter_prefab = new PrefabRecord("Counter", "counter") { IsAttachStation = true};
             var honey_crate_prefab = new PrefabRecord("Honey Crate", "honey-crate") { IsCrate = true };
-            honey_crate_prefab.Spawns.Add(new PrefabRecord("Honey", "honey") { MaxProgress = 1.4, IsChoppable = true });
-            honey_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Honey", "chopped-honey") { IsIngredient = true, IngredientId = 19670 });
+            honey_crate_prefab.Spawns.Add(new PrefabRecord("Honey", "honey") { MaxProgress = 1.4, IsChoppable = true, CanBeAttached = true });
+            honey_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Honey", "chopped-honey") { IsIngredient = true, IngredientId = 19670, CanBeAttached = true });
             var chocolate_crate_prefab = new PrefabRecord("Chocolate Crate", "chocolate-crate") { IsCrate = true };
-            chocolate_crate_prefab.Spawns.Add(new PrefabRecord("Chocolate", "chocolate") { MaxProgress = 1.4, IsChoppable = true });
-            chocolate_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Chocolate", "chopped-chocolate") { IsIngredient = true, IngredientId = 22804 });
+            chocolate_crate_prefab.Spawns.Add(new PrefabRecord("Chocolate", "chocolate") { MaxProgress = 1.4, IsChoppable = true, CanBeAttached = true });
+            chocolate_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Chocolate", "chopped-chocolate") { IsIngredient = true, IngredientId = 22804, CanBeAttached = true });
             var berry_crate_prefab = new PrefabRecord("Berry Crate", "berry-crate") { IsCrate = true };
-            berry_crate_prefab.Spawns.Add(new PrefabRecord("Berry", "berry") { MaxProgress = 1.4, IsChoppable = true });
-            berry_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Berry", "chopped-berry") { IsIngredient = true, IngredientId = 129618 });
+            berry_crate_prefab.Spawns.Add(new PrefabRecord("Berry", "berry") { MaxProgress = 1.4, IsChoppable = true, CanBeAttached = true });
+            berry_crate_prefab.Spawns[0].Spawns.Add(new PrefabRecord("Chopped Berry", "chopped-berry") { IsIngredient = true, IngredientId = 129618, CanBeAttached = true });
             var egg_crate_prefab = new PrefabRecord("Egg Crate", "egg-crate") { IsCrate = true };
-            egg_crate_prefab.Spawns.Add(new PrefabRecord("Egg", "egg") { IsIngredient = true, IngredientId = 16620 });
+            egg_crate_prefab.Spawns.Add(new PrefabRecord("Egg", "egg") { IsIngredient = true, IngredientId = 16620, CanBeAttached = true });
             var flour_crate_prefab = new PrefabRecord("Flour Crate", "flour-crate") { IsCrate = true };
-            flour_crate_prefab.Spawns.Add(new PrefabRecord("Flour", "flour") { IsIngredient = true, IngredientId = 18448 });
-            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true, CookingStage = 4 };
-            var dirty_plate_prefab = new PrefabRecord("Dirty Plate", "dirty plate");
+            flour_crate_prefab.Spawns.Add(new PrefabRecord("Flour", "flour") { IsIngredient = true, IngredientId = 18448, CanBeAttached = true });
+            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true, CookingStage = 4, CanBeAttached = true };
+            var dirty_plate_prefab = new PrefabRecord("Dirty Plate", "dirty plate"){ CanBeAttached = true };
             var dirty_plate_spawner_prefab = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner");
-            dirty_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"));
+            dirty_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"){ CanBeAttached = true });
             dirty_plate_spawner_prefab.Spawns[0].Spawns.Add(dirty_plate_prefab);
             var clean_plate_spawner_prefab = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner");
-            clean_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Clean Plate Stack", "clean-plate-stack"));
+            clean_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Clean Plate Stack", "clean-plate-stack"){ CanBeAttached = true });
             clean_plate_spawner_prefab.Spawns[0].Spawns.Add(plate_prefab);
             var washing_part_prefab = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true };
             var serve_prefab = new PrefabRecord("Serve", "serve") { OccupiedGridPoints = new Vector2[] { new Vector2(-0.6f, 0f), new Vector2(0.6f, 0) } };
-            var chef_red_prefab = new PrefabRecord("Chef Red", "chef-red");
-            var chef_green_prefab = new PrefabRecord("Chef Green", "chef-green");
-            var chef_yellow_prefab = new PrefabRecord("Chef Yellow", "chef-yellow");
-            var chef_blue_prefab = new PrefabRecord("Chef Blue", "chef-blue");
+            var chef_red_prefab = new PrefabRecord("Chef Red", "chef-red") { IsChef = true };
+            var chef_green_prefab = new PrefabRecord("Chef Green", "chef-green") { IsChef = true };
+            var chef_yellow_prefab = new PrefabRecord("Chef Yellow", "chef-yellow") { IsChef = true };
+            var chef_blue_prefab = new PrefabRecord("Chef Blue", "chef-blue") { IsChef = true };
             var ignore_prefab = new PrefabRecord("Ignored", "ignored") { Ignore = true };
 
             var MIXER_STATION1 = entityRecords.RegisterKnownObject(68, mixer_station_prefab);
@@ -286,6 +286,8 @@ namespace Hpmv {
             RegisterChef(CHEF2);
             RegisterChef(CHEF3);
             RegisterChef(CHEF4);
+
+            entityRecords.CalculateSpawningPathsForPrefabs();
         }
     }
 }

@@ -23,9 +23,14 @@ namespace Hpmv {
         }
     }
 
-    public static class EntityPathFromProto {
+    public static class EntityPathFromProtoOrThrift {
         public static EntityPath FromProto(this Save.EntityPath path) {
             return new EntityPath { ids = path.Path.ToArray() };
+        }
+
+        public static EntityPath FromThrift(this EntityPathReference path)
+        {
+            return new EntityPath { ids = path.Ids.ToArray() };
         }
     }
 }

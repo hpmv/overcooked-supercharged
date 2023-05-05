@@ -18,19 +18,30 @@ namespace SuperchargedPatch
             {
                 return;
             }
+            if (!Helpers.IsPaused())
+            {
+                Debug.Log("[WARP] Warning: Not warping because the game is not paused!");
+                return;
+            }
 
-            Debug.Log("Begin warping!");
+            Debug.Log("[WARP] Begin warping!");
+
+            // Resume the time manager before warping, because at the end we need to pause again to save the velocities.
+            Debug.Log("[WARP] Before warping, resuming the TimeManager");
+            Helpers.Resume();
+
             var warp = input.Warp;
             foreach (var entityId in warp.EntitiesToDelete)
             {
                 var entity = EntitySerialisationRegistry.GetEntry((uint)entityId);
                 if (entity == null)
                 {
-                    Debug.Log($"Error destroying entity ID {entityId}, entity does not exist!");
+                    Debug.Log($"[WARP] Error destroying entity ID {entityId}, entity does not exist!");
                     continue;
                 }
                 NetworkUtils.DestroyObject(entity.m_GameObject);
-                Debug.Log($"Destroyed entity {entityId}");            }
+                Debug.Log($"[WARP] Destroyed entity {entityId}");
+            }
 
             Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
 
@@ -43,7 +54,7 @@ namespace SuperchargedPatch
                     entity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.EntityId);
                     if (entity == null)
                     {
-                        Debug.Log($"Error warping existing entity {entityThrift.EntityId}: no such entity with this ID!");
+                        Debug.Log($"[WARP] Error warping existing entity {entityThrift.EntityId}: no such entity with this ID!");
                         continue;
                     }
                 } else if (entityThrift.SpawningPath.Count > 0)
@@ -51,13 +62,13 @@ namespace SuperchargedPatch
                     var spawningPathStr = string.Join(", ", entityThrift.SpawningPath.Select(p => "" + p).ToArray());
                     if (entityThrift.SpawningPath.Count == 1)
                     {
-                        Debug.Log($"Error spawning new entity for warping: Spawning path {spawningPathStr} is empty!");
+                        Debug.Log($"[WARP] Error spawning new entity for warping: Spawning path {spawningPathStr} is empty!");
                         continue;
                     }
                     var spawnerEntity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.SpawningPath[0]);
                     if (spawnerEntity == null)
                     {
-                        Debug.Log($"Error spawning new entity {spawningPathStr} for warping: Spawner entity ID does not exist!");
+                        Debug.Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: Spawner entity ID does not exist!");
                         continue;
                     }
                     var success = true;
@@ -67,26 +78,31 @@ namespace SuperchargedPatch
                         var spawnableEntities = spawnerEntity.m_GameObject.GetComponent<SpawnableEntityCollection>();
                         if (spawnableEntities == null)
                         {
-                            Debug.Log($"Error spawning new entity {spawningPathStr} for warping: The {j}th spawner does not have a SpawnableEntityCollection!");
+                            Debug.Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: The {j}th spawner does not have a SpawnableEntityCollection!");
                             success = false;
                             break;
                         }
-                        var prefab = spawnableEntities.GetSpawnableEntityByIndex(j);
+                        var prefab = spawnableEntities.GetSpawnableEntityByIndex(spawnableIndex);
                         if (prefab == null)
                         {
-                            Debug.Log($"Error spawning new entity {spawningPathStr} for warping: The {j}th spawn's index is out of bounds!");
+                            Debug.Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: The {j}th spawn's index is out of bounds!");
                             success = false;
                             break;
                         }
                         var spawned = NetworkUtils.ServerSpawnPrefab(spawnerEntity.m_GameObject, prefab);
                         var spawnedEntry = EntitySerialisationRegistry.GetEntry(spawned);
+                        Debug.Log($"[WARP] Spawned entity {spawnedEntry.m_Header.m_uEntityID} along path {spawningPathStr}");
                         if (spawnedEntry == null)
                         {
-                            Debug.Log($"Error spawning new entity {spawningPathStr} for warping: Failed to get the EntitySerialisationRegistry after the {j}th spawn!");
+                            Debug.Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: Failed to get the EntitySerialisationRegistry after the {j}th spawn!");
                             success = false;
                             break;
                         }
-                        NetworkUtils.DestroyObject(spawnerEntity.m_GameObject);
+                        if (j > 1)
+                        {
+                            Debug.Log($"[WARP] Destroying intermediate entity {spawnerEntity.m_Header.m_uEntityID}");
+                            NetworkUtils.DestroyObject(spawnerEntity.m_GameObject);
+                        }
                         spawnerEntity = spawnedEntry;
                     }
                     if (!success)
@@ -104,6 +120,10 @@ namespace SuperchargedPatch
                 {
                     var entityPathReference = entityThrift.EntityPathReference.FromThrift();
                     entityPathReferenceToEntry[entityPathReference] = entity;
+                    var marker = entity.m_GameObject.GetComponent<EntityPathReferenceMarker>() ??
+                        entity.m_GameObject.AddComponent<EntityPathReferenceMarker>();
+                    marker.EntityPath = entityPathReference;
+                    Debug.Log($"[WARP] Set entity path reference of {entity.m_Header.m_uEntityID} to {entityPathReference}");
                 }
 
                 if (entityThrift.__isset.attachmentParent)
@@ -138,16 +158,56 @@ namespace SuperchargedPatch
                     }
                     if (parentEntity == null)
                     {
-                        physicalAttachment.Detach();
+                        var existingParent = physicalAttachment.transform.parent;
+                        if (existingParent == null)
+                        {
+                            continue;
+                        }
+                        if (existingParent.GetComponent<ServerAttachStation>() is ServerAttachStation station)
+                        {
+                            Debug.Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerAttachStation");
+                            station.TakeItem();
+                        } else if (existingParent.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
+                        {
+                            Debug.Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerPlayerAttachmentCarrier");
+                            carrier.TakeItem();
+                        } else
+                        {
+                            Debug.Log($"Warning when detaching attachment for entity {entity.m_Header.m_uEntityID}: parent entity is of unhandled kind");
+                            physicalAttachment.Detach();
+                        }
                     } else
                     {
-                        var parentable = parentEntity.m_GameObject.GetComponent<IParentable>();
-                        if (parentable == null)
+                        if (physicalAttachment.transform.parent == parentEntity.m_GameObject.transform)
                         {
+                            continue;
+                        }
+                        if (parentEntity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation station) {
+                            if (station.HasItem())
+                            {
+                                Debug.Log($"[WARP] Detaching previous attachment of parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
+                                station.TakeItem();
+                            }
+                            Debug.Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
+                            station.AddItem(entity.m_GameObject, default);
+                            
+                        } else if (parentEntity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
+                        {
+                            if (carrier.HasAttachment(PlayerAttachTarget.Default))
+                            {
+                                Debug.Log($"[WARP] Detaching previous attachment of parent ServerPlayerAttachmentCarrier {parentEntity.m_Header.m_uEntityID}");
+                                carrier.TakeItem(PlayerAttachTarget.Default);
+                            }
+                            Debug.Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerPlayerAttachmentCarrier {parentEntity.m_Header.m_uEntityID}");
+                            carrier.CarryItem(entity.m_GameObject);
+                        } else if (parentEntity.m_GameObject.GetComponent<IParentable>() is IParentable parentable)
+                        {
+                            Debug.Log($"Warning when attaching entity entity {entity.m_Header.m_uEntityID} to new parent {parentEntity.m_Header.m_uEntityID}: parent is of unhandled kind");
+                            physicalAttachment.Attach(parentable);
+                        } else { 
                             Debug.Log($"Error setting attachment parent: desired parent entity {parentEntity.m_Header.m_uEntityID} is not an IParentable");
                             continue;
                         }
-                        physicalAttachment.Attach(parentable);
                     }
                 }
 
@@ -171,9 +231,34 @@ namespace SuperchargedPatch
                     }
                 }
 
+                // Special case for chefs. Use PlayerRespawnBehaviour to detect if it's a chef.
+                if (entity.m_GameObject.GetComponent<PlayerRespawnBehaviour>() != null)
+                {
+                    var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
+                    if (entityThrift.__isset.position)
+                    {
+                        rigidbody.transform.position = entityThrift.Position.FromThrift();
+                    }
+                    if (entityThrift.__isset.rotation)
+                    {
+                        rigidbody.transform.rotation = entityThrift.Rotation.FromThrift();
+                    }
+                    if (entityThrift.__isset.velocity)
+                    {
+                        rigidbody.velocity = entityThrift.Velocity.FromThrift();
+                    }
+                    if (entityThrift.__isset.angularVelocity)
+                    {
+                        rigidbody.angularVelocity = entityThrift.AngularVelocity.FromThrift();
+                    }
+                }
+
                 // TODO: more properties to warp
             }
 
+            // Pause the TimeManager again, to capture the velocities.
+            Helpers.Pause();
+            ServerInterceptionPatches.ClearCacheAfterWarp(warp.Frame);
         }
     }
 

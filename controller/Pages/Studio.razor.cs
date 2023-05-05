@@ -63,20 +63,38 @@ namespace controller.Pages {
         private bool ShowRecordDebug { get; set; }
 
         [JSInvokable]
-        public void HandleScheduleBackgroundClick(double x, double y) {
-            EditorState.SelectedFrame = Math.Min(level.LastSimulatedFrame, TimelineLayout.FrameFromOffset(y));
+        public async void HandleScheduleBackgroundClick(double x, double y) {
+            var frame = Math.Min(level.LastSimulatedFrame, TimelineLayout.FrameFromOffset(y));
+            if (realGameConnector != null) {
+                if (realGameConnector.state == RealGameState.Paused) {
+                    await realGameConnector.RequestRestoreState(frame);
+                } else {
+                    // Don't honor frame navigation if we're in the middle of a simulation.
+                    return;
+                }
+            }
+            EditorState.SelectedFrame = frame;
             EditorState.SelectedChef = null;
             EditorState.SelectedActionIndex = 0;
             StateHasChanged();
         }
 
-        public void HandleSelectAction(GameEntityRecord chef, int index, int frame) {
+        public async void HandleSelectAction(GameEntityRecord chef, int index, int frame) {
             if (nodeSelector.IsSelecting) {
                 nodeSelector.Select(level.sequences.Actions[level.sequences.ChefIndexByChef[chef]][index]);
             } else {
+                var targetFrame = Math.Min(level.LastSimulatedFrame, frame);
+                if (realGameConnector != null) {
+                    if (realGameConnector.state == RealGameState.Paused) {
+                        await realGameConnector.RequestRestoreState(targetFrame);
+                    } else {
+                        // Don't honor frame navigation if we're in the middle of a simulation.
+                        return;
+                    }
+                }
                 EditorState.SelectedChef = chef;
                 EditorState.SelectedActionIndex = index;
-                EditorState.SelectedFrame = Math.Min(level.LastSimulatedFrame, frame);
+                EditorState.SelectedFrame = targetFrame;
             }
         }
 

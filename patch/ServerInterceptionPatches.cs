@@ -15,75 +15,88 @@ namespace SuperchargedPatch
 {
     public static class ServerInterceptionPatches
     {
-        private static bool IsPaused()
-        {
-            return TimeManager.IsPaused(TimeManager.PauseLayer.Main);
-        }
 
         public static void LateUpdate()
         {
-            if (IsPaused())
+            if (Helpers.IsPaused())
             {
                 WarpHandler.HandleWarpRequestIfAny();
             }
             var data = Injector.Server.OpenCurrentFrameDataForWrite();
-            if (!IsPaused())
+            if (!Helpers.IsPaused())
             {
-                frameNumber++;
+                if (Injector.Server.CurrentInput.__isset.nextFrame)
+                {
+                    if (Injector.Server.CurrentInput.NextFrame <= frameNumber)
+                    {
+                        Console.WriteLine($"Restarting at frame {Injector.Server.CurrentInput.NextFrame}; was at frame {frameNumber}");
+                        ClearCacheAfterWarp(Injector.Server.CurrentInput.NextFrame);
+                    }
+                    else
+                    {
+                        frameNumber = Injector.Server.CurrentInput.NextFrame;
+                    }
+                }
             }
             data.FrameNumber = frameNumber;
             CollectPhysicsDataForFrame(data);
-            data.LastFramePaused = IsPaused();
+            data.LastFramePaused = Helpers.IsPaused();
             if (Injector.Server.CurrentInput.RequestPause)
             {
-                UnrealTimePatch.CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, true, timeManagerPauseArbitration);
+                Helpers.Pause();
             } else if (Injector.Server.CurrentInput.RequestResume)
             {
-                UnrealTimePatch.CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, false, timeManagerPauseArbitration);
+                Helpers.Resume();
             }
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrameIfNotCommitted();
         }
 
-        // Just an arbitrary object to tell TimeManager whose pause we're resuming.
-        private static object timeManagerPauseArbitration = new object();
-
         // TODO: Consider how the caching should behave when pausing/resuming/restoring. At least after
         // restoring these should be cleared.
-        private static Dictionary<int, Vector3> prevCachedLocation = new Dictionary<int, Vector3>();
-        private static Dictionary<int, UnityEngine.Quaternion> prevCachedRotation = new Dictionary<int, UnityEngine.Quaternion>();
-        private static Dictionary<int, Vector3> prevCachedVelocity = new Dictionary<int, Vector3>();
-        private static Dictionary<int, Vector3> prevCachedAngularVelocity = new Dictionary<int, Vector3>();
-        private static Dictionary<int, EntityPathReference> prevCachedEntityPathReference = new Dictionary<int, EntityPathReference>();
-        private static int frameNumber = -1;
+        private static readonly Dictionary<int, Vector3> prevCachedLocation = new Dictionary<int, Vector3>();
+        private static readonly Dictionary<int, UnityEngine.Quaternion> prevCachedRotation = new Dictionary<int, UnityEngine.Quaternion>();
+        private static readonly Dictionary<int, Vector3> prevCachedVelocity = new Dictionary<int, Vector3>();
+        private static readonly Dictionary<int, Vector3> prevCachedAngularVelocity = new Dictionary<int, Vector3>();
+        private static readonly Dictionary<int, EntityPathReference> prevCachedEntityPathReference = new Dictionary<int, EntityPathReference>();
+        private static int frameNumber = 0;
 
         public static bool EnableInputInjection = true;
 
+        public static void ClearCacheAfterWarp(int frame)
+        {
+            frameNumber = frame;
+            prevCachedLocation.Clear();
+            prevCachedRotation.Clear();
+            prevCachedVelocity.Clear();
+            prevCachedAngularVelocity.Clear();
+            prevCachedEntityPathReference.Clear();
+        }
+
         public static void CollectPhysicsDataForFrame(OutputData currentFrameData)
         {
+            // Debug.Log("DEBUG 1");
             if (frameNumber < 0)
             {
                 return;
             }
-            if (frameNumber == 0)
-            {
-                prevCachedLocation.Clear();
-                prevCachedRotation.Clear();
-                prevCachedVelocity.Clear();
-                prevCachedAngularVelocity.Clear();
-                prevCachedEntityPathReference.Clear();
-            }
+            // Debug.Log("DEBUG 3");
             if (currentFrameData.Items == null)
             {
                 currentFrameData.Items = new Dictionary<int, ItemData>();
             }
+            // Debug.Log("DEBUG 4");
             FastList<EntitySerialisationEntry> mEntitiesList = EntitySerialisationRegistry.m_EntitiesList;
+            // Debug.Log("DEBUG 5");
             for (int i = 0; i < mEntitiesList.Count; i++)
             {
+                // Debug.Log("DEBUG 6");
                 var t = mEntitiesList._items[i];
 
+                // Debug.Log("DEBUG 7");
                 Vector3 position = t.m_GameObject.transform.position;
+                // Debug.Log("DEBUG 8");
                 UnityEngine.Quaternion rotation = t.m_GameObject.transform.rotation;
                 Vector3 velocity = Vector3.zero;
                 Vector3 angularVelocity = Vector3.zero;
@@ -94,11 +107,13 @@ namespace SuperchargedPatch
                     angularVelocity = container.angularVelocity;
                     // TODO: isKinematic, etc?
                 }
+                // Debug.Log("DEBUG 9");
                 EntityPathReference entityPathReference = null;
                 if (t.m_GameObject.GetComponent<EntityPathReferenceMarker>() is EntityPathReferenceMarker marker)
                 {
                     entityPathReference = marker.EntityPath;
                 }
+                // Debug.Log("DEBUG 10");
                 int mUEntityID = (int)t.m_Header.m_uEntityID;
                 Dictionary<int, ItemData> items = currentFrameData.Items;
                 if (!prevCachedLocation.ContainsKey(mUEntityID) || prevCachedLocation[mUEntityID] != position)
@@ -110,6 +125,7 @@ namespace SuperchargedPatch
                     }
                     items[mUEntityID].Pos = position.ToThrift();
                 }
+                // Debug.Log("DEBUG 11");
                 if (!prevCachedRotation.ContainsKey(mUEntityID) || prevCachedRotation[mUEntityID] != rotation)
                 {
                     prevCachedRotation[mUEntityID] = rotation;
@@ -119,6 +135,7 @@ namespace SuperchargedPatch
                     }
                     items[mUEntityID].Rotation = rotation.ToThrift();
                 }
+                // Debug.Log("DEBUG 12");
                 if (!prevCachedVelocity.ContainsKey(mUEntityID) || prevCachedVelocity[mUEntityID] != velocity)
                 {
                     prevCachedVelocity[mUEntityID] = velocity;
@@ -128,6 +145,7 @@ namespace SuperchargedPatch
                     }
                     items[mUEntityID].Velocity = velocity.ToThrift();
                 }
+                // Debug.Log("DEBUG 13");
                 if (!prevCachedAngularVelocity.ContainsKey(mUEntityID) || prevCachedAngularVelocity[mUEntityID] != angularVelocity)
                 {
                     prevCachedAngularVelocity[mUEntityID] = angularVelocity;
@@ -137,6 +155,7 @@ namespace SuperchargedPatch
                     }
                     items[mUEntityID].AngularVelocity = angularVelocity.ToThrift();
                 }
+                // Debug.Log("DEBUG 14");
                 if (!prevCachedEntityPathReference.ContainsKey(mUEntityID) ||  prevCachedEntityPathReference[mUEntityID] != entityPathReference)
                 {
                     prevCachedEntityPathReference[mUEntityID] = entityPathReference;
@@ -144,9 +163,11 @@ namespace SuperchargedPatch
                     {
                         items[mUEntityID] = new ItemData();
                     }
-                    items[mUEntityID].EntityPathReference = entityPathReference.ToThrift();
+                    items[mUEntityID].EntityPathReference = entityPathReference?.ToThrift();
                 }
+                // Debug.Log("DEBUG 15");
             }
+            // Debug.Log("DEBUG 16");
         }
 
         private static Type t_ClientMessenger = typeof(ClientTime).Assembly.GetType("ClientMessenger");

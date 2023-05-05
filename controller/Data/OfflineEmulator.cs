@@ -13,7 +13,6 @@ namespace Hpmv {
 
         public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
         Dictionary<int, int> depsRemaining = new Dictionary<int, int>();
-        public HashSet<int> CompletedActions = new HashSet<int>();
 
         public OfflineEmulator(GameSetup level) {
             this.setup = level;
@@ -35,10 +34,11 @@ namespace Hpmv {
             foreach (var (i, action) in Graph.actions) {
                 depsRemaining[i] = Graph.deps[i].Count;
             }
+            var completedActions = new HashSet<int>();
             foreach (var (i, action) in Graph.actions) {
                 var timing = setup.sequences.NodeById[i];
                 if (timing.Predictions.EndFrame < frame) {
-                    CompletedActions.Add(i);
+                    completedActions.Add(i);
                     foreach (var fwd in Graph.fwds[i]) {
                         depsRemaining[fwd]--;
                     }
@@ -46,7 +46,7 @@ namespace Hpmv {
             }
 
             foreach (var (i, action) in Graph.actions) {
-                if (depsRemaining[i] == 0 && !CompletedActions.Contains(i)) {
+                if (depsRemaining[i] == 0 && !completedActions.Contains(i)) {
                     inProgress.Add((i, 0));
                     var predictions = setup.sequences.NodeById[i].Predictions;
                     if (predictions.StartFrame == null || predictions.StartFrame >= frame) {

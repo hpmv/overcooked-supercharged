@@ -7,20 +7,16 @@ using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
     public class RealGameSimulator {
+        public GameSetup setup;
         public GameActionGraph Graph = new GameActionGraph();
         int frame = 0;
         Dictionary<int, int> depsRemaining = new Dictionary<int, int>();
-        public GameEntityRecords Records { get; set; }
-        public GameActionSequences Timings { get; set; }
-        public InputHistory InputHistory { get; set; }
-        public GameMapGeometry Geometry { get; set; }
-        public Dictionary<int, GameMap> MapByChef { get; set; }
         public int Frame { get { return frame; } }
         public readonly MessageStats Stats = new MessageStats();
 
         public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
 
-        Dictionary<int, GameEntityRecord> entityIdToRecord = new Dictionary<int, GameEntityRecord>();
+        public Dictionary<int, GameEntityRecord> entityIdToRecord = new Dictionary<int, GameEntityRecord>();
 
         public void Reset() {
             FakeEntityRegistry.entityToTypes.Clear();
@@ -30,19 +26,64 @@ namespace Hpmv {
             entityIdToRecord.Clear();
             Stats.Clear();
 
-            Records.CleanRecordsFromFrame(0);
-            foreach (var entry in Records.FixedEntities) {
+            setup.entityRecords.CleanRecordsFromFrame(0);
+            foreach (var entry in setup.entityRecords.FixedEntities) {
                 entityIdToRecord[entry.path.ids[0]] = entry;
             }
 
             foreach (var (i, action) in Graph.actions) {
                 if (Graph.deps[i].Count == 0) {
                     inProgress.Add((i, 0));
-                    Timings.NodeById[i].Predictions.StartFrame = frame;
+                    setup.sequences.NodeById[i].Predictions.StartFrame = frame;
                 } else {
                     depsRemaining[i] = Graph.deps[i].Count;
                 }
             }
+        }
+
+        public void ChangeStateAfterWarping(WarpSpec warp) {
+            this.frame = warp.Frame;
+            // this may happen naturally? hmm..
+            // foreach (var entityToDelete in warp.EntitiesToDelete) {
+            //     entityIdToRecord.Remove(entityToDelete);
+            // }
+        }
+
+        public void ClearHistoryBeforeSimulation() {
+            Graph = setup.sequences.ToGraph();
+            depsRemaining.Clear();
+            inProgress.Clear();
+
+            setup.entityRecords.CleanRecordsFromFrame(frame + 1);
+            setup.sequences.CleanTimingsFromFrame(frame);
+            setup.inputHistory.CleanHistoryFromFrame(frame);
+            setup.LastSimulatedFrame = Math.Max(0, frame - 1);  // hand wavy...
+            setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, setup.LastSimulatedFrame);
+
+            foreach (var (i, action) in Graph.actions) {
+                depsRemaining[i] = Graph.deps[i].Count;
+            }
+            var completedActions = new HashSet<int>();
+            foreach (var (i, action) in Graph.actions) {
+                var timing = setup.sequences.NodeById[i];
+                if (timing.Predictions.EndFrame < frame) {
+                    completedActions.Add(i);
+                    foreach (var fwd in Graph.fwds[i]) {
+                        depsRemaining[fwd]--;
+                    }
+                }
+            }
+
+            foreach (var (i, action) in Graph.actions) {
+                if (depsRemaining[i] == 0 && !completedActions.Contains(i)) {
+                    inProgress.Add((i, 0));
+                    var predictions = setup.sequences.NodeById[i].Predictions;
+                    if (predictions.StartFrame == null || predictions.StartFrame >= frame) {
+                        predictions.StartFrame = frame;
+                    }
+                }
+            }
+            Console.WriteLine($"In progress: {string.Join(',', inProgress.Select(i => i.actionId))}");
         }
 
         public InputData Step() {
@@ -53,12 +94,12 @@ namespace Hpmv {
                 var action = Graph.actions[actionId];
 
                 var gameActionInput = new GameActionInput {
-                    ControllerState = Records.Chefs[action.Chef].Last(),
-                    Entities = Records,
+                    ControllerState = setup.entityRecords.Chefs[action.Chef].Last(),
+                    Entities = setup.entityRecords,
                     Frame = frame,
                     FrameWithinAction = actionFrame,
-                    Geometry = Geometry,
-                    MapByChef = MapByChef
+                    Geometry = setup.geometry,
+                    MapByChef = setup.mapByChef,
                 };
 
                 var output = action.Step(gameActionInput);
@@ -68,11 +109,11 @@ namespace Hpmv {
                 }
                 newControllers[action.Chef] = output.ControllerInput;
                 if (output.Done) {
-                    Timings.NodeById[actionId].Predictions.EndFrame = frame;
+                    setup.sequences.NodeById[actionId].Predictions.EndFrame = frame;
                     foreach (var fwd in Graph.fwds[actionId]) {
                         if (--depsRemaining[fwd] == 0) {
                             newInProgress.Add((fwd, 0));
-                            Timings.NodeById[fwd].Predictions.StartFrame = frame;
+                            setup.sequences.NodeById[fwd].Predictions.StartFrame = frame;
                         }
                     }
                 } else {
@@ -84,12 +125,12 @@ namespace Hpmv {
             var inputData = new InputData {
                 Input = new Dictionary<int, OneInputData>()
             };
-            foreach (var entry in Records.Chefs) {
+            foreach (var entry in setup.entityRecords.Chefs) {
 
                 var chefId = entry.Key.path.ids[0];
                 var desiredInput = newControllers.GetValueOrDefault(entry.Key);
                 var (newState, actualInput) = entry.Value.Last().ApplyInputAndAdvanceFrame(desiredInput);
-                InputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame);
+                setup.inputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame);
                 entry.Value.ChangeTo(newState, frame);
                 inputData.Input[chefId] = new OneInputData {
                     Pad = new PadDirection { X = actualInput.axes.X, Y = actualInput.axes.Y },
@@ -101,6 +142,7 @@ namespace Hpmv {
                 };
             }
             frame++;
+            inputData.NextFrame = frame;
             return inputData;
         }
 
@@ -173,6 +215,13 @@ namespace Hpmv {
                     specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
                     specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
                     entityIdToRecord[(int)message.m_delivered].existed.ChangeTo(false, frame);
+                    entityIdToRecord[(int)message.m_delivered].data.AppendWith(frame, d => {
+                        // The plate doesn't actually get destroyed at this point; rather its shaders and stuff get changed to play a fading animation
+                        // and then gets destroyed after. This is too difficult to recover, so if it gets here, we mark the object as unwarpable, so
+                        // that warping would require a new plate to be spawned.
+                        d.isUnwarpable = true;
+                        return d;
+                    });
                 } else if (payload is WashingStationMessage wsm) {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
@@ -202,7 +251,7 @@ namespace Hpmv {
                         // When ending interaction, unfortunately we don't get the object being originally interacted with,
                         // so we just have to iterate through all entities.
                         var interacter = entityIdToRecord[entityId];
-                        foreach (var entity in Records.GenAllEntities()) {
+                        foreach (var entity in setup.entityRecords.GenAllEntities()) {
                             if (entity.existed.Last() && entity.data.Last().washers != null && entity.data.Last().washers.Contains(interacter)) {
                                 entity.data.AppendWith(frame, d => {
                                     d.washers = new HashSet<GameEntityRecord>(d.washers);
@@ -246,10 +295,14 @@ namespace Hpmv {
                 entityIdToRecord[(int)sem.m_DesiredHeader.m_uEntityID] = child;
             };
 
-            Action<GameEntityRecord> destroyEntity = r => {
+            Action<GameEntityRecord, uint> destroyEntity = (r, entityId) => {
+                entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
-                foreach (var entity in Records.GenAllEntities()) {
+                Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");
+                // TODO: is this loop needed?
+                foreach (var entity in setup.entityRecords.GenAllEntities()) {
                     if (entity.existed.Last() && entity.data.Last().attachmentParent == r) {
+                        Console.WriteLine($"Destroying child entity {entity.className} {entity.displayName}");
                         entity.existed.ChangeTo(false, frame);
                     }
                 }
@@ -269,12 +322,12 @@ namespace Hpmv {
                 spawnHandler(spem.m_SpawnEntityData);
             } else if (item is DestroyEntityMessage dem) {
                 // Console.WriteLine($"[{frame}] " + toJson(item));
-                destroyEntity(entityIdToRecord[(int)dem.m_Header.m_uEntityID]);
+                destroyEntity(entityIdToRecord[(int)dem.m_Header.m_uEntityID], dem.m_Header.m_uEntityID);
             } else if (item is DestroyEntitiesMessage dems) {
                 // Console.WriteLine($"[{frame}] " + toJson(item));
-                destroyEntity(entityIdToRecord[(int)dems.m_rootId]);
+                destroyEntity(entityIdToRecord[(int)dems.m_rootId], dems.m_rootId);
                 foreach (var i in dems.m_ids) {
-                    destroyEntity(entityIdToRecord[(int)i]);
+                    destroyEntity(entityIdToRecord[(int)i], i);
                 }
             }
         }
@@ -312,6 +365,32 @@ namespace Hpmv {
                 entityIdToRecord[data.EntityId].displayName = data.Name;
             }
         }
+        public void ApplyGameUpdateWhenRestoringState(Serialisable item, Dictionary<int, EntityPath> entityIdToPath) {
+            Action<int> spawnHandler = (int entityId) => {
+                if (!entityIdToPath.ContainsKey(entityId)) {
+                    Console.WriteLine($"[WARP] Incorrect spawning capture! Spawned entity {entityId} does not have an entity path attached!");
+                    return;
+                }
+                var path = entityIdToPath[entityId];
+                Console.WriteLine($"[WARP] Matched spawned entity {entityId} to path {path}");
+                var record = setup.entityRecords.GetRecordFromPath(path.ids);
+                entityIdToRecord[entityId] = record;
+            };
+
+            if (item is DestroyEntityMessage dem) {
+                Console.WriteLine($"[WARP] Unmapped destroyed entity {dem.m_Header.m_uEntityID}");
+                entityIdToRecord.Remove((int)dem.m_Header.m_uEntityID);
+            } else if (item is DestroyEntitiesMessage dems) {
+                foreach (var i in dems.m_ids) {
+                    Console.WriteLine($"[WARP] Unmapped destroyed entity {i}");
+                    entityIdToRecord.Remove((int)i);
+                }
+            } else if (item is SpawnEntityMessage sem) {
+                spawnHandler((int)sem.m_DesiredHeader.m_uEntityID);
+            } else if (item is SpawnPhysicalAttachmentMessage spam) {
+                spawnHandler((int)spam.m_SpawnEntityData.m_DesiredHeader.m_uEntityID);
+            }
+        }
 
         public void ApplyPositionUpdate(int entityId, ItemData data) {
             Console.WriteLine($"{entityId} received {data}");
@@ -333,7 +412,7 @@ namespace Hpmv {
 
         public void AdvanceFrameAfterReceivingGameMessages() {
             // Advance chopping board item progress.
-            foreach (var entity in Records.FixedEntities) {
+            foreach (var entity in setup.entityRecords.FixedEntities) {
                 var chopInteracters = entity.data.Last().chopInteracters;
                 if (chopInteracters != null) {
                     var newData = entity.data.Last();

@@ -139,6 +139,7 @@ struct InputData {
     4: optional WarpSpec warp,
     5: optional bool requestPause,
     6: optional bool requestResume,
+    7: optional i32 nextFrame,
 }
 
 service Interceptor {
