@@ -6,7 +6,7 @@
     @if (Node.Action is WaitAction wait) {
         <div class="action-editor-property">
             Change to <input @bind="NumFramesEditing"/>
-            <button @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }">Change</button>
+            <button @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Change</button>
         </div>
     }
     <div class="action-editor-deps">
@@ -16,9 +16,9 @@
             <div class="action-editor-dep">
                 <div class="action-editor-dep-@(depNode.Action.Chef.className)"></div>
                 <div class="action-editor-dep-title">@(depNode.Action.Describe())</div>
-                <button class="action-editor-dep-delete" @onclick="() => HandleDelete(dep)">Delete</button>
+                <button class="action-editor-dep-delete" @onclick="() => HandleDelete(dep)" disabled="@(!CanEdit)">Delete</button>
             </div>
         }
-        <button class="action-editor-deps-add" @onclick="AddDependency">Add Dependency</button>
+        <button class="action-editor-deps-add" @onclick="AddDependency" disabled="@(!CanEdit)">Add Dependency</button>
     </div>
 </div>

@@ -16,6 +16,9 @@ namespace controller.Pages {
         [Parameter]
         public EventCallback<bool> DependenciesChanged { get; set; }
 
+        [Parameter]
+        public bool CanEdit { get; set; }
+
         private int NumFramesEditing { get; set; } = 5;
 
         private async Task AddDependency() {

@@ -12,6 +12,8 @@ namespace Hpmv {
         int frame = 0;
         Dictionary<int, int> depsRemaining = new Dictionary<int, int>();
         public int Frame { get { return frame; } }
+
+        public int LastMadeProgressFrame { get; private set; }
         public readonly MessageStats Stats = new MessageStats();
 
         public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
@@ -57,8 +59,7 @@ namespace Hpmv {
             setup.entityRecords.CleanRecordsFromFrame(frame + 1);
             setup.sequences.CleanTimingsFromFrame(frame);
             setup.inputHistory.CleanHistoryFromFrame(frame);
-            setup.LastSimulatedFrame = Math.Max(0, frame - 1);  // hand wavy...
-            setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, setup.LastSimulatedFrame);
+            setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, frame);
 
             foreach (var (i, action) in Graph.actions) {
                 depsRemaining[i] = Graph.deps[i].Count;
@@ -112,6 +113,7 @@ namespace Hpmv {
                     setup.sequences.NodeById[actionId].Predictions.EndFrame = frame;
                     foreach (var fwd in Graph.fwds[actionId]) {
                         if (--depsRemaining[fwd] == 0) {
+                            LastMadeProgressFrame = frame;
                             newInProgress.Add((fwd, 0));
                             setup.sequences.NodeById[fwd].Predictions.StartFrame = frame;
                         }
@@ -263,6 +265,8 @@ namespace Hpmv {
                     }
                 } else if (payload is ThrowableItemMessage tim) {
                     specificData.isFlying = tim.m_inFlight;
+                } else if (payload is CannonModMessage cmm) {
+                    specificData.rawGameEntityData = cmm.ToBytes();
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -316,7 +320,7 @@ namespace Hpmv {
             } else if (item is EntityEventMessage eem) {
                 entityHandler((int)eem.m_Header.m_uEntityID, eem.m_Payload);
             } else if (item is SpawnEntityMessage sem) {
-                Console.WriteLine(sem);
+                // Console.WriteLine(sem);
                 spawnHandler(sem);
             } else if (item is SpawnPhysicalAttachmentMessage spem) {
                 spawnHandler(spem.m_SpawnEntityData);
@@ -334,7 +338,7 @@ namespace Hpmv {
 
         public void ApplyChefUpdate(int chefId, CharPositionData chef) {
             if (chefId == 0) {
-                Console.WriteLine(chef);
+                // Console.WriteLine(chef);
                 return;
             }
             var chefRecord = entityIdToRecord[chefId];

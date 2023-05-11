@@ -58,7 +58,7 @@ namespace Hpmv {
             // SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.HordeEnemy, default(HordeEnemyMessage));
             // SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.HordeLockable, new HordeLockableMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.PickupItemSwitcher, () => new PickupItemSwitcherMessage());
-            SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.Cannon, () => new CannonMessage());
+            SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.Cannon, () => new CannonModMessage());  // MODDED
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.PilotRotation, () => new PilotRotationMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.TriggerColourCycle, () => new TriggerColourCycleMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.MultiTriggerDisable, () => new TriggerDisableMessage());

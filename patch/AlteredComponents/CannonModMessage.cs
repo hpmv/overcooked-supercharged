@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace SuperchargedPatch.AlteredComponents
 {
-    internal class CannonModMessage : Serialisable
+    public class CannonModMessage : Serialisable
 	{
 		// Token: 0x06001430 RID: 5168 RVA: 0x0006E42C File Offset: 0x0006C82C
 		public void Serialise(BitStreamWriter writer)

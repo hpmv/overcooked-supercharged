@@ -14,6 +14,10 @@ namespace BitStream {
             this._targetBuffer = bufferToWriteTo;
         }
 
+        public BitStreamWriter()
+        {
+        }
+
         // Token: 0x06002C5F RID: 11359 RVA: 0x0001C934 File Offset: 0x0001AB34
         public void Reset(FastList<byte> bufferToWriteTo) {
             this._targetBuffer = bufferToWriteTo;

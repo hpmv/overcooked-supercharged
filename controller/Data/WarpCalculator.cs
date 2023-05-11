@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace Hpmv {
-    public class WarpCalculator {
+    public static class WarpCalculator {
         public static WarpSpec CalculateWarp(
             Dictionary<int, GameEntityRecord> currentEntityIdToRecord,
             GameEntityRecords records,
@@ -69,10 +69,15 @@ namespace Hpmv {
                     }
                 }
                 if (record.prefab.IsChef) {
-                        spec.Position = record.position[desiredFrame].ToThrift();
-                        spec.Rotation = record.rotation[desiredFrame].ToThrift();
-                        spec.Velocity = record.velocity[desiredFrame].ToThrift();
-                        spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                    spec.Position = record.position[desiredFrame].ToThrift();
+                    spec.Rotation = record.rotation[desiredFrame].ToThrift();
+                    spec.Velocity = record.velocity[desiredFrame].ToThrift();
+                    spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                }
+                if (record.prefab.IsCannon) {
+                    spec.Cannon = new CannonWarpData {
+                        ModData = record.data[desiredFrame].rawGameEntityData,
+                    };
                 }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {

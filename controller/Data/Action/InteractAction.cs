@@ -66,7 +66,7 @@ namespace Hpmv {
 
             var wouldBeInput = CalculateInputRegardlessOfHighlighting(subjectEntity, input);
             var (predictedPosition, predictedVelocity, predictedForward) =
-                OfflineEmulator.PredictChefPositionAfterInput(
+                OfflineCalculations.PredictChefPositionAfterInput(
                     chefState,
                     Chef.position[input.Frame],
                     Chef.velocity[input.Frame],
@@ -74,7 +74,7 @@ namespace Hpmv {
                     input.ControllerState.ApplyInputAndAdvanceFrame(wouldBeInput).Item2);
             // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
             var predictedHighlightingOnNextFrame =
-                OfflineEmulator.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Geometry, input.Entities.GenAllEntities());
+                OfflineCalculations.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Geometry, input.Entities.GenAllEntities());
             // var predictedHighlightingOnNextNextFrame =
             //     OfflineEmulator.CalculateHighlightedObjects(predictedPosition2, predictedForward, input.Map, input.Entities.GenAllEntities());
             // var prepareToInteractHighlightings = OfflineEmulator.CalculateHighlightedObjects(Chef.position.Last().XZ(), chefState.forward, input.Map, input.Entities.GenAllEntities());

@@ -47,7 +47,6 @@ namespace Hpmv {
             setup.sequences.CleanTimingsFromFrame(0);
             setup.inputHistory.CleanHistoryFromFrame(0);
             setup.LastEmpiricalFrame = 0;
-            setup.LastSimulatedFrame = 0;
             state = RealGameState.AwaitingStart;
         }
 
@@ -114,6 +113,14 @@ namespace Hpmv {
                 simulator.AdvanceFrameAfterReceivingGameMessages();
             }
 
+            InputData inputs;
+            if (state == RealGameState.Running) {
+                setup.LastEmpiricalFrame = simulator.Frame;
+                inputs = simulator.Step();
+            } else {
+                inputs = new InputData();
+            }
+
             if (state == RealGameState.Running || state == RealGameState.AwaitingStart) {
                 var temp = OnFrameUpdate;
                 if (temp != null) {
@@ -121,13 +128,6 @@ namespace Hpmv {
                 }
             }
 
-            InputData inputs;
-            if (state == RealGameState.Running) {
-                setup.LastEmpiricalFrame = setup.LastSimulatedFrame = simulator.Frame;
-                inputs = simulator.Step();
-            } else {
-                inputs = new InputData();
-            }
             if (restarted) inputs.ResetOrderSeed = 12347;
             
             if (currentRequest != null) {

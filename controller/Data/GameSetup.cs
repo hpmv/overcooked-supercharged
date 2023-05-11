@@ -8,7 +8,6 @@ namespace Hpmv {
         public GameActionSequences sequences = new GameActionSequences();
         public InputHistory inputHistory = new InputHistory();
         public int LastEmpiricalFrame { get; set; }
-        public int LastSimulatedFrame { get; set; }
 
         public void RegisterChef(GameEntityRecord chef) {
             sequences.AddChef(chef);
@@ -25,7 +24,6 @@ namespace Hpmv {
             result.Sequences = sequences.ToProto();
             result.InputHistory = inputHistory.ToProto();
             result.LastEmpiricalFrame = LastEmpiricalFrame;
-            result.LastSimulatedFrame = LastSimulatedFrame;
             return result;
         }
     }
@@ -56,7 +54,6 @@ namespace Hpmv {
                 sequences = proto.Sequences.FromProto(loadContext),
                 inputHistory = proto.InputHistory.FromProto(loadContext),
                 LastEmpiricalFrame = proto.LastEmpiricalFrame,
-                LastSimulatedFrame = proto.LastSimulatedFrame
             };
         }
     }

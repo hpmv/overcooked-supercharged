@@ -931,6 +931,12 @@ app {
     box-sizing: border-box;
 }
 
+.left-side-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
 .right-side-content {
     display: flex;
     flex-direction: column;
@@ -946,4 +952,9 @@ app {
 
 .right-bottom-content {
     max-height: 500px;
+}
+
+.map-polygon {
+    stroke: rgba(255, 217, 146, 0.267);
+    fill: rgba(255, 217, 146, 0.1);
 }

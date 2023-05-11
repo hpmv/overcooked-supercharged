@@ -15,6 +15,7 @@ namespace Hpmv {
         public List<TimeSpan> plateRespawnTimers;
         public bool isFlying;
         public bool isUnwarpable;
+        public byte[] rawGameEntityData;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -23,6 +24,7 @@ namespace Hpmv {
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
                 IsFlying = isFlying,
                 IsUnwarpable = isUnwarpable,
+                RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -61,6 +63,7 @@ namespace Hpmv {
                 plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
                 isFlying = data.IsFlying,
                 isUnwarpable = data.IsUnwarpable,
+                rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
             };
         }
     }

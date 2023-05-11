@@ -4,6 +4,18 @@
     var frame = EditorState.SelectedFrame;
 }
 <div class="entity-record-renderer" @ref="canvasRef">
+
+    <svg class="map-render" width="700" height="700">
+        @foreach (var item in Level.mapByChef)
+        {
+            var chef = item.Key;
+            var map = item.Value;
+            @foreach (var polygon in map.polygons) {
+                <polygon points="@PolygonString(polygon)" class="map-polygon"></polygon>
+            }
+        }
+    </svg>
+
     @foreach (var record in Level.entityRecords.GenAllEntities()) {
         if (record.existed[frame] && !record.displayName.Contains("Rigidbody") && !record.displayName.Contains("Content") && !record.prefab.Ignore && record.prefab.Name != "Dirty Plate") {
             var pos = record.position[frame].XZ();

@@ -187,6 +187,7 @@ namespace Hpmv {
             var chef_green_prefab = new PrefabRecord("Chef Green", "chef-green") { IsChef = true };
             var chef_yellow_prefab = new PrefabRecord("Chef Yellow", "chef-yellow") { IsChef = true };
             var chef_blue_prefab = new PrefabRecord("Chef Blue", "chef-blue") { IsChef = true };
+            var cannon_prefab = new PrefabRecord("Cannon", "cannon") { IsCannon = true };
             var ignore_prefab = new PrefabRecord("Ignored", "ignored") { Ignore = true };
 
             var MIXER_STATION1 = entityRecords.RegisterKnownObject(68, mixer_station_prefab);
@@ -251,6 +252,8 @@ namespace Hpmv {
             var COUNTER90 = entityRecords.RegisterKnownObject(35, counter_prefab);
             var COUNTER92 = entityRecords.RegisterKnownObject(55, counter_prefab);
             var COUNTER97 = entityRecords.RegisterKnownObject(31, counter_prefab);
+
+            var CANNON = entityRecords.RegisterKnownObject(84, cannon_prefab);
 
             entityRecords.AttachInitialObjectTo(PLATE_1, COUNTER01);
             entityRecords.AttachInitialObjectTo(PLATE_2, COUNTER03);

@@ -45,6 +45,10 @@ namespace controller.Pages {
             return Level.geometry.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
         }
 
+        private string PolygonString(Vector2[] points) {
+            return string.Join(" ", points.Select(Render).Select(p => $"{p.X},{p.Y}"));
+        }
+
         protected override async Task OnAfterRenderAsync(bool firstRender) {
             if (firstRender) {
                 thisRef = DotNetObjectReference.Create(this);
@@ -85,7 +89,7 @@ namespace controller.Pages {
                 nextFrame += TimeSpan.FromSeconds(1) / Config.FRAMERATE;
                 DateTime now = DateTime.Now;
                 await Task.Delay(now > nextFrame ? TimeSpan.Zero : (nextFrame - now));
-                if (EditorState.SelectedFrame < Level.LastSimulatedFrame) {
+                if (EditorState.SelectedFrame < Level.LastEmpiricalFrame) {
                     await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame + 1);
                 } else {
                     break;

@@ -98,6 +98,10 @@ struct IngredientContainerWarpData {
     1: binary contents,  // encoded AssembledDefinitionNode[]
 }
 
+struct CannonWarpData {
+    1: binary modData,  // encoded CannonModMessage
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -121,6 +125,7 @@ struct EntityWarpSpec {
     8: optional PlateStationWarpData plateStation,
     9: optional ChefWarpData chef,
     10: optional IngredientContainerWarpData ingredientContainer,
+    12: optional CannonWarpData cannon,
     // TODO: more entity types
 }
 

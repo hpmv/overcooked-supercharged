@@ -20,7 +20,7 @@ namespace Hpmv {
                 return templates;
             }
             templates.Add(new ThrowTowardsActionTemplate(entity));
-            if (entity.prefab.CanUse) {
+            if (entity.prefab.CanUse || entity.prefab.IsCannon) {
                 templates.Add(new UseItemActionTemplate(entity));
             }
             if (entity.prefab.IsCrate) {

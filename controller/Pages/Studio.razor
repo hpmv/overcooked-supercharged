@@ -2,77 +2,79 @@
 @inject IJSRuntime JSRuntime
 
 <div class="main-container">
-    <div class="entities">
-        
-        <EntityRecordVisualizer
-           Level="level"
-           EditorState="EditorState"
-           OnActionAdded="SimulateInResponseToEditorChange"
-           OnFrameChanged="OnFrameChanged">
-        </EntityRecordVisualizer>
-        
-    </div>
-
-    <div class="right-side-content">
-
-        <button @onclick="() => ShowRecordDebug = !ShowRecordDebug">
-            @(ShowRecordDebug? "Hide " : "Show ") Record Debug</button>
-        @if (ShowRecordDebug) {
-            @foreach (var record in level.entityRecords.FixedEntities)
-            {
-                <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"></EntityRecordRenderer>
-            }
-        } 
-
-        <div class="control-row">
-            <button @onclick="(e) => StartRealSimulation()">Simulate Real</button>
-            <button @onclick="(e) => StopRealSimulation()">Stop Real</button>
-            <button @onclick="(e) => DoOfflineSimulation()">Simulate Offline</button>
+    <div class="left-side-content">
+        <div class="entities">
+            
+            <EntityRecordVisualizer
+            Level="level"
+            EditorState="EditorState"
+            OnActionAdded="SimulateInResponseToEditorChange"
+            OnFrameChanged="OnFrameChanged">
+            </EntityRecordVisualizer>
+            
         </div>
-        <div class="control-row">
-            <button @onclick="(e) => PauseRealSimulation()" disabled="@(!IsSimulationRunning())">Pause Real</button>
-            <button @onclick="(e) => ResumeRealSimulation()" disabled="@(!IsSimulationPaused())">Resume Real</button>
-            <span>Real Game State: @(GetRealGameState())</span>
-        </div>
-        
-        <div class="control-row">
-            <MatSelect Label="Select File to Load" @bind-Value="SelectedLevelToLoad">
-                @foreach (var file in availableSaveFiles) {
-                    <MatOptionString Value="@(file)">@(file)</MatOptionString>
+
+        <div class="controls">
+
+            <button @onclick="() => ShowRecordDebug = !ShowRecordDebug">
+                @(ShowRecordDebug? "Hide " : "Show ") Record Debug</button>
+            @if (ShowRecordDebug) {
+                @foreach (var record in level.entityRecords.FixedEntities)
+                {
+                    <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"></EntityRecordRenderer>
                 }
-            </MatSelect>
-            <button @onclick="LoadLevel">Load File</button>
-            <button @onclick="RefreshAvailableSaveFiles">Refresh File List</button>
-        </div>
-        
-        <div class="control-row">
-            <MatInputTextComponent @bind-Value="SaveFileName" Label="Save File Name"></MatInputTextComponent>
-            <button @onclick="SaveLevel">Save To File</button>
-        </div>
-        <div class="control-row">
-            <MatSelect label="Select Level to Initialize" @bind-Value="SelectedLevelToInitialize">
-                @foreach (var (init, type) in levelInitializers) {
-                    <MatOptionString Value="@(init)">@(init)</MatOptionString>
-                }
-            </MatSelect>
-            <button @onclick="InitializeNewLevel">Initialize New Level</button>
-            <button @onclick="PatchPrefab">Patch Prefabs</button>
-        </div>
-        <div class="control-row">
-            <button @onclick="Analyze">Analyze Gameplay</button>
-        </div>
+            } 
 
-        @if (realGameConnector != null) {
-            foreach (var entry in realGameConnector.simulator.Stats.messageTypeStats) {
-                <div>@(entry.Key): @(entry.Value)</div>
+            <div class="control-row">
+                <button @onclick="(e) => StartRealSimulation()" disabled="@(realGameConnector != null)">Connect Game</button>
+                <button @onclick="(e) => StopRealSimulation()" disabled="@(realGameConnector == null)">Disconnect Game</button>
+            </div>
+            <div class="control-row">
+                <button @onclick="async (e) => await PauseRealSimulation()" disabled="@(!IsSimulationRunning())">Pause Real</button>
+                <button @onclick="async (e) => await ResumeRealSimulation()" disabled="@(!IsSimulationPaused())">Resume Real</button>
+                <span>Real Game State: @(GetRealGameState())</span>
+            </div>
+            
+            <div class="control-row">
+                <MatSelect Label="Select File to Load" @bind-Value="SelectedLevelToLoad">
+                    @foreach (var file in availableSaveFiles) {
+                        <MatOptionString Value="@(file)">@(file)</MatOptionString>
+                    }
+                </MatSelect>
+                <button @onclick="LoadLevel">Load File</button>
+                <button @onclick="RefreshAvailableSaveFiles">Refresh File List</button>
+            </div>
+            
+            <div class="control-row">
+                <MatInputTextComponent @bind-Value="SaveFileName" Label="Save File Name"></MatInputTextComponent>
+                <button @onclick="SaveLevel">Save To File</button>
+            </div>
+            <div class="control-row">
+                <MatSelect label="Select Level to Initialize" @bind-Value="SelectedLevelToInitialize">
+                    @foreach (var (init, type) in levelInitializers) {
+                        <MatOptionString Value="@(init)">@(init)</MatOptionString>
+                    }
+                </MatSelect>
+                <button @onclick="InitializeNewLevel">Initialize New Level</button>
+                <button @onclick="PatchPrefab">Patch Prefabs</button>
+            </div>
+            <div class="control-row">
+                <button @onclick="Analyze">Analyze Gameplay</button>
+            </div>
+
+            @if (realGameConnector != null) {
+                foreach (var entry in realGameConnector.simulator.Stats.messageTypeStats) {
+                    <div>@(entry.Key): @(entry.Value)</div>
+                }
             }
-        }
+        </div>
+    
     </div>
 
     <div class="right-side-content">
         <div class="right-top-content">
             <div class="schedule-container">
-                <div class="schedule-background" @ref="scheduleBackgroundRef" style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastSimulatedFrame) + 500)px">
+                <div class="schedule-background" @ref="scheduleBackgroundRef" style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastEmpiricalFrame) + 500)px">
                     @foreach (var rift in TimelineLayout.Rifts) {
                         <div class="timeline-rift"
                             style="margin-top: @(rift.margin)px; height: @(rift.height)px">
@@ -113,7 +115,7 @@
                                     }
                                     <div class="one-action @(stateClass) @(selectedClass)"
                                         style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
-                                        @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
+                                        @onclick="async () => await HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
                                         <div class="one-action-text">[@(node.Id)] @(node.Action.Describe())</div>
                                         @foreach (var dep in node.Deps) {
                                             var depNode = sequences.NodeById[dep];
@@ -142,7 +144,8 @@
                     Selector="nodeSelector"
                     Sequences="sequences"
                     Node="sequences.Actions[sequences.ChefIndexByChef[chef]][EditorState.SelectedActionIndex]"
-                    DependenciesChanged="OnDependenciesChanged">
+                    DependenciesChanged="OnDependenciesChanged"
+                    CanEdit="CanEdit">
                     </ActionEditor>
                     <button @onclick="HandleDeleteAction">Delete Action</button>
                 }

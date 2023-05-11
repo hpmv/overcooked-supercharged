@@ -172,6 +172,7 @@ message SpecificEntityData {
     repeated double plate_respawn_timers = 7;
     bool is_flying = 9;
     bool is_unwarpable = 10;
+    bytes raw_game_entity_data = 11;
 }
 
 message ChefState {
@@ -260,6 +261,7 @@ message PrefabRecord {
     bool is_attach_station = 20;
     bool can_be_attached = 22;
     bool is_chef = 23;
+    bool is_cannon = 24;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

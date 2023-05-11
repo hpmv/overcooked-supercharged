@@ -130,34 +130,35 @@ namespace SuperchargedPatch.AlteredComponents
 		}
 
 		// Token: 0x06001437 RID: 5175 RVA: 0x0006E668 File Offset: 0x0006CA68
-		private void OnLoad(GameObject _obj)
+		private void OnLoad()
 		{
+			var chef = m_message.m_loadedObject;
 			// From original ServerCannonSessionInteractable.StartSession
 			m_placementInteractable.SetInteractionSurpressed(true);
 			m_interactable.SetInteractionSuppressed(true);
-			var playerControls = _obj.GetComponent<PlayerControls>();
+			var playerControls = chef.GetComponent<PlayerControls>();
 			playerControls.enabled = false;
 			var playerLayer = LayerMask.NameToLayer("Players");
-			_obj.GetComponent<CollisionRecorder>().SetFilter(_collision =>
+			chef.GetComponent<CollisionRecorder>().SetFilter(_collision =>
 			{
 				return _collision != null && _collision.gameObject != null && _collision.rigidbody != null && _collision.gameObject.layer == playerLayer && _collision.rigidbody.velocity.sqrMagnitude > 0.001f;
 			});
-			_obj.GetComponent<Rigidbody>().isKinematic = true;
+			chef.GetComponent<Rigidbody>().isKinematic = true;
 			playerControls.ControlScheme.ClearEvents();
 
 			// From original ClientCannonPlayerHandler.Load
 			playerControls.AllowSwitchingWhenDisabled = true;
 			playerControls.ThrowIndicator.Hide();
-			var dynamicLandscapeParenting = _obj.GetComponent<DynamicLandscapeParenting>();
+			var dynamicLandscapeParenting = chef.GetComponent<DynamicLandscapeParenting>();
 			if (dynamicLandscapeParenting != null)
             {
 				dynamicLandscapeParenting.enabled = false;
             }
 
 			// From original ClientCannon.Load
-			_obj.transform.position = m_cannon.m_attachPoint.position;
-			_obj.transform.rotation = m_cannon.m_attachPoint.rotation;
-			_obj.transform.SetParent(m_cannon.m_attachPoint, true);
+			chef.transform.position = m_cannon.m_attachPoint.position;
+			chef.transform.rotation = m_cannon.m_attachPoint.rotation;
+			chef.transform.SetParent(m_cannon.m_attachPoint, true);
 		}
 
 		private void OnReady()
@@ -203,6 +204,27 @@ namespace SuperchargedPatch.AlteredComponents
 			m_cannon.m_button.SendTrigger(m_cannon.m_disableTrigger);
 		}
 
+		public void Warp(CannonModMessage msg)
+        {
+			if (m_message.m_state != CannonModMessage.CannonState.NotLoaded)
+            {
+				OnExit();
+            }
+			m_message = msg;
+			if (m_message.m_state != CannonModMessage.CannonState.NotLoaded)
+            {
+				OnLoad();
+				if (m_message.m_state != CannonModMessage.CannonState.Loading)
+                {
+					OnReady();
+					if (m_message.m_state != CannonModMessage.CannonState.Loaded)
+                    {
+						OnLaunch();
+                    }
+                }
+            }
+        }
+
 		// Token: 0x0600143B RID: 5179 RVA: 0x0006E7AC File Offset: 0x0006CBAC
 		public void OnTrigger(string _trigger)
 		{
@@ -220,12 +242,11 @@ namespace SuperchargedPatch.AlteredComponents
 		}
 
 		private void OnInteractTrigger(GameObject _interacter, Vector2 _directionXZ)
-        {
-			OnLoad(_interacter);
-
+		{
 			m_message.m_loadedObject = _interacter;
 			m_message.m_state = CannonModMessage.CannonState.Loading;
 			m_clientCosmetics.Load(_interacter);
+			OnLoad();
 
 			// From original ClientCannon.Load
 			m_message.m_exitPosition = _interacter.transform.position;

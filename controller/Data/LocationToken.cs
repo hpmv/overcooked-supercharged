@@ -94,7 +94,7 @@ namespace Hpmv {
             if (ent == null) {
                 return new Vector2[0];
             }
-            if (ent.IsGridOccupant()) {
+            if (ent.IsGridOccupant() && !ent.prefab.IsCannon) {
                 return input.MapByChef[chef.path.ids[0]].GetInteractionPointsForBlockEntity(ent.position[input.Frame].XZ()).ToArray();
             } else {
                 // return input.MapByChef[chef.path.ids[0]].GetInteractionPointsForFreeEntity(ent.position[input.Frame].XZ(), chef.position[input.Frame].XZ(), 1.36).ToArray();
