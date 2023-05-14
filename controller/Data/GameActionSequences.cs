@@ -63,13 +63,13 @@ namespace Hpmv {
             return id;
         }
 
-        public void CleanTimingsFromFrame(int frame) {
+        public void CleanTimingsAfterFrame(int frame) {
             foreach (var actions in Actions) {
                 foreach (var action in actions) {
-                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame >= frame) {
+                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame > frame) {
                         action.Predictions.StartFrame = null;
                     }
-                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame >= frame) {
+                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame > frame) {
                         action.Predictions.EndFrame = null;
                     }
                 }

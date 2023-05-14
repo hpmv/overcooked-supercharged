@@ -24,11 +24,14 @@ namespace Hpmv {
                     return new GameActionOutput { Done = true };
                 }
                 var path = input.MapByChef[Chef.path.ids[0]].FindPath(chefPos, desired.ToList());
+                Vector2 direction;
                 if (path.Count < 2) {
                     Console.WriteLine($"Failed to find path from {chefPos} to {string.Join(',', desired)}");
-                    return new GameActionOutput();
+                    var approxTarget = desired.Aggregate((a, b) => a + b) / desired.Length;
+                    direction = Vector2.Normalize(approxTarget - chefPos);
+                } else {
+                    direction = (path[1] - path[0]) / (path[1] - path[0]).Length();
                 }
-                var direction = (path[1] - path[0]) / (path[1] - path[0]).Length();
                 var dash = false;
                 var chefState = Chef.chefState[input.Frame];
                 if (DASH_TIME - chefState.dashTimer < DASH_COOLDOWN) {

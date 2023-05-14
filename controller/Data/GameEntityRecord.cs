@@ -64,21 +64,27 @@ namespace Hpmv {
             progress = record.Progress.FromProto();
         }
 
-        public void CleanRecordsFromFrameRecursively(int frame) {
-            spawnOwner.RemoveAllFrom(frame);
-            position.RemoveAllFrom(frame);
-            rotation.RemoveAllFrom(frame);
-            velocity.RemoveAllFrom(frame);
-            angularVelocity.RemoveAllFrom(frame);
-            existed.RemoveAllFrom(frame);
-            data.RemoveAllFrom(frame);
-            nextSpawnId.RemoveAllFrom(frame);
-            progress.RemoveAllFrom(frame);
+        public void CleanRecordsAfterFrameRecursively(int frame) {
+            // This is hacky... spawn owner does not actually belong to the game, it belongs to the controller.
+            // We need to clear the spawn owner at this frame too because during action processing we set the
+            // spawn owner for this frame, not the next frame (and that's because another action may begin
+            // processing the spawned object at the same frame).
+            //
+            // It's OK if frame == 0; spawning is not possible at frame 0.
+            spawnOwner.RemoveAllAfter(Math.Max(0, frame - 1));
+            position.RemoveAllAfter(frame);
+            rotation.RemoveAllAfter(frame);
+            velocity.RemoveAllAfter(frame);
+            angularVelocity.RemoveAllAfter(frame);
+            existed.RemoveAllAfter(frame);
+            data.RemoveAllAfter(frame);
+            nextSpawnId.RemoveAllAfter(frame);
+            progress.RemoveAllAfter(frame);
             if (chefState != null) {
-                chefState.RemoveAllFrom(frame);
+                chefState.RemoveAllAfter(frame);
             }
             foreach (var spawned in spawned) {
-                spawned.CleanRecordsFromFrameRecursively(frame);
+                spawned.CleanRecordsAfterFrameRecursively(frame);
             }
         }
 

@@ -66,8 +66,8 @@ namespace controller.Pages {
         public async void HandleScheduleBackgroundClick(double x, double y) {
             var frame = Math.Min(level.LastEmpiricalFrame, TimelineLayout.FrameFromOffset(y));
             if (realGameConnector != null) {
-                if (realGameConnector.state == RealGameState.Paused) {
-                    await realGameConnector.RequestRestoreState(frame);
+                if (realGameConnector.State == RealGameState.Paused) {
+                    await realGameConnector.RequestWarp(frame);
                 } else {
                     // Don't honor frame navigation if we're in the middle of a simulation.
                     return;
@@ -85,8 +85,8 @@ namespace controller.Pages {
             } else {
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
                 if (realGameConnector != null) {
-                    if (realGameConnector.state == RealGameState.Paused) {
-                        await realGameConnector.RequestRestoreState(targetFrame);
+                    if (realGameConnector.State == RealGameState.Paused) {
+                        await realGameConnector.RequestWarp(targetFrame);
                     } else {
                         // Don't honor frame navigation if we're in the middle of a simulation.
                         return;
@@ -109,7 +109,7 @@ namespace controller.Pages {
 
         public bool CanEdit {
             get {
-                return realGameConnector != null && realGameConnector.state == RealGameState.Paused;
+                return realGameConnector != null && realGameConnector.State == RealGameState.Paused;
             }
         }
 
@@ -153,17 +153,21 @@ namespace controller.Pages {
                 InvokeAsync(async () => {
                     EditorState.SelectedFrame = level.LastEmpiricalFrame;
                     TimelineLayout.DoLayout();
-                    if (realGameConnector.simulator.inProgress.Count == 0 || EditorState.SelectedFrame >= realGameConnector.simulator.LastMadeProgressFrame + 600) {
-                        if (EditorState.SelectedActionIndex != -1) {
-                            await realGameConnector.RequestPause();
+                    if (realGameConnector.State == RealGameState.Running) {
+                        if (realGameConnector.simulator.inProgress.Count == 0 || EditorState.SelectedFrame >= realGameConnector.simulator.LastMadeProgressFrame + 600) {
                             if (EditorState.SelectedActionIndex != -1) {
-                                var actions = level.sequences.Actions[level.sequences.ChefIndexByChef[EditorState.SelectedChef]];
-                                if (EditorState.SelectedActionIndex >= actions.Count) {
-                                    EditorState.SelectedFrame = (actions.Last().Predictions.EndFrame ?? -1) + 1;
-                                } else {
-                                    EditorState.SelectedFrame = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? 0;
+                                await realGameConnector.RequestPause();
+                                if (EditorState.SelectedActionIndex != -1) {
+                                    var actions = level.sequences.Actions[level.sequences.ChefIndexByChef[EditorState.SelectedChef]];
+                                    if (actions.Count == 0) {
+                                        EditorState.SelectedFrame = 0;
+                                    } else if (EditorState.SelectedActionIndex >= actions.Count) {
+                                        EditorState.SelectedFrame = (actions.Last().Predictions.EndFrame ?? 0);
+                                    } else {
+                                        EditorState.SelectedFrame = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? 0;
+                                    }
+                                    await realGameConnector.RequestWarp(EditorState.SelectedFrame);
                                 }
-                                await realGameConnector.RequestRestoreState(EditorState.SelectedFrame);
                             }
                         }
                     }
@@ -193,23 +197,23 @@ namespace controller.Pages {
         }
 
         private bool IsSimulationRunning() {
-            return realGameConnector != null && realGameConnector.state == RealGameState.Running;
+            return realGameConnector != null && realGameConnector.State == RealGameState.Running;
         }
 
         private bool IsSimulationPaused() {
-            return realGameConnector != null && realGameConnector.state == RealGameState.Paused;
+            return realGameConnector != null && realGameConnector.State == RealGameState.Paused;
         }
 
         private string GetRealGameState() {
             if (realGameConnector == null) {
                 return "Not connected";
             }
-            return realGameConnector.state.ToString();
+            return realGameConnector.State.ToString();
         }
 
         private async Task SimulateInResponseToEditorChange(int frame) {
             if (realGameConnector != null) {
-                await realGameConnector.RequestRestoreState(frame);
+                await realGameConnector.RequestWarp(frame);
                 realGameConnector.simulator.ClearHistoryBeforeSimulation();
                 await realGameConnector.RequestResume();
             }

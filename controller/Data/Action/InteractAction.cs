@@ -53,7 +53,7 @@ namespace Hpmv {
                     axes = new Vector2(dir.X, -dir.Y)
                 };
             }
-            return output.ControllerInput;
+            return output.ControllerInput.Value;
         }
 
         public override GameActionOutput Step(GameActionInput input) {
@@ -64,14 +64,14 @@ namespace Hpmv {
             // Console.WriteLine($"[{input.Frame}] interactable entity for {Subject} is {subjectEntity.displayName}");
             var chefState = Chef.chefState[input.Frame];
 
-            var wouldBeInput = CalculateInputRegardlessOfHighlighting(subjectEntity, input);
+            var gotoInput = CalculateInputRegardlessOfHighlighting(subjectEntity, input);
             var (predictedPosition, predictedVelocity, predictedForward) =
                 OfflineCalculations.PredictChefPositionAfterInput(
                     chefState,
                     Chef.position[input.Frame],
                     Chef.velocity[input.Frame],
                     input.MapByChef[Chef.path.ids[0]],
-                    input.ControllerState.ApplyInputAndAdvanceFrame(wouldBeInput).Item2);
+                    input.ControllerState.axes);
             // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
             var predictedHighlightingOnNextFrame =
                 OfflineCalculations.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Geometry, input.Entities.GenAllEntities());
@@ -118,7 +118,7 @@ namespace Hpmv {
                 if (((chefState.highlightedForPickup == subjectEntity) || (predictedHighlightingOnNextFrame.highlightedForPickup == subjectEntity && Prepare)) && directionCheck) {
                     if (Prepare) {
                         return new GameActionOutput {
-                            ControllerInput = wouldBeInput,
+                            ControllerInput = gotoInput,
                             Done = true
                         };
                     }
@@ -129,7 +129,7 @@ namespace Hpmv {
                             ControllerInput = new DesiredControllerInput {
                                 primaryDown = true,
                                 primaryDownIsForPickup = IsPickup,
-                                axes = wouldBeInput.axes,
+                                axes = gotoInput.axes,
                             }
                         };
                     }
@@ -155,7 +155,7 @@ namespace Hpmv {
                         return new GameActionOutput {
                             ControllerInput = new DesiredControllerInput {
                                 secondaryDown = true,
-                                axes = wouldBeInput.axes,
+                                axes = gotoInput.axes,
                             }
                         };
                     }
@@ -163,7 +163,7 @@ namespace Hpmv {
                 }
 
             }
-            return new GameActionOutput { ControllerInput = wouldBeInput };
+            return new GameActionOutput { ControllerInput = gotoInput };
         }
 
         public Save.InteractAction ToProto() {

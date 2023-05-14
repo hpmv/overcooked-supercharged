@@ -16,7 +16,7 @@ namespace Hpmv {
         public int LastMadeProgressFrame { get; private set; }
         public readonly MessageStats Stats = new MessageStats();
 
-        public List<(int actionId, int actionFrame)> inProgress = new List<(int actionId, int actionFrame)>();
+        public List<int> inProgress = new List<int>();
 
         public Dictionary<int, GameEntityRecord> entityIdToRecord = new Dictionary<int, GameEntityRecord>();
 
@@ -28,14 +28,14 @@ namespace Hpmv {
             entityIdToRecord.Clear();
             Stats.Clear();
 
-            setup.entityRecords.CleanRecordsFromFrame(0);
+            setup.entityRecords.CleanRecordsAfterFrame(0);
             foreach (var entry in setup.entityRecords.FixedEntities) {
                 entityIdToRecord[entry.path.ids[0]] = entry;
             }
 
             foreach (var (i, action) in Graph.actions) {
                 if (Graph.deps[i].Count == 0) {
-                    inProgress.Add((i, 0));
+                    inProgress.Add(i);
                     setup.sequences.NodeById[i].Predictions.StartFrame = frame;
                 } else {
                     depsRemaining[i] = Graph.deps[i].Count;
@@ -43,22 +43,14 @@ namespace Hpmv {
             }
         }
 
-        public void ChangeStateAfterWarping(WarpSpec warp) {
-            this.frame = warp.Frame;
-            // this may happen naturally? hmm..
-            // foreach (var entityToDelete in warp.EntitiesToDelete) {
-            //     entityIdToRecord.Remove(entityToDelete);
-            // }
-        }
-
         public void ClearHistoryBeforeSimulation() {
             Graph = setup.sequences.ToGraph();
             depsRemaining.Clear();
             inProgress.Clear();
 
-            setup.entityRecords.CleanRecordsFromFrame(frame + 1);
-            setup.sequences.CleanTimingsFromFrame(frame);
-            setup.inputHistory.CleanHistoryFromFrame(frame);
+            setup.entityRecords.CleanRecordsAfterFrame(frame);
+            setup.sequences.CleanTimingsAfterFrame(frame);
+            setup.inputHistory.CleanHistoryAfterFrame(frame);
             setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, frame);
 
             foreach (var (i, action) in Graph.actions) {
@@ -67,6 +59,8 @@ namespace Hpmv {
             var completedActions = new HashSet<int>();
             foreach (var (i, action) in Graph.actions) {
                 var timing = setup.sequences.NodeById[i];
+                // Must be <, not <=, because when we are on frame N, the action processing for
+                // frame N is not yet done.
                 if (timing.Predictions.EndFrame < frame) {
                     completedActions.Add(i);
                     foreach (var fwd in Graph.fwds[i]) {
@@ -77,64 +71,102 @@ namespace Hpmv {
 
             foreach (var (i, action) in Graph.actions) {
                 if (depsRemaining[i] == 0 && !completedActions.Contains(i)) {
-                    inProgress.Add((i, 0));
+                    inProgress.Add(i);
                     var predictions = setup.sequences.NodeById[i].Predictions;
                     if (predictions.StartFrame == null || predictions.StartFrame >= frame) {
+                        // This is just for display. When we run these actions we'll give
+                        // them actual frames.
                         predictions.StartFrame = frame;
                     }
                 }
             }
-            Console.WriteLine($"In progress: {string.Join(',', inProgress.Select(i => i.actionId))}");
+            Console.WriteLine($"In progress: {string.Join(',', inProgress)}");
         }
 
-        public InputData Step() {
+        /// Advance frame in response to in-game logical frame advance.
+        public void AdvanceFrame() {
+            Console.WriteLine($"Advancing frame {frame} -> {frame + 1}");
+            frame++;
+        }
+
+        /// Set the frame in response to warping.
+        public void SetFrameAfterWarping(int frame) {
+            Console.WriteLine($"Setting frame after warp {this.frame} -> {frame}");
+            this.frame = frame;
+        }
+
+        public Dictionary<int, OneInputData> ComputeInputForNextFrame() {
+            Console.WriteLine($"Computing input for frame {frame}");
             var names = new List<string>();
-            var newInProgress = new List<(int actionId, int actionFrame)>();
+            var inProgress = new Queue<int>(this.inProgress);
+            var newInProgress = new List<int>();
             var newControllers = new Dictionary<GameEntityRecord, DesiredControllerInput>();
-            foreach (var (actionId, actionFrame) in inProgress) {
+            while (inProgress.Count > 0) {
+                var actionId = inProgress.Dequeue();
                 var action = Graph.actions[actionId];
 
                 var gameActionInput = new GameActionInput {
-                    ControllerState = setup.entityRecords.Chefs[action.Chef].Last(),
+                    ControllerState = setup.entityRecords.Chefs[action.Chef][frame],
                     Entities = setup.entityRecords,
-                    Frame = frame,
-                    FrameWithinAction = actionFrame,
+                    Frame = frame,  // not frame + 1; this is the basis of the computation
+                    FrameWithinAction = frame - setup.sequences.NodeById[actionId].Predictions.StartFrame.Value,
                     Geometry = setup.geometry,
                     MapByChef = setup.mapByChef,
                 };
+                Console.WriteLine($"Action {actionId} frame {frame} chef {action.Chef.displayName} controller state is {gameActionInput.ControllerState.ToProto().ToString()}");
 
                 var output = action.Step(gameActionInput);
                 if (output.SpawningClaim != null) {
                     // Console.WriteLine($"Action {actionId} claimed {output.SpawningClaim}");
+
+                    // We can't actually delay this to the next frame even though this kinda goes against the
+                    // idea of not mutating the current frame in the current frame. But that's probably OK.
                     output.SpawningClaim.spawnOwner.ChangeTo(action.ActionId, frame);
                 }
-                newControllers[action.Chef] = output.ControllerInput;
+                
+                if (output.ControllerInput != null) {
+                    newControllers[action.Chef] = output.ControllerInput.Value;
+                }
                 if (output.Done) {
+                    // If the output is Done that means we're achieved the goal of this action already
+                    // in the current frame, so mark it as done by the current frame.
                     setup.sequences.NodeById[actionId].Predictions.EndFrame = frame;
                     foreach (var fwd in Graph.fwds[actionId]) {
                         if (--depsRemaining[fwd] == 0) {
                             LastMadeProgressFrame = frame;
-                            newInProgress.Add((fwd, 0));
-                            setup.sequences.NodeById[fwd].Predictions.StartFrame = frame;
+                            // If the newly enabled action is for a chef who does not already have an
+                            // input computed for the next frame, then we can immediately start this
+                            // action. Otherwise, we mark the action as started (since we otherwise
+                            // can't reproduce the same marking when warping) but do not actually
+                            // run the action until next frame.
+                            //
+                            // Note that we must be checking the inputs on the chef - not whether
+                            // output.ControllerInput == null - because the enabled action may be on a
+                            // different chef.
+                            var nextAction = setup.sequences.NodeById[fwd];
+                            nextAction.Predictions.StartFrame = frame;
+                            if (newControllers.ContainsKey(nextAction.Action.Chef)) {
+                                newInProgress.Add(fwd);
+                            } else {
+                                inProgress.Enqueue(fwd);
+                            }
                         }
                     }
                 } else {
-                    newInProgress.Add((actionId, actionFrame + 1));
+                    newInProgress.Add(actionId);
                 }
             }
-            inProgress = newInProgress;
+            this.inProgress = newInProgress;
 
-            var inputData = new InputData {
-                Input = new Dictionary<int, OneInputData>()
-            };
+            var input = new Dictionary<int, OneInputData>();
             foreach (var entry in setup.entityRecords.Chefs) {
-
                 var chefId = entry.Key.path.ids[0];
                 var desiredInput = newControllers.GetValueOrDefault(entry.Key);
-                var (newState, actualInput) = entry.Value.Last().ApplyInputAndAdvanceFrame(desiredInput);
-                setup.inputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame);
-                entry.Value.ChangeTo(newState, frame);
-                inputData.Input[chefId] = new OneInputData {
+                var (newState, actualInput) = entry.Value[frame].ApplyInputAndAdvanceFrame(desiredInput);
+                setup.inputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame + 1);
+                Console.WriteLine($"Changing chef {entry.Key.displayName} frame {frame + 1} to {newState.ToProto().ToString()}; actual input is {actualInput.ToProto().ToString()}, desiredInput primary up is {desiredInput.primaryUp}");
+                entry.Value.ChangeTo(newState, frame + 1);
+                input[chefId] = new OneInputData {
                     Pad = new PadDirection { X = actualInput.axes.X, Y = actualInput.axes.Y },
                     PickDown = actualInput.primary.justPressed,
                     ChopDown = actualInput.secondary.isDown,
@@ -143,9 +175,7 @@ namespace Hpmv {
                     DashDown = actualInput.dash.justPressed
                 };
             }
-            frame++;
-            inputData.NextFrame = frame;
-            return inputData;
+            return input;
         }
 
 
@@ -369,7 +399,7 @@ namespace Hpmv {
                 entityIdToRecord[data.EntityId].displayName = data.Name;
             }
         }
-        public void ApplyGameUpdateWhenRestoringState(Serialisable item, Dictionary<int, EntityPath> entityIdToPath) {
+        public void ApplyGameUpdateWhenWarping(Serialisable item, Dictionary<int, EntityPath> entityIdToPath) {
             Action<int> spawnHandler = (int entityId) => {
                 if (!entityIdToPath.ContainsKey(entityId)) {
                     Console.WriteLine($"[WARP] Incorrect spawning capture! Spawned entity {entityId} does not have an entity path attached!");
@@ -397,7 +427,7 @@ namespace Hpmv {
         }
 
         public void ApplyPositionUpdate(int entityId, ItemData data) {
-            Console.WriteLine($"{entityId} received {data}");
+            // Console.WriteLine($"{entityId} received {data}");
             if (entityIdToRecord.ContainsKey(entityId)) {
                 if (data.__isset.pos) {
                     entityIdToRecord[entityId].position.ChangeTo(data.Pos.FromThrift(), frame);
@@ -414,8 +444,9 @@ namespace Hpmv {
             }
         }
 
-        public void AdvanceFrameAfterReceivingGameMessages() {
-            // Advance chopping board item progress.
+        // Advance certain progress bars such as chopping board, washing, plate respawn. These are not
+        // explicitly given via server messages; we have to time them ourselves.
+        public void AdvanceAutomaticProgress() {
             foreach (var entity in setup.entityRecords.FixedEntities) {
                 var chopInteracters = entity.data.Last().chopInteracters;
                 if (chopInteracters != null) {

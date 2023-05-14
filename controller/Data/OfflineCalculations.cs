@@ -6,7 +6,7 @@ using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
     public class OfflineCalculations {
-        public static (Vector3 pos, Vector3 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector3 position, Vector3 velocity, GameMap map, ActualControllerInput input) {
+        public static (Vector3 pos, Vector3 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector3 position, Vector3 velocity, GameMap map, Vector2 input) {
             var newPosition = CalculateNewChefPositionAfterMovement(position, velocity, map);
             var (newVelocity, forward) = CalculateNewChefVelocityAndForward(chefState, input);
             return (newPosition, newVelocity, forward);
@@ -108,8 +108,8 @@ namespace Hpmv {
             return chefState;
         }
 
-        public static (Vector3 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, ActualControllerInput input) {
-            var axes = new Vector2(input.axes.X, -input.axes.Y);
+        public static (Vector3 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, Vector2 input) {
+            var axes = new Vector2(input.X, -input.Y);
             if (axes.Length() < 0.01) {
                 axes = default;
             } else {

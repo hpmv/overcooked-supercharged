@@ -102,7 +102,7 @@
                                     var indexCopy = index;
                                     var node = actions[index];
                                     string stateClass;
-                                    if (realGameConnector != null && realGameConnector.simulator.inProgress.Any((x) => x.actionId == node.Id)) {
+                                    if (realGameConnector != null && realGameConnector.simulator.inProgress.Contains(node.Id)) {
                                         stateClass = "active-action";
                                     } else {
                                         stateClass = "unstarted-action";

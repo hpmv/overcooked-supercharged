@@ -53,8 +53,6 @@ namespace SuperchargedPatch
             Injector.Server.CommitFrameIfNotCommitted();
         }
 
-        // TODO: Consider how the caching should behave when pausing/resuming/restoring. At least after
-        // restoring these should be cleared.
         private static readonly Dictionary<int, Vector3> prevCachedLocation = new Dictionary<int, Vector3>();
         private static readonly Dictionary<int, UnityEngine.Quaternion> prevCachedRotation = new Dictionary<int, UnityEngine.Quaternion>();
         private static readonly Dictionary<int, Vector3> prevCachedVelocity = new Dictionary<int, Vector3>();

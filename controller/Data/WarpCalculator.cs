@@ -87,9 +87,8 @@ namespace Hpmv {
             }
             warpSpec.Frame = desiredFrame;
             warpSpec.RemainingTime = 0; // TODO: calculate this
-            Console.WriteLine("WarpSpec dump:");
-            // thrift dump
-            Console.WriteLine(JsonConvert.SerializeObject(warpSpec));
+            // Console.WriteLine("WarpSpec dump:");
+            // Console.WriteLine(JsonConvert.SerializeObject(warpSpec));
             return warpSpec;
         }
     }

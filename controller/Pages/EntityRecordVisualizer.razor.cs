@@ -75,7 +75,7 @@ namespace controller.Pages {
             if (EditorState.SelectedChef != null) {
                 var frame = EditorState.ResimulationFrame();
                 EditorState.ApplyActionTemplate(template);
-                await OnActionAdded.InvokeAsync(frame + 1);
+                await OnActionAdded.InvokeAsync(frame);
             }
             EntityMenuOpen = false;
         }

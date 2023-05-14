@@ -97,12 +97,12 @@ namespace Hpmv {
             return record;
         }
 
-        public void CleanRecordsFromFrame(int frame) {
+        public void CleanRecordsAfterFrame(int frame) {
             foreach (var entity in FixedEntities) {
-                entity.CleanRecordsFromFrameRecursively(frame);
+                entity.CleanRecordsAfterFrameRecursively(frame);
             }
             foreach (var state in Chefs) {
-                state.Value.RemoveAllFrom(frame);
+                state.Value.RemoveAllAfter(frame);
             }
         }
 

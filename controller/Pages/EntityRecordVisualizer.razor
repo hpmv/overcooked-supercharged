@@ -145,7 +145,7 @@
 @if (ShowControls) {
     @foreach (var (chef, _) in Level.entityRecords.Chefs) {
         var state = chef.chefState[frame];
-        var input = Level.inputHistory.FrameInputs[chef][frame];
+        var input = Level.inputHistory.FrameInputs[chef][frame + 1];
         var controller = Level.entityRecords.Chefs[chef][frame];
         <div>@(chef.displayName): Pickup: @(state.highlightedForPickup?.path), Use: @(state.highlightedForUse?.path), Dash timer: @(state.dashTimer)</div>
         <div class="chef-input-vis">
