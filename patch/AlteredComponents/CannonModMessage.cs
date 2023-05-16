@@ -9,13 +9,11 @@ namespace SuperchargedPatch.AlteredComponents
 		// Token: 0x06001430 RID: 5168 RVA: 0x0006E42C File Offset: 0x0006C82C
 		public void Serialise(BitStreamWriter writer)
 		{
-			writer.Write((uint)this.m_state, m_stateBits);
-			writer.Write(this.m_angle);
-			bool flag = this.m_loadedObject != null;
-			writer.Write(flag);
-			if (flag)
+			writer.Write((uint)m_state, m_stateBits);
+			writer.Write(m_angle);
+			if (m_state != CannonState.NotLoaded)
 			{
-				EntitySerialisationEntry entry = EntitySerialisationRegistry.GetEntry(this.m_loadedObject);
+				EntitySerialisationEntry entry = EntitySerialisationRegistry.GetEntry(m_loadedObject);
 				entry.m_Header.Serialise(writer);
 			}
 			writer.Write(ref m_startingPosition);
@@ -35,16 +33,16 @@ namespace SuperchargedPatch.AlteredComponents
 		// Token: 0x06001431 RID: 5169 RVA: 0x0006E484 File Offset: 0x0006C884
 		public bool Deserialise(BitStreamReader reader)
 		{
-			this.m_state = (CannonState)reader.ReadUInt32(m_stateBits);
-			this.m_angle = reader.ReadFloat32();
-			if (reader.ReadBit())
+			m_state = (CannonState)reader.ReadUInt32(m_stateBits);
+			m_angle = reader.ReadFloat32();
+			if (m_state != CannonState.NotLoaded)
 			{
-				this.m_entityHeader.Deserialise(reader);
-				this.m_loadedObject = EntitySerialisationRegistry.GetEntry(this.m_entityHeader.m_uEntityID).m_GameObject;
+				m_entityHeader.Deserialise(reader);
+				m_loadedObject = EntitySerialisationRegistry.GetEntry(m_entityHeader.m_uEntityID).m_GameObject;
 			}
 			else
 			{
-				this.m_loadedObject = null;
+				m_loadedObject = null;
 			}
 			reader.ReadVector3(ref m_startingPosition);
 			reader.ReadVector3(ref m_targetPosition);

@@ -26,7 +26,7 @@ namespace Hpmv {
                 var path = input.MapByChef[Chef.path.ids[0]].FindPath(chefPos, desired.ToList());
                 Vector2 direction;
                 if (path.Count < 2) {
-                    Console.WriteLine($"Failed to find path from {chefPos} to {string.Join(',', desired)}");
+                    // Console.WriteLine($"Failed to find path from {chefPos} to {string.Join(',', desired)}");
                     var approxTarget = desired.Aggregate((a, b) => a + b) / desired.Length;
                     direction = Vector2.Normalize(approxTarget - chefPos);
                 } else {

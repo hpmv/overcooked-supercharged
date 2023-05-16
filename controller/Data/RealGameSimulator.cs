@@ -85,18 +85,18 @@ namespace Hpmv {
 
         /// Advance frame in response to in-game logical frame advance.
         public void AdvanceFrame() {
-            Console.WriteLine($"Advancing frame {frame} -> {frame + 1}");
+            // Console.WriteLine($"Advancing frame {frame} -> {frame + 1}");
             frame++;
         }
 
         /// Set the frame in response to warping.
         public void SetFrameAfterWarping(int frame) {
-            Console.WriteLine($"Setting frame after warp {this.frame} -> {frame}");
+            // Console.WriteLine($"Setting frame after warp {this.frame} -> {frame}");
             this.frame = frame;
         }
 
         public Dictionary<int, OneInputData> ComputeInputForNextFrame() {
-            Console.WriteLine($"Computing input for frame {frame}");
+            // Console.WriteLine($"Computing input for frame {frame}");
             var names = new List<string>();
             var inProgress = new Queue<int>(this.inProgress);
             var newInProgress = new List<int>();
@@ -113,7 +113,7 @@ namespace Hpmv {
                     Geometry = setup.geometry,
                     MapByChef = setup.mapByChef,
                 };
-                Console.WriteLine($"Action {actionId} frame {frame} chef {action.Chef.displayName} controller state is {gameActionInput.ControllerState.ToProto().ToString()}");
+                // Console.WriteLine($"Action {actionId} frame {frame} chef {action.Chef.displayName} controller state is {gameActionInput.ControllerState.ToProto().ToString()}");
 
                 var output = action.Step(gameActionInput);
                 if (output.SpawningClaim != null) {
@@ -164,7 +164,7 @@ namespace Hpmv {
                 var desiredInput = newControllers.GetValueOrDefault(entry.Key);
                 var (newState, actualInput) = entry.Value[frame].ApplyInputAndAdvanceFrame(desiredInput);
                 setup.inputHistory.FrameInputs[entry.Key].ChangeTo(actualInput, frame + 1);
-                Console.WriteLine($"Changing chef {entry.Key.displayName} frame {frame + 1} to {newState.ToProto().ToString()}; actual input is {actualInput.ToProto().ToString()}, desiredInput primary up is {desiredInput.primaryUp}");
+                // Console.WriteLine($"Changing chef {entry.Key.displayName} frame {frame + 1} to {newState.ToProto().ToString()}; actual input is {actualInput.ToProto().ToString()}, desiredInput primary up is {desiredInput.primaryUp}");
                 entry.Value.ChangeTo(newState, frame + 1);
                 input[chefId] = new OneInputData {
                     Pad = new PadDirection { X = actualInput.axes.X, Y = actualInput.axes.Y },
@@ -296,7 +296,9 @@ namespace Hpmv {
                 } else if (payload is ThrowableItemMessage tim) {
                     specificData.isFlying = tim.m_inFlight;
                 } else if (payload is CannonModMessage cmm) {
+                    Console.WriteLine($"Changing cannon message so that flying time is {cmm.ToJson()} at frame {frame}");
                     specificData.rawGameEntityData = cmm.ToBytes();
+                    Console.WriteLine($"After re-deserializing the message is {new CannonModMessage().FromBytes(specificData.rawGameEntityData).ToJson()}");
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -324,7 +326,7 @@ namespace Hpmv {
                     spawner.spawned.Add(child);
                 }
                 child.existed.ChangeTo(true, frame);
-                child.position.ChangeTo(sem.m_Position.ToNumericsVector(), frame);
+                child.position.ChangeTo(sem.m_Position.ToNumerics(), frame);
                 spawner.nextSpawnId.ChangeTo(spawner.nextSpawnId.Last() + 1, frame);
                 entityIdToRecord[(int)sem.m_DesiredHeader.m_uEntityID] = child;
             };

@@ -79,7 +79,7 @@ namespace Hpmv {
             var bitstream = new BitStream.BitStreamReader(bytes);
             Serialisable result;
             if (!SerialisationRegistry<MessageType>.Deserialise(out result, messageType, bitstream)) {
-                //Console.WriteLine($"Failed to deserialize {messageType}");
+                // Console.WriteLine($"Failed to deserialize {messageType}: hexdump: {BitConverter.ToString(bytes)}");
                 return null;
             }
             //Console.WriteLine($"Succeeded to deserialize {messageType}");

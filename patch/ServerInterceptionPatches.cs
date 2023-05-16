@@ -500,9 +500,9 @@ namespace SuperchargedPatch
                             from s in (List<GameObject>)m_m_spawnables.GetValue(component)
                             select s.name).ToList<string>();
                     }
-                    for (int i = 0; i < entry.m_ClientSynchronisedComponents.Count; i++)
+                    for (int i = 0; i < entry.m_ServerSynchronisedComponents.Count; i++)
                     {
-                        entityRegistryDatum.SyncEntityTypes.Add((int)entry.m_ClientSynchronisedComponents._items[i].GetEntityType());
+                        entityRegistryDatum.SyncEntityTypes.Add((int)entry.m_ServerSynchronisedComponents._items[i].GetEntityType());
                     }
                     currentFrameData.EntityRegistry.Add(entityRegistryDatum);
                 }

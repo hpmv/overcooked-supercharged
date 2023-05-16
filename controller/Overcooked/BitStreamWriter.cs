@@ -37,53 +37,33 @@ namespace BitStream {
 
         // Token: 0x06002C61 RID: 11361 RVA: 0x000C9028 File Offset: 0x000C7228
         public void Write(ref Quaternion value) {
-            float num = value.x;
-            uint bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.y;
-            bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.z;
-            bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.w;
-            bits = (uint) num;
-            this.Write(bits, 32);
+            Write(value.x);
+            Write(value.y);
+            Write(value.z);
+            Write(value.w);
         }
 
         // Token: 0x06002C62 RID: 11362 RVA: 0x000C9090 File Offset: 0x000C7290
         public void Write(ref Vector3 value) {
-            float num = value.x;
-            uint bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.y;
-            bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.z;
-            bits = (uint) num;
-            this.Write(bits, 32);
+            Write(value.x);
+            Write(value.y);
+            Write(value.z);
         }
 
         // Token: 0x06002C63 RID: 11363 RVA: 0x000C90E4 File Offset: 0x000C72E4
         public void Write(ref Vector2 value) {
-            float num = value.x;
-            uint bits = (uint) num;
-            this.Write(bits, 32);
-            num = value.y;
-            bits = (uint) num;
-            this.Write(bits, 32);
+            Write(value.x);
+            Write(value.y);
         }
 
         // Token: 0x06002C64 RID: 11364 RVA: 0x000C9120 File Offset: 0x000C7320
         public void Write(double value) {
-            ulong bits = (ulong) value;
-            this.Write(bits, 64);
+            Write(unchecked((ulong)BitConverter.DoubleToInt64Bits(value)), 64);
         }
 
         // Token: 0x06002C65 RID: 11365 RVA: 0x000C9140 File Offset: 0x000C7340
         public void Write(float value) {
-            uint bits = (uint) value;
-            this.Write(bits, 32);
+            Write(unchecked((uint)BitConverter.SingleToInt32Bits(value)), 32);
         }
 
         // Token: 0x06002C66 RID: 11366 RVA: 0x0001C944 File Offset: 0x0001AB44

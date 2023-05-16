@@ -1,4 +1,5 @@
 ﻿using BitStream;
+using Hpmv;
 using Team17.Online.Multiplayer.Messaging;
 using UnityEngine;
 
@@ -7,11 +8,9 @@ public class CannonModMessage : Serialisable
 	// Token: 0x06001430 RID: 5168 RVA: 0x0006E42C File Offset: 0x0006C82C
 	public void Serialise(BitStreamWriter writer)
 	{
-		writer.Write((uint)this.m_state, m_stateBits);
-		writer.Write(this.m_angle);
-		bool flag = this.m_state != CannonState.NotLoaded;
-		writer.Write(flag);
-		if (flag)
+		writer.Write((uint)m_state, m_stateBits);
+		writer.Write(m_angle);
+		if (m_state != CannonState.NotLoaded)
 		{
 			m_entityHeader.Serialise(writer);
 		}
@@ -32,11 +31,13 @@ public class CannonModMessage : Serialisable
 	// Token: 0x06001431 RID: 5169 RVA: 0x0006E484 File Offset: 0x0006C884
 	public bool Deserialise(BitStreamReader reader)
 	{
-		this.m_state = (CannonState)reader.ReadUInt32(m_stateBits);
-		this.m_angle = reader.ReadFloat32();
-		if (reader.ReadBit())
+		m_state = (CannonState)reader.ReadUInt32(m_stateBits);
+		m_angle = reader.ReadFloat32();
+		if (m_state != CannonState.NotLoaded)
 		{
-			this.m_entityHeader.Deserialise(reader);
+			m_entityHeader.Deserialise(reader);
+		} else {
+			m_entityHeader.m_uEntityID = 0;  // default value for determinism
 		}
 		reader.ReadVector3(ref m_startingPosition);
 		reader.ReadVector3(ref m_targetPosition);
@@ -50,6 +51,26 @@ public class CannonModMessage : Serialisable
 		reader.ReadQuaternion(ref m_exitRotation);
 		m_loadingTime = reader.ReadFloat32();
 		return true;
+	}
+
+	public string ToJson() {
+		return (
+			"{\n" +
+			"  \"m_state\": " + m_state + ",\n" +
+			"  \"m_angle\": " + m_angle + ",\n" +
+			"  \"m_entityHeader\": " + m_entityHeader.m_uEntityID + ",\n" +
+			"  \"m_startingPosition\": " + m_startingPosition.ToNumerics().ToString() + ",\n" +
+			"  \"m_targetPosition\": " + m_targetPosition.ToNumerics().ToString() + ",\n" +
+			"  \"m_startingRotation\": " + m_startingRotation.ToNumerics().ToString() + ",\n" +
+			"  \"m_targetRotation\": " + m_targetRotation.ToNumerics().ToString() + ",\n" +
+			"  \"m_startingHeight\": " + m_startingHeight + ",\n" +
+			"  \"m_maxHeight\": " + m_maxHeight + ",\n" +
+			"  \"m_flyingTime\": " + m_flyingTime + ",\n" +
+			"  \"m_exitPosition\": " + m_exitPosition.ToNumerics().ToString() + ",\n" +
+			"  \"m_exitRotation\": " + m_exitRotation.ToNumerics().ToString() + ",\n" +
+			"  \"m_loadingTime\": " + m_loadingTime + "\n" +
+			"}"
+		);
 	}
 
 	public void ClearDataOnExit()
@@ -90,14 +111,14 @@ public class CannonModMessage : Serialisable
 
 	public Vector3 m_startingPosition;
 	public Vector3 m_targetPosition;
-	public Quaternion m_startingRotation;
-	public Quaternion m_targetRotation;
+	public UnityEngine.Quaternion m_startingRotation;
+	public UnityEngine.Quaternion m_targetRotation;
 	public float m_startingHeight;
 	public float m_maxHeight;
 	public float m_flyingTime;
 
 	public Vector3 m_exitPosition;
-	public Quaternion m_exitRotation;
+	public UnityEngine.Quaternion m_exitRotation;
 
 	public float m_loadingTime;
 }

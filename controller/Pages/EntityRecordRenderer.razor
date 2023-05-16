@@ -25,6 +25,9 @@
                     @("Chef: " + ToJson(Record.chefState[Frame].ToProto()))
                 }
                 Spawn Owner: @(Record.spawnOwner[Frame])
+                @if (Record.prefab.IsCannon && Record.data[Frame].rawGameEntityData != null) {
+                    @("Cannon: " + new CannonModMessage().FromBytes(Record.data[Frame].rawGameEntityData).ToJson())
+                }
             </pre>
         </div>
     }

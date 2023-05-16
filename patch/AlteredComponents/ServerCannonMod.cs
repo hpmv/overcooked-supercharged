@@ -104,8 +104,12 @@ namespace SuperchargedPatch.AlteredComponents
 						newPosition.y = Mathf.Lerp(m_message.m_targetPosition.y, m_message.m_maxHeight, m_cannon.m_animation.m_HeightCurve.Evaluate(position));
 					}
 					chef.transform.position = newPosition;
-					m_message.m_flyingTime += TimeManager.GetDeltaTime(chef);
-					SendServerEvent(m_message);
+					var deltaTime = TimeManager.GetDeltaTime(chef);
+					m_message.m_flyingTime += deltaTime;
+					if (deltaTime > 0)
+					{
+						SendServerEvent(m_message);
+					}
 				}
 				else
 				{

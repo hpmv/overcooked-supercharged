@@ -34,8 +34,23 @@ namespace Team17.Online.Multiplayer.Messaging {
                         return false;
                 }
                 m_EntityType = entry[(int) this.m_ComponentId];
-                return SerialisationRegistry<EntityType>.Deserialise(out this.m_Payload, entry[(int) this.m_ComponentId], reader);
+                if (!SerialisationRegistry<EntityType>.Deserialise(out this.m_Payload, entry[(int) this.m_ComponentId], reader)) {
+                    Console.WriteLine(
+                        $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId} entity type {m_EntityType}: deserialization failed");
+                    List<byte> remainder = new List<byte>();
+                    while (reader.RemainingBits >= 8) {
+                        remainder.Add(reader.ReadByte(8));
+                    }
+                    if (reader.RemainingBits > 0) {
+                        remainder.Add(reader.ReadByte((int) reader.RemainingBits));
+                    }
+                    Console.WriteLine($"Remainder: {BitConverter.ToString(remainder.ToArray())}");
+                    return false;
+                }
+                return true;
             }
+            Console.WriteLine(
+                $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}: no entity type found");
             return false;
         }
 

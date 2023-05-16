@@ -207,32 +207,23 @@ namespace BitStream {
 
         // Token: 0x06002C58 RID: 11352 RVA: 0x000C8E90 File Offset: 0x000C7090
         public void ReadVector3(ref Vector3 value) {
-            uint num = this.ReadUInt32(32);
-            value.x = (float)num;
-            num = this.ReadUInt32(32);
-            value.y = (float)num;
-            num = this.ReadUInt32(32);
-            value.z = (float)num;
+            value.x = ReadFloat32();
+            value.y = ReadFloat32();
+            value.z = ReadFloat32();
         }
 
         // Token: 0x06002C59 RID: 11353 RVA: 0x000C8EDC File Offset: 0x000C70DC
         public void ReadVector2(ref Vector2 value) {
-            uint num = this.ReadUInt32(32);
-            value.x = (float)num;
-            num = this.ReadUInt32(32);
-            value.y = (float)num;
+            value.x = ReadFloat32();
+            value.y = ReadFloat32();
         }
 
         // Token: 0x06002C5A RID: 11354 RVA: 0x000C8F14 File Offset: 0x000C7114
         public void ReadQuaternion(ref Quaternion value) {
-            uint num = this.ReadUInt32(32);
-            value.x = (float)num;
-            num = this.ReadUInt32(32);
-            value.y = (float)num;
-            num = this.ReadUInt32(32);
-            value.z = (float)num;
-            num = this.ReadUInt32(32);
-            value.w = (float)num;
+            value.x = ReadFloat32();
+            value.y = ReadFloat32();
+            value.z = ReadFloat32();
+            value.w = ReadFloat32();
         }
 
         // Token: 0x06002C5B RID: 11355 RVA: 0x000C8F74 File Offset: 0x000C7174
@@ -259,6 +250,12 @@ namespace BitStream {
         public bool EndOfStream {
             get {
                 return 0U == this._bufferLengthInBits;
+            }
+        }
+
+        public int RemainingBits {
+            get {
+                return (int)this._bufferLengthInBits;
             }
         }
 

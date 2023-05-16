@@ -16,8 +16,12 @@ namespace Hpmv {
             return value;
         }
 
-        public static Vector3 ToNumericsVector(this UnityEngine.Vector3 vector) {
+        public static Vector3 ToNumerics(this UnityEngine.Vector3 vector) {
             return new Vector3(vector.x, vector.y, vector.z);
+        }
+
+        public static System.Numerics.Quaternion ToNumerics(this UnityEngine.Quaternion q) {
+            return new System.Numerics.Quaternion(q.x, q.y, q.z, q.w);
         }
 
         public static Vector3 FromThrift(this Point vector) {
