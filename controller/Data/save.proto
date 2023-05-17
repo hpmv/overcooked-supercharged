@@ -176,12 +176,19 @@ message SpecificEntityData {
 }
 
 message ChefState {
-    Vector2 forward = 1;
     EntityPath highlighted_for_pickup = 2;
     EntityPath highlighted_for_use = 3;
     EntityPath highlighted_for_placement = 4;
+    EntityPath interacting_entity = 7;
     double dash_timer = 5;
-    bool is_aiming = 6;
+    Vector3 last_velocity = 8;
+    bool aiming_throw = 9;
+    bool movement_input_suppressed = 10;
+    Vector3 last_move_input_direction = 11;
+    double impact_start_time = 12;
+    double impact_timer = 13;
+    Vector3 impact_velocity = 14;
+    double left_over_time = 15;
 }
 
 message VersionedSpecificEntityData {

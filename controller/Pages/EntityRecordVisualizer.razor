@@ -20,6 +20,7 @@
         if (record.existed[frame] && !record.displayName.Contains("Rigidbody") && !record.displayName.Contains("Content") && !record.prefab.Ignore && record.prefab.Name != "Dirty Plate") {
             var pos = record.position[frame].XZ();
             var rendered = Render(pos);
+            var forward = record.rotation[frame].ToForwardVector();
             <div class="record-vis-anchor"
                 style="left: @(rendered.X)px; top: @(rendered.Y)px;">
                 <div class="record-vis-holder">
@@ -45,7 +46,7 @@
                     }
                     <div class="record-vis @(recordClass) @(ingredientClass)"
                         data-entity-path="@(record.path)"
-                        style="@(record.chefState != null ? "transform: rotate(" + (-Math.Atan2(record.chefState[frame].forward.Y, record.chefState[frame].forward.X) + Math.PI / 2) + "rad)" : "")">
+                        style="@($"transform: rotate({(-Math.Atan2(forward.Y, forward.X) + Math.PI / 2)}rad)")">
                         @if (record.prefab.Name == "Dirty Plate Stack") {
                             @(record.spawned.Count(s => s.existed[frame]))
                         } else if (record.prefab.Name == "Sink") {

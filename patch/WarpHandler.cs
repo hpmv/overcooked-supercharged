@@ -296,12 +296,50 @@ namespace SuperchargedPatch
                     cannon.Warp(message);
                 }
 
+                if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() is ClientPlayerControlsImpl_Default cpci)
+                {
+                    var chef = entityThrift.Chef;
+                    if (chef == null)
+                    {
+                        Log($"[WARP] Failed to warp chef: no chef specific warp data");
+                        continue;
+                    }
+                    cpci.set_m_dashTimer((float)chef.DashTimer);
+                    if (chef.InteractingEntity != -1)
+                    {
+                        var entry = EntitySerialisationRegistry.GetEntry((uint)chef.InteractingEntity);
+                        if (entry == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity ID {chef.InteractingEntity} does not exist");
+                            continue;
+                        }
+                        var clientInteractable = entry.m_GameObject.GetComponent<ClientInteractable>();
+                        if (clientInteractable == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ClientInteractable component");
+                            continue;
+                        }
+                        cpci.set_m_predictedInteracted(clientInteractable);
+                    } else
+                    {
+                        cpci.set_m_predictedInteracted(null);
+                    }
+                    cpci.set_m_lastVelocity(chef.LastVelocity.FromThrift());
+                    cpci.set_m_aimingThrow(chef.AimingThrow);
+                    cpci.set_m_movementInputSuppressed(chef.MovementInputSuppressed);
+                    cpci.set_m_lastMoveInputDirection(chef.LastMoveInputDirection.FromThrift());
+                    cpci.set_m_impactStartTime((float)chef.ImpactStartTime);
+                    cpci.set_m_impactTimer((float)chef.ImpactTimer);
+                    cpci.set_m_impactVelocity(chef.ImpactVelocity.FromThrift());
+                    cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
+                }
+
                 // TODO: more properties to warp
             }
 
             // Pause the TimeManager again, to capture the velocities.
             Helpers.Pause();
-            ServerInterceptionPatches.ClearCacheAfterWarp(warp.Frame);
+            ActiveStateCollector.ClearCacheAfterWarp(warp.Frame);
         }
     }
 

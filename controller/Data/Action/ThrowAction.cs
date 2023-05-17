@@ -12,7 +12,7 @@ namespace Hpmv {
 
         public override GameActionOutput Step(GameActionInput input) {
             var ctrl = input.ControllerState;
-            var chefFwd = Chef.chefState[input.Frame].forward;
+            var chefFwd = Chef.rotation[input.Frame].ToForwardVector();
             var chefPos = Chef.position[input.Frame].XZ();
             var location = Location.GetLocation(input, Chef)[0] + Bias;
             if (ctrl.SecondaryButtonDown) {

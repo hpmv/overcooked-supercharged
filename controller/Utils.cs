@@ -51,6 +51,10 @@ namespace Hpmv {
         public static Vector2 XZ(this Vector3 vector) {
             return new Vector2(vector.X, vector.Z);
         }
+
+        public static Vector2 ToForwardVector(this System.Numerics.Quaternion rotation) {
+            return Vector3.Transform(Vector3.UnitZ, rotation).XZ();
+        }
     }
 
     public static class JsonUtils {

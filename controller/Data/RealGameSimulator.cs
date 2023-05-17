@@ -368,7 +368,7 @@ namespace Hpmv {
             }
         }
 
-        public void ApplyChefUpdate(int chefId, CharPositionData chef) {
+        public void ApplyChefUpdate(int chefId, ChefSpecificData chef) {
             if (chefId == 0) {
                 // Console.WriteLine(chef);
                 return;
@@ -376,14 +376,24 @@ namespace Hpmv {
             var chefRecord = entityIdToRecord[chefId];
             try {
                 var chefData = new ChefState {
-                    forward = chef.ForwardDirection.FromThrift().XZ(),
-                    dashTimer = chef.DashTimer,
                     highlightedForPickup = chef.HighlightedForPickup <= 0 ? null : entityIdToRecord[chef.HighlightedForPickup],
                     highlightedForPlacement = chef.HighlightedForPlacement <= 0 ? null : entityIdToRecord[chef.HighlightedForPlacement],
                     highlightedForUse = chef.HighlightedForUse <= 0 ? null : entityIdToRecord[chef.HighlightedForUse],
+                    currentlyInteracting = chef.InteractingEntity <= 0 ? null : entityIdToRecord[chef.InteractingEntity],
+                    dashTimer = chef.DashTimer,
+                    lastVelocity = chef.LastVelocity.FromThrift(),
+                    aimingThrow = chef.AimingThrow,
+                    movementInputSuppressed = chef.MovementInputSuppressed,
+                    lastMoveInputDirection = chef.LastMoveInputDirection.FromThrift(),
+                    impactStartTime = chef.ImpactStartTime,
+                    impactTimer = chef.ImpactTimer,
+                    impactVelocity = chef.ImpactVelocity.FromThrift(),
+                    leftOverTime = chef.LeftOverTime,
                 };
                 chefRecord.chefState.ChangeTo(chefData, frame);
-            } catch (Exception e) { }
+            } catch (Exception e) {
+                Console.WriteLine($"Error applying chef update for {chefId}: {e}");
+            }
         }
 
         public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data) {

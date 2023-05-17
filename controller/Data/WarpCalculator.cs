@@ -79,6 +79,32 @@ namespace Hpmv {
                         ModData = record.data[desiredFrame].rawGameEntityData,
                     };
                 }
+                if (record.prefab.IsChef) {
+                    var chefState = record.chefState[desiredFrame];
+                    var interactingEntityId = -1;
+                    if (chefState.currentlyInteracting != null) {
+                        if (chefState.currentlyInteracting.path.ids.Length > 1) {
+                            Console.WriteLine("[WARP] Error: Chef is interacting with a spawned entity; this is not yet supported!");
+                        } else {
+                            interactingEntityId = chefState.currentlyInteracting.path.ids[0];
+                        }
+                    }
+                    spec.Chef = new ChefSpecificData {
+                        HighlightedForPickup = -1, // not used
+                        HighlightedForUse = -1, // not used
+                        HighlightedForPlacement = -1, // not used
+                        DashTimer = chefState.dashTimer,
+                        InteractingEntity = interactingEntityId,
+                        LastVelocity = chefState.lastVelocity.ToThrift(),
+                        AimingThrow = chefState.aimingThrow,
+                        MovementInputSuppressed = chefState.movementInputSuppressed,
+                        LastMoveInputDirection = chefState.lastMoveInputDirection.ToThrift(),
+                        ImpactStartTime = chefState.impactStartTime,
+                        ImpactTimer = chefState.impactTimer,
+                        ImpactVelocity = chefState.impactVelocity.ToThrift(),
+                        LeftOverTime = chefState.leftOverTime,
+                    };
+                }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {
                     continue;

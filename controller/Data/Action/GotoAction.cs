@@ -18,6 +18,7 @@ namespace Hpmv {
             var time = DateTime.Now;
             try {
                 var chefPos = Chef.position[input.Frame].XZ();
+                var chefForward = Chef.rotation[input.Frame].ToForwardVector();
                 var desired = DesiredPos.GetLocation(input, Chef);
                 // Console.WriteLine($"Stepping for chef {Chef} and frame {input.Frame} to {desired.Length}");
                 if (desired.Any(DesiredPos => (chefPos - DesiredPos).Length() < AllowedError)) {
@@ -35,7 +36,7 @@ namespace Hpmv {
                 var dash = false;
                 var chefState = Chef.chefState[input.Frame];
                 if (DASH_TIME - chefState.dashTimer < DASH_COOLDOWN) {
-                    var dashDirection = chefState.forward * MathUtils.SinusoidalSCurve((float)chefState.dashTimer / DASH_TIME) * DASH_SPEED;
+                    var dashDirection = chefForward * MathUtils.SinusoidalSCurve((float)chefState.dashTimer / DASH_TIME) * DASH_SPEED;
                     // TODO: what to do here exactly?
                 } else {
                     double remainDistance = 0;
@@ -43,7 +44,7 @@ namespace Hpmv {
                         remainDistance += (path[i - 1] - path[i]).Length();
                     }
                     if (AllowDash && remainDistance > USE_DASH_IF_REMAIN * DASH_SPEED * DASH_TIME * 0.8) {
-                        if (Vector2.Dot(Vector2.Normalize(chefState.forward), direction) > 0.8) {
+                        if (Vector2.Dot(chefForward, direction) > 0.8) {
                             dash = true;
                         }
                     }

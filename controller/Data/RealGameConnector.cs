@@ -116,8 +116,8 @@ namespace Hpmv {
                         simulator.ApplyEntityRegistryUpdateLate(entity);
                     }
                 }
-                if (output.CharPos != null) {
-                    foreach (var entry in output.CharPos) {
+                if (output.Chefs != null) {
+                    foreach (var entry in output.Chefs) {
                         // Console.WriteLine(new {entry.Key, entry.Value});
                         simulator.ApplyChefUpdate(entry.Key, entry.Value);
                     }

@@ -6,10 +6,10 @@ using Team17.Online.Multiplayer.Messaging;
 
 namespace Hpmv {
     public class OfflineCalculations {
-        public static (Vector3 pos, Vector3 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector3 position, Vector3 velocity, GameMap map, Vector2 input) {
+        public static (Vector3 pos, Vector3 velocity, Vector2 fwd) PredictChefPositionAfterInput(ChefState chefState, Vector3 position, Vector3 velocity, Vector2 forward, GameMap map, Vector2 input) {
             var newPosition = CalculateNewChefPositionAfterMovement(position, velocity, map);
-            var (newVelocity, forward) = CalculateNewChefVelocityAndForward(chefState, input);
-            return (newPosition, newVelocity, forward);
+            var (newVelocity, newForward) = CalculateNewChefVelocityAndForward(chefState, forward, input);
+            return (newPosition, newVelocity, newForward);
         }
 
         public static ChefState CalculateHighlightedObjects(Vector3 position, Vector2 forward, GameMapGeometry geometry, IEnumerable<GameEntityRecord> entities) {
@@ -108,17 +108,17 @@ namespace Hpmv {
             return chefState;
         }
 
-        public static (Vector3 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, Vector2 input) {
+        public static (Vector3 velocity, Vector2 forward) CalculateNewChefVelocityAndForward(ChefState chefState, Vector2 chefForward, Vector2 input) {
             var axes = new Vector2(input.X, -input.Y);
             if (axes.Length() < 0.01) {
                 axes = default;
             } else {
                 axes = Vector2.Normalize(axes);
             }
-            var newForward = CalculateNewChefRotation(chefState.forward, axes);
+            var newForward = CalculateNewChefRotation(chefForward, axes);
             // Skipping movement suppression, gravity force, wind force.
             var desiredVelocity = axes * 6;  // run speed
-            if (chefState.isAiming) {
+            if (chefState.aimingThrow) {
                 desiredVelocity = default;
             }
             if (chefState.dashTimer > 0) {

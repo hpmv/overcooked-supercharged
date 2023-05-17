@@ -22,10 +22,10 @@ namespace Hpmv {
                 }
                 return default;
             }
-            var chefFwd = Chef.chefState[input.Frame].forward;
+            var chefFwd = Chef.rotation[input.Frame].ToForwardVector();
             var chefPos = Chef.position[input.Frame].XZ();
             var location = Location.GetLocation(input, Chef)[0];
-            if (Vector2.Dot(Vector2.Normalize(chefFwd), Vector2.Normalize(location - chefPos)) >= AngleAllowance) {
+            if (Vector2.Dot(chefFwd, Vector2.Normalize(location - chefPos)) >= AngleAllowance) {
                 if (ctrl.RequestButtonDown()) {
                     return new GameActionOutput {
                         ControllerInput = new DesiredControllerInput {

@@ -89,7 +89,7 @@ namespace Hpmv {
                 path = new EntityPath { ids = new[] { entityId } },
                 position = new Versioned<Vector3>(CapturedInitialPositions[entityId]),
                 existed = new Versioned<bool>(true),
-                chefState = new Versioned<ChefState>(new ChefState { forward = -Vector2.UnitY })
+                chefState = new Versioned<ChefState>(new ChefState {})
             };
             CapturedInitialPositions.Remove(entityId);
             FixedEntities.Add(record);

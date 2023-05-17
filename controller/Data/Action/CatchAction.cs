@@ -13,8 +13,8 @@ namespace Hpmv {
             if (Chef.data[input.Frame].attachment != null) {
                 return new GameActionOutput { Done = true };
             }
-            var chefState = Chef.chefState[input.Frame];
-            if (Vector2.Dot(Vector2.Normalize(chefState.forward), FacingDirection) < 0.85) {
+            var chefForward = Chef.rotation[input.Frame].ToForwardVector();
+            if (Vector2.Dot(chefForward, FacingDirection) < 0.85) {
                 return new GameActionOutput {
                     ControllerInput = new DesiredControllerInput {
                         axes = new Vector2(FacingDirection.X, -FacingDirection.Y)

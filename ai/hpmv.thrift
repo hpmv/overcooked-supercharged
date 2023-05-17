@@ -32,13 +32,20 @@ struct OneInputData {
     6: bool throwUp,
 }
 
-struct CharPositionData {
-    1: Point forwardDirection,
-    3: optional i32 attachment,
-    4: optional i32 highlightedForPickup,
-    5: optional i32 highlightedForUse,
-    6: optional i32 highlightedForPlacement,
+struct ChefSpecificData {
+    4: i32 highlightedForPickup,
+    5: i32 highlightedForUse,
+    6: i32 highlightedForPlacement,
     7: double dashTimer,
+    8: i32 interactingEntity,
+    9: Point lastVelocity,
+    10: bool aimingThrow,
+    11: bool movementInputSuppressed,
+    12: Point lastMoveInputDirection,
+    13: double impactStartTime,
+    14: double impactTimer,
+    15: Point impactVelocity,
+    16: double leftOverTime,
 }
 
 struct ItemData {
@@ -66,7 +73,7 @@ struct ServerMessage {
 }
 
 struct OutputData {
-    1: map<i32, CharPositionData> charPos,
+    1: map<i32, ChefSpecificData> chefs,
     2: map<i32, ItemData> items,
     3: list<ServerMessage> serverMessages,
     4: list<EntityRegistryData> entityRegistry,
@@ -88,10 +95,6 @@ struct PlatePendingReturnWarpData {
 
 struct PlateStationWarpData {
     1: list<PlatePendingReturnWarpData> plates,
-}
-
-struct ChefWarpData {
-    1: double dashTimer,
 }
 
 struct IngredientContainerWarpData {
@@ -123,7 +126,7 @@ struct EntityWarpSpec {
     // Zero or more of the following can be present.
     7: optional AttachmentParentWarpData attachmentParent,
     8: optional PlateStationWarpData plateStation,
-    9: optional ChefWarpData chef,
+    9: optional ChefSpecificData chef,
     10: optional IngredientContainerWarpData ingredientContainer,
     12: optional CannonWarpData cannon,
     // TODO: more entity types

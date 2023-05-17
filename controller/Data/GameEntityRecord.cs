@@ -150,21 +150,35 @@ namespace Hpmv {
     }
 
     public struct ChefState {
-        public Vector2 forward;
         public GameEntityRecord highlightedForPickup;
         public GameEntityRecord highlightedForUse;
         public GameEntityRecord highlightedForPlacement;
+        public GameEntityRecord currentlyInteracting;
         public double dashTimer;
-        public bool isAiming;
+        public Vector3 lastVelocity;
+        public bool aimingThrow;
+        public bool movementInputSuppressed;
+        public Vector3 lastMoveInputDirection;
+        public double impactStartTime;
+        public double impactTimer;
+        public Vector3 impactVelocity;
+        public double leftOverTime;
 
         public Save.ChefState ToProto() {
             return new Save.ChefState {
-                Forward = forward.ToProto(),
                 HighlightedForPickup = highlightedForPickup?.path?.ToProto(),
                 HighlightedForUse = highlightedForUse?.path?.ToProto(),
                 HighlightedForPlacement = highlightedForPlacement?.path?.ToProto(),
+                InteractingEntity = currentlyInteracting?.path?.ToProto(),
                 DashTimer = dashTimer,
-                IsAiming = isAiming
+                LastVelocity = lastVelocity.ToProto(),
+                AimingThrow = aimingThrow,
+                MovementInputSuppressed = movementInputSuppressed,
+                LastMoveInputDirection = lastMoveInputDirection.ToProto(),
+                ImpactStartTime = impactStartTime,
+                ImpactTimer = impactTimer,
+                ImpactVelocity = impactVelocity.ToProto(),
+                LeftOverTime = leftOverTime,
             };
         }
     }
@@ -172,12 +186,19 @@ namespace Hpmv {
     public static class ChefStateFromProto {
         public static ChefState FromProto(this Save.ChefState state, LoadContext context) {
             return new ChefState {
-                forward = state.Forward.FromProto(),
                 highlightedForPickup = state.HighlightedForPickup.FromProtoRef(context),
                 highlightedForUse = state.HighlightedForUse.FromProtoRef(context),
                 highlightedForPlacement = state.HighlightedForPlacement.FromProtoRef(context),
+                currentlyInteracting = state.InteractingEntity.FromProtoRef(context),
                 dashTimer = state.DashTimer,
-                isAiming = state.IsAiming
+                lastVelocity = state.LastVelocity.FromProto(),
+                aimingThrow = state.AimingThrow,
+                movementInputSuppressed = state.MovementInputSuppressed,
+                lastMoveInputDirection = state.LastMoveInputDirection.FromProto(),
+                impactStartTime = state.ImpactStartTime,
+                impactTimer = state.ImpactTimer,
+                impactVelocity = state.ImpactVelocity.FromProto(),
+                leftOverTime = state.LeftOverTime,
             };
         }
     }

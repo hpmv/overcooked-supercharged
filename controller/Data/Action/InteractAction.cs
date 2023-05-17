@@ -63,6 +63,7 @@ namespace Hpmv {
             }
             // Console.WriteLine($"[{input.Frame}] interactable entity for {Subject} is {subjectEntity.displayName}");
             var chefState = Chef.chefState[input.Frame];
+            var chefForward = Chef.rotation[input.Frame].ToForwardVector();
 
             var gotoInput = CalculateInputRegardlessOfHighlighting(subjectEntity, input);
             var (predictedPosition, predictedVelocity, predictedForward) =
@@ -70,6 +71,7 @@ namespace Hpmv {
                     chefState,
                     Chef.position[input.Frame],
                     Chef.velocity[input.Frame],
+                    chefForward,
                     input.MapByChef[Chef.path.ids[0]],
                     input.ControllerState.axes);
             // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
@@ -82,7 +84,7 @@ namespace Hpmv {
             var gridPosOfChef = input.Geometry.CoordsToGridPosRounded(Chef.position.Last().XZ());
             var gridPosOfEntity = input.Geometry.CoordsToGridPosRounded(subjectEntity.position.Last().XZ());
             var gridDirection = input.Geometry.GridPos(gridPosOfEntity.x, gridPosOfEntity.y) - input.Geometry.GridPos(gridPosOfChef.x, gridPosOfChef.y);
-            var directionCheck = Vector2.Dot(Vector2.Normalize(gridDirection), Vector2.Normalize(chefState.forward)) > 0.05;
+            var directionCheck = Vector2.Dot(Vector2.Normalize(gridDirection), chefForward) > 0.05;
 
             if (Primary) {
                 if (input.ControllerState.PrimaryButtonDown) {
