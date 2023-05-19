@@ -345,6 +345,7 @@ namespace Hpmv {
             
             var SAUSAGE_CRATE = new PrefabRecord("Sausage Crate", "sausage-crate") { IsAttachStation = true, IsCrate = true };
             var SAUSAGE = new PrefabRecord("Sausage", "sausage") { IsIngredient = true, IngredientId = 284626, CanBeAttached = true };
+            SAUSAGE_CRATE.Spawns.Add(SAUSAGE);
             entityRecords.RegisterKnownObject(70, SAUSAGE_CRATE);
             
             var EGG_CRATE = new PrefabRecord("Egg Crate", "egg-crate") { IsAttachStation = true, IsCrate = true };
@@ -456,7 +457,7 @@ namespace Hpmv {
             for (var i = 95; i <= 102; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
-            for (var i = 109; i <= 122; i++) {
+            for (var i = 107; i <= 122; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
 

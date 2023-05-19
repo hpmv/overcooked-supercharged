@@ -322,6 +322,7 @@ message IntList {
 
 message GameMapGeometry {
     Vector2 top_left = 1;
+    Vector2 size = 2;
 }
 
 message GameMap {

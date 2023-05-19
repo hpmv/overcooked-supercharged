@@ -555,6 +555,22 @@ app {
     z-index: 3;
 }
 
+.record-vis-type-pot {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background-color: bisque;
+    z-index: 3;
+}
+
+.record-vis-type-pan {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background-color: rgb(236, 196, 255);
+    z-index: 3;
+}
+
 .record-vis-type-frier-station {
     width: 46px;
     height: 46px;
@@ -566,6 +582,13 @@ app {
     width: 46px;
     height: 46px;
     background-color: rgb(200, 200, 255);
+    z-index: 2;
+}
+
+.record-vis-type-heat-station {
+    width: 46px;
+    height: 46px;
+    background-color: rgb(255, 179, 179);
     z-index: 2;
 }
 
@@ -707,6 +730,15 @@ app {
 }
 .record-vis-ingredient-32308 {
     background-image: url('../images/Chicken_Icon-resources.assets-235.png');
+}
+.record-vis-ingredient-461162 {
+    background-image: url('../images/Onion_Icon-resources.assets-488.png');
+}
+.record-vis-ingredient-284626 {
+    background-image: url('../images/Sausage_Icon-resources.assets-286.png');
+}
+.record-vis-ingredient-262914 {
+    background-image: url('../images/Bun_Icon-resources.assets-533.png');
 }
 
 

@@ -34,13 +34,14 @@ namespace Hpmv {
         public Save.GameMapGeometry ToProto() {
             return new Save.GameMapGeometry {
                 TopLeft = topLeft.ToProto(),
+                Size = size.ToProto(),
             };
         }
     }
 
     public static class GameMapGeometryFromProto {
         public static GameMapGeometry FromProto(this Save.GameMapGeometry proto) {
-            return new GameMapGeometry(proto.TopLeft.FromProto(), Vector2.Zero);
+            return new GameMapGeometry(proto.TopLeft.FromProto(), proto.Size.FromProto());
         }
     }
 
