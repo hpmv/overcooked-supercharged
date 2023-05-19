@@ -105,8 +105,8 @@ namespace Hpmv
             entityRecords.CapturedInitialPositions[70] = new Vector3(7.2f, 0.702f, 0f);
 
 
-            var roating_tray_prefab = new PrefabRecord("Tray", "roating-tray") { MaxProgress = 12, CanContainIngredients = true, MaxIngredientCount = 4, CookingStage = 2 };
-            var oven_prefab = new PrefabRecord("Oven", "oven") { IsHeatingStation = true };
+            var roating_tray_prefab = new PrefabRecord("Tray", "roating-tray") { MaxProgress = 12, CanContainIngredients = true };
+            var oven_prefab = new PrefabRecord("Oven", "oven") {};
             var beef_prefab = new PrefabRecord("Beef", "beef") { IsIngredient = true, IngredientId = 54456 };
             var chicken_prefab = new PrefabRecord("Chicken") { IsIngredient = true, IngredientId = 32308 };
             var beef_crate_prefab = new PrefabRecord("Beef Crate") { IsCrate = true };
@@ -130,7 +130,7 @@ namespace Hpmv
             brocolli_crate_prefab.Spawns.Add(brocolli_prefab);
 
             var board_prefab = new PrefabRecord("Board", "board") { CanUse = true, IsBoard = true };
-            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true, CookingStage = 3 };
+            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true };
             var dirty_plate_prefab = new PrefabRecord("Dirty Plate", "dirty plate");
             var dirty_plate_spawner_prefab = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner");
             dirty_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"));

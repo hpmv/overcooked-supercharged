@@ -97,10 +97,10 @@ namespace Hpmv
             entityRecords.CapturedInitialPositions[73] = new Vector3(20.42f, 0.448f, -15.6f);
 
 
-            var mixer_prefab = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 2 };
-            var mixer_station_prefab = new PrefabRecord("Mixer Station", "mixer-station") { IsMixerStation = true };
-            var frier_prefab = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, MaxIngredientCount = 3, CookingStage = 3 };
-            var frier_station_prefab = new PrefabRecord("Frier Station", "frier-station") { IsHeatingStation = true };
+            var mixer_prefab = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true };
+            var mixer_station_prefab = new PrefabRecord("Mixer Station", "mixer-station") {};
+            var frier_prefab = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true };
+            var frier_station_prefab = new PrefabRecord("Frier Station", "frier-station") {};
             var board_prefab = new PrefabRecord("Board", "board") { CanUse = true, IsBoard = true };
             var blueberry_crate_prefab = new PrefabRecord("Bluberry Crate", "blueberry-crate") { IsCrate = true };
             blueberry_crate_prefab.Spawns.Add(new PrefabRecord("Blueberry", "blueberry") { MaxProgress = 1.4, IsChoppable = true });
@@ -112,7 +112,7 @@ namespace Hpmv
             egg_crate_prefab.Spawns.Add(new PrefabRecord("Egg", "egg") { IsIngredient = true, IngredientId = 16620 });
             var flour_crate_prefab = new PrefabRecord("Flour Crate", "flour-crate") { IsCrate = true };
             flour_crate_prefab.Spawns.Add(new PrefabRecord("Flour", "flour") { IsIngredient = true, IngredientId = 18448 });
-            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true, CookingStage = 4 };
+            var plate_prefab = new PrefabRecord("Plate", "plate") { CanContainIngredients = true };
             var dirty_plate_prefab = new PrefabRecord("Dirty Plate", "dirty plate");
             var dirty_plate_spawner_prefab = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner");
             dirty_plate_spawner_prefab.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"));

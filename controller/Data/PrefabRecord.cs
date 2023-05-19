@@ -13,14 +13,10 @@ namespace Hpmv {
         public bool IsCrate { get; set; }
         public double MaxProgress { get; set; }
         public bool CanContainIngredients { get; set; }
-        public int MaxIngredientCount { get; set; }
         public bool IsIngredient { get; set; }
         public int IngredientId { get; set; }
-        public int CookingStage { get; set; }
         public bool IsBoard { get; set; }
         public bool IsWashingStation { get; set; }
-        public bool IsMixerStation { get; set; }
-        public bool IsHeatingStation { get; set; }
         public bool IsChoppable { get; set; }
         public bool IsButton { get; set; }
         public bool IsAttachStation { get; set; }
@@ -44,14 +40,10 @@ namespace Hpmv {
                 IsCrate = IsCrate,
                 MaxProgress = MaxProgress,
                 CanContainIngredients = CanContainIngredients,
-                MaxIngredientCount = MaxIngredientCount,
                 IsIngredient = IsIngredient,
                 IngredientId = IngredientId,
-                CookingStage = CookingStage,
                 IsBoard = IsBoard,
                 IsWashingStation = IsWashingStation,
-                IsMixerStation = IsMixerStation,
-                IsHeatingStation = IsHeatingStation,
                 IsChoppable = IsChoppable,
                 IsButton = IsButton,
                 IsAttachStation = IsAttachStation,
@@ -87,14 +79,10 @@ namespace Hpmv {
                 IsCrate = record.IsCrate,
                 MaxProgress = record.MaxProgress,
                 CanContainIngredients = record.CanContainIngredients,
-                MaxIngredientCount = record.MaxIngredientCount,
                 IsIngredient = record.IsIngredient,
                 IngredientId = record.IngredientId,
-                CookingStage = record.CookingStage,
                 IsBoard = record.IsBoard,
                 IsWashingStation = record.IsWashingStation,
-                IsMixerStation = record.IsMixerStation,
-                IsHeatingStation = record.IsHeatingStation,
                 IsChoppable = record.IsChoppable,
                 IsButton = record.IsButton,
                 IsAttachStation = record.IsAttachStation,

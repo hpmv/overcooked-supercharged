@@ -244,6 +244,7 @@ namespace controller.Pages {
             ["carnival31-four"] = typeof(Carnival31FourLevel),
             ["campfire14-two"] = typeof(Campture14TwoLevel),
             ["horde13-two"] = typeof(Horde13TwoLevel),
+            ["carnival34-four"] = typeof(Carnival34FourLevel),
         };
 
         private async Task LoadLevel() {

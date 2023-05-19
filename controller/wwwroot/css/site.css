@@ -432,6 +432,7 @@ app {
     height: 700px;
     background: white;
     cursor: crosshair;
+    transform-origin: top left;
 }
 
 .schedule-container {

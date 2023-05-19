@@ -45,8 +45,40 @@ namespace controller.Pages {
             return Level.geometry.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
         }
 
-        private string PolygonString(Vector2[] points) {
-            return string.Join(" ", points.Select(Render).Select(p => $"{p.X},{p.Y}"));
+        private int SvgWidth {
+            get {
+                if (Level?.geometry == null) {
+                    return 700;
+                }
+                return (int)((Level.geometry.size.X + 2) / 1.2 * SCALE);
+            }
+        }
+
+        private int SvgHeight {
+            get {
+                if (Level?.geometry == null) {
+                    return 700;
+                }
+                return (int)((Level.geometry.size.Y + 2) / 1.2 * SCALE);
+            }
+        }
+
+        private float RenderScale {
+            get {
+                if (Level?.geometry == null) {
+                    return 1;
+                }
+                return 700 / (Math.Max(Level.geometry.size.Y + 2, Level.geometry.size.X + 2) * SCALE / 1.2f);
+            }
+        }
+
+        private string PolygonString(Vector2[][] points) {
+            return string.Join(" ", points.Select(polygon => 
+                "M " + string.Join(" L ", polygon.Select(p => {
+                    var r = Render(p);
+                    return $"{r.X},{r.Y}";
+                })) + " Z"
+            ));
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender) {
@@ -61,8 +93,9 @@ namespace controller.Pages {
             EntitiesForMenu = entityPaths
                 .Select(path => Level.entityRecords.GetRecordFromPath(EntityPath.ParseEntityPath(path)))
                 .ToList();
-            EntityMenuX = x;
-            EntityMenuY = y;
+            var renderScale = RenderScale;
+            EntityMenuX = x / renderScale;
+            EntityMenuY = y / renderScale;
             StateHasChanged();
             await InvokeAsync(async () => {
                 EntityMenuOpen = true;

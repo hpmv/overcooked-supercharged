@@ -3,16 +3,14 @@
 @{
     var frame = EditorState.SelectedFrame;
 }
-<div class="entity-record-renderer" @ref="canvasRef">
+<div class="entity-record-renderer" @ref="canvasRef" style="transform: scale(@(RenderScale))">
 
-    <svg class="map-render" width="700" height="700">
+    <svg class="map-render" width="@(SvgWidth)" height="@(SvgHeight)">
         @foreach (var item in Level.mapByChef)
         {
             var chef = item.Key;
             var map = item.Value;
-            @foreach (var polygon in map.polygons) {
-                <polygon points="@PolygonString(polygon)" class="map-polygon"></polygon>
-            }
+            <path d="@PolygonString(map.polygons)" class="map-polygon"></path>
         }
     </svg>
 

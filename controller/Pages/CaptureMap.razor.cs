@@ -82,20 +82,30 @@ namespace controller.Pages {
 
             public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
                 // TODO: fix.
-                if (output.Items != null) {
-                    foreach (var pos in output.Items) {
-                        var line = $"entityRecords.CapturedInitialPositions[{pos.Key}] = new Vector3({(float)pos.Value.Pos.X}f, {(float)pos.Value.Pos.Y}f, {(float)pos.Value.Pos.Z}f);";
-                        Console.WriteLine(line);
-                        posCache[pos.Key] = line;
-                        // parent.points.Add(pos.Value.Pos);
-                    }
-                }
+                // if (output.Items != null) {
+                //     foreach (var pos in output.Items) {
+                //         if (pos.Value.Pos != null) {
+                //             var line = $"entityRecords.CapturedInitialPositions[{pos.Key}] = new Vector3({(float)pos.Value.Pos.X}f, {(float)pos.Value.Pos.Y}f, {(float)pos.Value.Pos.Z}f);";
+                //             Console.WriteLine(line);
+                //             posCache[pos.Key] = line;
+                //             // parent.points.Add(pos.Value.Pos);
+                //         }
+                //     }
+                // }
                 if (output.EntityRegistry != null) {
                     foreach (var reg in output.EntityRegistry) {
+                        // parent.points.Add(pos.Value.Pos);
+                        List<EntityType> types = new List<EntityType>();
+                        foreach (var type in reg.SyncEntityTypes) {
+                            EntityType et = (EntityType)type;
+                            types.Add(et);
+                        }
+                        FakeEntityRegistry.entityToTypes[reg.EntityId] = types;
+
+                        Console.WriteLine($"// Entity {reg.EntityId} with types {string.Join(", ", types)}");
                         var line = $"entityRecords.CapturedInitialPositions[{reg.EntityId}] = new Vector3({(float)reg.Pos.X}f, {(float)reg.Pos.Y}f, {(float)reg.Pos.Z}f);";
                         Console.WriteLine(line);
                         posCache[reg.EntityId] = line;
-                        // parent.points.Add(pos.Value.Pos);
                     }
                 }
                 if (output.ServerMessages != null) {
@@ -113,6 +123,19 @@ namespace controller.Pages {
                             }
                         }
                     }
+                }
+                var pointsAdded = false;
+                foreach (var chef in output.Chefs) {
+                    if (output.Items.ContainsKey(chef.Key)) {
+                        var pos = output.Items[chef.Key].Pos;
+                        if (pos != null) {
+                            parent.points.Add(pos);
+                            pointsAdded = true;
+                        }
+                    }
+                }
+                if (pointsAdded) {
+                    parent.StateHasChanged();
                 }
                 return new InputData();
             }
