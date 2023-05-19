@@ -234,7 +234,6 @@ namespace SuperchargedPatch
                         Vector3 _forward = (movementScale * ___m_controlObject.transform.forward) * movement.DashSpeed;
                         float single = MathUtils.SinusoidalSCurve(___m_dashTimer / movement.DashTime);
                         runSpeed = ((1f - single) * runSpeed) + (single * _forward);
-                        Debug.Log($"Dash timer is {___m_dashTimer} at frame {Time.frameCount}");
                     }
                     ___m_dashTimer -= _deltaTime;
                     if (___m_impactTimer > 0f)

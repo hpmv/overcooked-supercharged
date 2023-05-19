@@ -55,7 +55,7 @@ namespace SuperchargedPatch
         {
             if (frame <= FrameNumber)
             {
-                Console.WriteLine($"Restarting at frame {frame}; was at frame {FrameNumber}");
+                // Console.WriteLine($"Restarting at frame {frame}; was at frame {FrameNumber}");
                 ClearCacheAfterWarp(frame);
             }
             else
@@ -131,9 +131,9 @@ namespace SuperchargedPatch
         {
             var data = new ChefSpecificData();
             var m_controls = cpci.m_controls();
-            data.HighlightedForPickup = m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup) : -1;
-            data.HighlightedForUse = m_controls.CurrentInteractionObjects.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_interactable.gameObject) : -1;
-            data.HighlightedForPlacement = m_controls.CurrentInteractionObjects.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)m_controls.CurrentInteractionObjects.m_iHandlePlacement).gameObject) : -1;
+            data.HighlightedForPickup = m_controls?.CurrentInteractionObjects?.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup) : -1;
+            data.HighlightedForUse = m_controls?.CurrentInteractionObjects?.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_interactable.gameObject) : -1;
+            data.HighlightedForPlacement = m_controls?.CurrentInteractionObjects?.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)m_controls.CurrentInteractionObjects.m_iHandlePlacement).gameObject) : -1;
 
             data.DashTimer = cpci.m_dashTimer();
             var interactingEntity = cpci.m_predictedInteracted();
