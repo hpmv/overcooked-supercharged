@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using ClipperLib;
+using Clipper2Lib;
 using Dijkstra.NET.Graph;
 using Dijkstra.NET.ShortestPath;
 
@@ -48,49 +48,34 @@ namespace Hpmv {
     public class GameMap {
         public Vector2[][] polygons;
         public GameMapGeometry geometry;
-        private IntPoint topLeftDiscrete;
+        private Point64 topLeftDiscrete;
 
         private const int SCALE = 1000;
         private const int RESOLUTION = 100;
 
-        private List<List<IntPoint>> LevelPolygons;
+        private Paths64 LevelPolygons;
 
-        private IntPoint Discretize(Vector2 p) => new IntPoint((int)(p.X * SCALE), (int)(p.Y * SCALE));
-        private Vector2 Undiscretize(IntPoint point) => new Vector2((float)point.X / SCALE, (float)point.Y / SCALE);
-        private (int, int) ClosestGridPoint(IntPoint p) {
+        private Point64 Discretize(Vector2 p) => new Point64((int)(p.X * SCALE), (int)(p.Y * SCALE));
+        private Vector2 Undiscretize(Point64 point) => new Vector2((float)point.X / SCALE, (float)point.Y / SCALE);
+        private (int, int) ClosestGridPoint(Point64 p) {
             var x = (p.X - topLeftDiscrete.X + RESOLUTION / 2) / RESOLUTION;
             var y = (-(p.Y - topLeftDiscrete.Y) + RESOLUTION / 2) / RESOLUTION;
             return ((int)x, (int)y);
         }
 
         private bool[,,] precomputedConnectivity;
-        private List<IntPoint> boundaryPoints = new List<IntPoint>();
+        private List<Point64> boundaryPoints = new List<Point64>();
         private List<List<int>> pointsMesh = new List<List<int>>();
 
         public List<(Vector2, Vector2)> debugConnectivity = new List<(Vector2, Vector2)>();
 
-        private bool LineIsInsidePolygon(IntPoint pA, IntPoint pB) {
-
-            var clipper = new Clipper();
-            var sol = new PolyTree();
-            bool ok = false;
-            {
-                clipper.Clear();
-                sol.Clear();
-                clipper.AddPath(new List<IntPoint> { pA, pB }, PolyType.ptSubject, false);
-                clipper.AddPaths(LevelPolygons, PolyType.ptClip, true);
-                clipper.Execute(ClipType.ctDifference, sol, PolyFillType.pftEvenOdd);
-                ok = ok || sol.Total == 0;
-            }
-            {
-                clipper.Clear();
-                sol.Clear();
-                clipper.AddPath(new List<IntPoint> { pB, pA }, PolyType.ptSubject, false);
-                clipper.AddPaths(LevelPolygons, PolyType.ptClip, true);
-                clipper.Execute(ClipType.ctDifference, sol, PolyFillType.pftEvenOdd);
-                ok = ok || sol.Total == 0;
-            }
-            return ok;
+        private bool LineIsInsidePolygon(Point64 pA, Point64 pB) {
+            var clipper = new Clipper64();
+            var sol = new Paths64();
+            clipper.AddOpenSubject(new Path64 { pA, pB });
+            clipper.AddClip(LevelPolygons);
+            clipper.Execute(ClipType.Difference, FillRule.EvenOdd, new Paths64(), sol);
+            return sol.Count == 0;
         }
 
 
@@ -99,7 +84,7 @@ namespace Hpmv {
             this.geometry = geometry;
 
             LevelPolygons =
-                polygons.Select(polygon => polygon.Select(Discretize).ToList()).ToList();
+                new Paths64(polygons.Select(polygon => new Path64(polygon.Select(Discretize))));
 
 
             foreach (var polygon in LevelPolygons) {
@@ -145,7 +130,7 @@ namespace Hpmv {
             topLeftDiscrete = Discretize(geometry.topLeft);
             for (int i = 0; i < numX; i++) {
                 for (int j = 0; j < numY; j++) {
-                    var point = new IntPoint(topLeftDiscrete.X + i * RESOLUTION, topLeftDiscrete.Y - j * RESOLUTION);
+                    var point = new Point64(topLeftDiscrete.X + i * RESOLUTION, topLeftDiscrete.Y - j * RESOLUTION);
                     for (int k = 0; k < boundaryPoints.Count; k++) {
                         var boundary = boundaryPoints[k];
                         if (LineIsInsidePolygon(point, boundary)) {
@@ -157,7 +142,7 @@ namespace Hpmv {
         }
 
 
-        private static int DistanceApprox(IntPoint a, IntPoint b) {
+        private static int DistanceApprox(Point64 a, Point64 b) {
             long xdiff = a.X - b.X;
             long ydiff = a.Y - b.Y;
             return (int)Math.Sqrt(xdiff * xdiff + ydiff * ydiff);
@@ -246,10 +231,10 @@ namespace Hpmv {
         }
 
         public bool IsInsideMap(Vector2 v) {
-            return PathFinding.IsInside(Discretize(v), LevelPolygons);
+            return IsInside(Discretize(v), LevelPolygons);
         }
 
-        private static double Distance(IntPoint a, IntPoint b) {
+        private static double Distance(Point64 a, Point64 b) {
             long xdiff = a.X - b.X;
             long ydiff = a.Y - b.Y;
             return Math.Sqrt(xdiff * xdiff + ydiff * ydiff);
@@ -258,15 +243,15 @@ namespace Hpmv {
         public Vector2 FindNeighboringPointWithinMap(Vector2 point, Vector2 towards) {
             var pointD = Discretize(point);
             var towardsD = Discretize(towards);
-            var clipper = new Clipper();
-            clipper.AddPath(new List<IntPoint> { pointD, towardsD }, PolyType.ptSubject, false);
-            clipper.AddPaths(LevelPolygons, PolyType.ptClip, true);
-            var tree = new PolyTree();
-            clipper.Execute(ClipType.ctIntersection, tree);
-            IntPoint closest = towardsD;
+            var clipper = new Clipper64();
+            clipper.AddOpenSubject(new Path64 { pointD, towardsD });
+            clipper.AddClip(LevelPolygons);
+            var sol = new Paths64();
+            clipper.Execute(ClipType.Intersection, FillRule.EvenOdd, new Paths64(), sol);
+            Point64 closest = towardsD;
 
-            foreach (var path in tree.Childs) {
-                foreach (var cand in path.m_polygon) {
+            foreach (var path in sol) {
+                foreach (var cand in path) {
                     if (Distance(closest, pointD) > Distance(cand, pointD)) {
                         closest = cand;
                     }
@@ -297,7 +282,7 @@ namespace Hpmv {
         };
 
         public List<Vector2> GetInteractionPointsForBlockEntity(Vector2 center) {
-            var results = offsets.Select(v => center + v).Where(v => PathFinding.IsInside(Discretize(v), LevelPolygons)).ToList();
+            var results = offsets.Select(v => center + v).Where(v => IsInside(Discretize(v), LevelPolygons)).ToList();
             if (results.Count == 0) {
                 Console.WriteLine($"Trying to find interaction points around unreachable entity at {center}");
             }
@@ -343,8 +328,18 @@ namespace Hpmv {
                 }
             }
             LevelPolygons =
-                polygons.Select(polygon => polygon.Select(Discretize).ToList()).ToList();
+                new Paths64(polygons.Select(polygon => new Path64(polygon.Select(Discretize))));
             topLeftDiscrete = Discretize(geometry.topLeft);
+        }
+
+        private static bool IsInside(Point64 point, Paths64 polygons) {
+            var count = 0;
+            foreach (var polygon in polygons) {
+                if (Clipper.PointInPolygon(point, polygon) != PointInPolygonResult.IsOutside) {
+                    count++;
+                }
+            }
+            return count % 2 == 1;
         }
     }
 

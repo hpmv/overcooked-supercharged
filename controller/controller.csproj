@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Blazor.Extensions.Canvas" Version="1.0.0" />
     <PackageReference Include="ChartJs.Blazor" Version="1.0.3" />
+    <PackageReference Include="Clipper2" Version="1.2.2" />
     <PackageReference Include="Dijkstra.NET" Version="1.2.1" />
     <PackageReference Include="Google.Protobuf" Version="3.11.4" />
     <PackageReference Include="MatBlazor" Version="2.2.0" />

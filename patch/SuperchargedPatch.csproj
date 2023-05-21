@@ -103,6 +103,8 @@
     <Compile Include="Helpers.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ServerWorkableItemExt.cs" />
+    <Compile Include="ServerWorkstationExt.cs" />
     <Compile Include="TASPatcher.cs" />
     <Compile Include="UnrealTimePatch.cs" />
     <Compile Include="WarpHandler.cs" />

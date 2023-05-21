@@ -82,9 +82,13 @@ struct OutputData {
     8: i32 frameNumber,
 }
 
+struct EntityIdOrRef {
+    1: optional i32 entityId,
+    2: optional EntityPathReference entityPathReference,
+}
+
 struct AttachmentParentWarpData {
-    1: optional i32 parentEntityId,
-    2: optional EntityPathReference parentEntityPathReference,
+    1: EntityIdOrRef parentEntity,
 }
 
 struct PlatePendingReturnWarpData {
@@ -103,6 +107,22 @@ struct IngredientContainerWarpData {
 
 struct CannonWarpData {
     1: binary modData,  // encoded CannonModMessage
+}
+
+struct WorkstationInteracterWarpData {
+    1: i32 chefEntityId,
+    4: double actionTimer,
+}
+
+struct WorkstationWarpData {
+    1: list<WorkstationInteracterWarpData> interacters,
+    2: optional EntityIdOrRef item,
+}
+
+struct WorkableItemWarpData {
+    1: i32 progress,
+    2: i32 subProgress,
+    3: bool onWorkstation,
 }
 
 struct EntityWarpSpec {
@@ -129,6 +149,8 @@ struct EntityWarpSpec {
     9: optional ChefSpecificData chef,
     10: optional IngredientContainerWarpData ingredientContainer,
     12: optional CannonWarpData cannon,
+    13: optional WorkstationWarpData workstation,
+    14: optional WorkableItemWarpData workableItem,
     // TODO: more entity types
 }
 

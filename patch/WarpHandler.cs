@@ -1,5 +1,6 @@
 ﻿using Hpmv;
 using SuperchargedPatch.AlteredComponents;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -51,6 +52,16 @@ namespace SuperchargedPatch
             }
 
             Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
+
+            Func<EntityIdOrRef, EntitySerialisationEntry> getEntityByIdOrRef = (EntityIdOrRef idOrRef) =>
+            {
+                if (idOrRef.__isset.entityId)
+                {
+                    return EntitySerialisationRegistry.GetEntry((uint)idOrRef.EntityId);
+                }
+                var reference = idOrRef.EntityPathReference.FromThrift();
+                return entityPathReferenceToEntry.ContainsKey(reference) ? entityPathReferenceToEntry[reference] : null;
+            };
 
             for (int i = 0; i < warp.Entities.Count; i++)
             {
@@ -157,26 +168,11 @@ namespace SuperchargedPatch
                 if (entityThrift.__isset.attachmentParent)
                 {
                     var attachmentParent = entityThrift.AttachmentParent;
-                    EntitySerialisationEntry parentEntity;
-                    if (attachmentParent.__isset.parentEntityPathReference)
+                    EntitySerialisationEntry parentEntity = getEntityByIdOrRef(attachmentParent.ParentEntity);
+                    if (parentEntity == null)
                     {
-                        parentEntity = entityPathReferenceToEntry[attachmentParent.ParentEntityPathReference.FromThrift()];
-                        if (parentEntity == null)
-                        {
-                            Log($"[WARP] Error setting attachment parent: parent entity path reference {attachmentParent.ParentEntityPathReference} does not exist");
-                            continue;
-                        }
-                    } else if (attachmentParent.__isset.parentEntityId)
-                    {
-                        parentEntity = EntitySerialisationRegistry.GetEntry((uint)attachmentParent.ParentEntityId);
-                        if (parentEntity == null)
-                        {
-                            Log($"[WARP] Error setting attachment parent: parent entity ID {attachmentParent.ParentEntityId} does not exist");
-                            continue;
-                        }
-                    } else
-                    {
-                        parentEntity = null;
+                        Log($"[WARP] Error setting attachment parent: parent entity path {attachmentParent} does not exist");
+                        continue;
                     }
                     var physicalAttachment = entity.m_GameObject.GetComponent<ServerPhysicalAttachment>();
                     if (physicalAttachment == null)
@@ -184,32 +180,39 @@ namespace SuperchargedPatch
                         Log($"[WARP] Error setting attachment parent: entity {entity.m_Header.m_uEntityID} does not have a ServerPhysicalAttachment");
                         continue;
                     }
-                    if (parentEntity == null)
+                    Action detachFromExistingParent = () =>
                     {
                         var existingParent = physicalAttachment.transform.parent;
                         if (existingParent == null)
                         {
-                            continue;
+                            return;
                         }
                         if (existingParent.GetComponent<ServerAttachStation>() is ServerAttachStation station)
                         {
                             Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerAttachStation");
                             station.TakeItem();
-                        } else if (existingParent.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
+                        }
+                        else if (existingParent.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
                         {
                             Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerPlayerAttachmentCarrier");
                             carrier.TakeItem();
-                        } else
+                        }
+                        else
                         {
                             Log($"[WARP] Warning when detaching attachment for entity {entity.m_Header.m_uEntityID}: parent entity is of unhandled kind");
                             physicalAttachment.Detach();
                         }
+                    };
+                    if (parentEntity == null)
+                    {
+                        detachFromExistingParent();
                     } else
                     {
                         if (physicalAttachment.transform.parent == parentEntity.m_GameObject.transform)
                         {
                             continue;
                         }
+                        detachFromExistingParent();
                         if (parentEntity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation station) {
                             if (station.HasItem())
                             {
@@ -320,9 +323,20 @@ namespace SuperchargedPatch
                             continue;
                         }
                         cpci.set_m_predictedInteracted(clientInteractable);
+
+                        // We also need to set this on the server side. This seems to be the only thing the server keeps track of.
+                        // The reason we need this is because the server side performs EndInteraction triggers based on this value.
+                        var serverInteractable = entry.m_GameObject.GetComponent<ServerInteractable>();
+                        if (serverInteractable == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ServerInteractable component");
+                            continue;
+                        }
+                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(serverInteractable);
                     } else
                     {
                         cpci.set_m_predictedInteracted(null);
+                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(null);
                     }
                     cpci.set_m_lastVelocity(chef.LastVelocity.FromThrift());
                     cpci.set_m_aimingThrow(chef.AimingThrow);
@@ -334,6 +348,80 @@ namespace SuperchargedPatch
                     cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
                 }
 
+                if (entity.m_GameObject.GetComponent<ServerWorkstation>() is ServerWorkstation sw)
+                {
+                    var workstation = entityThrift.Workstation;
+                    if (workstation == null)
+                    {
+                        Log($"[WARP] Failed to warp Workstation: no workstation specific data");
+                        continue;
+                    }
+
+                    // First remove all interacters. Then we'll add back those asked for.
+                    foreach (var interacter in sw.Interacters())
+                    {
+                        sw.OnInteracterRemoved(interacter.m_object);
+                    }
+
+                    if (sw.Item() != null)
+                    {
+                        sw.OnItemRemovedItem(sw.Item().GetComponent<IAttachment>());
+                    }
+
+                    if (workstation.__isset.item)
+                    {
+                        var item = getEntityByIdOrRef(workstation.Item);
+                        if (item != null && item.m_GameObject.GetComponent<IAttachment>() is IAttachment attachment)
+                        {
+                            sw.OnItemAdded(attachment);
+                        } else
+                        {
+                            Log($"[WARP] Failed to warp Workstation: item entity {workstation.Item} does not exist or does not have IAttachment component");
+                            continue;
+                        }
+                    }
+
+                    if (workstation.Interacters != null)
+                    {
+                        foreach (var interacter in workstation.Interacters)
+                        {
+                            var chef = EntitySerialisationRegistry.GetEntry((uint)interacter.ChefEntityId)?.m_GameObject;
+                            if (chef == null)
+                            {
+                                Log($"[WARP] Failed to warp Workstation: chef entity {interacter.ChefEntityId} does not exist");
+                                continue;  // inner loop, but it's ok, we'll catch it outside
+                            }
+                            sw.OnInteracterAdded(chef, Vector2.up);  // direction doesn't matter
+                        }
+
+                        var interacters = sw.Interacters();
+                        if (interacters.Count != workstation.Interacters.Count)
+                        {
+                            Log($"[WARP] Failed to warp Workstation: was not able to add desired interacters");
+                            continue;
+                        }
+                        for (int j = 0; j < workstation.Interacters.Count; j++)
+                        {
+                            var interacter = workstation.Interacters[j];
+                            interacters[j].m_actionTimer = (float)interacter.ActionTimer;
+                        }
+                    }
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerWorkableItem>() is ServerWorkableItem wi)
+                {
+                    var workableItem = entityThrift.WorkableItem;
+                    if (workableItem == null)
+                    {
+                        Log($"[WARP] Failed to warp WorkableItem: no WorkableItem specific data");
+                        continue;
+                    }
+
+                    wi.SetOnWorkstation(workableItem.OnWorkstation);
+                    wi.SetProgress(workableItem.Progress);
+                    wi.SetSubProgress(workableItem.SubProgress);
+                    wi.SynchroniseClientState();
+                }
                 // TODO: more properties to warp
             }
 

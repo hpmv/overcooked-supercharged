@@ -311,7 +311,7 @@ message Polygon {
     repeated Vector2 points = 1;
 }
 
-message IntPoint {
+message Point64 {
     int64 x = 1;
     int64 y = 2;
 }
@@ -330,7 +330,7 @@ message GameMap {
     Vector2 top_left = 2;
     repeated bool precomputed_connectivity = 3;
     repeated int32 precomputed_connectivity_dimensions = 4;
-    repeated IntPoint boundary_points = 5;
+    repeated Point64 boundary_points = 5;
     repeated IntList points_mesh = 6;
 }
 

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
-using ClipperLib;
+using Clipper2Lib;
 using Hpmv;
 
 namespace Hpmv {
@@ -41,15 +41,15 @@ namespace Hpmv {
             return new System.Numerics.Quaternion(q.X, q.Y, q.Z, q.W);
         }
 
-        public static Save.IntPoint ToProto(this IntPoint p) {
-            return new Save.IntPoint {
+        public static Save.Point64 ToProto(this Point64 p) {
+            return new Save.Point64 {
                 X = p.X,
                 Y = p.Y
             };
         }
 
-        public static IntPoint FromProto(this Save.IntPoint p) {
-            return new IntPoint(p.X, p.Y);
+        public static Point64 FromProto(this Save.Point64 p) {
+            return new Point64(p.X, p.Y);
         }
 
         public static Save.VersionedInt ToProto(this Versioned<int> ver) {

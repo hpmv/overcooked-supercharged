@@ -28,6 +28,14 @@ namespace Hpmv {
                 }
             }
 
+            Func<GameEntityRecord, EntityIdOrRef> getEntityIdOrRef = (record) => {
+                if (currentRecordToEntityId.ContainsKey(record)) {
+                    return new EntityIdOrRef { EntityId = currentRecordToEntityId[record] };
+                } else {
+                    return new EntityIdOrRef { EntityPathReference = record.path.ToThrift() };
+                }
+            };
+
             // Spawn entities that didn't exist in the original frame.
             foreach (var record in records.GenAllEntities()) {
                 if (!record.existed[desiredFrame]) {
@@ -53,12 +61,9 @@ namespace Hpmv {
                 }
                 if (record.prefab.CanBeAttached) {
                     if (record.data[desiredFrame].attachmentParent is GameEntityRecord attachmentParent) {
+                        // TODO: We probably want to switch to attachment child instead of parent.
                         var attachmentSpec = new AttachmentParentWarpData();
-                        if (currentRecordToEntityId.ContainsKey(attachmentParent)) {
-                            attachmentSpec.ParentEntityId = currentRecordToEntityId[attachmentParent];
-                        } else {
-                            attachmentSpec.ParentEntityPathReference = attachmentParent.path.ToThrift();
-                        }
+                        attachmentSpec.ParentEntity = getEntityIdOrRef(attachmentParent);
                         spec.AttachmentParent = attachmentSpec;
                     } else {
                         spec.AttachmentParent = new AttachmentParentWarpData();
@@ -103,6 +108,31 @@ namespace Hpmv {
                         ImpactTimer = chefState.impactTimer,
                         ImpactVelocity = chefState.impactVelocity.ToThrift(),
                         LeftOverTime = chefState.leftOverTime,
+                    };
+                }
+                if (record.prefab.IsBoard) {
+                    spec.Workstation = new WorkstationWarpData();
+                    var data = record.data[desiredFrame];
+                    if (data.itemBeingChopped != null) {
+                        spec.Workstation.Item = getEntityIdOrRef(data.itemBeingChopped);
+                    }
+                    if (data.chopInteracters != null) {
+                        spec.Workstation.Interacters = new List<WorkstationInteracterWarpData>();
+                        foreach (var kv in data.chopInteracters) {
+                            spec.Workstation.Interacters.Add(new WorkstationInteracterWarpData {
+                                ChefEntityId = kv.Key.path.ids[0],
+                                ActionTimer = 0.2 - kv.Value.TotalSeconds,
+                            });
+                        }
+                    }
+                }
+                if (record.prefab.IsChoppable) {
+                    var data = record.data[desiredFrame];
+                    var onWorkstation = data.attachmentParent != null && data.attachmentParent.prefab.IsBoard;
+                    spec.WorkableItem = new WorkableItemWarpData {
+                        OnWorkstation = onWorkstation,
+                        Progress = (int)Math.Round(record.progress[desiredFrame] / 0.2),
+                        SubProgress = 0,
                     };
                 }
 

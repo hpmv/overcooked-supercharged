@@ -1,10 +1,8 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Blazor.Extensions;
 using Blazor.Extensions.Canvas.Canvas2D;
-using ClipperLib;
 using Hpmv;
 
 namespace controller.Pages {

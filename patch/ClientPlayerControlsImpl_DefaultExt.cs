@@ -114,4 +114,14 @@ namespace SuperchargedPatch
             f_m_LeftOverTime.SetValue(instance, value);
         }
     }
+
+    public static class ServerPlayerControlsImpl_DefaultExt
+    {
+        private static readonly Type type = typeof(ServerPlayerControlsImpl_Default);
+        private static readonly FieldInfo f_m_lastInteracted = AccessTools.Field(type, "m_lastInteracted");
+        public static void set_m_lastInteracted(this ServerPlayerControlsImpl_Default instance, ServerInteractable interactable)
+        {
+            f_m_lastInteracted.SetValue(instance, interactable);
+        }
+    }
 }
