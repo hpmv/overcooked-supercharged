@@ -13,12 +13,12 @@ namespace SuperchargedPatch
     [BepInProcess("Overcooked2.exe")]
     class TASPatcher : BaseUnityPlugin
     {
+        private static Harmony patcher;
         public void Awake()
         {
             ServerInterceptionPatches.EnableInputInjection = true;
 
-            var patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
-            //patcher.PatchAll();
+            patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll(Assembly.GetExecutingAssembly());
             foreach (var patched in Harmony.GetAllPatchedMethods()) {
                 Console.WriteLine("Patched: " + patched.FullDescription());
@@ -33,6 +33,11 @@ namespace SuperchargedPatch
         public void LateUpdate()
         {
             ServerInterceptionPatches.LateUpdate();
+        }
+
+        public void OnDestroy()
+        {
+            patcher.UnpatchSelf();
         }
     }
 }

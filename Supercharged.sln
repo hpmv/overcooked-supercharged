@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29728.190
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33712.159
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ai", "ai\ai.csproj", "{696D3CEC-7A21-47CB-8CE9-2BD92288A1BF}"
 EndProject
@@ -10,6 +10,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "controller", "controller\controller.csproj", "{A0E28C21-CDCC-4B06-BA0D-83A20C6D3C58}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Thrift", "thrift\Thrift\Thrift.csproj", "{1749C311-146B-44BC-98C7-FFB5BD566C0B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DebugPatch", "debugpatch\DebugPatch.csproj", "{A675A4D0-0E06-42F4-9734-F8658824F3D7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{1749C311-146B-44BC-98C7-FFB5BD566C0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1749C311-146B-44BC-98C7-FFB5BD566C0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1749C311-146B-44BC-98C7-FFB5BD566C0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A675A4D0-0E06-42F4-9734-F8658824F3D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A675A4D0-0E06-42F4-9734-F8658824F3D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A675A4D0-0E06-42F4-9734-F8658824F3D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A675A4D0-0E06-42F4-9734-F8658824F3D7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

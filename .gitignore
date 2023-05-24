@@ -6,3 +6,5 @@ controller/Saves
 patch/Libs
 patch/bin
 patch/obj
+debugpatch/bin
+debugpatch/obj
