@@ -294,7 +294,12 @@ namespace Hpmv {
                         }
                     }
                 } else if (payload is ThrowableItemMessage tim) {
-                    specificData.isFlying = tim.m_inFlight;
+                    specificData.throwableItem.IsFlying = tim.m_inFlight;
+                    specificData.throwableItem.FlightTimer = TimeSpan.FromSeconds(0);
+                    specificData.throwableItem.thrower = tim.m_thrower <= 0 ? null : entityIdToRecord[tim.m_thrower];
+                } else if (payload is ThrowableItemAuxMessage tiam) {
+                    specificData.throwableItem.ignoredColliders =
+                        tiam.m_colliders.Select(c => (Entity: entityIdToRecord[(int)c.entity.m_uEntityID], ColliderIndex: c.colliderIndex)).ToArray();
                 } else if (payload is CannonModMessage cmm) {
                     Console.WriteLine($"Changing cannon message so that flying time is {cmm.ToJson()} at frame {frame}");
                     specificData.rawGameEntityData = cmm.ToBytes();
@@ -351,6 +356,8 @@ namespace Hpmv {
                 }
             } else if (item is EntityEventMessage eem) {
                 entityHandler((int)eem.m_Header.m_uEntityID, eem.m_Payload);
+            } else if (item is EntityAuxMessage eam) {
+                entityHandler((int)eam.m_entityHeader.m_uEntityID, eam.m_payload);
             } else if (item is SpawnEntityMessage sem) {
                 // Console.WriteLine(sem);
                 spawnHandler(sem);
@@ -459,13 +466,14 @@ namespace Hpmv {
         // Advance certain progress bars such as chopping board, washing, plate respawn. These are not
         // explicitly given via server messages; we have to time them ourselves.
         public void AdvanceAutomaticProgress() {
+            var frameTime = TimeSpan.FromSeconds(1) / Config.FRAMERATE;
             foreach (var entity in setup.entityRecords.FixedEntities) {
                 var chopInteracters = entity.data.Last().chopInteracters;
                 if (chopInteracters != null) {
                     var newData = entity.data.Last();
                     newData.chopInteracters = new Dictionary<GameEntityRecord, TimeSpan>(chopInteracters);
                     foreach (var (chef, remain) in chopInteracters) {
-                        var newRemain = remain - TimeSpan.FromSeconds(1) / Config.FRAMERATE;
+                        var newRemain = remain - frameTime;
                         if (newRemain < TimeSpan.Zero) {
                             newData.itemBeingChopped.progress.ChangeTo(newData.itemBeingChopped.progress.Last() + 0.2, frame);
                             newRemain += TimeSpan.FromSeconds(0.2);
@@ -480,7 +488,13 @@ namespace Hpmv {
                 if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
                     entity.data.AppendWith(frame, d => {
                         d.plateRespawnTimers = d.plateRespawnTimers
-                            .Select(t => t - TimeSpan.FromSeconds(1) / Config.FRAMERATE).Where(t => t > TimeSpan.Zero).ToList();
+                            .Select(t => t - frameTime).Where(t => t > TimeSpan.Zero).ToList();
+                        return d;
+                    });
+                }
+                if (entity.data.Last().throwableItem.IsFlying) {
+                    entity.data.AppendWith(frame, d => {
+                        d.throwableItem.FlightTimer += frameTime;
                         return d;
                     });
                 }

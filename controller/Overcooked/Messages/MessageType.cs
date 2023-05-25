@@ -89,7 +89,9 @@ namespace Team17.Online.Multiplayer.Messaging {
         // Token: 0x04002806 RID: 10246
         HordeSpawn,
         // Token: 0x04002807 RID: 10247
-        COUNT
+        COUNT,
+
+        EntityAuxMessage,  // Mod.
     }
 }
 

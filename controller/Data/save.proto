@@ -161,6 +161,18 @@ message VersionedDouble {
     double initial_value = 3;
 }
 
+message SavedCollider {
+    EntityPath entity = 1;
+    int32 collider_index = 2;
+}
+
+message SpecificEntityData_ThrowableItem {
+    bool is_flying = 1;
+    double flight_timer = 2;
+    EntityPath thrower = 3;
+    repeated SavedCollider ignored_colliders = 4;
+}
+
 message SpecificEntityData {
     EntityPath attachment_parent = 1;
     EntityPath attachment = 2;
@@ -170,7 +182,7 @@ message SpecificEntityData {
     repeated EntityPath washers = 6;
     int32 num_plates = 8;
     repeated double plate_respawn_timers = 7;
-    bool is_flying = 9;
+    SpecificEntityData_ThrowableItem throwable_item = 12;
     bool is_unwarpable = 10;
     bytes raw_game_entity_data = 11;
 }
@@ -269,6 +281,7 @@ message PrefabRecord {
     bool can_be_attached = 22;
     bool is_chef = 23;
     bool is_cannon = 24;
+    bool is_throwable = 25;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

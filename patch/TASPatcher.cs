@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Harmony;
 using HarmonyLib;
+using Hpmv;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,6 +39,8 @@ namespace SuperchargedPatch
         public void OnDestroy()
         {
             patcher.UnpatchSelf();
+            Injector.Destroy();
+            WarpHandler.Destroy();
         }
     }
 }

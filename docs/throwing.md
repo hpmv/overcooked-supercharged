@@ -281,9 +281,10 @@ private void ResumeAndClearThrowStartCollisions()
 this is to clear the previously ignored collisions, if any somehow remains (because the same thing
 is done in `EndFlight`).
 
-Finally, we check for any initially colliding items with the thrown item, and ignore collisions for
-all of them. This allows us to throw an object over another object (such as if there's a strawberry
-on the counter right in front of us we can still throw another strawberry over it).
+Finally, we check for any initially colliding items (within the "Attachments" layer) with the thrown
+item, and ignore collisions for all of them. This allows us to throw an object over another object
+(such as if there's a strawberry on the counter right in front of us we can still throw another
+strawberry over it).
 
 ## During Flight
 
@@ -795,3 +796,17 @@ triggered:
   above that there's also a 1.8 minimum distance between the center of the chef and the center of the object, and a
   max 120 angle between chef forward and object velocity. The catching is done on the server side unlike most of the other
   chef controls.
+
+## Warping
+
+States we need to warp:
+
+* `m_flying` (if changing, perform flight start/end actions)
+* `m_flightTimer`
+* `m_thrower`
+* `m_ThrowStartColliders` (if changing, perform physics collision changes)
+
+Things to do when warping from non-flight to flight:
+
+* Set pickup referral, server & client
+* Register attach changed callback

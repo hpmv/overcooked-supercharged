@@ -13,7 +13,7 @@ namespace Hpmv {
         public HashSet<GameEntityRecord> washers;
         public int numPlates;
         public List<TimeSpan> plateRespawnTimers;
-        public bool isFlying;
+        public SpecificEntityData_ThrowableItem throwableItem;
         public bool isUnwarpable;
         public byte[] rawGameEntityData;
 
@@ -22,7 +22,7 @@ namespace Hpmv {
                 AttachmentParent = attachmentParent?.path?.ToProto(),
                 Attachment = attachment?.path?.ToProto(),
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
-                IsFlying = isFlying,
+                ThrowableItem = throwableItem.ToProto(),
                 IsUnwarpable = isUnwarpable,
                 RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
             };
@@ -61,11 +61,45 @@ namespace Hpmv {
                 washers = data.Washers.Count == 0 ? null : data.Washers.Select(washer => washer.FromProtoRef(context)).ToHashSet(),
                 numPlates = data.NumPlates,
                 plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
-                isFlying = data.IsFlying,
+                throwableItem = data.ThrowableItem?.FromProto(context) ?? default,
                 isUnwarpable = data.IsUnwarpable,
                 rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
             };
         }
     }
 
+    public struct SpecificEntityData_ThrowableItem {
+        public bool IsFlying { get; set; }
+        public TimeSpan FlightTimer { get; set; }
+        public GameEntityRecord thrower { get; set; }
+        public (GameEntityRecord Entity, int ColliderIndex)[] ignoredColliders { get; set; }
+
+        public Hpmv.Save.SpecificEntityData_ThrowableItem ToProto() {
+            var result = new Hpmv.Save.SpecificEntityData_ThrowableItem {
+                IsFlying = IsFlying,
+                FlightTimer = FlightTimer.TotalMilliseconds,
+                Thrower = thrower?.path?.ToProto(),
+            };
+            if (ignoredColliders != null) {
+                foreach (var (entity, colliderIndex) in ignoredColliders) {
+                    result.IgnoredColliders.Add(new Hpmv.Save.SavedCollider {
+                        Entity = entity.path.ToProto(),
+                        ColliderIndex = colliderIndex,
+                    });
+                }
+            }
+            return result;
+        }
+    }
+
+    public static class SpecificEntityData_ThrowableItemFromProto {
+        public static SpecificEntityData_ThrowableItem FromProto(this Save.SpecificEntityData_ThrowableItem data, LoadContext context) {
+            return new SpecificEntityData_ThrowableItem {
+                IsFlying = data.IsFlying,
+                FlightTimer = TimeSpan.FromMilliseconds(data.FlightTimer),
+                thrower = data.Thrower.FromProtoRef(context),
+                ignoredColliders = data.IgnoredColliders.Select(collider => (collider.Entity.FromProtoRef(context), collider.ColliderIndex)).ToArray(),
+            };
+        }
+    }
 }

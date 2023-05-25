@@ -8,5 +8,10 @@ namespace Hpmv {
             Server = new InjectorServer();
             Server.Start();
         }
+
+        public static void Destroy()
+        {
+            Server.Destroy();
+        }
     }
 }

@@ -125,6 +125,18 @@ struct WorkableItemWarpData {
     3: bool onWorkstation,
 }
 
+struct ColliderRef {
+    1: EntityIdOrRef entity,
+    2: i32 colliderIndex,
+}
+
+struct ThrowableItemWarpData {
+    1: bool isFlying,
+    2: double flightTimer,
+    3: i32 throwerEntityId,
+    4: list<ColliderRef> throwStartColliders,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -151,6 +163,7 @@ struct EntityWarpSpec {
     12: optional CannonWarpData cannon,
     13: optional WorkstationWarpData workstation,
     14: optional WorkableItemWarpData workableItem,
+    15: optional ThrowableItemWarpData throwableItem,
     // TODO: more entity types
 }
 

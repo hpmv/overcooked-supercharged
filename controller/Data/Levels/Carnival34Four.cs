@@ -330,44 +330,44 @@ namespace Hpmv {
             }
 
             var BUN_CRATE = new PrefabRecord("Bun Crate", "bread-crate") { IsAttachStation = true, IsCrate = true };
-            var BUN = new PrefabRecord("Bun", "bread") { IsChoppable = true, CanBeAttached = true };
-            var CHOPPED_BUN = new PrefabRecord("Chopped Bun", "chopped-bread") { IsIngredient = true, IngredientId = 262914, CanBeAttached = true };
+            var BUN = new PrefabRecord("Bun", "bread") { IsChoppable = true, CanBeAttached = true, IsThrowable = true };
+            var CHOPPED_BUN = new PrefabRecord("Chopped Bun", "chopped-bread") { IsIngredient = true, IngredientId = 262914, CanBeAttached = true, IsThrowable = true };
             BUN_CRATE.Spawns.Add(BUN);
             BUN.Spawns.Add(CHOPPED_BUN);
             entityRecords.RegisterKnownObject(68, BUN_CRATE);
             
             var ONION_CRATE = new PrefabRecord("Onion Crate", "onion-crate") { IsAttachStation = true, IsCrate = true };
-            var ONION = new PrefabRecord("Onion", "onion") { IsChoppable = true, CanBeAttached = true };
-            var CHOPPED_ONION = new PrefabRecord("Chopped Onion", "chopped-onion") { IsIngredient = true, IngredientId = 461162, CanBeAttached = true };
+            var ONION = new PrefabRecord("Onion", "onion") { IsChoppable = true, CanBeAttached = true, IsThrowable = true };
+            var CHOPPED_ONION = new PrefabRecord("Chopped Onion", "chopped-onion") { IsIngredient = true, IngredientId = 461162, CanBeAttached = true, IsThrowable = true };
             ONION_CRATE.Spawns.Add(ONION);
             ONION.Spawns.Add(CHOPPED_ONION);
             entityRecords.RegisterKnownObject(69, ONION_CRATE);
             
             var SAUSAGE_CRATE = new PrefabRecord("Sausage Crate", "sausage-crate") { IsAttachStation = true, IsCrate = true };
-            var SAUSAGE = new PrefabRecord("Sausage", "sausage") { IsIngredient = true, IngredientId = 284626, CanBeAttached = true };
+            var SAUSAGE = new PrefabRecord("Sausage", "sausage") { IsIngredient = true, IngredientId = 284626, CanBeAttached = true, IsThrowable = true };
             SAUSAGE_CRATE.Spawns.Add(SAUSAGE);
             entityRecords.RegisterKnownObject(70, SAUSAGE_CRATE);
             
             var EGG_CRATE = new PrefabRecord("Egg Crate", "egg-crate") { IsAttachStation = true, IsCrate = true };
-            var EGG = new PrefabRecord("Egg", "egg") { IsIngredient = true, IngredientId = 16620, CanBeAttached = true };
+            var EGG = new PrefabRecord("Egg", "egg") { IsIngredient = true, IngredientId = 16620, CanBeAttached = true, IsThrowable = true };
             EGG_CRATE.Spawns.Add(EGG);
             entityRecords.RegisterKnownObject(65, EGG_CRATE);
 
             var FLOUR_CRATE = new PrefabRecord("Flour Crate", "flour-crate") { IsAttachStation = true, IsCrate = true };
-            var FLOUR = new PrefabRecord("Flour", "flour") { IsIngredient = true, IngredientId = 18448, CanBeAttached = true };
+            var FLOUR = new PrefabRecord("Flour", "flour") { IsIngredient = true, IngredientId = 18448, CanBeAttached = true, IsThrowable = true };
             FLOUR_CRATE.Spawns.Add(FLOUR);
             entityRecords.RegisterKnownObject(71, FLOUR_CRATE);
 
             var BERRY_CRATE = new PrefabRecord("Berry Crate", "berry-crate") { IsAttachStation = true, IsCrate = true };
-            var BERRY = new PrefabRecord("Berry", "berry") { IsChoppable = true, CanBeAttached = true };
-            var CHOPPED_BERRY = new PrefabRecord("Chopped Berry", "chopped-berry") { IsIngredient = true, IngredientId = 129618, CanBeAttached = true };
+            var BERRY = new PrefabRecord("Berry", "berry") { IsChoppable = true, CanBeAttached = true, IsThrowable = true };
+            var CHOPPED_BERRY = new PrefabRecord("Chopped Berry", "chopped-berry") { IsIngredient = true, IngredientId = 129618, CanBeAttached = true, IsThrowable = true };
             BERRY_CRATE.Spawns.Add(BERRY);
             BERRY.Spawns.Add(CHOPPED_BERRY);
             entityRecords.RegisterKnownObject(67, BERRY_CRATE);
 
             var CHOCOLATE_CRATE = new PrefabRecord("Chocolate Crate", "chocolate-crate") { IsAttachStation = true, IsCrate = true };
-            var CHOCOLATE = new PrefabRecord("Chocolate", "chocolate") { IsChoppable = true, CanBeAttached = true };
-            var CHOPPED_CHOCOLATE = new PrefabRecord("Chopped Chocolate", "chopped-chocolate") { IsIngredient = true, IngredientId = 22804, CanBeAttached = true };
+            var CHOCOLATE = new PrefabRecord("Chocolate", "chocolate") { IsChoppable = true, CanBeAttached = true, IsThrowable = true };
+            var CHOPPED_CHOCOLATE = new PrefabRecord("Chopped Chocolate", "chopped-chocolate") { IsIngredient = true, IngredientId = 22804, CanBeAttached = true, IsThrowable = true };
             CHOCOLATE_CRATE.Spawns.Add(CHOCOLATE);
             CHOCOLATE.Spawns.Add(CHOPPED_CHOCOLATE);
             entityRecords.RegisterKnownObject(66, CHOCOLATE_CRATE);

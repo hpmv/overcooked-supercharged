@@ -6,5 +6,6 @@ controller/Saves
 patch/Libs
 patch/bin
 patch/obj
+patch/gen-csharp
 debugpatch/bin
 debugpatch/obj

@@ -174,6 +174,12 @@ namespace controller.Pages {
                     StateHasChanged();
                 });
             };
+            realGameConnector.OnConnectionTerminated += () => {
+                InvokeAsync(() => {
+                    StopRealSimulation();
+                    StateHasChanged();
+                });
+            };
             realGameConnector.Start();
         }
 

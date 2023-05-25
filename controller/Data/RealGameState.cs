@@ -76,6 +76,7 @@ namespace Hpmv {
         Paused,
         Warping,
         AwaitingResume,
+        Error,
     }
 
     public enum RealGameStateRequestKind {

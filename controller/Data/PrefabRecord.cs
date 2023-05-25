@@ -23,6 +23,7 @@ namespace Hpmv {
         public bool CanBeAttached { get; set; } // whether the prefab has PhysicalAttachment
         public bool IsChef { get; set; }
         public bool IsCannon { get; set; }
+        public bool IsThrowable { get; set; }
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
@@ -50,6 +51,7 @@ namespace Hpmv {
                 CanBeAttached = CanBeAttached,
                 IsChef = IsChef,
                 IsCannon = IsCannon,
+                IsThrowable = IsThrowable,
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
@@ -89,6 +91,7 @@ namespace Hpmv {
                 CanBeAttached = record.CanBeAttached,
                 IsChef = record.IsChef,
                 IsCannon = record.IsCannon,
+                IsThrowable = record.IsThrowable,
                 Ignore = record.Ignore,
                 OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };

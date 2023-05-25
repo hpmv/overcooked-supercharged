@@ -1,4 +1,6 @@
-﻿using HarmonyLib;
+﻿using BitStream;
+using HarmonyLib;
+using Hpmv;
 using SuperchargedPatch.AlteredComponents;
 using System;
 using System.Collections.Generic;
@@ -41,5 +43,44 @@ namespace SuperchargedPatch
                 config = new SynchroniserConfig(InstancesPerGameObject.Single, typeof(ServerCannonPlayerHandlerMod), typeof(ClientCannonPlayerHandlerMod));
             }
         }
+    }
+
+    public static class AuxMessageSender
+    {
+        public static void SendAuxMessage(this ServerSynchroniserBase self, AuxMessageBase message)
+        {
+            var entityEventMessage = new EntityAuxMessage()
+            {
+                m_entityHeader = new EntityMessageHeader
+                {
+                    m_uEntityID = self.GetEntityId()
+                },
+                m_auxEntityType = message.GetAuxEntityType(),
+                m_payload = message,
+            };
+            var serialized = new FastList<byte>();
+            entityEventMessage.Serialise(new BitStreamWriter(serialized));
+            var data = Injector.Server.OpenCurrentFrameDataForWrite();
+            if (data.ServerMessages == null)
+            {
+                data.ServerMessages = new List<ServerMessage>();
+            }
+            data.ServerMessages.Add(new ServerMessage
+            {
+                Type = (int)MessageType.COUNT + 1,
+                Message = serialized.ToArray(),
+            });
+        }
+    }
+
+    public abstract class AuxMessageBase : Serialisable
+    {
+        public bool Deserialise(BitStreamReader reader)
+        {
+            throw new NotImplementedException();
+        }
+
+        public abstract AuxEntityType GetAuxEntityType();
+        public abstract void Serialise(BitStreamWriter writer);
     }
 }

@@ -14,3 +14,5 @@
 * [TODO] WashingStation progress and plate count (simple).
 * [TODO] Item throwing. Items need to be in the right state when flying. It might be more complicated than it initially looks because it needs to ignore certain collisions?
 * [TODO] PlacementItemSwitcher - condiment switching, need to store which condiment is the one used.
+* [TODO] ServerKitchenFlowController - all the parameters for orders, score.
+* [TODO] Game timer.

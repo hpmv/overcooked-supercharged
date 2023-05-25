@@ -69,7 +69,7 @@
                             </div>
                         }
                     }
-                    @if (record.data[frame].isFlying) {
+                    @if (record.data[frame].throwableItem.IsFlying) {
                         <div class="record-vis-flying">▲</div>
                     }
                     @if (record.prefab.CanContainIngredients && record.data[frame].contents is List<int> contents) {

@@ -7,13 +7,26 @@ using Thrift.Transport;
 
 namespace Hpmv {
     public class InjectorServer {
+        private Thread tcpThread;
+        private Thread requestThread;
         public void Start() {
-            new Thread(() => {
+            tcpThread = new Thread(() => {
                 StartTcpListener();
-            }).Start();
-            new Thread(() => {
+            });
+            requestThread = new Thread(() => {
                 RunRequestLoop();
-            }).Start();
+            });
+            tcpThread.Start();
+            requestThread.Start();
+        }
+
+        public void Destroy()
+        {
+            UnityEngine.Debug.Log("Destroying injector server");
+            tcpThread.Abort();
+            requestThread.Abort();
+            tcpThread.Join();
+            requestThread.Join();
         }
 
         private void StartTcpListener() {

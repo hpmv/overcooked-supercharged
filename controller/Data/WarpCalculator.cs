@@ -135,6 +135,27 @@ namespace Hpmv {
                         SubProgress = 0,
                     };
                 }
+                if (record.prefab.IsThrowable) {
+                    var data = record.data[desiredFrame].throwableItem;
+                    spec.ThrowableItem = new ThrowableItemWarpData
+                    {
+                        IsFlying = data.IsFlying,
+                        FlightTimer = data.FlightTimer.TotalMilliseconds,
+                        ThrowerEntityId = data.thrower == null ? -1 : data.thrower.path.ids[0],
+                        ThrowStartColliders = new List<ColliderRef>(),
+                    };
+                    if (data.ignoredColliders != null)
+                    {
+                        foreach (var collider in data.ignoredColliders)
+                        {
+                            spec.ThrowableItem.ThrowStartColliders.Add(new ColliderRef
+                            {
+                                ColliderIndex = collider.ColliderIndex,
+                                Entity = getEntityIdOrRef(collider.Entity),
+                            });
+                        }
+                    }
+                }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {
                     continue;

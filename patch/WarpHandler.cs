@@ -1,5 +1,6 @@
 ﻿using Hpmv;
 using SuperchargedPatch.AlteredComponents;
+using SuperchargedPatch.Extensions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,6 +18,11 @@ namespace SuperchargedPatch
         {
             writer.WriteLine(s);
             writer.Flush();
+        }
+
+        public static void Destroy()
+        {
+            writer.Close();
         }
 
         public static void HandleWarpRequestIfAny()
@@ -168,11 +174,15 @@ namespace SuperchargedPatch
                 if (entityThrift.__isset.attachmentParent)
                 {
                     var attachmentParent = entityThrift.AttachmentParent;
-                    EntitySerialisationEntry parentEntity = getEntityByIdOrRef(attachmentParent.ParentEntity);
-                    if (parentEntity == null)
+                    EntitySerialisationEntry parentEntity = null;
+                    if (attachmentParent.ParentEntity != null)
                     {
-                        Log($"[WARP] Error setting attachment parent: parent entity path {attachmentParent} does not exist");
-                        continue;
+                        parentEntity = getEntityByIdOrRef(attachmentParent.ParentEntity);
+                        if (parentEntity == null)
+                        {
+                            Log($"[WARP] Error setting attachment parent: parent entity path {attachmentParent} does not exist");
+                            continue;
+                        }
                     }
                     var physicalAttachment = entity.m_GameObject.GetComponent<ServerPhysicalAttachment>();
                     if (physicalAttachment == null)
@@ -182,7 +192,7 @@ namespace SuperchargedPatch
                     }
                     Action detachFromExistingParent = () =>
                     {
-                        var existingParent = physicalAttachment.transform.parent;
+                        var existingParent = physicalAttachment.m_ServerData().m_parentable as Component;
                         if (existingParent == null)
                         {
                             return;
@@ -421,6 +431,77 @@ namespace SuperchargedPatch
                     wi.SetProgress(workableItem.Progress);
                     wi.SetSubProgress(workableItem.SubProgress);
                     wi.SynchroniseClientState();
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerThrowableItem>() is ServerThrowableItem sti)
+                {
+                    var throwableItem = entityThrift.ThrowableItem;
+                    var cti = sti.GetComponent<ClientThrowableItem>();
+                    var wasFlying = sti.m_flying();
+                    if (throwableItem == null)
+                    {
+                        Log($"[WARP] Failed to warp ThrowableItem: no ThrowableItem specific data");
+                        continue;
+                    }
+
+                    sti.SetFlying(throwableItem.IsFlying);
+                    cti.SetIsFlying(throwableItem.IsFlying);
+                    sti.SetFlightTimer((float)throwableItem.FlightTimer);
+                    if (throwableItem.ThrowerEntityId == -1)
+                    {
+                        sti.SetThrower(null);
+                        cti.SetThrower(null);
+                    } else
+                    {
+                        var thrower = EntitySerialisationRegistry.GetEntry((uint)throwableItem.ThrowerEntityId)?.m_GameObject;
+                        if (thrower == null)
+                        {
+                            Log($"[WARP] Failed to warp ThrowableItem: thrower entity {throwableItem.ThrowerEntityId} does not exist");
+                            continue;
+                        }
+                        sti.SetThrower(thrower.GetComponent<IThrower>());
+                        cti.SetThrower(thrower.GetComponent<IClientThrower>());
+                    }
+
+                    var newColliders = new List<Collider>();
+                    foreach (var collider in throwableItem.ThrowStartColliders)
+                    {
+                        var colliderEntity = getEntityByIdOrRef(collider.Entity);
+                        if (colliderEntity == null)
+                        {
+                            Log($"[WARP] Warning: failed to find collider entity {collider.Entity}");
+                            continue;  // inner loop.
+                        }
+                        var colliders = colliderEntity.m_GameObject.GetComponents<Collider>();
+                        if (collider.ColliderIndex >= colliders.Length)
+                        {
+                            Log($"[WARP] Warning: collider entity {collider.Entity} does not have collider index {collider.ColliderIndex}");
+                            continue;  // inner loop
+                        }
+                        newColliders.Add(colliders[collider.ColliderIndex]);
+                    }
+
+                    var originalColliderCount = sti.m_ignoredCollidersCount();
+                    for (var j = 0; j < originalColliderCount; j++)
+                    {
+                        Physics.IgnoreCollision(sti.m_Collider(), sti.m_ThrowStartColliders()[j], false);
+                    }
+                    sti.SetIgnoredCollidersCount(newColliders.Count);
+                    sti.SetThrowStartColliders(newColliders.ToArray());
+                    foreach (var collider in newColliders)
+                    {
+                        Physics.IgnoreCollision(sti.m_Collider(), collider, true);
+                    }
+
+                    if (throwableItem.IsFlying && !wasFlying)
+                    {
+                        sti.OnEnterFlightForWarping();
+                        cti.OnEnterFlightForWarping();
+                    } else if (!throwableItem.IsFlying && wasFlying)
+                    {
+                        sti.OnExitFlightForWarping();
+                        cti.OnExitFlightForWarping();
+                    }
                 }
                 // TODO: more properties to warp
             }

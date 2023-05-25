@@ -96,24 +96,28 @@
     <Compile Include="AlteredComponents\ServerCannonMod.cs" />
     <Compile Include="AlteredComponents\ServerCannonPlayerHandlerMod.cs" />
     <Compile Include="AlteredComponents\ServerCannonSessionInteractableMod.cs" />
-    <Compile Include="ClientPlayerControlsImpl_DefaultExt.cs" />
+    <Compile Include="AlteredComponents\ThrowableItemAuxMessage.cs" />
+    <Compile Include="AlteredComponents\ThrowableItemPatches.cs" />
+    <Compile Include="Extensions\ClientPlayerControlsImpl_DefaultExt.cs" />
     <Compile Include="ComponentAltering.cs" />
+    <Compile Include="EntityAuxMessage.cs" />
     <Compile Include="EntityPathReference.cs" />
     <Compile Include="EntityPathReferenceMarker.cs" />
+    <Compile Include="Extensions\ServerPhysicalAttachmentExt.cs" />
+    <Compile Include="Extensions\ThrowableItemExt.cs" />
     <Compile Include="Helpers.cs" />
+    <Compile Include="Injection\BlockingQueue.cs" />
+    <Compile Include="Injection\Injector.cs" />
+    <Compile Include="Injection\InjectorServer.cs" />
+    <Compile Include="Injection\OrderRandom.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ServerWorkableItemExt.cs" />
-    <Compile Include="ServerWorkstationExt.cs" />
+    <Compile Include="Extensions\ServerWorkableItemExt.cs" />
+    <Compile Include="Extensions\ServerWorkstationExt.cs" />
     <Compile Include="TASPatcher.cs" />
     <Compile Include="UnrealTimePatch.cs" />
     <Compile Include="WarpHandler.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ai\ai.csproj">
-      <Project>{696d3cec-7a21-47cb-8ce9-2bd92288a1bf}</Project>
-      <Name>ai</Name>
-    </ProjectReference>
+    <Compile Include="gen-csharp\**\*.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -129,6 +133,9 @@
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.Analyzers.dll" />
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.CSharp.Analyzers.dll" />
   </ItemGroup>
+  <Target Name="PreBuild" BeforeTargets="_GenerateRestoreProjectSpec;Restore;Compile">
+    <Exec Command="thrift -gen csharp ../common/game.thrift" />
+  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

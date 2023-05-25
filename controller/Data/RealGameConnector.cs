@@ -29,10 +29,17 @@ namespace Hpmv {
         }
 
         public event Action OnFrameUpdate;
+        public event Action OnConnectionTerminated;
 
         public async void Start() {
             connector = new Connector(this);
-            await connector.Connect(cancellationTokenSource.Token);
+            try {
+                await connector.Connect(cancellationTokenSource.Token);
+            } catch (Exception e) {
+                Console.WriteLine("Connection error: {0}", e);
+            } finally {
+                OnConnectionTerminated?.Invoke();
+            }
         }
 
         public void Stop() {
@@ -178,6 +185,7 @@ namespace Hpmv {
                             Console.WriteLine($"Unexpected state when handling pause; should be AwaitingPause; actual state: {State}");
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
+                            State = RealGameState.Error;
                         }
                         if (output.NextFramePaused) {
                             State = RealGameState.Paused;
@@ -185,6 +193,7 @@ namespace Hpmv {
                             currentRequest = null;
                         } else {
                             Console.WriteLine($"Unexpected game state when pausing; game is not paused but should be");
+                            State = RealGameState.Error;
                         }
                         break;
                     case RealGameStateRequestKind.Resume:
@@ -192,6 +201,7 @@ namespace Hpmv {
                             Console.WriteLine($"Unexpected state when handling resume; should be AwaitingResume; actual state: {State}");
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
+                            State = RealGameState.Error;
                         }
                         if (!output.NextFramePaused) {
                             State = RealGameState.Running;
@@ -199,6 +209,7 @@ namespace Hpmv {
                             currentRequest = null;
                         } else {
                             Console.WriteLine($"Unexpected game state when resuming; game is paused but should not be");
+                            State = RealGameState.Error;
                         }
                         break;
                     case RealGameStateRequestKind.Warp:
@@ -207,6 +218,7 @@ namespace Hpmv {
                             Console.WriteLine($"Unexpected state when handling warp; should be Warping; actual state: {State}");
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
+                            State = RealGameState.Error;
                         }
                         if (output.FrameNumber == currentRequest.FrameToWarpTo) {
                             State = RealGameState.Paused;
@@ -214,6 +226,7 @@ namespace Hpmv {
                             currentRequest = null;
                         } else {
                             Console.WriteLine($"Unexpected game state when warping; game frame {output.FrameNumber} is not equal to the requested frame {currentRequest.FrameToWarpTo}");
+                            State = RealGameState.Error;
                         }
                         break;
                 }

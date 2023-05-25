@@ -62,6 +62,9 @@ namespace Hpmv {
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.PilotRotation, () => new PilotRotationMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.TriggerColourCycle, () => new TriggerColourCycleMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.MultiTriggerDisable, () => new TriggerDisableMessage());
+
+            SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.ThrowableItemAux, () => new ThrowableItemAuxMessage());
+
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntitySynchronisation, () => new EntitySynchronisationMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityEvent, () => new EntityEventMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.SpawnEntity, () => new SpawnEntityMessage());
@@ -72,6 +75,7 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.GameState, () => new GameStateMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.TimeSync, () => new TimeSyncMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LatencyMeasure, () => new LatencyMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityAuxMessage, () => new EntityAuxMessage());
         }
 
         public static Serialisable Deserialize(int type, byte[] bytes) {

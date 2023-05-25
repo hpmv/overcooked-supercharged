@@ -25,6 +25,6 @@
   </ItemGroup>
    
   <Target Name="PreBuild" BeforeTargets="_GenerateRestoreProjectSpec;Restore;Compile">
-    <Exec Command="thrift -gen netstd ../ai/hpmv.thrift" />
+    <Exec Command="thrift -gen netstd ../common/game.thrift" />
   </Target>
 </Project>
