@@ -5,12 +5,14 @@ using System.Linq;
 namespace Hpmv {
     public class TimelineLayout {
         public GameActionSequences Sequences { get; set; }
+        public GameEntityRecords Records { get; set; }
 
         public double PixelsPerFrame { get; set; } = 2;
         public int MinFrames { get; set; } = 10;
 
         List<(int frame, int length)> FrameRifts = new List<(int, int)>();
         public readonly List<(double margin, double height)> Rifts = new List<(double margin, double height)>();
+        public readonly List<(double offset, double height)> CriticalSections = new List<(double offset, double height)>();
 
         public int FrameFromOffset(double offset) {
             double count = 0;
@@ -124,6 +126,24 @@ namespace Hpmv {
                 Rifts.Add(((frame - prevFrame) * PixelsPerFrame, length * PixelsPerFrame));
                 FrameRifts.Add((frame, length));
                 prevFrame = frame;
+            }
+
+            CriticalSections.Clear();
+            double? criticalSectionBeginOffset = null;
+            double currentRiftTotal = 0;
+            int nextRiftId = 0;
+            foreach (var (time, value) in Records.CriticalSectionForWarping.changes) {
+                while (nextRiftId < FrameRifts.Count && FrameRifts[nextRiftId].frame < time) {
+                    var (frame, length) = FrameRifts[nextRiftId];
+                    currentRiftTotal += length * PixelsPerFrame;
+                    nextRiftId++;
+                }
+                if (criticalSectionBeginOffset == null && value > 0) {
+                    criticalSectionBeginOffset = currentRiftTotal + time * PixelsPerFrame;
+                } else if (criticalSectionBeginOffset != null && value == 0) {
+                    CriticalSections.Add((criticalSectionBeginOffset.Value, currentRiftTotal + time * PixelsPerFrame - criticalSectionBeginOffset.Value));
+                    criticalSectionBeginOffset = null;
+                }
             }
         }
     }

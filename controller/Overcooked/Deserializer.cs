@@ -72,6 +72,7 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntity, () => new DestroyEntityMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.DestroyEntities, () => new DestroyEntitiesMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LevelLoadByIndex, () => new LevelLoadByIndexMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LevelLoadByName, () => new LevelLoadByNameMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.GameState, () => new GameStateMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.TimeSync, () => new TimeSyncMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LatencyMeasure, () => new LatencyMessage());

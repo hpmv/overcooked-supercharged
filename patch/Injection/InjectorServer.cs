@@ -9,6 +9,7 @@ namespace Hpmv {
     public class InjectorServer {
         private Thread tcpThread;
         private Thread requestThread;
+        private bool stopRequested = false;
         public void Start() {
             tcpThread = new Thread(() => {
                 StartTcpListener();
@@ -23,47 +24,70 @@ namespace Hpmv {
         public void Destroy()
         {
             UnityEngine.Debug.Log("Destroying injector server");
-            tcpThread.Abort();
-            requestThread.Abort();
-            tcpThread.Join();
+            stopRequested = true;
+            listener?.Stop();  // interrupts AcceptTcpClient if it's running
+            requestThread.Interrupt();  // interrupts dequeue timeout
             requestThread.Join();
+            tcpThread.Join();
+            UnityEngine.Debug.Log("Destroyed injector server");
         }
 
         private void StartTcpListener() {
-            var server = new TcpListener(IPAddress.Loopback, 14455);
-            server.Start();
+            while (!stopRequested)
+            {
+                try
+                {
+                    listener = new TcpListener(IPAddress.Loopback, 14455);
+                    listener.Start();
 
-            while (true) {
-                var client = server.AcceptTcpClient();
-                HandleClient(client);
+                    while (!stopRequested)
+                    {
+                        UseClient(listener.AcceptTcpClient());
+                    }
+                }
+                catch (Exception e) {
+                    UnityEngine.Debug.LogException(e);
+                    Thread.Sleep(100);
+                }
+                finally
+                {
+                    listener?.Stop();
+                    tcpClient?.Close();
+                }
             }
         }
 
-        private void HandleClient(TcpClient client) {
+        private void UseClient(TcpClient client) {
             client.NoDelay = true;
             TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream());
             TProtocol protocol = new TBinaryProtocol(transport);
             var thriftClient = new Interceptor.Client(protocol);
             lock(sync) {
+                if (this.tcpClient != null)
+                {
+                    this.tcpClient.Close();
+                }
                 this.client = thriftClient;
                 this.tcpClient = client;
             }
         }
 
         private void RunRequestLoop() {
-            while (true) {
-                OutputData output = null;
+            while (!stopRequested) {
+                OutputData output;
                 try {
                     var time = DateTime.Now;
                     if (this.output.PeekSize() > 1) {
                         Console.WriteLine("WEIRD!!!! Output queue size: " + this.output.PeekSize());
                     }
-                    output = this.output.Dequeue(TimeSpan.FromSeconds(4));
+                    output = this.output.Dequeue(TimeSpan.FromSeconds(1));
                     var delta = DateTime.Now - time;
                     if (delta.TotalMilliseconds > 10) {
                         //Console.WriteLine("Time taken to wait for output: " + delta);
                     }
                 } catch (Exception) {
+                    this.tcpClient?.Close();
+                    this.client = null;
                     continue;
                 }
                 Interceptor.Client client = null;
@@ -144,6 +168,7 @@ namespace Hpmv {
         private InputData currentInput = new InputData();
         private object sync = new object();
 
+        private TcpListener listener;
         private Interceptor.Client client;
         private TcpClient tcpClient;
     }

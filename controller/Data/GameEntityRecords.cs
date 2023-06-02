@@ -8,6 +8,12 @@ namespace Hpmv {
         public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new Dictionary<GameEntityRecord, Versioned<ControllerState>>();
         public readonly Dictionary<int, Vector3> CapturedInitialPositions = new Dictionary<int, Vector3>();
 
+        // Represents whether the game is currently in a critical section, where warping in or out of
+        // the critical section is not correctly implemented and should be avoided.
+        // It's an integer because multiple sources may enter critical sections, so this is a running total.
+        // We're not in a critical section of this value is 0.
+        public Versioned<int> CriticalSectionForWarping = new Versioned<int>(0);
+
         public IEnumerable<GameEntityRecord> GenAllEntities() {
             foreach (var record in FixedEntities) {
                 foreach (var entity in record.GenAllEntities()) {
@@ -104,6 +110,7 @@ namespace Hpmv {
             foreach (var state in Chefs) {
                 state.Value.RemoveAllAfter(frame);
             }
+            CriticalSectionForWarping.RemoveAllAfter(frame);
         }
 
         public void CalculateSpawningPathsForPrefabs() {
@@ -128,6 +135,7 @@ namespace Hpmv {
             foreach (var (chef, controller) in Chefs) {
                 result.Controllers[chef.path.ids[0]] = controller.ToProto();
             }
+            result.CriticalSectionForWarping = CriticalSectionForWarping.ToProto();
             return result;
         }
     }

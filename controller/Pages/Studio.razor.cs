@@ -20,6 +20,7 @@ namespace controller.Pages {
         private void UseLevel(GameSetup level) {
             this.level = level;
             TimelineLayout.Sequences = level.sequences;
+            TimelineLayout.Records = level.entityRecords;
             EditorState.Records = level.entityRecords;
             EditorState.Sequences = level.sequences;
             EditorState.SelectedChef = null;
@@ -49,6 +50,9 @@ namespace controller.Pages {
         }
 
         private void StopRealSimulation() {
+            if (realGameConnector == null) {
+                return;
+            }
             realGameConnector.Stop();
             realGameConnector = null;
             EditorState.SelectedFrame = level.LastEmpiricalFrame;

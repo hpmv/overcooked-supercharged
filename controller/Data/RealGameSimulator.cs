@@ -499,6 +499,17 @@ namespace Hpmv {
                     });
                 }
             }
+            var totalCriticalSections = 0;
+            foreach (var entity in setup.entityRecords.GenAllEntities()) {
+                if (entity.existed.Last()) {
+                    if (entity.IsInCriticalSectionForWarping(frame)) {
+                        totalCriticalSections++;
+                    }
+                }
+            }
+            if (setup.entityRecords.CriticalSectionForWarping.Last() != totalCriticalSections) {
+                setup.entityRecords.CriticalSectionForWarping.ChangeTo(totalCriticalSections, frame);
+            }
         }
     }
 }

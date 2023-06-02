@@ -309,6 +309,7 @@ message GameEntityRecord {
 message GameEntityRecords {
     repeated GameEntityRecord all_records = 1;
     map<int32, VersionedControllerState> controllers = 2;
+    VersionedInt critical_section_for_warping = 3;
 }
 
 message GameActionChefList {

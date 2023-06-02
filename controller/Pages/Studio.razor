@@ -80,6 +80,11 @@
                             style="margin-top: @(rift.margin)px; height: @(rift.height)px">
                         </div>
                     }
+                    @foreach (var criticalSection in TimelineLayout.CriticalSections) {
+                        <div class="timeline-critical-section"
+                            style="top: @(criticalSection.offset)px; height: @(criticalSection.height)px">
+                        </div>
+                    }
                 </div>
                 <div class="timeline-line-container">
                     <div class="timeline-line"

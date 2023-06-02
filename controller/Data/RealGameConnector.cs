@@ -9,7 +9,6 @@ namespace Hpmv {
         private FramerateController FramerateController = new FramerateController { Delay = TimeSpan.FromSeconds(1) / Config.FRAMERATE };
         private GameSetup setup;
         public RealGameSimulator simulator = new RealGameSimulator();
-        private RealGameState state = RealGameState.NotInLevel;
 
         // Queue of state transition requests; enqueued by the UI thread, dequeued by the RPC handling thread.
         private ConcurrentQueue<RealGameStateRequest> requests = new ConcurrentQueue<RealGameStateRequest>();
@@ -20,26 +19,25 @@ namespace Hpmv {
 
         private Connector connector;
 
-        public RealGameState State {
-            get => state;
-            set {
-                state = value;
-                Console.WriteLine($"Controller transitioned to state {state}");
-            }
-        }
+        public RealGameState State { get; set; } = RealGameState.NotInLevel;
 
         public event Action OnFrameUpdate;
         public event Action OnConnectionTerminated;
 
         public async void Start() {
             connector = new Connector(this);
-            try {
-                await connector.Connect(cancellationTokenSource.Token);
-            } catch (Exception e) {
-                Console.WriteLine("Connection error: {0}", e);
-            } finally {
-                OnConnectionTerminated?.Invoke();
+            while (!cancellationTokenSource.Token.IsCancellationRequested) {
+                try {
+                    await connector.Connect(cancellationTokenSource.Token);
+                } catch (Exception e) {
+                    Console.WriteLine("Connection error: {0}", e);
+                }
+                if (this.State != RealGameState.Paused) {
+                    break;
+                }
+                Console.WriteLine("Reestablishing connection");
             }
+            OnConnectionTerminated?.Invoke();
         }
 
         public void Stop() {
@@ -88,7 +86,7 @@ namespace Hpmv {
             if (output.ServerMessages != null) {
                 foreach (var msg in output.ServerMessages) {
                     var item = Deserializer.Deserialize(msg.Type, msg.Message);
-                    if (item is LevelLoadByIndexMessage llbim) {
+                    if (item is LevelLoadByIndexMessage || item is LevelLoadByNameMessage) {
                         RestartLevel();
                         inputs.ResetOrderSeed = 12347;
                     } else if (item is GameStateMessage gsm) {

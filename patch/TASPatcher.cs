@@ -24,6 +24,7 @@ namespace SuperchargedPatch
             foreach (var patched in Harmony.GetAllPatchedMethods()) {
                 Console.WriteLine("Patched: " + patched.FullDescription());
             }
+            DebugItemOverlay.Awake();
         }
 
         public void Update()
@@ -36,11 +37,17 @@ namespace SuperchargedPatch
             ServerInterceptionPatches.LateUpdate();
         }
 
+        public void OnGUI()
+        {
+            DebugItemOverlay.OnGUI();
+        }
+
         public void OnDestroy()
         {
             patcher.UnpatchSelf();
             Injector.Destroy();
             WarpHandler.Destroy();
+            DebugItemOverlay.Destroy();
         }
     }
 }

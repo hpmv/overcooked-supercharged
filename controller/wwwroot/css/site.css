@@ -272,6 +272,12 @@ app {
     background-color: rgb(106, 183, 255);
 }
 
+.timeline-critical-section {
+    background-color: rgb(255, 255, 255, 0.5);
+    position: absolute;
+    width: 100%;
+}
+
 .schedule {
     position: relative;
     display: flex;

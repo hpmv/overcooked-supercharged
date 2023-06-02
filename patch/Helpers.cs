@@ -17,7 +17,11 @@ namespace SuperchargedPatch
 
 
         // Just an arbitrary object to tell TimeManager whose pause we're resuming.
-        private static object timeManagerPauseArbitration = new object();
+        // We don't initialize a new object though. This is because when we hot-reload the plugin,
+        // we would get a different object and then it's impossible to resume the game. So, we use
+        // a stable reference. The exact reference doesn't matter, it just needs to not be part of
+        // the plugin.
+        private static object timeManagerPauseArbitration = typeof(TimeManager);
 
         public static TimeManager CurrentTimeManager { get; set; }
 

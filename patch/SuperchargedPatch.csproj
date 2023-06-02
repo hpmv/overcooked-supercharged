@@ -75,11 +75,19 @@
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.IMGUIModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>Libs\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
       <HintPath>Libs\UnityEngine.ParticleSystemModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>Libs\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>Libs\UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>Libs\UnityEngine.UI.dll</HintPath>
@@ -98,6 +106,7 @@
     <Compile Include="AlteredComponents\ServerCannonSessionInteractableMod.cs" />
     <Compile Include="AlteredComponents\ThrowableItemAuxMessage.cs" />
     <Compile Include="AlteredComponents\ThrowableItemPatches.cs" />
+    <Compile Include="DebugItemOverlay.cs" />
     <Compile Include="Extensions\ClientPlayerControlsImpl_DefaultExt.cs" />
     <Compile Include="ComponentAltering.cs" />
     <Compile Include="EntityAuxMessage.cs" />
@@ -110,6 +119,7 @@
     <Compile Include="Injection\Injector.cs" />
     <Compile Include="Injection\InjectorServer.cs" />
     <Compile Include="Injection\OrderRandom.cs" />
+    <Compile Include="ObjectAnnotator.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Extensions\ServerWorkableItemExt.cs" />

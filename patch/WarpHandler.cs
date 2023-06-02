@@ -152,25 +152,36 @@ namespace SuperchargedPatch
                     Log($"[WARP] Set entity path reference of {entity.m_Header.m_uEntityID} to {entityPathReference}");
                 }
             }
-            for (int i = 0; i < warp.Entities.Count; i++)
+
+            // We do several iterations, because the order in which we warp specific properties is important.
+            Action<Action<EntitySerialisationEntry, EntityWarpSpec>> forEachEntity = (Action<EntitySerialisationEntry, EntityWarpSpec> action) =>
             {
-                var entityThrift = warp.Entities[i];
-                EntitySerialisationEntry entity;
-                if (entityThrift.__isset.entityId)
+                for (int i = 0; i < warp.Entities.Count; i++)
                 {
-                    entity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.EntityId);
-                    if (entity == null)
+                    var entityThrift = warp.Entities[i];
+                    EntitySerialisationEntry entity;
+                    if (entityThrift.__isset.entityId)
                     {
-                        continue;
+                        entity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.EntityId);
+                        if (entity == null)
+                        {
+                            continue;
+                        }
                     }
-                }
-                else
-                {
-                    if (!entityPathReferenceToEntry.TryGetValue(entityThrift.EntityPathReference.FromThrift(), out entity))
+                    else
                     {
-                        continue;
+                        if (!entityPathReferenceToEntry.TryGetValue(entityThrift.EntityPathReference.FromThrift(), out entity))
+                        {
+                            continue;
+                        }
                     }
+                    action(entity, entityThrift);
                 }
+            };
+
+            // Handle attachment parent changes.
+            forEachEntity((entity, entityThrift) =>
+            {
                 if (entityThrift.__isset.attachmentParent)
                 {
                     var attachmentParent = entityThrift.AttachmentParent;
@@ -181,14 +192,14 @@ namespace SuperchargedPatch
                         if (parentEntity == null)
                         {
                             Log($"[WARP] Error setting attachment parent: parent entity path {attachmentParent} does not exist");
-                            continue;
+                            return;
                         }
                     }
                     var physicalAttachment = entity.m_GameObject.GetComponent<ServerPhysicalAttachment>();
                     if (physicalAttachment == null)
                     {
                         Log($"[WARP] Error setting attachment parent: entity {entity.m_Header.m_uEntityID} does not have a ServerPhysicalAttachment");
-                        continue;
+                        return;
                     }
                     Action detachFromExistingParent = () =>
                     {
@@ -216,14 +227,17 @@ namespace SuperchargedPatch
                     if (parentEntity == null)
                     {
                         detachFromExistingParent();
-                    } else
+                    }
+                    else
                     {
-                        if (physicalAttachment.transform.parent == parentEntity.m_GameObject.transform)
+                        var existingParent = physicalAttachment.m_ServerData().m_parentable as Component;
+                        if (existingParent.gameObject == parentEntity.m_GameObject)
                         {
-                            continue;
+                            return;
                         }
                         detachFromExistingParent();
-                        if (parentEntity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation station) {
+                        if (parentEntity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation station)
+                        {
                             if (station.HasItem())
                             {
                                 Log($"[WARP] Detaching previous attachment of parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
@@ -231,8 +245,9 @@ namespace SuperchargedPatch
                             }
                             Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
                             station.AddItem(entity.m_GameObject, default);
-                            
-                        } else if (parentEntity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
+
+                        }
+                        else if (parentEntity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
                         {
                             if (carrier.HasAttachment(PlayerAttachTarget.Default))
                             {
@@ -241,65 +256,30 @@ namespace SuperchargedPatch
                             }
                             Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerPlayerAttachmentCarrier {parentEntity.m_Header.m_uEntityID}");
                             carrier.CarryItem(entity.m_GameObject);
-                        } else if (parentEntity.m_GameObject.GetComponent<IParentable>() is IParentable parentable)
+                        }
+                        else if (parentEntity.m_GameObject.GetComponent<IParentable>() is IParentable parentable)
                         {
                             Log($"[WARP] Warning when attaching entity entity {entity.m_Header.m_uEntityID} to new parent {parentEntity.m_Header.m_uEntityID}: parent is of unhandled kind");
                             physicalAttachment.Attach(parentable);
-                        } else { 
+                        }
+                        else
+                        {
                             Log($"[WARP] Error setting attachment parent: desired parent entity {parentEntity.m_Header.m_uEntityID} is not an IParentable");
-                            continue;
+                            return;
                         }
                     }
                 }
+            });
 
-                if (entity.m_GameObject.GetPhysicsContainerIfExists() is Rigidbody container)
-                {
-                    if (entityThrift.__isset.position)
-                    {
-                        container.transform.position = entityThrift.Position.FromThrift();
-                    }
-                    if (entityThrift.__isset.rotation)
-                    {
-                        container.transform.rotation = entityThrift.Rotation.FromThrift();
-                    }
-                    if (entityThrift.__isset.velocity)
-                    {
-                        container.velocity = entityThrift.Velocity.FromThrift();
-                    }
-                    if (entityThrift.__isset.angularVelocity)
-                    {
-                        container.angularVelocity = entityThrift.AngularVelocity.FromThrift();
-                    }
-                }
-
-                // Special case for chefs. Use PlayerRespawnBehaviour to detect if it's a chef.
-                if (entity.m_GameObject.GetComponent<PlayerRespawnBehaviour>() != null)
-                {
-                    var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
-                    if (entityThrift.__isset.position)
-                    {
-                        rigidbody.transform.position = entityThrift.Position.FromThrift();
-                    }
-                    if (entityThrift.__isset.rotation)
-                    {
-                        rigidbody.transform.rotation = entityThrift.Rotation.FromThrift();
-                    }
-                    if (entityThrift.__isset.velocity)
-                    {
-                        rigidbody.velocity = entityThrift.Velocity.FromThrift();
-                    }
-                    if (entityThrift.__isset.angularVelocity)
-                    {
-                        rigidbody.angularVelocity = entityThrift.AngularVelocity.FromThrift();
-                    }
-                }
-
+            // Handle specific component warping.
+            forEachEntity((entity, entityThrift) =>
+            {
                 if (entity.m_GameObject.GetComponent<ServerCannonMod>() is ServerCannonMod cannon)
                 {
                     if (entityThrift.Cannon == null)
                     {
                         Log($"[WARP] Failed to warp cannon: no cannon specific warp data");
-                        continue;
+                        return;
                     }
                     CannonModMessage message = new CannonModMessage();
                     if (entityThrift.Cannon.ModData != null)
@@ -315,7 +295,7 @@ namespace SuperchargedPatch
                     if (chef == null)
                     {
                         Log($"[WARP] Failed to warp chef: no chef specific warp data");
-                        continue;
+                        return;
                     }
                     cpci.set_m_dashTimer((float)chef.DashTimer);
                     if (chef.InteractingEntity != -1)
@@ -324,13 +304,13 @@ namespace SuperchargedPatch
                         if (entry == null)
                         {
                             Log($"[WARP] Failed to warp chef's interacting entity: entity ID {chef.InteractingEntity} does not exist");
-                            continue;
+                            return;
                         }
                         var clientInteractable = entry.m_GameObject.GetComponent<ClientInteractable>();
                         if (clientInteractable == null)
                         {
                             Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ClientInteractable component");
-                            continue;
+                            return;
                         }
                         cpci.set_m_predictedInteracted(clientInteractable);
 
@@ -340,10 +320,11 @@ namespace SuperchargedPatch
                         if (serverInteractable == null)
                         {
                             Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ServerInteractable component");
-                            continue;
+                            return;
                         }
                         cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(serverInteractable);
-                    } else
+                    }
+                    else
                     {
                         cpci.set_m_predictedInteracted(null);
                         cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(null);
@@ -364,7 +345,7 @@ namespace SuperchargedPatch
                     if (workstation == null)
                     {
                         Log($"[WARP] Failed to warp Workstation: no workstation specific data");
-                        continue;
+                        return;
                     }
 
                     // First remove all interacters. Then we'll add back those asked for.
@@ -384,10 +365,11 @@ namespace SuperchargedPatch
                         if (item != null && item.m_GameObject.GetComponent<IAttachment>() is IAttachment attachment)
                         {
                             sw.OnItemAdded(attachment);
-                        } else
+                        }
+                        else
                         {
                             Log($"[WARP] Failed to warp Workstation: item entity {workstation.Item} does not exist or does not have IAttachment component");
-                            continue;
+                            return;
                         }
                     }
 
@@ -399,7 +381,7 @@ namespace SuperchargedPatch
                             if (chef == null)
                             {
                                 Log($"[WARP] Failed to warp Workstation: chef entity {interacter.ChefEntityId} does not exist");
-                                continue;  // inner loop, but it's ok, we'll catch it outside
+                                return;
                             }
                             sw.OnInteracterAdded(chef, Vector2.up);  // direction doesn't matter
                         }
@@ -408,7 +390,7 @@ namespace SuperchargedPatch
                         if (interacters.Count != workstation.Interacters.Count)
                         {
                             Log($"[WARP] Failed to warp Workstation: was not able to add desired interacters");
-                            continue;
+                            return;
                         }
                         for (int j = 0; j < workstation.Interacters.Count; j++)
                         {
@@ -424,7 +406,7 @@ namespace SuperchargedPatch
                     if (workableItem == null)
                     {
                         Log($"[WARP] Failed to warp WorkableItem: no WorkableItem specific data");
-                        continue;
+                        return;
                     }
 
                     wi.SetOnWorkstation(workableItem.OnWorkstation);
@@ -441,7 +423,7 @@ namespace SuperchargedPatch
                     if (throwableItem == null)
                     {
                         Log($"[WARP] Failed to warp ThrowableItem: no ThrowableItem specific data");
-                        continue;
+                        return;
                     }
 
                     sti.SetFlying(throwableItem.IsFlying);
@@ -451,13 +433,14 @@ namespace SuperchargedPatch
                     {
                         sti.SetThrower(null);
                         cti.SetThrower(null);
-                    } else
+                    }
+                    else
                     {
                         var thrower = EntitySerialisationRegistry.GetEntry((uint)throwableItem.ThrowerEntityId)?.m_GameObject;
                         if (thrower == null)
                         {
                             Log($"[WARP] Failed to warp ThrowableItem: thrower entity {throwableItem.ThrowerEntityId} does not exist");
-                            continue;
+                            return;
                         }
                         sti.SetThrower(thrower.GetComponent<IThrower>());
                         cti.SetThrower(thrower.GetComponent<IClientThrower>());
@@ -497,14 +480,62 @@ namespace SuperchargedPatch
                     {
                         sti.OnEnterFlightForWarping();
                         cti.OnEnterFlightForWarping();
-                    } else if (!throwableItem.IsFlying && wasFlying)
+                    }
+                    else if (!throwableItem.IsFlying && wasFlying)
                     {
                         sti.OnExitFlightForWarping();
                         cti.OnExitFlightForWarping();
                     }
                 }
-                // TODO: more properties to warp
-            }
+            });
+
+            // Handle position setting last.
+            forEachEntity((entity, entityThrift) =>
+            {
+                if (entity.m_GameObject.GetPhysicsContainerIfExists() is Rigidbody container)
+                {
+                    if (entityThrift.__isset.position)
+                    {
+                        container.transform.position = entityThrift.Position.FromThrift();
+                    }
+                    if (entityThrift.__isset.rotation)
+                    {
+                        container.transform.rotation = entityThrift.Rotation.FromThrift();
+                    }
+                    if (entityThrift.__isset.velocity)
+                    {
+                        container.velocity = entityThrift.Velocity.FromThrift();
+                    }
+                    if (entityThrift.__isset.angularVelocity)
+                    {
+                        container.angularVelocity = entityThrift.AngularVelocity.FromThrift();
+                    }
+                }
+                if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() != null)
+                {
+                    var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
+                    if (entityThrift.__isset.position)
+                    {
+                        rigidbody.transform.position = entityThrift.Position.FromThrift();
+                    }
+                    if (entityThrift.__isset.rotation)
+                    {
+                        rigidbody.transform.rotation = entityThrift.Rotation.FromThrift();
+                    }
+                    if (entityThrift.__isset.velocity)
+                    {
+                        rigidbody.velocity = entityThrift.Velocity.FromThrift();
+                    }
+                    if (entityThrift.__isset.angularVelocity)
+                    {
+                        rigidbody.angularVelocity = entityThrift.AngularVelocity.FromThrift();
+                    }
+
+                    var groundCast = entity.m_GameObject.GetComponent<GroundCast>();
+                    groundCast.ForceUpdateNow();
+                    Log($"INFO: Entity {entity.m_Header.m_uEntityID} has ground contact? {groundCast.HasGroundContact()} should apply gravity? {entity.m_GameObject.GetComponent<PlayerControls>().m_bApplyGravity} ground layer? {groundCast.GetGroundLayer()}");
+                }
+            });
 
             // Pause the TimeManager again, to capture the velocities.
             Helpers.Pause();

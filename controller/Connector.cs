@@ -27,12 +27,15 @@ namespace Hpmv {
             TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream());
             TProtocol protocol = new TBinaryProtocol(transport);
             var server = new Interceptor.AsyncProcessor(handler);
-            try {
-                while (!token.IsCancellationRequested) {
-                    await server.ProcessAsync(protocol, protocol);
+            while (!token.IsCancellationRequested) {
+                try {
+                    if (!await server.ProcessAsync(protocol, protocol, token)) {
+                        break;
+                    }
                 }
-            } catch (Exception e) {
-                Console.WriteLine("Connection error: {0}", e);
+                catch {
+                    break;
+                }
             }
             client.Close();
         }

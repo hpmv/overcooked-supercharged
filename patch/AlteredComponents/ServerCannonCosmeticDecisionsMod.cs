@@ -20,14 +20,56 @@ namespace SuperchargedPatch.AlteredComponents
 
 		public float GetLoadAnimationProgress()
         {
-			return m_cannonCosmeticDecisions.m_cannonAnimator.GetAnimatorTransitionInfo(0).normalizedTime;
+            // Note: I tried to use GetAnimationTransitionInfo. But, that apparently just never returns any transitions.
+            // Instead, it looks like when we transition from Load to Ready, we just stay in Load state for a while and
+            // then suddenly become the Ready state; and also, when we call Play("DLC08_Cannon_Load", 0, time), we will
+            // actually restore the exact state as if we had been transitioning from Load to Ready for "time". Note also
+            // that the normalized time is between 0 and 1, with 1 being the end of the transition. It's weird, but this
+            // seems to be the only way this can work.
+			return m_cannonCosmeticDecisions.m_cannonAnimator.GetCurrentAnimatorStateInfo(0).normalizedTime;
 		}
 
 		public void SetLoadAnimationProgress(float time)
         {
-			m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load");
-			m_cannonCosmeticDecisions.m_cannonAnimator.CrossFade("DLC08_Cannon_Ready", 0.25f, 0, 0, time);
+			m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, time);
 		}
+		
+        // Debugging code... leaving it here for now.
+		// public void Update()
+		// {
+		// 	if (Input.GetKeyDown(KeyCode.F1))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, 0.99f);
+        //     } else if (Input.GetKeyDown(KeyCode.F2))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.SetBool("IsOccupied", false);
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.SetBool("IsOccupied", true);
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, 0f);
+        //     }
+        //     else if (Input.GetKeyDown(KeyCode.F3))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, 0.99f);
+        //     }
+        //     else if (Input.GetKeyDown(KeyCode.F4))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, 0f);
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Load", 0, 0.99f);
+        //     }
+        //     else if (Input.GetKeyDown(KeyCode.F5))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.Play("DLC08_Cannon_Ready", 0, 0f);
+        //     }
+        //     if (Input.GetKeyDown(KeyCode.F8))
+        //     {
+		// 		m_cannonCosmeticDecisions.m_cannonAnimator.speed = 0f;
+        //     } else if (Input.GetKeyDown(KeyCode.F9))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.speed = 0.25f;
+        //     } else if (Input.GetKeyDown(KeyCode.F10))
+        //     {
+        //         m_cannonCosmeticDecisions.m_cannonAnimator.speed = 1f;
+        //     }
+        // }
 
 		// Token: 0x04000D67 RID: 3431
 		private CannonCosmeticDecisions m_cannonCosmeticDecisions;

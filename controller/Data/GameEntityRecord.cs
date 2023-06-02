@@ -147,6 +147,16 @@ namespace Hpmv {
             }
             return new SpawnedEntityReference(spawnOwner[frame]);
         }
+
+        public bool IsInCriticalSectionForWarping(int frame) {
+            if (prefab != null && prefab.IsCannon) {
+                var rawData = data[frame].rawGameEntityData;
+                if (rawData != null) {
+                    return new CannonModMessage().FromBytes(rawData).m_state == CannonModMessage.CannonState.Loading;
+                }
+            }
+            return false;
+        }
     }
 
     public struct ChefState {

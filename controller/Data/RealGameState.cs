@@ -77,6 +77,7 @@ namespace Hpmv {
         Warping,
         AwaitingResume,
         Error,
+        ReestablishingConnection,
     }
 
     public enum RealGameStateRequestKind {

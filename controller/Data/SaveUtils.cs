@@ -245,6 +245,7 @@ namespace Hpmv {
             foreach (var (chef, controllerState) in records.Controllers) {
                 Records.Chefs[GetRootRecord(chef)] = controllerState.FromProto();
             }
+            Records.CriticalSectionForWarping = records.CriticalSectionForWarping.FromProto();
         }
     }
 }
