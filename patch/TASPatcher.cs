@@ -17,8 +17,6 @@ namespace SuperchargedPatch
         private static Harmony patcher;
         public void Awake()
         {
-            ServerInterceptionPatches.EnableInputInjection = true;
-
             patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll(Assembly.GetExecutingAssembly());
             foreach (var patched in Harmony.GetAllPatchedMethods()) {

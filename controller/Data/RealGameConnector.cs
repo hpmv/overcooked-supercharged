@@ -61,6 +61,7 @@ namespace Hpmv {
             setup.inputHistory.CleanHistoryAfterFrame(0);
             setup.LastEmpiricalFrame = 0;
             State = RealGameState.AwaitingStart;
+            OnFrameUpdate?.Invoke();
         }
 
         public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
@@ -184,8 +185,7 @@ namespace Hpmv {
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
                             State = RealGameState.Error;
-                        }
-                        if (output.NextFramePaused) {
+                        } else if (output.NextFramePaused) {
                             State = RealGameState.Paused;
                             currentRequest.Completed.SetResult(true);
                             currentRequest = null;
@@ -200,8 +200,7 @@ namespace Hpmv {
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
                             State = RealGameState.Error;
-                        }
-                        if (!output.NextFramePaused) {
+                        } else if (!output.NextFramePaused) {
                             State = RealGameState.Running;
                             currentRequest.Completed.SetResult(true);
                             currentRequest = null;
@@ -217,8 +216,7 @@ namespace Hpmv {
                             currentRequest.Completed.SetResult(false);
                             currentRequest = null;
                             State = RealGameState.Error;
-                        }
-                        if (output.FrameNumber == currentRequest.FrameToWarpTo) {
+                        } else if (output.FrameNumber == currentRequest.FrameToWarpTo) {
                             State = RealGameState.Paused;
                             currentRequest.Completed.SetResult(true);
                             currentRequest = null;

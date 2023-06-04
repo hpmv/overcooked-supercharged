@@ -168,16 +168,21 @@ namespace Hpmv {
                 entry.Value.ChangeTo(newState, frame + 1);
                 input[chefId] = new OneInputData {
                     Pad = new PadDirection { X = actualInput.axes.X, Y = actualInput.axes.Y },
-                    PickDown = actualInput.primary.justPressed,
-                    ChopDown = actualInput.secondary.isDown,
-                    ThrowDown = actualInput.secondary.justPressed,
-                    ThrowUp = actualInput.secondary.justReleased,
-                    DashDown = actualInput.dash.justPressed
+                    Pickup = ToButtonInput(actualInput.primary),
+                    Interact = ToButtonInput(actualInput.secondary),
+                    Dash = ToButtonInput(actualInput.dash),
                 };
             }
             return input;
         }
 
+        private ButtonInput ToButtonInput(ButtonOutput output) {
+            return new ButtonInput {
+                JustPressed = output.justPressed,
+                JustReleased = output.justReleased,
+                Down = output.isDown
+            };
+        }
 
         private string toJson(Serialisable serialisable) {
             if (serialisable == null) return "(null)";
@@ -301,9 +306,12 @@ namespace Hpmv {
                     specificData.throwableItem.ignoredColliders =
                         tiam.m_colliders.Select(c => (Entity: entityIdToRecord[(int)c.entity.m_uEntityID], ColliderIndex: c.colliderIndex)).ToArray();
                 } else if (payload is CannonModMessage cmm) {
-                    Console.WriteLine($"Changing cannon message so that flying time is {cmm.ToJson()} at frame {frame}");
                     specificData.rawGameEntityData = cmm.ToBytes();
-                    Console.WriteLine($"After re-deserializing the message is {new CannonModMessage().FromBytes(specificData.rawGameEntityData).ToJson()}");
+                } else if (payload is SessionInteractableMessage sim) {
+                    var interacter = sim.m_interacterID == 0 ? null : entityIdToRecord[(int)sim.m_interacterID];
+                    specificData.sessionInteracter = interacter;
+                } else if (payload is PilotRotationMessage prm) {
+                    specificData.pilotRotationAngle = prm.m_angle;
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };

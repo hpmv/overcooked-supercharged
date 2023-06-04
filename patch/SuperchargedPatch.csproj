@@ -113,17 +113,19 @@
     <Compile Include="EntityPathReference.cs" />
     <Compile Include="EntityPathReferenceMarker.cs" />
     <Compile Include="Extensions\ServerPhysicalAttachmentExt.cs" />
+    <Compile Include="Extensions\ServerPilotRotationExt.cs" />
+    <Compile Include="Extensions\ServerSessionInteractableExt.cs" />
     <Compile Include="Extensions\ThrowableItemExt.cs" />
     <Compile Include="Helpers.cs" />
     <Compile Include="Injection\BlockingQueue.cs" />
     <Compile Include="Injection\Injector.cs" />
     <Compile Include="Injection\InjectorServer.cs" />
     <Compile Include="Injection\OrderRandom.cs" />
-    <Compile Include="ObjectAnnotator.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Extensions\ServerWorkableItemExt.cs" />
     <Compile Include="Extensions\ServerWorkstationExt.cs" />
+    <Compile Include="TASLogicalButton.cs" />
     <Compile Include="TASPatcher.cs" />
     <Compile Include="UnrealTimePatch.cs" />
     <Compile Include="WarpHandler.cs" />
@@ -143,9 +145,6 @@
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.Analyzers.dll" />
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.CSharp.Analyzers.dll" />
   </ItemGroup>
-  <Target Name="PreBuild" BeforeTargets="_GenerateRestoreProjectSpec;Restore;Compile">
-    <Exec Command="thrift -gen csharp ../common/game.thrift" />
-  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -157,4 +156,7 @@
     <Error Condition="!Exists('..\packages\Microsoft.NetFramework.Analyzers.2.9.6\build\Microsoft.NetFramework.Analyzers.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.NetFramework.Analyzers.2.9.6\build\Microsoft.NetFramework.Analyzers.props'))" />
     <Error Condition="!Exists('..\packages\Microsoft.CodeAnalysis.FxCopAnalyzers.2.9.6\build\Microsoft.CodeAnalysis.FxCopAnalyzers.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.CodeAnalysis.FxCopAnalyzers.2.9.6\build\Microsoft.CodeAnalysis.FxCopAnalyzers.props'))" />
   </Target>
+  <PropertyGroup>
+    <PreBuildEvent>$(ProjectDir)\thrift -gen csharp -o $(ProjectDir) $(ProjectDir)\..\common\game.thrift</PreBuildEvent>
+  </PropertyGroup>
 </Project>

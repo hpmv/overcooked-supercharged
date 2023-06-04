@@ -1,4 +1,5 @@
 ﻿using SuperchargedPatch.AlteredComponents;
+using SuperchargedPatch.Extensions;
 using System.Collections.Generic;
 using Team17.Online.Multiplayer.Messaging;
 using UnityEngine;
@@ -32,44 +33,152 @@ namespace SuperchargedPatch
             // {
             //     return string.Format("{0:0.###}", c.transform.localScale);
             // });
-            AddProviderFor<PlayerControls>("parent", c =>
+            // AddProviderFor<PlayerControls>("parent", c =>
+            // {
+            //     return c.transform.parent?.name ?? "null";
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("transDur", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
+            //     return "" + info.duration;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("transTime", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
+            //     return "" + info.normalizedTime;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("transName", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
+            //     return "" + info.nameHash;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("stateTime", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetCurrentAnimatorStateInfo(0);
+            //     return "" + info.normalizedTime;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("stateName", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetCurrentAnimatorStateInfo(0);
+            //     return "" + info.nameHash;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("nextStateTime", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetNextAnimatorStateInfo(0);
+            //     return "" + info.normalizedTime;
+            // });
+            // AddProviderFor<CannonCosmeticDecisions>("nextStateName", c =>
+            // {
+            //     var info = c.m_cannonAnimator.GetNextAnimatorStateInfo(0);
+            //     return "" + info.nameHash;
+            // });
+            // AddProvider("name", go =>
+            // {
+            //     var entityId = EntitySerialisationRegistry.GetEntry(go);
+            //     if (entityId == null)
+            //     {
+            //         return "null";
+            //     }
+            //     if (entityId.m_Header.m_uEntityID == 81)
+            //     {
+            //         return go.name;
+            //     }
+            //     return null;
+            // });
+            // AddProviderFor<ServerPilotRotation>("spr.startAngle", c =>
+            // {
+            //     return "" + c.m_startAngle();
+            // });
+            // AddProviderFor<ServerPilotRotation>("spr.angle", c =>
+            // {
+            //     return "" + c.m_angle();
+            // });
+            // AddProviderFor<PilotRotation>("pr.euler.y", c =>
+            // {
+            //     return "" + c.transform.eulerAngles.y;
+            // });
+            AddProviderFor<PlayerControls>("buttons", c =>
             {
-                return c.transform.parent?.name ?? "null";
+                var controlScheme = c.ControlScheme;
+                if (controlScheme == null)
+                {
+                    return "?";
+                }
+                var str = "";
+                if (controlScheme.m_pickupButton is TASLogicalButton)
+                {
+                    if (controlScheme.m_pickupButton.IsDown())
+                    {
+                        str += "+P ";
+                    } else
+                    {
+                        str += "-P ";
+                    }
+                } else
+                {
+                    str += "?P ";
+                }
+                if (controlScheme.m_worksurfaceUseButton is TASLogicalButton)
+                {
+                    if (controlScheme.m_worksurfaceUseButton.IsDown())
+                    {
+                        str += "+U ";
+                    }
+                    else
+                    {
+                        str += "-U ";
+                    }
+                }
+                else
+                {
+                    str += "?U ";
+                }
+                if (controlScheme.m_dashButton is TASLogicalButton)
+                {
+                    if (controlScheme.m_dashButton.IsDown())
+                    {
+                        str += "+D";
+                    }
+                    else
+                    {
+                        str += "-D";
+                    }
+                }
+                else
+                {
+                    str += "?D";
+                }
+                return str;
             });
-            AddProviderFor<CannonCosmeticDecisions>("transDur", c =>
+            AddProviderFor<PlayerControls>("axes", c =>
             {
-                var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
-                return "" + info.duration;
+                var controlScheme = c.ControlScheme;
+                if (controlScheme == null)
+                {
+                    return "?";
+                }
+                var str = "";
+                if (controlScheme.m_moveX is TASLogicalValue)
+                {
+                    str += "X:" + string.Format("{0:0.###}", controlScheme.m_moveX.GetValue()) + " ";
+                }
+                else
+                {
+                    str += "X:? ";
+                }
+                if (controlScheme.m_moveY is TASLogicalValue)
+                {
+                    str += "Y:" + string.Format("{0:0.###}", controlScheme.m_moveY.GetValue());
+                }
+                else
+                {
+                    str += "Y:?";
+                }
+                return str;
             });
-            AddProviderFor<CannonCosmeticDecisions>("transTime", c =>
+            AddProviderFor<PlayerControls>("canpress", c =>
             {
-                var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
-                return "" + info.normalizedTime;
-            });
-            AddProviderFor<CannonCosmeticDecisions>("transName", c =>
-            {
-                var info = c.m_cannonAnimator.GetAnimatorTransitionInfo(0);
-                return "" + info.nameHash;
-            });
-            AddProviderFor<CannonCosmeticDecisions>("stateTime", c =>
-            {
-                var info = c.m_cannonAnimator.GetCurrentAnimatorStateInfo(0);
-                return "" + info.normalizedTime;
-            });
-            AddProviderFor<CannonCosmeticDecisions>("stateName", c =>
-            {
-                var info = c.m_cannonAnimator.GetCurrentAnimatorStateInfo(0);
-                return "" + info.nameHash;
-            });
-            AddProviderFor<CannonCosmeticDecisions>("nextStateTime", c =>
-            {
-                var info = c.m_cannonAnimator.GetNextAnimatorStateInfo(0);
-                return "" + info.normalizedTime;
-            });
-            AddProviderFor<CannonCosmeticDecisions>("nextStateName", c =>
-            {
-                var info = c.m_cannonAnimator.GetNextAnimatorStateInfo(0);
-                return "" + info.nameHash;
+                return c.CanButtonBePressed() ? "YES" : "NO";
             });
         }
 
@@ -81,15 +190,22 @@ namespace SuperchargedPatch
                 style.normal.textColor = Color.black;
                 style.normal.background = Texture2D.whiteTexture;
                 style.fontSize = 10;
+                style.font = Font.CreateDynamicFontFromOSFont("Courier New", 10);
+                style.fontStyle = FontStyle.Bold;
                 style.alignment = TextAnchor.UpperLeft;
                 style.padding = new RectOffset(4, 4, 1, 1);
             }
 
-            foreach (var entry in EntitySerialisationRegistry.m_EntitiesList._items)
+            if (EntitySerialisationRegistry.m_EntitiesList?._items == null)
+            {
+                return;
+            }
+            EntitySerialisationRegistry.m_EntitiesList.ForEach(entry =>
             {
                 var screenPos = Camera.main.WorldToScreenPoint(entry.m_GameObject.transform.position).XY();
                 var curPos = screenPos + new Vector2(-50, 50);
-                foreach (var provider in providers) {
+                foreach (var provider in providers)
+                {
                     if (!provider.enabled)
                     {
                         continue;
@@ -105,7 +221,7 @@ namespace SuperchargedPatch
                     GUI.Label(new Rect(curPos.x, Screen.height - curPos.y, labelSize.x, labelSize.y), guiContent, style);
                     curPos.y += labelSize.y;
                 }
-            }
+            });
         }
 
         public static void Destroy()

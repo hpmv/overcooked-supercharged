@@ -16,6 +16,8 @@ namespace Hpmv {
         public SpecificEntityData_ThrowableItem throwableItem;
         public bool isUnwarpable;
         public byte[] rawGameEntityData;
+        public GameEntityRecord sessionInteracter;
+        public float pilotRotationAngle;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -25,6 +27,8 @@ namespace Hpmv {
                 ThrowableItem = throwableItem.ToProto(),
                 IsUnwarpable = isUnwarpable,
                 RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
+                SessionInteracter = sessionInteracter?.path?.ToProto(),
+                PilotRotationAngle = pilotRotationAngle,
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -64,6 +68,8 @@ namespace Hpmv {
                 throwableItem = data.ThrowableItem?.FromProto(context) ?? default,
                 isUnwarpable = data.IsUnwarpable,
                 rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
+                sessionInteracter = data.SessionInteracter.FromProtoRef(context),
+                pilotRotationAngle = data.PilotRotationAngle,
             };
         }
     }

@@ -373,8 +373,17 @@ namespace Hpmv {
             entityRecords.RegisterKnownObject(66, CHOCOLATE_CRATE);
 
             var CANNON = new PrefabRecord("Cannon", "cannon") { IsCannon = true };
-            entityRecords.RegisterKnownObject(84, CANNON);
-            entityRecords.RegisterKnownObject(85, CANNON);
+            var cannon1 = entityRecords.RegisterKnownObject(84, CANNON);
+            var cannon2 = entityRecords.RegisterKnownObject(85, CANNON);
+
+            cannon1.data.AppendWith(0, d => {
+                d.pilotRotationAngle = 90;
+                return d;
+            });
+            cannon2.data.AppendWith(0, d => {
+                d.pilotRotationAngle = 270;
+                return d;
+            });
 
             var BUTTON = new PrefabRecord("Button", "button") { CanUse = true };
             entityRecords.RegisterKnownObject(77, BUTTON);
@@ -452,6 +461,9 @@ namespace Hpmv {
             var SERVE = new PrefabRecord("Serve", "serve") { OccupiedGridPoints = new Vector2[] { new Vector2(0, -0.6f), new Vector2(0, 0.6f) } };
             entityRecords.RegisterKnownObject(73, SERVE);
 
+            var TERMINAL = new PrefabRecord("Terminal", "terminal") { CanUse = true, IsTerminal = true };
+            entityRecords.RegisterKnownObject(83, TERMINAL);
+            entityRecords.RegisterKnownObject(86, TERMINAL);
 
             var IGNORE = new PrefabRecord("", "") { Ignore = true };
             for (var i = 95; i <= 102; i++) {

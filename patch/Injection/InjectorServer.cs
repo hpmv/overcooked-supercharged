@@ -126,7 +126,6 @@ namespace Hpmv {
         public InputData CurrentInput {
             get {
                 if (currentInput == null) {
-                    committed = false;
                     try {
                         if (input.PeekSize() > 1) {
                             Console.WriteLine("WEIRD!!!! Input queue size: " + input.PeekSize());
@@ -138,6 +137,7 @@ namespace Hpmv {
                     }
                 }
                 if (currentInput.ResetOrderSeed != 0) {
+                    // TODO: revisit this; this is a hack right now.
                     Console.WriteLine("Resetting random seed to " + currentInput.ResetOrderSeed);
                     OrderRandom.myRandom = new Random(currentInput.ResetOrderSeed);
                 }
@@ -145,26 +145,21 @@ namespace Hpmv {
             }
         }
 
-        public void CommitFrameIfNotCommitted() {
-            if (!committed) {
-                currentInput = null;
-                output.Enqueue(CurrentFrameData);
-                CurrentFrameData = new OutputData();
-                committed = true;
+        public void CommitFrame() {
+            // Make sure the drain previous input.
+            if (currentInput == null)
+            {
+                var unused = CurrentInput;
             }
-        }
-
-        public OutputData OpenCurrentFrameDataForWrite() {
-            // Ensure previous input is drained.
-            var currentInput = CurrentInput;
-            return CurrentFrameData;
+            currentInput = null;
+            output.Enqueue(CurrentFrameData);
+            CurrentFrameData = new OutputData();
         }
 
         private BlockingQueue<OutputData> output = new BlockingQueue<OutputData>();
         private BlockingQueue<InputData> input = new BlockingQueue<InputData>();
 
-        private OutputData CurrentFrameData { get; set; } = new OutputData();
-        private bool committed = false;
+        public OutputData CurrentFrameData { get; private set; } = new OutputData();
         private InputData currentInput = new InputData();
         private object sync = new object();
 

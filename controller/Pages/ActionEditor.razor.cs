@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components;
 
 namespace controller.Pages {
     public partial class ActionEditor {
+
         [Parameter]
         public GameActionNode Node { get; set; }
 
@@ -19,7 +20,22 @@ namespace controller.Pages {
         [Parameter]
         public bool CanEdit { get; set; }
 
-        private int NumFramesEditing { get; set; } = 5;
+        private int? numFramesEditing;
+        private float? targetAngleEditing;
+
+        private int NumFramesEditing {
+            get => numFramesEditing ?? (Node.Action as WaitAction).NumFrames;
+            set => numFramesEditing = value;
+        }
+
+        private bool NumFramesEdited => numFramesEditing != null;
+
+        private float TargetAngleEditing {
+            get => targetAngleEditing ?? (Node.Action as PilotRotationAction).TargetAngle;
+            set => targetAngleEditing = value;
+        }
+
+        private bool TargetAngleEdited => targetAngleEditing != null;
 
         private async Task AddDependency() {
             StateHasChanged();

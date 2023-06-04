@@ -60,7 +60,7 @@ namespace SuperchargedPatch
             };
             var serialized = new FastList<byte>();
             entityEventMessage.Serialise(new BitStreamWriter(serialized));
-            var data = Injector.Server.OpenCurrentFrameDataForWrite();
+            var data = Injector.Server.CurrentFrameData;
             if (data.ServerMessages == null)
             {
                 data.ServerMessages = new List<ServerMessage>();

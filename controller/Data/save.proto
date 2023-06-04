@@ -185,6 +185,8 @@ message SpecificEntityData {
     SpecificEntityData_ThrowableItem throwable_item = 12;
     bool is_unwarpable = 10;
     bytes raw_game_entity_data = 11;
+    EntityPath session_interacter = 13;
+    float pilot_rotation_angle = 14;
 }
 
 message ChefState {
@@ -267,14 +269,10 @@ message PrefabRecord {
     bool is_crate = 5;
     double max_progress = 6;
     bool can_contain_ingredients = 7;
-    int32 max_ingredient_count = 8;
     bool is_ingredient = 9;
     int32 ingredient_id = 10;
-    int32 cooking_stage = 11;
     bool is_board = 12;
     bool is_washing_station = 13;
-    bool is_mixer_station = 14;
-    bool is_heating_station = 15;
     bool is_choppable = 16;
     bool is_button = 19;
     bool is_attach_station = 20;
@@ -282,6 +280,7 @@ message PrefabRecord {
     bool is_chef = 23;
     bool is_cannon = 24;
     bool is_throwable = 25;
+    bool is_terminal = 26;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

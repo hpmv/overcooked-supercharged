@@ -23,13 +23,17 @@ struct EntityPathReference {
     1: list<i32> ids,
 }
 
+struct ButtonInput {
+    1: bool down,
+    2: bool justPressed,
+    3: bool justReleased,
+}
+
 struct OneInputData {
     1: PadDirection pad,
-    2: bool pickDown,
-    3: bool chopDown,
-    4: bool dashDown,
-    5: bool throwDown,
-    6: bool throwUp,
+    7: ButtonInput pickup,
+    8: ButtonInput interact,
+    9: ButtonInput dash,
 }
 
 struct ChefSpecificData {
@@ -137,6 +141,14 @@ struct ThrowableItemWarpData {
     4: list<ColliderRef> throwStartColliders,
 }
 
+struct TerminalWarpData {
+    1: optional i32 interacterEntityId,
+}
+
+struct PilotRotationWarpData {
+    1: double angle,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -164,6 +176,8 @@ struct EntityWarpSpec {
     13: optional WorkstationWarpData workstation,
     14: optional WorkableItemWarpData workableItem,
     15: optional ThrowableItemWarpData throwableItem,
+    16: optional TerminalWarpData terminal,
+    17: optional PilotRotationWarpData pilotRotation,
     // TODO: more entity types
 }
 

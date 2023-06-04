@@ -38,10 +38,9 @@ namespace SuperchargedPatch
                 return;
             }
 
-            Log("[WARP] Begin warping!");
+            Log($"[WARP] Begin warping to frame {input.Warp.Frame}");
 
             // Resume the time manager before warping, because at the end we need to pause again to save the velocities.
-            Log("[WARP] Before warping, resuming the TimeManager");
             Helpers.Resume();
 
             var warp = input.Warp;
@@ -179,6 +178,32 @@ namespace SuperchargedPatch
                 }
             };
 
+            // Prefer to remove existing interacters first, we'll add them back later.
+            forEachEntity((entity, entityThrift) =>
+            {
+                if (entity.m_GameObject.GetComponent<ServerWorkstation>() is ServerWorkstation sw)
+                {
+                    foreach (var interacter in sw.Interacters())
+                    {
+                        sw.OnInteracterRemoved(interacter.m_object);
+                    }
+
+                    if (sw.Item() != null)
+                    {
+                        sw.OnItemRemovedItem(sw.Item().GetComponent<IAttachment>());
+                    }
+                }
+                if (entity.m_GameObject.GetComponent<ServerTerminal>() is ServerTerminal st)
+                {
+                    var session = st.GetSession();
+                    if (session != null)
+                    {
+                        session.OnSessionEnded();
+                        st.OnSessionEnded();
+                    }
+                }
+            });
+
             // Handle attachment parent changes.
             forEachEntity((entity, entityThrift) =>
             {
@@ -289,56 +314,6 @@ namespace SuperchargedPatch
                     cannon.Warp(message);
                 }
 
-                if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() is ClientPlayerControlsImpl_Default cpci)
-                {
-                    var chef = entityThrift.Chef;
-                    if (chef == null)
-                    {
-                        Log($"[WARP] Failed to warp chef: no chef specific warp data");
-                        return;
-                    }
-                    cpci.set_m_dashTimer((float)chef.DashTimer);
-                    if (chef.InteractingEntity != -1)
-                    {
-                        var entry = EntitySerialisationRegistry.GetEntry((uint)chef.InteractingEntity);
-                        if (entry == null)
-                        {
-                            Log($"[WARP] Failed to warp chef's interacting entity: entity ID {chef.InteractingEntity} does not exist");
-                            return;
-                        }
-                        var clientInteractable = entry.m_GameObject.GetComponent<ClientInteractable>();
-                        if (clientInteractable == null)
-                        {
-                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ClientInteractable component");
-                            return;
-                        }
-                        cpci.set_m_predictedInteracted(clientInteractable);
-
-                        // We also need to set this on the server side. This seems to be the only thing the server keeps track of.
-                        // The reason we need this is because the server side performs EndInteraction triggers based on this value.
-                        var serverInteractable = entry.m_GameObject.GetComponent<ServerInteractable>();
-                        if (serverInteractable == null)
-                        {
-                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ServerInteractable component");
-                            return;
-                        }
-                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(serverInteractable);
-                    }
-                    else
-                    {
-                        cpci.set_m_predictedInteracted(null);
-                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(null);
-                    }
-                    cpci.set_m_lastVelocity(chef.LastVelocity.FromThrift());
-                    cpci.set_m_aimingThrow(chef.AimingThrow);
-                    cpci.set_m_movementInputSuppressed(chef.MovementInputSuppressed);
-                    cpci.set_m_lastMoveInputDirection(chef.LastMoveInputDirection.FromThrift());
-                    cpci.set_m_impactStartTime((float)chef.ImpactStartTime);
-                    cpci.set_m_impactTimer((float)chef.ImpactTimer);
-                    cpci.set_m_impactVelocity(chef.ImpactVelocity.FromThrift());
-                    cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
-                }
-
                 if (entity.m_GameObject.GetComponent<ServerWorkstation>() is ServerWorkstation sw)
                 {
                     var workstation = entityThrift.Workstation;
@@ -347,16 +322,15 @@ namespace SuperchargedPatch
                         Log($"[WARP] Failed to warp Workstation: no workstation specific data");
                         return;
                     }
-
-                    // First remove all interacters. Then we'll add back those asked for.
-                    foreach (var interacter in sw.Interacters())
+                    if (sw.Interacters().Count != 0)
                     {
-                        sw.OnInteracterRemoved(interacter.m_object);
+                        Log($"[WARP] Error warping Workstation: workstation should no longer have interacters after previous stage");
+                        return;
                     }
-
                     if (sw.Item() != null)
                     {
-                        sw.OnItemRemovedItem(sw.Item().GetComponent<IAttachment>());
+                        Log($"[WARP] Error warping Workstation: workstation should no longer have item after previous stage");
+                        return;
                     }
 
                     if (workstation.__isset.item)
@@ -487,9 +461,62 @@ namespace SuperchargedPatch
                         cti.OnExitFlightForWarping();
                     }
                 }
+
+                if (entity.m_GameObject.GetComponent<ServerTerminal>() is ServerTerminal st)
+                {
+                    var terminal = entityThrift.Terminal;
+                    if (terminal == null)
+                    {
+                        Log($"[WARP] Failed to warp Terminal: no Terminal specific data");
+                        return;
+                    }
+                    if (st.GetSession() != null)
+                    {
+                        Log($"[WARP] Warning: Terminal should no longer have a session after previous stage");
+                        return;
+                    }
+                    if (terminal.__isset.interacterEntityId)
+                    {
+                        var interacter = EntitySerialisationRegistry.GetEntry((uint)terminal.InteracterEntityId)?.m_GameObject;
+                        if (interacter == null)
+                        {
+                            Log($"[WARP] Failed to warp Terminal: interacter entity {terminal.InteracterEntityId} does not exist");
+                            return;
+                        }
+                        st.StartSession(interacter, default);
+                        if (st.GetSession() == null)
+                        {
+                            Log($"[WARP] Warning: Terminal failed to start session; session is still null after StartSession");
+                            return;
+                        }
+                    }
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerPilotRotation>() is ServerPilotRotation spr)
+                {
+                    var pilotRotation = entityThrift.PilotRotation;
+                    if (pilotRotation == null)
+                    {
+                        Log($"[WARP] Failed to warp PilotRotation: no Rotation specific data");
+                        return;
+                    }
+                    // Set the angle on the server side.
+                    spr.SetAngle((float)pilotRotation.Angle - spr.m_startAngle());
+                    spr.m_message().m_angle = (float)pilotRotation.Angle;
+
+                    // Set the angle on the client side too. Strictly speaking this is not the exact behavior
+                    // because the client side rotates the graphical angle with a very slight delay. However,
+                    // this is unlikely to matter in practice so we just set it.
+                    var transform = entity.m_GameObject.GetComponent<PilotRotation>().m_transformToRotate;
+                    var eulerAngles = transform.rotation.eulerAngles;
+                    eulerAngles.y = (float)pilotRotation.Angle;
+                    transform.rotation = UnityEngine.Quaternion.Euler(eulerAngles);
+                    var client = entity.m_GameObject.GetComponent<ClientPilotRotation>();
+                    client.SetNextRotation(transform.rotation);
+                }
             });
 
-            // Handle position setting last.
+            // Handle position setting and chef warping last.
             forEachEntity((entity, entityThrift) =>
             {
                 if (entity.m_GameObject.GetPhysicsContainerIfExists() is Rigidbody container)
@@ -511,8 +538,55 @@ namespace SuperchargedPatch
                         container.angularVelocity = entityThrift.AngularVelocity.FromThrift();
                     }
                 }
-                if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() != null)
+                if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() is ClientPlayerControlsImpl_Default cpci)
                 {
+                    var chef = entityThrift.Chef;
+                    if (chef == null)
+                    {
+                        Log($"[WARP] Failed to warp chef: no chef specific warp data");
+                        return;
+                    }
+                    cpci.set_m_dashTimer((float)chef.DashTimer);
+                    if (chef.InteractingEntity != -1)
+                    {
+                        var entry = EntitySerialisationRegistry.GetEntry((uint)chef.InteractingEntity);
+                        if (entry == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity ID {chef.InteractingEntity} does not exist");
+                            return;
+                        }
+                        var clientInteractable = entry.m_GameObject.GetComponent<ClientInteractable>();
+                        if (clientInteractable == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ClientInteractable component");
+                            return;
+                        }
+                        cpci.set_m_predictedInteracted(clientInteractable);
+
+                        // We also need to set this on the server side. This seems to be the only thing the server keeps track of.
+                        // The reason we need this is because the server side performs EndInteraction triggers based on this value.
+                        var serverInteractable = entry.m_GameObject.GetComponent<ServerInteractable>();
+                        if (serverInteractable == null)
+                        {
+                            Log($"[WARP] Failed to warp chef's interacting entity: entity with ID {chef.InteractingEntity} does not have ServerInteractable component");
+                            return;
+                        }
+                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(serverInteractable);
+                    }
+                    else
+                    {
+                        cpci.set_m_predictedInteracted(null);
+                        cpci.GetComponent<ServerPlayerControlsImpl_Default>().set_m_lastInteracted(null);
+                    }
+                    cpci.set_m_lastVelocity(chef.LastVelocity.FromThrift());
+                    cpci.set_m_aimingThrow(chef.AimingThrow);
+                    cpci.set_m_movementInputSuppressed(chef.MovementInputSuppressed);
+                    cpci.set_m_lastMoveInputDirection(chef.LastMoveInputDirection.FromThrift());
+                    cpci.set_m_impactStartTime((float)chef.ImpactStartTime);
+                    cpci.set_m_impactTimer((float)chef.ImpactTimer);
+                    cpci.set_m_impactVelocity(chef.ImpactVelocity.FromThrift());
+                    cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
+
                     var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
                     if (entityThrift.__isset.position)
                     {
@@ -531,15 +605,14 @@ namespace SuperchargedPatch
                         rigidbody.angularVelocity = entityThrift.AngularVelocity.FromThrift();
                     }
 
-                    var groundCast = entity.m_GameObject.GetComponent<GroundCast>();
-                    groundCast.ForceUpdateNow();
-                    Log($"INFO: Entity {entity.m_Header.m_uEntityID} has ground contact? {groundCast.HasGroundContact()} should apply gravity? {entity.m_GameObject.GetComponent<PlayerControls>().m_bApplyGravity} ground layer? {groundCast.GetGroundLayer()}");
+                    entity.m_GameObject.GetComponent<GroundCast>().ForceUpdateNow();
                 }
             });
 
             // Pause the TimeManager again, to capture the velocities.
             Helpers.Pause();
             ActiveStateCollector.ClearCacheAfterWarp(warp.Frame);
+            Log($"[WARP] Finished warping to frame {warp.Frame}");
         }
     }
 

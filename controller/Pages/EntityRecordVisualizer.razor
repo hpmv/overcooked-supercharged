@@ -59,13 +59,21 @@
                         </div>
                     }
                     @{
-                        var interacters = record.data[frame].chopInteracters;
+                        var data = record.data[frame];
+                        var interacters = data.chopInteracters;
                         if (interacters != null) {
                             <div class="record-vis-interacters">
                                 @foreach (var (chef, time) in interacters) {
                                     <div class="record-vis-interacter record-vis-interacter-@(chef.prefab.ClassName)">
                                     </div>
                                 }
+                            </div>
+                        }
+                        var interacter = data.sessionInteracter;
+                        if (interacter != null) {
+                            <div class="record-vis-interacters">
+                                <div class="record-vis-interacter record-vis-interacter-@(interacter.prefab.ClassName)">
+                                </div>
                             </div>
                         }
                     }

@@ -22,7 +22,7 @@ namespace SuperchargedPatch
             {
                 WarpHandler.HandleWarpRequestIfAny();
             }
-            var data = Injector.Server.OpenCurrentFrameDataForWrite();
+            var data = Injector.Server.CurrentFrameData;
             if (!Helpers.IsPaused())
             {
                 if (Injector.Server.CurrentInput.__isset.nextFrame)
@@ -41,243 +41,127 @@ namespace SuperchargedPatch
             }
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
-            Injector.Server.CommitFrameIfNotCommitted();
+            Injector.Server.CommitFrame();
         }
 
-        public static bool EnableInputInjection = true;
+        [HarmonyPatch(typeof(PlayerInputLookup), "GetButton")]
+        public static class PatchPlayerInputLookupGetButton
+        {
+            [HarmonyPostfix]
+            public static void Postfix(PlayerInputLookup.LogicalButtonID _id, PlayerInputLookup.Player _player, ref ILogicalButton __result)
+            {
+                int? foundEntityId = null;
+                EntitySerialisationRegistry.m_EntitiesList.ForEach(entry =>
+                {
+                    if (entry.m_GameObject.GetComponent<PlayerIDProvider>() is PlayerIDProvider pip)
+                    {
+                        if (pip.GetID() == _player)
+                        {
+                            foundEntityId = (int)entry.m_Header.m_uEntityID;
+                        }
+                    }
+                });
+                if (foundEntityId == null)
+                {
+                    Debug.Log($"Unable to find entity ID for player input ID {_player}");
+                    return;
+                }
 
-        private static Type t_ClientMessenger = typeof(ClientTime).Assembly.GetType("ClientMessenger");
-        private static MethodInfo f_ClientMessenger_ChefEventMessageGameObject = t_ClientMessenger.GetMethod(
-            "ChefEventMessage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, Type.DefaultBinder,
-            new Type[] { typeof(ChefEventMessage.ChefEventType), typeof(GameObject), typeof(GameObject) },
-            null);
-        private static MethodInfo f_ClientMessenger_ChefEventMessageMonoBehavior = t_ClientMessenger.GetMethod(
-            "ChefEventMessage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, Type.DefaultBinder,
-            new Type[] { typeof(ChefEventMessage.ChefEventType), typeof(GameObject), typeof(MonoBehaviour) },
-            null);
+                TASLogicalButtonType buttonType;
+                switch (_id)
+                {
+                    case PlayerInputLookup.LogicalButtonID.PickupAndDrop:
+                        buttonType = TASLogicalButtonType.Pickup;
+                        break;
+                    case PlayerInputLookup.LogicalButtonID.WorkstationInteract:
+                        buttonType = TASLogicalButtonType.Use;
+                        break;
+                    case PlayerInputLookup.LogicalButtonID.Dash:
+                        buttonType = TASLogicalButtonType.Dash;
+                        break;
+                    default:
+                        return;
+                }
+                Debug.Log($"Overriding button {_id} for player {_player} with entity ID {foundEntityId.Value}");
+                __result = new TASLogicalButton(foundEntityId.Value, buttonType, __result);
+            }
+        }
 
-        [HarmonyPatch(typeof(ClientPlayerControlsImpl_Default), "Update_Carry")]
-        public static class Update_CarryPatch
+        [HarmonyPatch(typeof(PlayerInputLookup), "GetValue")]
+        public static class PatchPlayerInputLookupGetValue
+        {
+            [HarmonyPostfix]
+            public static void Postfix(PlayerInputLookup.LogicalValueID _id, PlayerInputLookup.Player _player, ref ILogicalValue __result)
+            {
+                int? foundEntityId = null;
+                EntitySerialisationRegistry.m_EntitiesList.ForEach(entry =>
+                {
+                    if (entry.m_GameObject.GetComponent<PlayerIDProvider>() is PlayerIDProvider pip)
+                    {
+                        if (pip.GetID() == _player)
+                        {
+                            foundEntityId = (int)entry.m_Header.m_uEntityID;
+                        }
+                    }
+                });
+                if (foundEntityId == null)
+                {
+                    Debug.Log($"Unable to find entity ID for player input ID {_player}");
+                    return;
+                }
+
+                TASLogicalValueType valueType;
+                switch (_id)
+                {
+                    case PlayerInputLookup.LogicalValueID.MovementX:
+                        valueType = TASLogicalValueType.MovementX;
+                        break;
+                    case PlayerInputLookup.LogicalValueID.MovementY:
+                        valueType = TASLogicalValueType.MovementY;
+                        break;
+                    default:
+                        return;
+                }
+                Debug.Log($"Overriding value {_id} for player {_player} with entity ID {foundEntityId.Value}");
+                __result = new TASLogicalValue(foundEntityId.Value, valueType, __result);
+                return;
+            }
+        }
+
+        [HarmonyPatch(typeof(PlayerControls), "CanButtonBePressed")]
+        public static class PatchPlayerControlsCanButtonBePressed
         {
             [HarmonyPrefix]
-            public static bool Prefix(ref PlayerControls ___m_controls, ref ICarrier ___m_iCarrier, ref float ___m_lastPickupTimestamp, ClientPlayerControlsImpl_Default __instance)
+            public static bool Prefix(PlayerControls __instance, ref bool __result)
             {
-                if (!EnableInputInjection)
-                {
-                    return true;
-                }
-                int id = (int)EntitySerialisationRegistry.GetId(___m_controls.gameObject);
-                bool overridden = (Injector.Server.CurrentInput.Input == null || !Injector.Server.CurrentInput.Input.ContainsKey(id) ? false : Injector.Server.CurrentInput.Input[id].PickDown);
-                if (___m_controls.ControlScheme.m_pickupButton.JustPressed() | overridden)
-                {
-                    IClientHandlePickup mIHandlePickup = ___m_controls.CurrentInteractionObjects.m_iHandlePickup;
-                    if (___m_iCarrier.InspectCarriedItem() != null)
-                    {
-                        PlayerControlsHelper.PlaceHeldItem_Client(___m_controls);
-
-                    }
-                    else if (mIHandlePickup != null && mIHandlePickup.CanHandlePickup(___m_iCarrier))
-                    {
-                        float single = ClientTime.Time();
-                        if (single >= ___m_lastPickupTimestamp)
-                        {
-                            f_ClientMessenger_ChefEventMessageGameObject.Invoke(null, new object[] { ChefEventMessage.ChefEventType.PickUp, __instance.gameObject, ___m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup });
-                            ___m_lastPickupTimestamp = single + ___m_controls.m_pickupDelay;
-
-                        }
-                    }
-                    else if (___m_controls.CurrentInteractionObjects.m_interactable != null && ___m_controls.CurrentInteractionObjects.m_interactable.UsePlacementButton)
-                    {
-                        f_ClientMessenger_ChefEventMessageMonoBehavior.Invoke(null, new object[] { ChefEventMessage.ChefEventType.TriggerInteract, __instance.gameObject, ___m_controls.CurrentInteractionObjects.m_interactable });
-                    }
-                }
+                // The original method queries a lot of stuff that isn't useful for TAS.
+                // GetDirectlyUnderPlayerControl() is the only thing that is related to
+                // game logic.
+                __result = __instance.GetDirectlyUnderPlayerControl();
                 return false;
             }
         }
 
-        private static MethodInfo f_Update_Carry = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Carry", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Interact = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Interact", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Throw = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Throw", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Aim = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Aim", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Movement = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Movement", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Falling = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Falling", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_Rotation = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_Rotation", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_Update_MovementSuppression = typeof(ClientPlayerControlsImpl_Default).GetMethod("Update_MovementSuppression", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_ApplyGravityForce = typeof(ClientPlayerControlsImpl_Default).GetMethod("ApplyGravityForce", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_ApplyWindForce = typeof(ClientPlayerControlsImpl_Default).GetMethod("ApplyWindForce", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_ProgressVelocityWrtFriction = typeof(ClientPlayerControlsImpl_Default).GetMethod("ProgressVelocityWrtFriction", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_GetSurfaceData = typeof(ClientPlayerControlsImpl_Default).GetMethod("GetSurfaceData", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_ApplyGroundMovement = typeof(ClientPlayerControlsImpl_Default).GetMethod("ApplyGroundMovement", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_DoDash = typeof(ClientPlayerControlsImpl_Default).GetMethod("DoDash", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static MethodInfo f_OnDashCollision = typeof(ClientPlayerControlsImpl_Default).GetMethod("OnDashCollision", BindingFlags.NonPublic | BindingFlags.Instance);
-
-        [HarmonyPatch(typeof(ClientPlayerControlsImpl_Default), "Update_Impl")]
-        public static class Update_ImplPatch
+        [HarmonyPatch(typeof(ClientInputTransmitter), "GetGated", new Type[] { typeof(ILogicalButton) } )]
+        public static class PatchClientInputTransmitterGetGatedButton
         {
-            public static bool Prefix(
-                ClientPlayerControlsImpl_Default __instance,
-                ref PlayerControls ___m_controls,
-                ref PlayerIDProvider ___m_playerIDProvider,
-                ref PlayerControls.ControlSchemeData ___m_controlScheme
-                )
+            [HarmonyPrefix]
+            public static bool Prefix(ILogicalButton _toProtect, ref ILogicalButton __result)
             {
-                if (!EnableInputInjection)
-                {
-                    return true;
-                }
-                float deltaTime = TimeManager.GetDeltaTime(__instance.gameObject);
-                bool flag = ___m_playerIDProvider.IsLocallyControlled();
-                if (TimeManager.IsPaused(TimeManager.PauseLayer.Network) & flag)
-                {
-                    if (___m_controlScheme != null)
-                    {
-                        f_Update_Movement.Invoke(__instance, new object[] { deltaTime, true });
-                    }
-                    return false;
-                }
-                if (TimeManager.IsPaused(TimeManager.PauseLayer.Main) & flag)
-                {
-                    return false;
-                }
-                if (___m_controlScheme != null)
-                {
-                    int id = (int)EntitySerialisationRegistry.GetId(___m_controls.gameObject);
-                    bool flag1 = (Injector.Server.CurrentInput.Input == null || !Injector.Server.CurrentInput.Input.ContainsKey(id) ? false : Injector.Server.CurrentInput.Input[id].ChopDown);
-                    bool flag2 = (Injector.Server.CurrentInput.Input == null || !Injector.Server.CurrentInput.Input.ContainsKey(id) ? false : Injector.Server.CurrentInput.Input[id].ThrowDown);
-                    bool flag3 = (Injector.Server.CurrentInput.Input == null || !Injector.Server.CurrentInput.Input.ContainsKey(id) ? false : Injector.Server.CurrentInput.Input[id].ThrowUp);
-                    bool flag4 = ___m_controlScheme.IsUseSuppressed();
-                    bool flag5 = ___m_controlScheme.IsUseDown() | flag1;
-                    bool flag6 = ___m_controlScheme.IsUseJustPressed() | flag2;
-                    bool flag7 = ___m_controlScheme.IsUseJustReleased() | flag3;
-                    if (flag)
-                    {
-                        var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
-                        ___m_controls.UpdateNearbyObjects();
-                        f_Update_Carry.Invoke(__instance, new object[0]);
-                        f_Update_Interact.Invoke(__instance, new object[] { deltaTime, flag5, flag6 });
-                        f_Update_Throw.Invoke(__instance, new object[] { deltaTime, flag5, flag7, flag4 });
-                    }
-                    f_Update_Aim.Invoke(__instance, new object[] { deltaTime, flag5 });
-                    f_Update_Movement.Invoke(__instance, new object[] { deltaTime, false });
-                }
-                f_Update_Falling.Invoke(__instance, new object[] { deltaTime });
+                // TODO: revisit this. We're skipping CanButtonBePressed here.
+                __result = _toProtect;
                 return false;
             }
         }
 
-        [HarmonyPatch(typeof(ClientPlayerControlsImpl_Default), "Update_Movement")]
-
-        public static class UpdateMovementPatch
+        [HarmonyPatch(typeof(ClientInputTransmitter), "GetGated", new Type[] { typeof(ILogicalValue) })]
+        public static class PatchClientInputTransmitterGetGatedValue
         {
-            public static bool Prefix(
-                float _deltaTime,
-                bool _netPaused,
-                ClientPlayerControlsImpl_Default __instance,
-                ref float ___m_LeftOverTime,
-                ref PlayerControlsHelper.ControlAxisData ___m_controlAxisData,
-                ref PlayerControls ___m_controls,
-                ref bool ___m_movementInputSuppressed,
-                ref float ___m_dashTimer,
-                ref GameObject ___m_controlObject,
-                ref float ___m_impactTimer,
-                ref float ___m_impactStartTime,
-                ref Vector3 ___m_lastVelocity,
-                ref Vector3 ___m_impactVelocity,
-                ref PlayerControls.ControlSchemeData ___m_controlScheme,
-                ref PlayerControlsImpl_Default ___m_controlsImpl,
-                ref float ___m_attemptedDistanceCounter,
-                ref CollisionRecorder ___m_collisionRecorder)
+            [HarmonyPrefix]
+            public static bool Prefix(ILogicalValue _toProtect, ref ILogicalValue __result)
             {
-                if (!EnableInputInjection)
-                {
-                    return true;
-                }
-                ___m_LeftOverTime += _deltaTime;
-                _deltaTime = 0.0166666675f;
-                Vector3 _zero = Vector3.zero;
-                PlayerControlsHelper.BuildControlAxisData(___m_controls, ref ___m_controlAxisData);
-                float value = ___m_controlAxisData.MoveX.GetValue();
-                float y = ___m_controlAxisData.MoveY.GetValue();
-                bool dashDown = false;
-                int id = (int)EntitySerialisationRegistry.GetId(___m_controls.gameObject);
-                Dictionary<int, OneInputData> input = Injector.Server.CurrentInput.Input;
-                if (input != null && input.ContainsKey(id))
-                {
-                    OneInputData item = input[id];
-                    if (item.Pad != null)
-                    {
-                        value += (float)item.Pad.X;
-                        y += (float)item.Pad.Y;
-                    }
-                    dashDown = item.DashDown;
-                }
-                if (!_netPaused)
-                {
-                    _zero = PlayerControlsHelper.GetControlAxis(value, y, ___m_controlAxisData.XAxisAllignment, ___m_controlAxisData.YAxisAllignment);
-                }
-                while (___m_LeftOverTime >= 0.0166666675f)
-                {
-                    ___m_LeftOverTime -= 0.0166666675f;
-                    f_Update_Rotation.Invoke(__instance, new object[] { _deltaTime, value, y, ___m_controlAxisData.XAxisAllignment, ___m_controlAxisData.YAxisAllignment });
-                    f_Update_MovementSuppression.Invoke(__instance, new object[] { _deltaTime, _zero });
-                    f_ApplyGravityForce.Invoke(__instance, new object[0]);
-                    f_ApplyWindForce.Invoke(__instance, new object[] { _deltaTime });
-                    PlayerControls.MovementData movement = ___m_controls.Movement;
-                    float movementScale = ___m_controls.MovementScale;
-                    Vector3 runSpeed = (movementScale * _zero) * movement.RunSpeed;
-                    if (___m_movementInputSuppressed)
-                    {
-                        runSpeed = Vector3.zero;
-                    }
-                    if (___m_dashTimer > 0f)
-                    {
-                        Vector3 _forward = (movementScale * ___m_controlObject.transform.forward) * movement.DashSpeed;
-                        float single = MathUtils.SinusoidalSCurve(___m_dashTimer / movement.DashTime);
-                        runSpeed = ((1f - single) * runSpeed) + (single * _forward);
-                    }
-                    ___m_dashTimer -= _deltaTime;
-                    if (___m_impactTimer > 0f)
-                    {
-                        float single1 = MathUtils.SinusoidalSCurve(___m_impactTimer / ___m_impactStartTime);
-                        runSpeed = ((1f - single1) * runSpeed) + (single1 * ___m_impactVelocity);
-                    }
-                    ___m_impactTimer -= _deltaTime;
-                    runSpeed = Vector3.ClampMagnitude(runSpeed, movement.MaxSpeed);
-                    Vector3 vector3 = (Vector3)f_ProgressVelocityWrtFriction.Invoke(__instance, new object[] { ___m_lastVelocity, ___m_controls.Motion.GetVelocity(), runSpeed, f_GetSurfaceData.Invoke(__instance, new object[0]) });
-                    ___m_controls.Motion.SetVelocity(vector3);
-                    ___m_lastVelocity = vector3;
-                    f_ApplyGroundMovement.Invoke(__instance, new object[] { _deltaTime });
-                    if (!_netPaused && ___m_controlScheme.m_dashButton.JustPressed() | dashDown && movement.DashTime - ___m_dashTimer >= movement.DashCooldown && ___m_impactTimer < 0f)
-                    {
-                        ___m_dashTimer = movement.DashTime;
-                        if (___m_controlsImpl.m_serverImpl == null)
-                        {
-                            f_DoDash.Invoke(__instance, new object[0]);
-                        }
-                        else
-                        {
-                            ___m_controlsImpl.m_serverImpl.StartDash();
-                        }
-                        List<Collision> recentCollisions = ___m_collisionRecorder.GetRecentCollisions();
-                        for (int i = 0; i < recentCollisions.Count; i++)
-                        {
-                            Collision collision = recentCollisions[i];
-                            PlayerControls playerControl = collision.gameObject.RequestComponent<PlayerControls>();
-                            if (playerControl != null)
-                            {
-                                Vector3 _relativeVelocity = collision.relativeVelocity + ((movementScale * ___m_controlObject.transform.forward) * movement.DashSpeed);
-                                f_OnDashCollision.Invoke(__instance, new object[] { playerControl, collision.contacts[0].point, _relativeVelocity });
-                            }
-                        }
-                    }
-                    ___m_attemptedDistanceCounter = ___m_attemptedDistanceCounter + runSpeed.magnitude * _deltaTime;
-
-                    if (___m_attemptedDistanceCounter < movement.FootstepLength)
-                    {
-                        continue;
-                    }
-                    ___m_attemptedDistanceCounter %= movement.FootstepLength;
-                }
+                // TODO: revisit this. We're skipping CanButtonBePressed here.
+                __result = _toProtect;
                 return false;
             }
         }
@@ -292,7 +176,7 @@ namespace SuperchargedPatch
             {
                 try
                 {
-                    var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
+                    var currentFrameData = Injector.Server.CurrentFrameData;
                     GameObject mGameObject = entry.m_GameObject;
                     if (currentFrameData.EntityRegistry == null)
                     {
@@ -386,7 +270,7 @@ namespace SuperchargedPatch
         public static void Prefix(NetworkConnection connection, MessageType type, Serialisable message, bool bReliable) {
             try
             {
-                var currentFrameData = Injector.Server.OpenCurrentFrameDataForWrite();
+                var currentFrameData = Injector.Server.CurrentFrameData;
                 if (currentFrameData.ServerMessages == null)
                 {
                     currentFrameData.ServerMessages = new List<ServerMessage>();

@@ -28,6 +28,9 @@ namespace Hpmv {
             } else {
                 templates.Add(new PickupItemActionTemplate(entity));
             }
+            if (entity.prefab.IsCannon) {
+                templates.Add(new PilotRotationActionTemplate(entity));
+            }
             templates.Add(new PlaceItemActionTemplate(entity));
             templates.Add(new PrepareToInteractActionTemplate(entity));
             if (entity.prefab.Name == "Dirty Plate Spawner") {
@@ -360,6 +363,31 @@ namespace Hpmv {
             return new List<GameAction>{
                 new WaitAction {
                     NumFrames = Frames
+                }
+            };
+        }
+    }
+
+    public class PilotRotationActionTemplate : ActionTemplate
+    {
+        public GameEntityRecord Entity { get; set; }
+
+        public PilotRotationActionTemplate(GameEntityRecord entity)
+        {
+            Entity = entity;
+        }
+
+        public string Describe()
+        {
+            return "Rotate cannon";
+        }
+
+        public List<GameAction> GenerateActions(int frame)
+        {
+            return new List<GameAction>{
+                new PilotRotationAction {
+                    PilotRotationEntity = Entity.ReverseEngineerStableEntityReference(frame),
+                    TargetAngle = Entity.data[frame].pilotRotationAngle,
                 }
             };
         }

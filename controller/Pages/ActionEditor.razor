@@ -6,7 +6,17 @@
     @if (Node.Action is WaitAction wait) {
         <div class="action-editor-property">
             Change to <input @bind="NumFramesEditing"/>
-            <button @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Change</button>
+            <button
+                @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !NumFramesEdited)">Change</button>
+        </div>
+    }
+    @if (Node.Action is PilotRotationAction pra) {
+        <div class="action-editor-property">
+            Target angle: <input @bind="TargetAngleEditing"/>
+            <button
+                @onclick="() => {pra.TargetAngle = TargetAngleEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !TargetAngleEdited)">Change</button>
         </div>
     }
     <div class="action-editor-deps">

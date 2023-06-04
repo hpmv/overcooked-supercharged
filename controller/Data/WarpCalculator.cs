@@ -80,8 +80,12 @@ namespace Hpmv {
                     spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
                 }
                 if (record.prefab.IsCannon) {
+                    var data = record.data[desiredFrame];
                     spec.Cannon = new CannonWarpData {
-                        ModData = record.data[desiredFrame].rawGameEntityData,
+                        ModData = data.rawGameEntityData,
+                    };
+                    spec.PilotRotation = new PilotRotationWarpData {
+                        Angle = data.pilotRotationAngle,
                     };
                 }
                 if (record.prefab.IsChef) {
@@ -154,6 +158,13 @@ namespace Hpmv {
                                 Entity = getEntityIdOrRef(collider.Entity),
                             });
                         }
+                    }
+                }
+                if (record.prefab.IsTerminal) {
+                    spec.Terminal = new TerminalWarpData();
+                    var data = record.data[desiredFrame];
+                    if (data.sessionInteracter != null) {
+                        spec.Terminal.InteracterEntityId = data.sessionInteracter.path.ids[0];
                     }
                 }
 
