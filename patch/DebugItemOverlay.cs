@@ -107,46 +107,80 @@ namespace SuperchargedPatch
                 var str = "";
                 if (controlScheme.m_pickupButton is TASLogicalButton)
                 {
-                    if (controlScheme.m_pickupButton.IsDown())
+                    if (controlScheme.m_pickupButton.JustPressed())
                     {
-                        str += "+P ";
+                        str += "P";
+                    } else if (controlScheme.m_pickupButton.JustReleased())
+                    {
+                        str += "-";
                     } else
                     {
-                        str += "-P ";
+                        str += " ";
+                    }
+                    if (controlScheme.m_pickupButton.IsDown())
+                    {
+                        str += "P ";
+                    } else
+                    {
+                        str += "  ";
                     }
                 } else
                 {
-                    str += "?P ";
+                    str += "?? ";
                 }
                 if (controlScheme.m_worksurfaceUseButton is TASLogicalButton)
                 {
-                    if (controlScheme.m_worksurfaceUseButton.IsDown())
+                    if (controlScheme.m_worksurfaceUseButton.JustPressed())
                     {
-                        str += "+U ";
+                        str += "U";
+                    }
+                    else if (controlScheme.m_worksurfaceUseButton.JustReleased())
+                    {
+                        str += "-";
                     }
                     else
                     {
-                        str += "-U ";
+                        str += " ";
+                    }
+                    if (controlScheme.m_worksurfaceUseButton.IsDown())
+                    {
+                        str += "U ";
+                    }
+                    else
+                    {
+                        str += "  ";
                     }
                 }
                 else
                 {
-                    str += "?U ";
+                    str += "?? ";
                 }
                 if (controlScheme.m_dashButton is TASLogicalButton)
                 {
-                    if (controlScheme.m_dashButton.IsDown())
+                    if (controlScheme.m_dashButton.JustPressed())
                     {
-                        str += "+D";
+                        str += "D";
+                    }
+                    else if (controlScheme.m_dashButton.JustReleased())
+                    {
+                        str += "-";
                     }
                     else
                     {
-                        str += "-D";
+                        str += " ";
+                    }
+                    if (controlScheme.m_dashButton.IsDown())
+                    {
+                        str += "D";
+                    }
+                    else
+                    {
+                        str += " ";
                     }
                 }
                 else
                 {
-                    str += "?D";
+                    str += "??";
                 }
                 return str;
             });
@@ -179,6 +213,40 @@ namespace SuperchargedPatch
             AddProviderFor<PlayerControls>("canpress", c =>
             {
                 return c.CanButtonBePressed() ? "YES" : "NO";
+            });
+            AddProviderFor<ServerPlayerAttachmentCarrier>("carry", c =>
+            {
+                return c.InspectCarriedItem()?.name ?? "";
+            });
+            AddProviderFor<PlayerControls>("pickup", c =>
+            {
+                var handlePickup = c.CurrentInteractionObjects.m_iHandlePickup;
+                if (handlePickup == null)
+                {
+                    return "";
+                }
+                var canHandlePickup = " (NO)";
+                if (handlePickup.CanHandlePickup(c.GetComponent<ICarrier>()))
+                {
+                    canHandlePickup = " (YES)";
+                }
+                var pickup = c.CurrentInteractionObjects.m_TheOriginalHandlePickup;
+                if (pickup == null)
+                {
+                    return "";
+                }
+                var entityId = EntitySerialisationRegistry.GetEntry(pickup)?.m_Header?.m_uEntityID ?? 0;
+                return pickup.name + " (" + entityId + ")" + canHandlePickup;
+            });
+            AddProviderFor<PlayerControls>("interact", c =>
+            {
+                var obj = c.CurrentInteractionObjects.m_interactable;
+                if (obj == null)
+                {
+                    return "";
+                }
+                var entityId = EntitySerialisationRegistry.GetEntry(obj.gameObject)?.m_Header?.m_uEntityID ?? 0;
+                return obj.name + " (" + entityId + ")";
             });
         }
 

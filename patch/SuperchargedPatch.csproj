@@ -112,6 +112,7 @@
     <Compile Include="EntityAuxMessage.cs" />
     <Compile Include="EntityPathReference.cs" />
     <Compile Include="EntityPathReferenceMarker.cs" />
+    <Compile Include="Extensions\MultiplayerControllerExt.cs" />
     <Compile Include="Extensions\ServerPhysicalAttachmentExt.cs" />
     <Compile Include="Extensions\ServerPilotRotationExt.cs" />
     <Compile Include="Extensions\ServerSessionInteractableExt.cs" />

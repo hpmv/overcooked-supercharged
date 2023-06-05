@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Hpmv {
     class RealGameConnector : Interceptor.IAsync {
-        private FramerateController FramerateController = new FramerateController { Delay = TimeSpan.FromSeconds(1) / Config.FRAMERATE };
+        public readonly FramerateController FramerateController = new FramerateController { Framerate = Config.FRAMERATE };
         private GameSetup setup;
         public RealGameSimulator simulator = new RealGameSimulator();
 

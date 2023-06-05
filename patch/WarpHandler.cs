@@ -256,7 +256,7 @@ namespace SuperchargedPatch
                     else
                     {
                         var existingParent = physicalAttachment.m_ServerData().m_parentable as Component;
-                        if (existingParent.gameObject == parentEntity.m_GameObject)
+                        if (existingParent?.gameObject == parentEntity.m_GameObject)
                         {
                             return;
                         }
@@ -609,6 +609,9 @@ namespace SuperchargedPatch
                 }
             });
 
+            // Make sure we flush any network messages after warping - otherwise they might be pushed to
+            // next frame and that's not good.
+            GameObject.FindObjectOfType<MultiplayerController>()?.FlushAllPendingBatchedMessages();
             // Pause the TimeManager again, to capture the velocities.
             Helpers.Pause();
             ActiveStateCollector.ClearCacheAfterWarp(warp.Frame);

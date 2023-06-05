@@ -10,6 +10,7 @@ using Team17.Online.Multiplayer;
 using Team17.Online.Multiplayer.Messaging;
 using Team17.Online.Multiplayer.Connection;
 using UnityEngine;
+using SuperchargedPatch.Extensions;
 
 namespace SuperchargedPatch
 {
@@ -18,6 +19,11 @@ namespace SuperchargedPatch
 
         public static void LateUpdate()
         {
+            // Make sure to flush any network messages before capturing state. Normally this
+            // is done as part of MultiplayerController.LateUpdate(), but we're also executing in
+            // LateUpdate so the order is not deterministic.
+            GameObject.FindObjectOfType<MultiplayerController>()?.FlushAllPendingBatchedMessages();
+
             if (Helpers.IsPaused())
             {
                 WarpHandler.HandleWarpRequestIfAny();
@@ -295,5 +301,4 @@ namespace SuperchargedPatch
             }
         }
     }
-
 }

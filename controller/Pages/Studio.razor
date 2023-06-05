@@ -15,7 +15,9 @@
         </div>
 
         <div class="controls">
-
+            @if (realGameConnector != null) {
+                <FramerateControllerEditor FramerateController="realGameConnector.FramerateController"/>
+            }
             <button @onclick="() => ShowRecordDebug = !ShowRecordDebug">
                 @(ShowRecordDebug? "Hide " : "Show ") Record Debug</button>
             @if (ShowRecordDebug) {

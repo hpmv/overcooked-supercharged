@@ -1,0 +1,22 @@
+@using Microsoft.AspNetCore.Components
+
+<div class="framerate-controller-editor">
+    <label for="framerate-slider">Framerate:</label>
+    <input id="framerate-slider" type="range" min="1" max="240" @bind="@FramerateController.Framerate" />
+    <div>@FramerateController.Framerate</div>
+
+    <button @onclick="() => SetFramerate(1)">1</button>
+    <button @onclick="() => SetFramerate(10)">10</button>
+    <button @onclick="() => SetFramerate(60)">60</button>
+    <button @onclick="() => SetFramerate(240)">240</button>
+</div>
+
+@code {
+    [Parameter]
+    public FramerateController FramerateController { get; set; }
+
+    private void SetFramerate(int framerate)
+    {
+        FramerateController.Framerate = framerate;
+    }
+}

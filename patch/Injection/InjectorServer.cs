@@ -77,10 +77,11 @@ namespace Hpmv {
                 OutputData output;
                 try {
                     var time = DateTime.Now;
-                    if (this.output.PeekSize() > 1) {
+                    while (this.output.PeekSize() > 1) {
                         Console.WriteLine("WEIRD!!!! Output queue size: " + this.output.PeekSize());
+                        this.output.Dequeue(TimeSpan.Zero);
                     }
-                    output = this.output.Dequeue(TimeSpan.FromSeconds(1));
+                    output = this.output.Dequeue(TimeSpan.FromSeconds(2));
                     var delta = DateTime.Now - time;
                     if (delta.TotalMilliseconds > 10) {
                         //Console.WriteLine("Time taken to wait for output: " + delta);
@@ -127,10 +128,11 @@ namespace Hpmv {
             get {
                 if (currentInput == null) {
                     try {
-                        if (input.PeekSize() > 1) {
+                        while (input.PeekSize() > 1) {
                             Console.WriteLine("WEIRD!!!! Input queue size: " + input.PeekSize());
+                            input.Dequeue(TimeSpan.Zero);
                         }
-                        currentInput = input.Dequeue(TimeSpan.FromSeconds(1));
+                        currentInput = input.Dequeue(TimeSpan.FromSeconds(2));
                     } catch (Exception e) {
                         Console.WriteLine("Timeout: " + e.Message + "\n" + e.StackTrace);
                         currentInput = new InputData();

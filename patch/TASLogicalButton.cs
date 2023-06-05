@@ -108,7 +108,6 @@ namespace SuperchargedPatch
                         return inputData.Dash.JustReleased;
                 }
             }
-            UnityEngine.Debug.Log("Unable to find input for player " + playerEntityId + " type " + type);
             return original.JustReleased();
         }
     }
@@ -145,7 +144,6 @@ namespace SuperchargedPatch
                         return (float)inputData.Pad.Y;
                 }
             }
-            UnityEngine.Debug.Log("Unable to find input for player " + playerEntityId + " type " + type);
             return original.GetValue();
         }
     }
