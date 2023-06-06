@@ -587,6 +587,12 @@ namespace SuperchargedPatch
                     cpci.set_m_impactVelocity(chef.ImpactVelocity.FromThrift());
                     cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
 
+                    // Don't suppressUse. This flag is for players who hold the use button and then enter some
+                    // session interaction (such as cannon or terminal); we don't want the use button to still
+                    // be considered pressed when exiting from them. We don't take advantage of this for TAS,
+                    // so just set it to false.
+                    cpci.GetComponent<PlayerControls>().ControlScheme.SetUseSuppressed(false);
+
                     var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
                     if (entityThrift.__isset.position)
                     {

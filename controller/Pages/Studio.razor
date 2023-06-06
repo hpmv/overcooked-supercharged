@@ -6,6 +6,7 @@
         <MatIconButton
             Icon="folder_open"
             OnClick="(e) => {RefreshAvailableSaveFiles(); LoadMenu.OpenAsync(LoadButton.Ref);}"
+            Disabled=@(realGameConnector != null)
             @ref="LoadButton"/>
         <MatMenu @ref="LoadMenu">
             <MatList>
@@ -25,7 +26,11 @@
                 <MatButton OnClick="async (e) => {await SaveLevel(); SaveDialogIsOpen = false;}">Save</MatButton>
             </MatDialogActions>
         </MatDialog>
-        <MatIconButton Icon="note_add" OnClick="(e) => InitializeMenu.OpenAsync(InitializeButton.Ref)" @ref="InitializeButton"/>
+        <MatIconButton
+            Icon="note_add"
+            OnClick="(e) => InitializeMenu.OpenAsync(InitializeButton.Ref)"
+            Disabled=@(realGameConnector != null)
+            @ref="InitializeButton"/>
         <MatMenu @ref="InitializeMenu">
             <MatList>
                 @foreach (var (init, type) in levelInitializers) {
@@ -35,8 +40,9 @@
         </MatMenu>
         <MatIconButton
             Icon="build"
-            Disabled=@(!level.IsValid())
-            OnClick="(e) => PatchPrefabMenu.OpenAsync(PatchPrefabButton.Ref)" @ref="PatchPrefabButton"/>
+            Disabled=@(!level.IsValid() || realGameConnector != null)
+            OnClick="(e) => PatchPrefabMenu.OpenAsync(PatchPrefabButton.Ref)"
+            @ref="PatchPrefabButton"/>
         <MatMenu @ref="PatchPrefabMenu">
             <MatList>
                 @foreach (var (init, type) in levelInitializers) {

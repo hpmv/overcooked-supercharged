@@ -124,4 +124,15 @@ namespace SuperchargedPatch
             f_m_lastInteracted.SetValue(instance, interactable);
         }
     }
+
+    public static class PlayerControlsControlSchemeDataExt
+    {
+        private static readonly Type type = typeof(PlayerControls.ControlSchemeData);
+        private static readonly FieldInfo f_m_supressUse = AccessTools.Field(type, "m_supressUse");
+
+        public static void SetUseSuppressed(this PlayerControls.ControlSchemeData instance, bool value)
+        {
+            f_m_supressUse.SetValue(instance, value);
+        }
+    }
 }
