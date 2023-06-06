@@ -1,10 +1,13 @@
 <div class="action-editor">
-    <div class="action-editor-title">[@(Node.Id)] @(Node.Action.Describe())</div>
-    <div class="action-editor-predictions">
-        Start: @(Node.Predictions.StartFrame ?? -1); End: @(Node.Predictions.EndFrame ?? -1)
+    <div class="action-editor-row">
+        <div class="action-editor-title">[@(Node.Id)] @(Node.Action.Describe())</div>
+        <div class="action-editor-predictions">
+            (Frames @(Node.Predictions.StartFrame == null ? "??" : ("" + Node.Predictions.StartFrame))
+            to @(Node.Predictions.EndFrame == null ? "??" : ("" + Node.Predictions.EndFrame)))
+        </div>
     </div>
     @if (Node.Action is WaitAction wait) {
-        <div class="action-editor-property">
+        <div class="action-editor-row">
             Change to <input @bind="NumFramesEditing"/>
             <button
                 @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }"
@@ -12,7 +15,7 @@
         </div>
     }
     @if (Node.Action is PilotRotationAction pra) {
-        <div class="action-editor-property">
+        <div class="action-editor-row">
             Target angle: <input @bind="TargetAngleEditing"/>
             <button
                 @onclick="() => {pra.TargetAngle = TargetAngleEditing; DependenciesChanged.InvokeAsync(false); }"
@@ -20,13 +23,13 @@
         </div>
     }
     <div class="action-editor-deps">
-        <div class="action-editor-deps-title">Dependencies:</div>
+        <div class="action-editor-deps-title">Depends on:</div>
         @foreach (var dep in Node.Deps) {
             var depNode = Sequences.NodeById[dep];
             <div class="action-editor-dep">
                 <div class="action-editor-dep-@(depNode.Action.Chef.className)"></div>
                 <div class="action-editor-dep-title">@(depNode.Action.Describe())</div>
-                <button class="action-editor-dep-delete" @onclick="() => HandleDelete(dep)" disabled="@(!CanEdit)">Delete</button>
+                <MatIconButton Icon="close" class="action-editor-dep-delete" OnClick="() => HandleDelete(dep)" Disabled="@(!CanEdit)" />
             </div>
         }
         <button class="action-editor-deps-add" @onclick="AddDependency" disabled="@(!CanEdit)">Add Dependency</button>

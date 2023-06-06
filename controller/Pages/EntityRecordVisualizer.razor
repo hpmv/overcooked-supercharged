@@ -3,7 +3,8 @@
 @{
     var frame = EditorState.SelectedFrame;
 }
-<div class="entity-record-renderer" @ref="canvasRef" style="transform: scale(@(RenderScale))">
+<div class="entity-record-renderer-container" @ref="canvasRef">
+<div class="entity-record-renderer" style="transform: scale(@(RenderScale)); height:@(RenderScale*SvgHeight)px">
 
     <svg class="map-render" width="@(SvgWidth)" height="@(SvgHeight)">
         @foreach (var item in Level.mapByChef)
@@ -104,69 +105,39 @@
     }
     <div @ref="EntityMenuAnchor" style="position: absolute; left: @(EntityMenuX)px; top: @(EntityMenuY)px;"></div>
 </div>
-
-
-<MatMenu @ref="Menu">
-    @if (EntityMenuOpen) {
-        @foreach (var entity in EntitiesForMenu) {
-            var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
-            <MatListGroup>
-                <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
-                <MatList>
-                    @foreach (var template in actionTemplates) {
-                        <MatListItem OnClick="() => HandleTemplateClick(template)">
-                            <div style="margin-left: 20px">@(template.Describe())</div>
-                        </MatListItem>
-                    }
-                </MatList>
-            </MatListGroup>
-        }
-        if (Level != null) {
-            var pos = InverseRender(new System.Numerics.Vector2((float)EntityMenuX, (float)EntityMenuY));
-            var actionTemplates = EditorState.GetActionTemplatesForPosition(pos);
-            
-            <MatListGroup>
-                <MatListGroupSubHeader>Position @(pos)</MatListGroupSubHeader>
-                <MatList>
-                    @foreach (var template in actionTemplates) {
-                        <MatListItem OnClick="() => HandleTemplateClick(template)">
-                            <div style="margin-left: 20px">@(template.Describe())</div>
-                        </MatListItem>
-                    }
-                </MatList>
-            </MatListGroup>
-        }
-    }
-</MatMenu>
-
-<span>Frame: @(frame), Time: @(TimeSpan.FromMinutes(4.5) - TimeSpan.FromSeconds(1)/Config.FRAMERATE * frame)</span>
-<button @onclick="GotoPrevFrame">&lt;&lt;</button>
-<button @onclick="GotoNextFrame">&gt;&gt;</button>
-@if (!IsAutoplaying) {
-    <button @onclick="StartAutoplay">▶</button>
-} else {
-    <button @onclick="(e) => IsAutoplaying = false">⏸</button>
-}
-
-<button @onclick="() => ShowControls = !ShowControls">@(ShowControls ? "Hide Inputs" : "Show Inputs")</button>
-@if (ShowControls) {
-    @foreach (var (chef, _) in Level.entityRecords.Chefs) {
-        var state = chef.chefState[frame];
-        var input = Level.inputHistory.FrameInputs[chef][frame + 1];
-        var controller = Level.entityRecords.Chefs[chef][frame];
-        <div>@(chef.displayName): Pickup: @(state.highlightedForPickup?.path), Use: @(state.highlightedForUse?.path), Dash timer: @(state.dashTimer)</div>
-        <div class="chef-input-vis">
-            <div class="input-axis-vis">
-                <div class="input-axis-dot" style="left: @((input.axes.X + 1) * 20)px; top: @((input.axes.Y + 1) * 20)px"></div>
-            </div>
-            @foreach (var (title, button) in new[]{("P", input.primary), ("S", input.secondary), ("D", input.dash)}) {
-                <div class="input-button-vis @(button.isDown ? "input-button-vis-down" : "") @(button.justPressed ? "input-button-vis-just-pressed" : "") @(button.justReleased ? "input-button-vis-just-released" : "")">
-                    @(title)
-                </div>
+</div>
+@for (var i = 0; i < 2; i++) {
+    var ii = i;
+    <MatMenu @ref="Menu[ii]">
+        @if (EntityMenuOpen[ii]) {
+            @foreach (var entity in EntitiesForMenu) {
+                var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
+                <MatListGroup>
+                    <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
+                    <MatList>
+                        @foreach (var template in actionTemplates) {
+                            <MatListItem OnClick="() => HandleTemplateClick(template)">
+                                <div style="margin-left: 20px">@(template.Describe())</div>
+                            </MatListItem>
+                        }
+                    </MatList>
+                </MatListGroup>
             }
-        </div>
-        @* <div>
-            Vel: @(controller.axesVelocity) Accel: @(controller.axesAcceleration) Down: @(controller.axesDown) Cooldown: @(controller.axesCooldown)
-        </div> *@
-    }
+            if (Level != null) {
+                var pos = InverseRender(new System.Numerics.Vector2((float)EntityMenuX, (float)EntityMenuY));
+                var actionTemplates = EditorState.GetActionTemplatesForPosition(pos);
+                
+                <MatListGroup>
+                    <MatListGroupSubHeader>Position @(pos)</MatListGroupSubHeader>
+                    <MatList>
+                        @foreach (var template in actionTemplates) {
+                            <MatListItem OnClick="() => HandleTemplateClick(template)">
+                                <div style="margin-left: 20px">@(template.Describe())</div>
+                            </MatListItem>
+                        }
+                    </MatList>
+                </MatListGroup>
+            }
+        }
+    </MatMenu>
 }

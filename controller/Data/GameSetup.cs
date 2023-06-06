@@ -14,6 +14,10 @@ namespace Hpmv {
             inputHistory.FrameInputs[chef] = new Versioned<ActualControllerInput>(default);
         }
 
+        public bool IsValid() {
+            return geometry != null;
+        }
+
         public Save.GameSetup ToProto() {
             var result = new Save.GameSetup();
             foreach (var kv in mapByChef) {

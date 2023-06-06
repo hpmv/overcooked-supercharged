@@ -9,6 +9,7 @@ using Hpmv;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Google.Protobuf;
+using MatBlazor;
 
 namespace controller.Pages {
     partial class Studio : IDisposable {
@@ -16,6 +17,19 @@ namespace controller.Pages {
         private ElementReference scheduleBackgroundRef;
         private DotNetObjectReference<Studio> thisRef;
         private NodeSelector nodeSelector = new NodeSelector();
+        private MatIconButton LoadButton;
+        private MatIconButton InitializeButton;
+        private MatIconButton PatchPrefabButton;
+        private BaseMatMenu LoadMenu;
+        private BaseMatMenu InitializeMenu;
+        private BaseMatMenu PatchPrefabMenu;
+        private bool SaveDialogIsOpen;
+        private Canvas2DContext _context;
+        private BECanvasComponent _canvasReference;
+        private RealGameConnector realGameConnector;
+        private GameSetup level = new GameSetup();
+        private bool ShowInputDebug;
+        private bool ShowRecordDebug { get; set; }
 
         private void UseLevel(GameSetup level) {
             this.level = level;
@@ -59,12 +73,6 @@ namespace controller.Pages {
             TimelineLayout.DoLayout();
             StateHasChanged();
         }
-
-        private Canvas2DContext _context;
-        private BECanvasComponent _canvasReference;
-        private RealGameConnector realGameConnector;
-        private GameSetup level = new GameSetup();
-        private bool ShowRecordDebug { get; set; }
 
         [JSInvokable]
         public async void HandleScheduleBackgroundClick(double x, double y) {
@@ -113,7 +121,7 @@ namespace controller.Pages {
 
         public bool CanEdit {
             get {
-                return realGameConnector != null && realGameConnector.State == RealGameState.Paused;
+                return realGameConnector == null || realGameConnector.State == RealGameState.Paused;
             }
         }
 
@@ -121,25 +129,6 @@ namespace controller.Pages {
             var frame = EditorState.ResimulationFrame();
             await SimulateInResponseToEditorChange(frame);
         }
-
-        // private async void Repaint() {
-        //     this._context = await this._canvasReference.CreateCanvas2DAsync();
-        //     await _context.BeginBatchAsync();
-        //     await _context.SetStrokeStyleAsync("#666666");
-        //     await _context.BeginPathAsync();
-        //     for (int i = 0; i < levelShape.Length; i++) {
-        //         if (i == 0) {
-        //             var point1 = Render(levelShape[i].ToXZVector3());
-        //             await _context.MoveToAsync(point1.X, point1.Y);
-        //         }
-        //         int j = (i + 1) % levelShape.Length;
-        //         var point = Render(levelShape[j].ToXZVector3());
-        //         await _context.LineToAsync(point.X, point.Y);
-        //     }
-        //     await _context.StrokeAsync();
-        //     await _context.EndBatchAsync();
-
-        // }
 
         public EditorState EditorState = new EditorState();
         private InputHistory inputHistory = new InputHistory();
@@ -221,6 +210,54 @@ namespace controller.Pages {
             return realGameConnector.State.ToString();
         }
 
+        private string RealGameStateToIcon(RealGameState state) {
+            switch (state) {
+                case RealGameState.NotInLevel:
+                    return "pending";
+                case RealGameState.AwaitingStart:
+                    return "hourglass_empty";
+                case RealGameState.Running:
+                    return "play_arrow";
+                case RealGameState.AwaitingPause:
+                    return "hourglass_bottom";
+                case RealGameState.Paused:
+                    return "hourglass_full";
+                case RealGameState.AwaitingResume:
+                    return "hourglass_top";
+                case RealGameState.Warping:
+                    return "restore";
+                case RealGameState.Error:
+                    return "error_outline";
+                case RealGameState.ReestablishingConnection:
+                    return "settings_ethernet";
+            }
+            return "";
+        }
+
+        private string RealGameStateToColor(RealGameState state) {
+            switch (state) {
+                case RealGameState.NotInLevel:
+                    return "gray";
+                case RealGameState.AwaitingStart:
+                    return "gray";
+                case RealGameState.Running:
+                    return "green";
+                case RealGameState.AwaitingPause:
+                    return "darkyellow";
+                case RealGameState.Paused:
+                    return "green";
+                case RealGameState.AwaitingResume:
+                    return "darkyellow";
+                case RealGameState.Warping:
+                    return "gray";
+                case RealGameState.Error:
+                    return "red";
+                case RealGameState.ReestablishingConnection:
+                    return "gray";
+            }
+            return "";
+        }
+
         private async Task SimulateInResponseToEditorChange(int frame) {
             if (realGameConnector != null) {
                 await realGameConnector.RequestWarp(frame);
@@ -228,12 +265,6 @@ namespace controller.Pages {
                 await realGameConnector.RequestResume();
             }
         }
-
-        private void OnFrameChanged(int frame) {
-            EditorState.SelectedFrame = frame;
-            StateHasChanged();
-        }
-
 
         private List<string> availableSaveFiles = new List<string>();
         private void RefreshAvailableSaveFiles() {
@@ -246,8 +277,6 @@ namespace controller.Pages {
             }
         }
 
-        private string SelectedLevelToLoad { get; set; }
-        private string SelectedLevelToInitialize { get; set; }
         private string SaveFileName { get; set; }
 
         private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type> {
@@ -257,8 +286,8 @@ namespace controller.Pages {
             ["carnival34-four"] = typeof(Carnival34FourLevel),
         };
 
-        private async Task LoadLevel() {
-            var data = await File.ReadAllBytesAsync(SelectedLevelToLoad);
+        private async Task LoadLevel(string selectedLevel) {
+            var data = await File.ReadAllBytesAsync(selectedLevel);
             var save = new Hpmv.Save.GameSetup();
             save.MergeFrom(data);
             UseLevel(save.FromProto());
@@ -270,13 +299,13 @@ namespace controller.Pages {
             await File.WriteAllBytesAsync(filePath, data.ToByteArray());
         }
 
-        private void InitializeNewLevel() {
-            var initializer = levelInitializers[SelectedLevelToInitialize];
+        private void InitializeNewLevel(string selectedLevel) {
+            var initializer = levelInitializers[selectedLevel];
             UseLevel(Activator.CreateInstance(initializer) as GameSetup);
         }
 
-        private void PatchPrefab() {
-            var initializer = levelInitializers[SelectedLevelToInitialize];
+        private void PatchPrefab(string selectedLevel) {
+            var initializer = levelInitializers[selectedLevel];
             var stock = Activator.CreateInstance(initializer) as GameSetup;
             var dict = new Dictionary<string, PrefabRecord>();
 
@@ -302,20 +331,6 @@ namespace controller.Pages {
                     entity.prefab = val;
                 }
             }
-        }
-
-        private Hpmv.Save.Analysis Analysis { get; set; }
-        private void Analyze() {
-            var analysis = new Hpmv.Save.Analysis();
-            var analyzers = new IAnalyzer[] {
-                new MixerAnalyzer()
-            };
-            foreach (var analyzer in analyzers) {
-                foreach (var row in analyzer.Analyze(EditorState.Records, level.LastEmpiricalFrame)) {
-                    analysis.Rows.Add(row);
-                }
-            }
-            Analysis = analysis;
         }
     }
 }

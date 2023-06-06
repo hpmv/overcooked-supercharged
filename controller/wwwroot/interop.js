@@ -49,6 +49,9 @@ function setUpEntityRecordVisualizerHandlers(component, container) {
 
         component.invokeMethodAsync('HandleEntityClicks', paths, x - outerRect.left, y - outerRect.top);
     });
+    new ResizeObserver(() => {
+        component.invokeMethodAsync('NotifyWidthChange', container.getBoundingClientRect().width);
+    }).observe(container);
 }
 
 function setUpAnalysisResultsVisualizerHandlers(component, container) {

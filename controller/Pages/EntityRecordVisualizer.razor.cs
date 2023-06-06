@@ -20,17 +20,18 @@ namespace controller.Pages {
         public EventCallback<int> OnActionAdded { get; set; }
 
         [Parameter]
-        public EventCallback<int> OnFrameChanged { get; set; }
+        public bool CanEdit { get; set; }
 
         private float SCALE = 50;
+        private int Width { get; set; } = 900;
         private DotNetObjectReference<EntityRecordVisualizer> thisRef;
         private ElementReference canvasRef;
         private ElementReference EntityMenuAnchor;
         private double EntityMenuX;
         private double EntityMenuY;
 
-        private BaseMatMenu Menu;
-        private bool EntityMenuOpen { get; set; }
+        private BaseMatMenu[] Menu = new BaseMatMenu[2];
+        private bool[] EntityMenuOpen = { false, false };
         private List<GameEntityRecord> EntitiesForMenu = new List<GameEntityRecord>();
 
         private bool ShowControls { get; set; }
@@ -48,7 +49,7 @@ namespace controller.Pages {
         private int SvgWidth {
             get {
                 if (Level?.geometry == null) {
-                    return 700;
+                    return Width;
                 }
                 return (int)((Level.geometry.size.X + 2) / 1.2 * SCALE);
             }
@@ -57,7 +58,7 @@ namespace controller.Pages {
         private int SvgHeight {
             get {
                 if (Level?.geometry == null) {
-                    return 700;
+                    return Width;
                 }
                 return (int)((Level.geometry.size.Y + 2) / 1.2 * SCALE);
             }
@@ -68,7 +69,7 @@ namespace controller.Pages {
                 if (Level?.geometry == null) {
                     return 1;
                 }
-                return 700 / (Math.Max(Level.geometry.size.Y + 2, Level.geometry.size.X + 2) * SCALE / 1.2f);
+                return Width / (Math.Max(Level.geometry.size.Y + 2, Level.geometry.size.X + 2) * SCALE / 1.2f);
             }
         }
 
@@ -98,44 +99,32 @@ namespace controller.Pages {
             EntityMenuY = y / renderScale;
             StateHasChanged();
             await InvokeAsync(async () => {
-                EntityMenuOpen = true;
-                await Menu.OpenAsync(EntityMenuAnchor);
+                if (EntityMenuOpen[0]) {
+                    EntityMenuOpen[0] = false;
+                    EntityMenuOpen[1] = true;
+                    await Menu[1].OpenAsync(EntityMenuAnchor);
+                } else {
+                    EntityMenuOpen[0] = true;
+                    EntityMenuOpen[1] = false;
+                    await Menu[0].OpenAsync(EntityMenuAnchor);
+                }
                 StateHasChanged();
             });
         }
 
         private async Task HandleTemplateClick(ActionTemplate template) {
-            if (EditorState.SelectedChef != null) {
+            if (EditorState.SelectedChef != null && CanEdit) {
                 var frame = EditorState.ResimulationFrame();
                 EditorState.ApplyActionTemplate(template);
                 await OnActionAdded.InvokeAsync(frame);
             }
-            EntityMenuOpen = false;
+            EntityMenuOpen[0] = EntityMenuOpen[1] = false;
         }
 
-        private bool IsAutoplaying { get; set; }
-
-        private async Task StartAutoplay() {
-            IsAutoplaying = true;
-            DateTime nextFrame = DateTime.Now;
-            while (IsAutoplaying) {
-                nextFrame += TimeSpan.FromSeconds(1) / Config.FRAMERATE;
-                DateTime now = DateTime.Now;
-                await Task.Delay(now > nextFrame ? TimeSpan.Zero : (nextFrame - now));
-                if (EditorState.SelectedFrame < Level.LastEmpiricalFrame) {
-                    await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame + 1);
-                } else {
-                    break;
-                }
-            }
-            IsAutoplaying = false;
-        }
-        private async Task GotoPrevFrame() {
-            await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame - 1);
-        }
-        private async Task GotoNextFrame() {
-            await OnFrameChanged.InvokeAsync(EditorState.SelectedFrame + 1);
+        [JSInvokable]
+        public void NotifyWidthChange(float width) {
+            Width = (int)width;
+            StateHasChanged();
         }
     }
-
 }
