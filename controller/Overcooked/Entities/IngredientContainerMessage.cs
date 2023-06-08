@@ -30,7 +30,25 @@ public class IngredientContainerMessage : Serialisable {
 
 	// Token: 0x06002B6D RID: 11117 RVA: 0x000CAD10 File Offset: 0x000C9110
 	public void Serialise(BitStreamWriter writer) {
-		throw new NotImplementedException();
+		writer.Write((uint)this.m_type, 1);
+		IngredientContainerMessage.MessageType type = this.m_type;
+		if (type != IngredientContainerMessage.MessageType.ActiveState)
+		{
+			if (type == IngredientContainerMessage.MessageType.ContentsChanged)
+			{
+				if (this.m_contents != null)
+				{
+					CompositeAssembledNode compositeAssembledNode = new CompositeAssembledNode();
+					compositeAssembledNode.m_composition = this.m_contents;
+					writer.Write((uint)AssembledDefinitionNodeFactory.GetNodeType(compositeAssembledNode), 4);
+					compositeAssembledNode.Serialise(writer);
+				}
+			}
+		}
+		else
+		{
+			writer.Write(this.m_activeState);
+		}
 	}
 
 	// Token: 0x06002B6E RID: 11118 RVA: 0x000CAD8C File Offset: 0x000C918C

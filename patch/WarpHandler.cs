@@ -514,6 +514,44 @@ namespace SuperchargedPatch
                     var client = entity.m_GameObject.GetComponent<ClientPilotRotation>();
                     client.SetNextRotation(transform.rotation);
                 }
+
+                if (entity.m_GameObject.GetComponent<ServerIngredientContainer>() is ServerIngredientContainer sic)
+                {
+                    var container = entityThrift.IngredientContainer;
+                    if (container == null)
+                    {
+                        Log($"[WARP] Failed to warp IngredientContainer: no IngredientContainer specific data");
+                        return;
+                    }
+                    IngredientContainerMessage msg = new IngredientContainerMessage();
+                    msg.Initialise(new AssembledDefinitionNode[] { });
+                    if (container.MsgData != null) {
+                        msg.Deserialise(new BitStream.BitStreamReader(container.MsgData));
+                    }
+                    sic.SetContentsAndForceOnContentsChanged(msg.Contents.ToList());
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerCookingHandler>() is ServerCookingHandler sch)
+                {
+                    var handler = entityThrift.CookingHandler;
+                    if (handler == null)
+                    {
+                        Log($"[WARP] Failed to warp CookingHandler: no CookingHandler specific data");
+                        return;
+                    }
+                    sch.SetCookingProgressAndForceStateChangedCallback((float)handler.Progress);
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerMixingHandler>() is ServerMixingHandler smh)
+                {
+                    var handler = entityThrift.MixingHandler;
+                    if (handler == null)
+                    {
+                        Log($"[WARP] Failed to warp MixingHandler: no MixingHandler specific data");
+                        return;
+                    }
+                    smh.SetMixingProgressAndForceStateChangedCallback((float)handler.Progress);
+                }
             });
 
             // Handle position setting and chef warping last.

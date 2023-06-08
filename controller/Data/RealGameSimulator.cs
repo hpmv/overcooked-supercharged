@@ -247,7 +247,10 @@ namespace Hpmv {
                 } else if (payload is AttachStationMessage asm) {
                     specificData.attachment = asm.m_item <= 0 ? null : entityIdToRecord[asm.m_item];
                 } else if (payload is IngredientContainerMessage icm) {
-                    specificData.contents = icm.Contents?.Flatten()?.ToList();
+                    if (icm.Type == IngredientContainerMessage.MessageType.ContentsChanged) {
+                        specificData.contents = icm.Contents?.Flatten()?.ToList();
+                        specificData.rawGameEntityData = icm.ToBytes();
+                    }
                 } else if (payload is PlateStationMessage message) {
                     specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
                     specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));

@@ -106,7 +106,7 @@ struct PlateStationWarpData {
 }
 
 struct IngredientContainerWarpData {
-    1: binary contents,  // encoded AssembledDefinitionNode[]
+    1: binary msgData,  // encoded IngredientContainerMessage
 }
 
 struct CannonWarpData {
@@ -149,6 +149,14 @@ struct PilotRotationWarpData {
     1: double angle,
 }
 
+struct MixingHandlerWarpData {
+    1: double progress,
+}
+
+struct CookingHandlerWarpData {
+    1: double progress,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -178,6 +186,8 @@ struct EntityWarpSpec {
     15: optional ThrowableItemWarpData throwableItem,
     16: optional TerminalWarpData terminal,
     17: optional PilotRotationWarpData pilotRotation,
+    18: optional MixingHandlerWarpData mixingHandler,
+    19: optional CookingHandlerWarpData cookingHandler,
     // TODO: more entity types
 }
 

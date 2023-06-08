@@ -167,6 +167,21 @@ namespace Hpmv {
                         spec.Terminal.InteracterEntityId = data.sessionInteracter.path.ids[0];
                     }
                 }
+                if (record.prefab.IsMixer) {
+                    spec.MixingHandler = new MixingHandlerWarpData {
+                        Progress = record.progress[desiredFrame],
+                    };
+                }
+                if (record.prefab.IsCookingHandler) {
+                    spec.CookingHandler = new CookingHandlerWarpData {
+                        Progress = record.progress[desiredFrame],
+                    };
+                }
+                if (record.prefab.CanContainIngredients) {
+                    spec.IngredientContainer = new IngredientContainerWarpData {
+                        MsgData = record.data[desiredFrame].rawGameEntityData,
+                    };
+                }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {
                     continue;

@@ -25,6 +25,8 @@ namespace Hpmv {
         public bool IsCannon { get; set; }
         public bool IsThrowable { get; set; }
         public bool IsTerminal { get; set; }
+        public bool IsMixer { get; set; }
+        public bool IsCookingHandler { get; set; }
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
@@ -54,6 +56,8 @@ namespace Hpmv {
                 IsCannon = IsCannon,
                 IsThrowable = IsThrowable,
                 IsTerminal = IsTerminal,
+                IsMixer = IsMixer,
+                IsCookingHandler = IsCookingHandler,
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
@@ -95,6 +99,8 @@ namespace Hpmv {
                 IsCannon = record.IsCannon,
                 IsThrowable = record.IsThrowable,
                 IsTerminal = record.IsTerminal,
+                IsMixer = record.IsMixer,
+                IsCookingHandler = record.IsCookingHandler,
                 Ignore = record.Ignore,
                 OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };
