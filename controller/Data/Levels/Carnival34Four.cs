@@ -411,7 +411,7 @@ namespace Hpmv {
                 entityRecords.GetRecordFromPath(new []{43}));
 
 
-            var MIXER = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, IsMixer = true, CanBeAttached = true };
+            var MIXER = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, IsMixer = true, IsCookingHandler = true, CanBeAttached = true };
             var MIXER_STATION = new PrefabRecord("Mixer Station", "mixer-station") { IsAttachStation = true }; 
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(3, MIXER),

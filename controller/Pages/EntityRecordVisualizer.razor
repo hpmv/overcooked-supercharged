@@ -12,6 +12,10 @@
             var chef = item.Key;
             var map = item.Value;
             <path d="@PolygonString(map.polygons)" class="map-polygon"></path>
+            @if (Level.pathDebug.ContainsKey(chef)) {
+                var path = Level.pathDebug[chef];
+                <path d="@PathString(path)" class="map-path"></path>
+            }
         }
     </svg>
 

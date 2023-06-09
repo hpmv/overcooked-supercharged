@@ -878,6 +878,10 @@ html, body {
     fill: rgba(255, 217, 146, 0.1);
 }
 
+.map-path {
+    stroke: green;
+}
+
 .framerate-controller-editor {
     display: flex;
 }

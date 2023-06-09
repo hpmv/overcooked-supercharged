@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Hpmv {
     public class GameSetup {
@@ -7,6 +8,7 @@ namespace Hpmv {
         public GameEntityRecords entityRecords = new GameEntityRecords();
         public GameActionSequences sequences = new GameActionSequences();
         public InputHistory inputHistory = new InputHistory();
+        public Dictionary<int, List<Vector2>> pathDebug = new Dictionary<int, List<Vector2>>();
         public int LastEmpiricalFrame { get; set; }
 
         public void RegisterChef(GameEntityRecord chef) {

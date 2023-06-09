@@ -124,6 +124,7 @@
     <Compile Include="Injection\Injector.cs" />
     <Compile Include="Injection\InjectorServer.cs" />
     <Compile Include="Injection\OrderRandom.cs" />
+    <Compile Include="PausingPatches.cs" />
     <Compile Include="ServerInterceptionPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Extensions\ServerWorkableItemExt.cs" />

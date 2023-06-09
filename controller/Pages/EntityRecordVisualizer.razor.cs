@@ -82,6 +82,13 @@ namespace controller.Pages {
             ));
         }
 
+        private string PathString(List<Vector2> points) {
+            return "M " + string.Join(" L ", points.Select(p => {
+                var r = Render(p);
+                return $"{r.X},{r.Y}";
+            }));
+        }
+
         protected override async Task OnAfterRenderAsync(bool firstRender) {
             if (firstRender) {
                 thisRef = DotNetObjectReference.Create(this);

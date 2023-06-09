@@ -114,6 +114,13 @@ namespace SuperchargedPatch
                             break;
                         }
                         var spawned = NetworkUtils.ServerSpawnPrefab(spawnerEntity.m_GameObject, prefab);
+                        if (spawned.GetComponent<ServerPhysicalAttachment>() is ServerPhysicalAttachment spa)
+                        {
+                            // This is needed to ensure that when we first spawn it, it is properly contained in its
+                            // Rigidbody container, i.e. a valid detached state. Otherwise, it is not in a valid
+                            // state - it could be detached but not in a Rigidbody container.
+                            spa.ManualEnable();
+                        }
                         var spawnedEntry = EntitySerialisationRegistry.GetEntry(spawned);
                         Log($"[WARP] Spawned entity {spawnedEntry.m_Header.m_uEntityID} along path {spawningPathStr}");
                         if (spawnedEntry == null)

@@ -131,9 +131,13 @@ namespace SuperchargedPatch
         {
             var data = new ChefSpecificData();
             var m_controls = cpci.m_controls();
-            data.HighlightedForPickup = m_controls?.CurrentInteractionObjects?.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_TheOriginalHandlePickup) : -1;
-            data.HighlightedForUse = m_controls?.CurrentInteractionObjects?.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(m_controls.CurrentInteractionObjects.m_interactable.gameObject) : -1;
-            data.HighlightedForPlacement = m_controls?.CurrentInteractionObjects?.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)m_controls.CurrentInteractionObjects.m_iHandlePlacement).gameObject) : -1;
+            // Recalculate the nearby objects. This is because the current calculation was for the previous frame, after which the chefs already moved.
+            // (The order goes - calculate nearby objects, update carry/interact, and *then* update movement). So, whatever we calculate here should
+            // be whatever is used for next frame, thereby giving us the correct data to make decisions for the next frame's input.
+            var nearbyObjects = m_controls.FindNearbyObjects();
+            data.HighlightedForPickup = nearbyObjects.m_TheOriginalHandlePickup != null ? (int)EntitySerialisationRegistry.GetId(nearbyObjects.m_TheOriginalHandlePickup) : -1;
+            data.HighlightedForUse = nearbyObjects.m_interactable != null ? (int)EntitySerialisationRegistry.GetId(nearbyObjects.m_interactable.gameObject) : -1;
+            data.HighlightedForPlacement = nearbyObjects.m_iHandlePlacement is Component ? (int)EntitySerialisationRegistry.GetId(((Component)nearbyObjects.m_iHandlePlacement).gameObject) : -1;
 
             data.DashTimer = cpci.m_dashTimer();
             var interactingEntity = cpci.m_predictedInteracted();

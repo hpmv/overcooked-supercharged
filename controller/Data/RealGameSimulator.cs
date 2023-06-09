@@ -127,6 +127,11 @@ namespace Hpmv {
                 if (output.ControllerInput != null) {
                     newControllers[action.Chef] = output.ControllerInput.Value;
                 }
+                if (output.PathDebug != null) {
+                    setup.pathDebug[action.Chef.path.ids[0]] = output.PathDebug;
+                } else {
+                    setup.pathDebug.Remove(action.Chef.path.ids[0]);
+                }
                 if (output.Done) {
                     // If the output is Done that means we're achieved the goal of this action already
                     // in the current frame, so mark it as done by the current frame.

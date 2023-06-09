@@ -78,11 +78,11 @@
         <div class="toolbar-text toolbar-text-frame">@(EditorState.SelectedFrame)</div>
         <MatIconButton
             Icon="arrow_back_ios"
-            OnClick="() => EditorState.SelectedFrame = Math.Max(0, EditorState.SelectedFrame - 1)"
+            OnClick="async () => await NavigateToFrame(Math.Max(0, EditorState.SelectedFrame - 1))"
             Disabled="EditorState.SelectedFrame <= 0"/>
         <MatIconButton
             Icon="arrow_forward_ios"
-            OnClick="() => EditorState.SelectedFrame = Math.Min(EditorState.SelectedFrame + 1, level.LastEmpiricalFrame)"
+            OnClick="async () => await NavigateToFrame(Math.Min(EditorState.SelectedFrame + 1, level.LastEmpiricalFrame))"
             Disabled="EditorState.SelectedFrame >= level.LastEmpiricalFrame"/>
         @if (realGameConnector != null) {
             <div class="toolbar-divider"></div>

@@ -77,6 +77,10 @@ namespace controller.Pages {
         [JSInvokable]
         public async void HandleScheduleBackgroundClick(double x, double y) {
             var frame = Math.Min(level.LastEmpiricalFrame, TimelineLayout.FrameFromOffset(y));
+            await NavigateToFrame(frame);
+        }
+
+        private async Task NavigateToFrame(int frame) {
             if (realGameConnector != null) {
                 if (realGameConnector.State == RealGameState.Paused) {
                     await realGameConnector.RequestWarp(frame);
@@ -88,6 +92,7 @@ namespace controller.Pages {
             EditorState.SelectedFrame = frame;
             EditorState.SelectedChef = null;
             EditorState.SelectedActionIndex = 0;
+            level.pathDebug.Clear();
             StateHasChanged();
         }
 
@@ -96,17 +101,7 @@ namespace controller.Pages {
                 nodeSelector.Select(level.sequences.Actions[level.sequences.ChefIndexByChef[chef]][index]);
             } else {
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
-                if (realGameConnector != null) {
-                    if (realGameConnector.State == RealGameState.Paused) {
-                        await realGameConnector.RequestWarp(targetFrame);
-                    } else {
-                        // Don't honor frame navigation if we're in the middle of a simulation.
-                        return;
-                    }
-                }
-                EditorState.SelectedChef = chef;
-                EditorState.SelectedActionIndex = index;
-                EditorState.SelectedFrame = targetFrame;
+                await NavigateToFrame(targetFrame);
             }
         }
 
@@ -141,6 +136,7 @@ namespace controller.Pages {
                 StopRealSimulation();
             }
             EditorState.SelectedFrame = 0;
+            level.pathDebug.Clear();
             realGameConnector = new RealGameConnector(level);
             realGameConnector.OnFrameUpdate += () => {
                 InvokeAsync(async () => {

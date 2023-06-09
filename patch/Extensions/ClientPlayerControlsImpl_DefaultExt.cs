@@ -125,6 +125,17 @@ namespace SuperchargedPatch
         }
     }
 
+    public static class PlayerControlsExt
+    {
+        private static readonly Type type = typeof(PlayerControls);
+        private static readonly MethodInfo m_FindNearbyObjects = AccessTools.Method(type, "FindNearbyObjects");
+
+        public static PlayerControls.InteractionObjects FindNearbyObjects(this PlayerControls instance)
+        {
+            return (PlayerControls.InteractionObjects)m_FindNearbyObjects.Invoke(instance, null);
+        }
+    }
+
     public static class PlayerControlsControlSchemeDataExt
     {
         private static readonly Type type = typeof(PlayerControls.ControlSchemeData);

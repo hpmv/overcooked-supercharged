@@ -40,7 +40,7 @@ namespace Hpmv {
             return entity;
         }
 
-        private DesiredControllerInput CalculateInputRegardlessOfHighlighting(GameEntityRecord subjectEntity, GameActionInput input) {
+        private GameActionOutput CalculateGotoResult(GameEntityRecord subjectEntity, GameActionInput input) {
             GotoAction gotoAction = new GotoAction {
                 Chef = Chef,
                 DesiredPos = new InteractionPointsLocationToken(new LiteralEntityReference(subjectEntity))
@@ -49,11 +49,18 @@ namespace Hpmv {
             var output = gotoAction.Step(input);
             var dir = Vector2.Normalize(subjectEntity.position[input.Frame].XZ() - Chef.position[input.Frame].XZ());
             if (output.Done) {
-                return new DesiredControllerInput {
-                    axes = new Vector2(dir.X, -dir.Y)
+                // If we're already there... then go towards the entity's position. That'll likely
+                // make us highlight the entity next time.
+                return new GameActionOutput {
+                    ControllerInput = new DesiredControllerInput {
+                        axes = new Vector2(dir.X, -dir.Y)
+                    }
                 };
             }
-            return output.ControllerInput.Value;
+            return new GameActionOutput {
+                ControllerInput = output.ControllerInput.Value,
+                PathDebug = output.PathDebug,
+            };
         }
 
         public override GameActionOutput Step(GameActionInput input) {
@@ -63,28 +70,6 @@ namespace Hpmv {
             }
             // Console.WriteLine($"[{input.Frame}] interactable entity for {Subject} is {subjectEntity.displayName}");
             var chefState = Chef.chefState[input.Frame];
-            var chefForward = Chef.rotation[input.Frame].ToForwardVector();
-
-            var gotoInput = CalculateInputRegardlessOfHighlighting(subjectEntity, input);
-            var (predictedPosition, predictedVelocity, predictedForward) =
-                OfflineCalculations.PredictChefPositionAfterInput(
-                    chefState,
-                    Chef.position[input.Frame],
-                    Chef.velocity[input.Frame],
-                    chefForward,
-                    input.MapByChef[Chef.path.ids[0]],
-                    input.ControllerState.axes);
-            // var predictedPosition2 = OfflineEmulator.CalculateNewChefPositionAfterMovement(predictedPosition, predictedVelocity, input.Map);
-            var predictedHighlightingOnNextFrame =
-                OfflineCalculations.CalculateHighlightedObjects(predictedPosition, predictedForward, input.Geometry, input.Entities.GenAllEntities());
-            // var predictedHighlightingOnNextNextFrame =
-            //     OfflineEmulator.CalculateHighlightedObjects(predictedPosition2, predictedForward, input.Map, input.Entities.GenAllEntities());
-            // var prepareToInteractHighlightings = OfflineEmulator.CalculateHighlightedObjects(Chef.position.Last().XZ(), chefState.forward, input.Map, input.Entities.GenAllEntities());
-
-            var gridPosOfChef = input.Geometry.CoordsToGridPosRounded(Chef.position.Last().XZ());
-            var gridPosOfEntity = input.Geometry.CoordsToGridPosRounded(subjectEntity.position.Last().XZ());
-            var gridDirection = input.Geometry.GridPos(gridPosOfEntity.x, gridPosOfEntity.y) - input.Geometry.GridPos(gridPosOfChef.x, gridPosOfChef.y);
-            var directionCheck = Vector2.Dot(Vector2.Normalize(gridDirection), chefForward) > 0.05;
 
             if (Primary) {
                 if (input.ControllerState.PrimaryButtonDown) {
@@ -116,22 +101,17 @@ namespace Hpmv {
                     return default;
                 }
 
-                // if ((Prepare || chefState.highlightedForPickup == subjectEntity) && (predictedHighlightingOnNextFrame.highlightedForPickup == subjectEntity) && predictedHighlightingOnNextNextFrame.highlightedForPickup == subjectEntity) {
-                if (((chefState.highlightedForPickup == subjectEntity) || (predictedHighlightingOnNextFrame.highlightedForPickup == subjectEntity && Prepare)) && directionCheck) {
+                if (chefState.highlightedForPickup == subjectEntity) {
                     if (Prepare) {
                         return new GameActionOutput {
-                            ControllerInput = gotoInput,
                             Done = true
                         };
                     }
-                    // TODO: We can't store state for streak here, so we'd have to predict the highlight in the next frame
-                    // with some humanizer information. For now just be inaccurate.
                     if (IsPickup ? input.ControllerState.RequestButtonDownForPickup() : input.ControllerState.RequestButtonDown()) {
                         return new GameActionOutput {
                             ControllerInput = new DesiredControllerInput {
                                 primaryDown = true,
                                 primaryDownIsForPickup = IsPickup,
-                                axes = gotoInput.axes,
                             }
                         };
                     }
@@ -152,12 +132,11 @@ namespace Hpmv {
                     return default;
                 }
 
-                if (directionCheck && chefState.highlightedForUse == subjectEntity) {
+                if (chefState.highlightedForUse == subjectEntity) {
                     if (input.ControllerState.RequestButtonDown()) {
                         return new GameActionOutput {
                             ControllerInput = new DesiredControllerInput {
                                 secondaryDown = true,
-                                axes = gotoInput.axes,
                             }
                         };
                     }
@@ -165,7 +144,8 @@ namespace Hpmv {
                 }
 
             }
-            return new GameActionOutput { ControllerInput = gotoInput };
+
+            return CalculateGotoResult(subjectEntity, input);
         }
 
         public Save.InteractAction ToProto() {
