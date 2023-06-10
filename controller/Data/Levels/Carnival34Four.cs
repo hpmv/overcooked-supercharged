@@ -465,6 +465,9 @@ namespace Hpmv {
             entityRecords.RegisterKnownObject(83, TERMINAL);
             entityRecords.RegisterKnownObject(86, TERMINAL);
 
+            var FIRE_EXTINGUISHER = new PrefabRecord("Fire Extinguisher", "fire-extinguisher") { CanBeAttached = true };
+            entityRecords.RegisterKnownObject(1, FIRE_EXTINGUISHER);
+
             var IGNORE = new PrefabRecord("", "") { Ignore = true };
             for (var i = 95; i <= 102; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);

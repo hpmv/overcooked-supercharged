@@ -113,10 +113,12 @@
     <Compile Include="EntityPathReference.cs" />
     <Compile Include="EntityPathReferenceMarker.cs" />
     <Compile Include="Extensions\MultiplayerControllerExt.cs" />
+    <Compile Include="Extensions\ServerAttachStationExt.cs" />
     <Compile Include="Extensions\ServerCookingAndMixingHandlerExt.cs" />
     <Compile Include="Extensions\ServerIngredientContainerExt.cs" />
     <Compile Include="Extensions\ServerPhysicalAttachmentExt.cs" />
     <Compile Include="Extensions\ServerPilotRotationExt.cs" />
+    <Compile Include="Extensions\ServerPlayerAttachmentCarrierExt.cs" />
     <Compile Include="Extensions\ServerSessionInteractableExt.cs" />
     <Compile Include="Extensions\ThrowableItemExt.cs" />
     <Compile Include="Helpers.cs" />

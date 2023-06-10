@@ -59,18 +59,13 @@ namespace Hpmv {
                         EntityId = currentRecordToEntityId[record],
                     };
                 }
-                if (record.prefab.CanBeAttached) {
-                    if (record.data[desiredFrame].attachmentParent is GameEntityRecord attachmentParent) {
-                        // TODO: We probably want to switch to attachment child instead of parent.
-                        var attachmentSpec = new AttachmentParentWarpData();
-                        attachmentSpec.ParentEntity = getEntityIdOrRef(attachmentParent);
-                        spec.AttachmentParent = attachmentSpec;
+                if (record.prefab.IsAttachStation) {
+                    if (record.data[desiredFrame].attachment is GameEntityRecord attachment) {
+                        spec.AttachStation = new AttachStationWarpData {
+                            Item = getEntityIdOrRef(attachment),
+                        };
                     } else {
-                        spec.AttachmentParent = new AttachmentParentWarpData();
-                        spec.Position = record.position[desiredFrame].ToThrift();
-                        spec.Rotation = record.rotation[desiredFrame].ToThrift();
-                        spec.Velocity = record.velocity[desiredFrame].ToThrift();
-                        spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                        spec.AttachStation = new AttachStationWarpData();
                     }
                 }
                 if (record.prefab.IsChef) {
@@ -78,6 +73,13 @@ namespace Hpmv {
                     spec.Rotation = record.rotation[desiredFrame].ToThrift();
                     spec.Velocity = record.velocity[desiredFrame].ToThrift();
                     spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                    if (record.data[desiredFrame].attachment is GameEntityRecord attachment) {
+                        spec.ChefCarry = new ChefCarryWarpData {
+                            CarriedItem = getEntityIdOrRef(attachment),
+                        };
+                    } else {
+                        spec.ChefCarry = new ChefCarryWarpData();
+                    }
                 }
                 if (record.prefab.IsCannon) {
                     var data = record.data[desiredFrame];

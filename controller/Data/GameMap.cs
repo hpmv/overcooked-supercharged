@@ -55,7 +55,7 @@ namespace Hpmv {
 
         private Paths64 LevelPolygons;
 
-        private Point64 Discretize(Vector2 p) => new Point64((int)(p.X * SCALE), (int)(p.Y * SCALE));
+        private Point64 Discretize(Vector2 p) => new Point64((int)(p.X * SCALE + 0.5), (int)(p.Y * SCALE + 0.5));
         private Vector2 Undiscretize(Point64 point) => new Vector2((float)point.X / SCALE, (float)point.Y / SCALE);
         private (int, int) ClosestGridPoint(Point64 p) {
             var x = (p.X - topLeftDiscrete.X + RESOLUTION / 2) / RESOLUTION;

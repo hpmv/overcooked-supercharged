@@ -77,10 +77,10 @@ namespace controller.Pages {
         [JSInvokable]
         public async void HandleScheduleBackgroundClick(double x, double y) {
             var frame = Math.Min(level.LastEmpiricalFrame, TimelineLayout.FrameFromOffset(y));
-            await NavigateToFrame(frame);
+            await NavigateToFrame(frame, true);
         }
 
-        private async Task NavigateToFrame(int frame) {
+        private async Task NavigateToFrame(int frame, bool clearSelection) {
             if (realGameConnector != null) {
                 if (realGameConnector.State == RealGameState.Paused) {
                     await realGameConnector.RequestWarp(frame);
@@ -90,8 +90,10 @@ namespace controller.Pages {
                 }
             }
             EditorState.SelectedFrame = frame;
-            EditorState.SelectedChef = null;
-            EditorState.SelectedActionIndex = 0;
+            if (clearSelection) {
+                EditorState.SelectedChef = null;
+                EditorState.SelectedActionIndex = 0;
+            }
             level.pathDebug.Clear();
             StateHasChanged();
         }
@@ -101,7 +103,9 @@ namespace controller.Pages {
                 nodeSelector.Select(level.sequences.Actions[level.sequences.ChefIndexByChef[chef]][index]);
             } else {
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
-                await NavigateToFrame(targetFrame);
+                EditorState.SelectedChef = chef;
+                EditorState.SelectedActionIndex = index;
+                await NavigateToFrame(targetFrame, false);
             }
         }
 

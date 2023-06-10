@@ -91,10 +91,6 @@ struct EntityIdOrRef {
     2: optional EntityPathReference entityPathReference,
 }
 
-struct AttachmentParentWarpData {
-    1: EntityIdOrRef parentEntity,
-}
-
 struct PlatePendingReturnWarpData {
     1: i32 returnStationEntityId,
     2: double timer,
@@ -157,6 +153,14 @@ struct CookingHandlerWarpData {
     1: double progress,
 }
 
+struct ChefCarryWarpData {
+    1: optional EntityIdOrRef carriedItem,
+}
+
+struct AttachStationWarpData {
+    1: optional EntityIdOrRef item,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -176,7 +180,6 @@ struct EntityWarpSpec {
     11: optional Point angularVelocity,
 
     // Zero or more of the following can be present.
-    7: optional AttachmentParentWarpData attachmentParent,
     8: optional PlateStationWarpData plateStation,
     9: optional ChefSpecificData chef,
     10: optional IngredientContainerWarpData ingredientContainer,
@@ -188,6 +191,8 @@ struct EntityWarpSpec {
     17: optional PilotRotationWarpData pilotRotation,
     18: optional MixingHandlerWarpData mixingHandler,
     19: optional CookingHandlerWarpData cookingHandler,
+    20: optional ChefCarryWarpData chefCarry,
+    21: optional AttachStationWarpData attachStation,
     // TODO: more entity types
 }
 

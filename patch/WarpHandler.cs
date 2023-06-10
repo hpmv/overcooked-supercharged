@@ -44,17 +44,6 @@ namespace SuperchargedPatch
             Helpers.Resume();
 
             var warp = input.Warp;
-            foreach (var entityId in warp.EntitiesToDelete)
-            {
-                var entity = EntitySerialisationRegistry.GetEntry((uint)entityId);
-                if (entity == null)
-                {
-                    Log($"[WARP] Error destroying entity ID {entityId}, entity does not exist!");
-                    continue;
-                }
-                NetworkUtils.DestroyObject(entity.m_GameObject);
-                Log($"[WARP] Destroyed entity {entityId}");
-            }
 
             Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
 
@@ -185,7 +174,8 @@ namespace SuperchargedPatch
                 }
             };
 
-            // Prefer to remove existing interacters first, we'll add them back later.
+            // Remove stuff first, before adding stuff later. Attachments for example need to be free before
+            // it's attached to something else.
             forEachEntity((entity, entityThrift) =>
             {
                 if (entity.m_GameObject.GetComponent<ServerWorkstation>() is ServerWorkstation sw)
@@ -194,10 +184,40 @@ namespace SuperchargedPatch
                     {
                         sw.OnInteracterRemoved(interacter.m_object);
                     }
-
-                    if (sw.Item() != null)
+                }
+                if (entity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation sas)
+                {
+                    var thrift = entityThrift.AttachStation;
+                    if (thrift == null)
                     {
-                        sw.OnItemRemovedItem(sw.Item().GetComponent<IAttachment>());
+                        Log($"[WARP] Error warping attach station {entity.m_Header.m_uEntityID}: AttachStation is null");
+                        return;
+                    }
+                    if (sas.m_item() is IAttachment ia)
+                    {
+                        var existingEntity = ia.AccessGameObject();
+                        if (thrift.Item == null || existingEntity != getEntityByIdOrRef(thrift.Item)?.m_GameObject)
+                        {
+                            sas.TakeItem();
+                        }
+                    }
+                }
+                if (entity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier spac)
+                {
+                    var thrift = entityThrift.ChefCarry;
+                    if (thrift == null)
+                    {
+                        Log($"[WARP] Error warping chef carry {entity.m_Header.m_uEntityID}: ChefCarry is null");
+                        return;
+                    }
+                    // TODO: backpacks uses array index 1. We're not handling that yet.
+                    if (spac.m_carriedObjects()[0] is IAttachment ia)
+                    {
+                        var existingEntity = ia.AccessGameObject();
+                        if (thrift.CarriedItem == null || existingEntity != getEntityByIdOrRef(thrift.CarriedItem)?.m_GameObject)
+                        {
+                            spac.TakeItem();
+                        }
                     }
                 }
                 if (entity.m_GameObject.GetComponent<ServerTerminal>() is ServerTerminal st)
@@ -211,94 +231,46 @@ namespace SuperchargedPatch
                 }
             });
 
-            // Handle attachment parent changes.
+            // Handle attachment changes.
             forEachEntity((entity, entityThrift) =>
             {
-                if (entityThrift.__isset.attachmentParent)
+                if (entity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation sas)
                 {
-                    var attachmentParent = entityThrift.AttachmentParent;
-                    EntitySerialisationEntry parentEntity = null;
-                    if (attachmentParent.ParentEntity != null)
+                    var thrift = entityThrift.AttachStation;
+                    if (thrift == null)
                     {
-                        parentEntity = getEntityByIdOrRef(attachmentParent.ParentEntity);
-                        if (parentEntity == null)
-                        {
-                            Log($"[WARP] Error setting attachment parent: parent entity path {attachmentParent} does not exist");
-                            return;
-                        }
-                    }
-                    var physicalAttachment = entity.m_GameObject.GetComponent<ServerPhysicalAttachment>();
-                    if (physicalAttachment == null)
-                    {
-                        Log($"[WARP] Error setting attachment parent: entity {entity.m_Header.m_uEntityID} does not have a ServerPhysicalAttachment");
+                        Log($"[WARP] Error warping attach station {entity.m_Header.m_uEntityID}: AttachStation is null");
                         return;
                     }
-                    Action detachFromExistingParent = () =>
+                    if (sas.m_item() == null && thrift.Item != null)
                     {
-                        var existingParent = physicalAttachment.m_ServerData().m_parentable as Component;
-                        if (existingParent == null)
+                        var newEntity = getEntityByIdOrRef(thrift.Item);
+                        if (newEntity == null)
                         {
+                            Log($"[WARP] Error warping attach station {entity.m_Header.m_uEntityID}: Failed to get new item entity {thrift.Item}");
                             return;
                         }
-                        if (existingParent.GetComponent<ServerAttachStation>() is ServerAttachStation station)
-                        {
-                            Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerAttachStation");
-                            station.TakeItem();
-                        }
-                        else if (existingParent.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
-                        {
-                            Log($"[WARP] Detaching attachment {entity.m_Header.m_uEntityID} from parent ServerPlayerAttachmentCarrier");
-                            carrier.TakeItem();
-                        }
-                        else
-                        {
-                            Log($"[WARP] Warning when detaching attachment for entity {entity.m_Header.m_uEntityID}: parent entity is of unhandled kind");
-                            physicalAttachment.Detach();
-                        }
-                    };
-                    if (parentEntity == null)
-                    {
-                        detachFromExistingParent();
+                        sas.AddItem(newEntity.m_GameObject, default);
                     }
-                    else
+                }
+                if (entity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier spac)
+                {
+                    var thrift = entityThrift.ChefCarry;
+                    if (thrift == null)
                     {
-                        var existingParent = physicalAttachment.m_ServerData().m_parentable as Component;
-                        if (existingParent?.gameObject == parentEntity.m_GameObject)
+                        Log($"[WARP] Error warping chef carry {entity.m_Header.m_uEntityID}: ChefCarry is null");
+                        return;
+                    }
+                    // TODO: backpacks uses array index 1. We're not handling that yet.
+                    if (spac.m_carriedObjects()[0] == null && thrift.CarriedItem != null)
+                    {
+                        var newEntity = getEntityByIdOrRef(thrift.CarriedItem);
+                        if (newEntity == null)
                         {
+                            Log($"[WARP] Error warping chef carry {entity.m_Header.m_uEntityID}: Failed to get new carried item entity {thrift.CarriedItem}");
                             return;
                         }
-                        detachFromExistingParent();
-                        if (parentEntity.m_GameObject.GetComponent<ServerAttachStation>() is ServerAttachStation station)
-                        {
-                            if (station.HasItem())
-                            {
-                                Log($"[WARP] Detaching previous attachment of parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
-                                station.TakeItem();
-                            }
-                            Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerAttachStation {parentEntity.m_Header.m_uEntityID}");
-                            station.AddItem(entity.m_GameObject, default);
-
-                        }
-                        else if (parentEntity.m_GameObject.GetComponent<ServerPlayerAttachmentCarrier>() is ServerPlayerAttachmentCarrier carrier)
-                        {
-                            if (carrier.HasAttachment(PlayerAttachTarget.Default))
-                            {
-                                Log($"[WARP] Detaching previous attachment of parent ServerPlayerAttachmentCarrier {parentEntity.m_Header.m_uEntityID}");
-                                carrier.TakeItem(PlayerAttachTarget.Default);
-                            }
-                            Log($"[WARP] Attaching {entity.m_Header.m_uEntityID} to parent ServerPlayerAttachmentCarrier {parentEntity.m_Header.m_uEntityID}");
-                            carrier.CarryItem(entity.m_GameObject);
-                        }
-                        else if (parentEntity.m_GameObject.GetComponent<IParentable>() is IParentable parentable)
-                        {
-                            Log($"[WARP] Warning when attaching entity entity {entity.m_Header.m_uEntityID} to new parent {parentEntity.m_Header.m_uEntityID}: parent is of unhandled kind");
-                            physicalAttachment.Attach(parentable);
-                        }
-                        else
-                        {
-                            Log($"[WARP] Error setting attachment parent: desired parent entity {parentEntity.m_Header.m_uEntityID} is not an IParentable");
-                            return;
-                        }
+                        spac.CarryItem(newEntity.m_GameObject);
                     }
                 }
             });
@@ -333,25 +305,6 @@ namespace SuperchargedPatch
                     {
                         Log($"[WARP] Error warping Workstation: workstation should no longer have interacters after previous stage");
                         return;
-                    }
-                    if (sw.Item() != null)
-                    {
-                        Log($"[WARP] Error warping Workstation: workstation should no longer have item after previous stage");
-                        return;
-                    }
-
-                    if (workstation.__isset.item)
-                    {
-                        var item = getEntityByIdOrRef(workstation.Item);
-                        if (item != null && item.m_GameObject.GetComponent<IAttachment>() is IAttachment attachment)
-                        {
-                            sw.OnItemAdded(attachment);
-                        }
-                        else
-                        {
-                            Log($"[WARP] Failed to warp Workstation: item entity {workstation.Item} does not exist or does not have IAttachment component");
-                            return;
-                        }
                     }
 
                     if (workstation.Interacters != null)
@@ -659,6 +612,20 @@ namespace SuperchargedPatch
                     entity.m_GameObject.GetComponent<GroundCast>().ForceUpdateNow();
                 }
             });
+
+            // Delete things at the end. This is because we might have needed to properly cleanup things,
+            // like removing something from a workstation when it's deleted.
+            foreach (var entityId in warp.EntitiesToDelete)
+            {
+                var entity = EntitySerialisationRegistry.GetEntry((uint)entityId);
+                if (entity == null)
+                {
+                    Log($"[WARP] Error destroying entity ID {entityId}, entity does not exist!");
+                    continue;
+                }
+                NetworkUtils.DestroyObject(entity.m_GameObject);
+                Log($"[WARP] Destroyed entity {entityId}");
+            }
 
             // Make sure we flush any network messages after warping - otherwise they might be pushed to
             // next frame and that's not good.
