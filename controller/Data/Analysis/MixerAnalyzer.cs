@@ -22,8 +22,8 @@ namespace Hpmv {
                         var prevCount = currentData.contents?.Count ?? 0;
                         var currentCount = data.contents?.Count ?? 0;
                         if (prevCount != currentCount) {
-                            var prevProgress = entity.progress[time - 1];
-                            var curProgress = entity.progress[time];
+                            var prevProgress = entity.mixingProgress[time - 1];
+                            var curProgress = entity.mixingProgress[time];
                             var range = new AnalysisRange() {
                                 Id = row.Ranges.Count,
                                 StartFrame = startFrame,

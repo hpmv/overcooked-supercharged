@@ -44,9 +44,18 @@ namespace Hpmv {
                 if (entity.prefab.Spawns.Count > 0) {
                     templates.Add(new WaitForSpawnActionTemplate(entity));
                 }
-                if (entity.prefab.MaxProgress > 0) {
-                    templates.Add(new WaitForMaxProgressActionTemplate(entity));
-                }
+            }
+            if (entity.prefab.IsWashingStation) {
+                templates.Add(new WaitForWashingProgressActionTemplate(entity));
+            }
+            if (entity.prefab.IsChoppable) {
+                templates.Add(new WaitForChoppingProgressActionTemplate(entity));
+            }
+            if (entity.prefab.IsCookingHandler) {
+                templates.Add(new WaitForCookingProgressActionTemplate(entity));
+            }
+            if (entity.prefab.IsMixer) {
+                templates.Add(new WaitForMixingProgressActionTemplate(entity));
             }
             return templates;
         }
@@ -282,22 +291,85 @@ namespace Hpmv {
         }
     }
 
-    public class WaitForMaxProgressActionTemplate : ActionTemplate {
+    public class WaitForWashingProgressActionTemplate : ActionTemplate {
         public GameEntityRecord Record { get; set; }
 
-        public WaitForMaxProgressActionTemplate(GameEntityRecord record) {
+        public WaitForWashingProgressActionTemplate(GameEntityRecord record) {
             Record = record;
         }
 
         public string Describe() {
-            return $"Wait for {Record.displayName} to complete";
+            return $"Wait for {Record.displayName} washing progress 100%";
         }
 
         public List<GameAction> GenerateActions(int frame) {
             return new List<GameAction>{
-                new WaitForProgressAction {
+                new WaitForWashingProgressAction {
                     Entity = Record.ReverseEngineerStableEntityReference(frame),
-                    Progress = Record.prefab.MaxProgress
+                    WashingProgress = Record.prefab.MaxProgress
+                }
+            };
+        }
+    }
+
+    public class WaitForChoppingProgressActionTemplate : ActionTemplate {
+        public GameEntityRecord Record { get; set; }
+
+        public WaitForChoppingProgressActionTemplate(GameEntityRecord record) {
+            Record = record;
+        }
+
+        public string Describe() {
+            return $"Wait for {Record.displayName} chopping progress 100%";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitForChoppingProgressAction {
+                    Entity = Record.ReverseEngineerStableEntityReference(frame),
+                    ChoppingProgress = Record.prefab.MaxProgress
+                }
+            };
+        }
+    }
+
+    public class WaitForCookingProgressActionTemplate : ActionTemplate {
+        public GameEntityRecord Record { get; set; }
+
+        public WaitForCookingProgressActionTemplate(GameEntityRecord record) {
+            Record = record;
+        }
+
+        public string Describe() {
+            return $"Wait for {Record.displayName} cooking progress 100%";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitForCookingProgressAction {
+                    Entity = Record.ReverseEngineerStableEntityReference(frame),
+                    CookingProgress = Record.prefab.MaxProgress
+                }
+            };
+        }
+    }
+
+    public class WaitForMixingProgressActionTemplate : ActionTemplate {
+        public GameEntityRecord Record { get; set; }
+
+        public WaitForMixingProgressActionTemplate(GameEntityRecord record) {
+            Record = record;
+        }
+
+        public string Describe() {
+            return $"Wait for {Record.displayName} mixing progress 100%";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                new WaitForMixingProgressAction {
+                    Entity = Record.ReverseEngineerStableEntityReference(frame),
+                    MixingProgress = Record.prefab.MaxProgress
                 }
             };
         }

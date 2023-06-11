@@ -15,4 +15,13 @@ namespace SuperchargedPatch
             return !Helpers.IsPaused();
         }
     }
+
+    [HarmonyPatch(typeof(PlayerControls), "Update")]
+    public static class SkipPlayerControlsIfPaused
+    {
+        public static bool Prefix()
+        {
+            return !Helpers.IsPaused();
+        }
+    }
 }

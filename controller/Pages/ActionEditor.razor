@@ -8,7 +8,7 @@
     </div>
     @if (Node.Action is WaitAction wait) {
         <div class="action-editor-row">
-            Change to <input @bind="NumFramesEditing"/>
+            Change to <input @bind="NumFramesEditing" @bind:event="oninput"/>
             <button
                 @onclick="() => {wait.NumFrames = NumFramesEditing; DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !NumFramesEdited)">Change</button>
@@ -16,12 +16,45 @@
     }
     @if (Node.Action is PilotRotationAction pra) {
         <div class="action-editor-row">
-            Target angle: <input @bind="TargetAngleEditing"/>
+            Target angle: <input @bind="TargetAngleEditing" @bind:event="oninput"/>
             <button
                 @onclick="() => {pra.TargetAngle = TargetAngleEditing; DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !TargetAngleEdited)">Change</button>
         </div>
     }
+    @if (Node.Action is WaitForWashingProgressAction wpa) {
+        <div class="action-editor-row">
+            Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
+            <button
+                @onclick="() => {wpa.WashingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
+        </div>
+    }
+    @if (Node.Action is WaitForChoppingProgressAction cpa) {
+        <div class="action-editor-row">
+            Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
+            <button
+                @onclick="() => {cpa.ChoppingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
+        </div>
+    }
+    @if (Node.Action is WaitForCookingProgressAction cpa2) {
+        <div class="action-editor-row">
+            Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
+            <button
+                @onclick="() => {cpa2.CookingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
+        </div>
+    }
+    @if (Node.Action is WaitForMixingProgressAction mpa) {
+        <div class="action-editor-row">
+            Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
+            <button
+                @onclick="() => {mpa.MixingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
+        </div>
+    }
+
     <div class="action-editor-deps">
         <div class="action-editor-deps-title">Depends on:</div>
         @foreach (var dep in Node.Deps) {

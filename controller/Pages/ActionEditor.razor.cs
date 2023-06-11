@@ -22,6 +22,7 @@ namespace controller.Pages {
 
         private int? numFramesEditing;
         private float? targetAngleEditing;
+        private double? targetProgressEditing;
 
         private int NumFramesEditing {
             get => numFramesEditing ?? (Node.Action as WaitAction).NumFrames;
@@ -36,6 +37,30 @@ namespace controller.Pages {
         }
 
         private bool TargetAngleEdited => targetAngleEditing != null;
+
+        private double TargetProgressEditing {
+            get {
+                if (targetProgressEditing != null) {
+                    return targetProgressEditing.Value;
+                }
+                if (Node.Action is WaitForWashingProgressAction wpa) {
+                    return wpa.WashingProgress;
+                }
+                if (Node.Action is WaitForChoppingProgressAction cpa) {
+                    return cpa.ChoppingProgress;
+                }
+                if (Node.Action is WaitForCookingProgressAction cpa2) {
+                    return cpa2.CookingProgress;
+                }
+                if (Node.Action is WaitForMixingProgressAction mpa) {
+                    return mpa.MixingProgress;
+                }
+                return 0;
+            }
+            set => targetProgressEditing = value;
+        }
+
+        private bool TargetProgressEdited => targetProgressEditing != null;
 
         private async Task AddDependency() {
             StateHasChanged();

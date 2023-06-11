@@ -217,9 +217,9 @@ namespace Hpmv {
                 if (payload is ChefCarryMessage ccm) {
                     specificData.attachment = ccm.m_carriableItem == 0 ? null : entityIdToRecord[(int)ccm.m_carriableItem];
                 } else if (payload is MixingStateMessage msm) {
-                    entityRecord.progress.ChangeTo(msm.m_mixingProgress, frame);
+                    entityRecord.mixingProgress.ChangeTo(msm.m_mixingProgress, frame);
                 } else if (payload is CookingStateMessage csm) {
-                    entityRecord.progress.ChangeTo(csm.m_cookingProgress, frame);
+                    entityRecord.cookingProgress.ChangeTo(csm.m_cookingProgress, frame);
                 } else if (payload is PhysicalAttachMessage pam) {
                     if (specificData.attachmentParent != null) {
                         specificData.attachmentParent.data.AppendWith(frame, d => {
@@ -271,11 +271,11 @@ namespace Hpmv {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
                         specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
-                        entityRecord.progress.ChangeTo(wsm.m_progress, frame);
+                        entityRecord.washingProgress.ChangeTo(wsm.m_progress, frame);
                     } else {
                         specificData.numPlates = wsm.m_plateCount;
                         if (wsm.m_msgType == WashingStationMessage.MessageType.CleanedPlate) {
-                            entityRecord.progress.ChangeTo(0, frame);
+                            entityRecord.washingProgress.ChangeTo(0, frame);
                         }
                     }
                 } else if (payload is InputEventMessage iem) {
@@ -491,7 +491,7 @@ namespace Hpmv {
                     foreach (var (chef, remain) in chopInteracters) {
                         var newRemain = remain - frameTime;
                         if (newRemain < TimeSpan.Zero) {
-                            newData.itemBeingChopped.progress.ChangeTo(newData.itemBeingChopped.progress.Last() + 0.2, frame);
+                            newData.itemBeingChopped.choppingProgress.ChangeTo(newData.itemBeingChopped.choppingProgress.Last() + 0.2, frame);
                             newRemain += TimeSpan.FromSeconds(0.2);
                         }
                         newData.chopInteracters[chef] = newRemain;
@@ -499,7 +499,7 @@ namespace Hpmv {
                     entity.data.ChangeTo(newData, frame);
                 }
                 if (entity.data.Last().washers is HashSet<GameEntityRecord> washers && washers.Count > 0) {
-                    entity.progress.AppendWith(frame, p => p + washers.Count * 1.0 / Config.FRAMERATE);
+                    entity.washingProgress.AppendWith(frame, p => p + washers.Count * 1.0 / Config.FRAMERATE);
                 }
                 if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
                     entity.data.AppendWith(frame, d => {

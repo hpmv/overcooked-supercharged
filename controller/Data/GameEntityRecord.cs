@@ -23,7 +23,10 @@ namespace Hpmv {
         public Versioned<bool> existed;
         public Versioned<SpecificEntityData> data = new Versioned<SpecificEntityData>(new SpecificEntityData());
         public Versioned<ChefState> chefState = null;
-        public Versioned<double> progress = new Versioned<double>(0);
+        public Versioned<double> washingProgress = new Versioned<double>(0);
+        public Versioned<double> choppingProgress = new Versioned<double>(0);
+        public Versioned<double> cookingProgress = new Versioned<double>(0);
+        public Versioned<double> mixingProgress = new Versioned<double>(0);
 
         public Save.GameEntityRecord ToProto() {
             var result = new Save.GameEntityRecord {
@@ -41,7 +44,10 @@ namespace Hpmv {
                 Existed = existed.ToProto(),
                 Data = data.ToProto(),
                 ChefState = chefState?.ToProto(),
-                Progress = progress.ToProto()
+                WashingProgress = washingProgress.ToProto(),
+                ChoppingProgress = choppingProgress.ToProto(),
+                CookingProgress = cookingProgress.ToProto(),
+                MixingProgress = mixingProgress.ToProto(),
             };
             foreach (var spawned in this.spawned) {
                 result.Spawned.Add(spawned.path.ToProto());
@@ -61,7 +67,10 @@ namespace Hpmv {
             existed = record.Existed.FromProto();
             data = record.Data.FromProto(context);
             chefState = record.ChefState?.FromProto(context);
-            progress = record.Progress.FromProto();
+            washingProgress = record.WashingProgress.FromProto();
+            choppingProgress = record.ChoppingProgress.FromProto();
+            cookingProgress = record.CookingProgress.FromProto();
+            mixingProgress = record.MixingProgress.FromProto();
         }
 
         public void CleanRecordsAfterFrameRecursively(int frame) {
@@ -79,7 +88,10 @@ namespace Hpmv {
             existed.RemoveAllAfter(frame);
             data.RemoveAllAfter(frame);
             nextSpawnId.RemoveAllAfter(frame);
-            progress.RemoveAllAfter(frame);
+            washingProgress.RemoveAllAfter(frame);
+            choppingProgress.RemoveAllAfter(frame);
+            cookingProgress.RemoveAllAfter(frame);
+            mixingProgress.RemoveAllAfter(frame);
             if (chefState != null) {
                 chefState.RemoveAllAfter(frame);
             }

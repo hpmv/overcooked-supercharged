@@ -59,6 +59,14 @@ namespace Hpmv {
                         EntityId = currentRecordToEntityId[record],
                     };
                 }
+                if (record.prefab.CanBeAttached) {
+                    if (record.data[desiredFrame].attachmentParent == null) {
+                        spec.Position = record.position[desiredFrame].ToThrift();
+                        spec.Rotation = record.rotation[desiredFrame].ToThrift();
+                        spec.Velocity = record.velocity[desiredFrame].ToThrift();
+                        spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                    }
+                }
                 if (record.prefab.IsAttachStation) {
                     if (record.data[desiredFrame].attachment is GameEntityRecord attachment) {
                         spec.AttachStation = new AttachStationWarpData {
@@ -137,7 +145,7 @@ namespace Hpmv {
                     var onWorkstation = data.attachmentParent != null && data.attachmentParent.prefab.IsBoard;
                     spec.WorkableItem = new WorkableItemWarpData {
                         OnWorkstation = onWorkstation,
-                        Progress = (int)Math.Round(record.progress[desiredFrame] / 0.2),
+                        Progress = (int)Math.Round(record.choppingProgress[desiredFrame] / 0.2),
                         SubProgress = 0,
                     };
                 }
@@ -171,12 +179,12 @@ namespace Hpmv {
                 }
                 if (record.prefab.IsMixer) {
                     spec.MixingHandler = new MixingHandlerWarpData {
-                        Progress = record.progress[desiredFrame],
+                        Progress = record.mixingProgress[desiredFrame],
                     };
                 }
                 if (record.prefab.IsCookingHandler) {
                     spec.CookingHandler = new CookingHandlerWarpData {
-                        Progress = record.progress[desiredFrame],
+                        Progress = record.cookingProgress[desiredFrame],
                     };
                 }
                 if (record.prefab.CanContainIngredients) {

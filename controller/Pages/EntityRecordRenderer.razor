@@ -9,8 +9,17 @@
             <span> (o: @(Record.spawnOwner[Frame])</span>
         }
         @{
-            if (Record.progress[Frame] > 0) {
-                <span> (p: @(Record.progress[Frame]))</span>
+            if (Record.washingProgress[Frame] > 0) {
+                <span> (wp: @(Record.washingProgress[Frame]))</span>
+            }
+            if (Record.choppingProgress[Frame] > 0) {
+                <span> (cp: @(Record.choppingProgress[Frame]))</span>
+            }
+            if (Record.cookingProgress[Frame] > 0) {
+                <span> (cp: @(Record.cookingProgress[Frame]))</span>
+            }
+            if (Record.mixingProgress[Frame] > 0) {
+                <span> (mp: @(Record.mixingProgress[Frame]))</span>
             }
         }
     </div>
@@ -19,7 +28,18 @@
 <pre>Position: @(Record.position[Frame])
 Velocity: @(Record.velocity[Frame])
 Data: @(ToJson(Record.data[Frame].ToProto()))
-Progress: @(Record.progress[Frame])
+@if (Record.washingProgress[Frame] > 0) {
+@("Washing Progress: " +Record.washingProgress[Frame])
+}
+@if (Record.choppingProgress[Frame] > 0) {
+@("Chopping Progress: " +Record.choppingProgress[Frame])
+}
+@if (Record.cookingProgress[Frame] > 0) {
+@("Cooking Progress: " +Record.cookingProgress[Frame])
+}
+@if (Record.mixingProgress[Frame] > 0) {
+@("Mixing Progress: " +Record.mixingProgress[Frame])
+}
 @if (Record.chefState != null) {
     @("Chef: " + ToJson(Record.chefState[Frame].ToProto()))
 }

@@ -252,9 +252,38 @@ namespace SuperchargedPatch
             // {
             //     return "" + (c.AccessRigidbody().transform == c.AccessGameObject().transform.parent);
             // });
+            // AddProviderFor<ServerPhysicalAttachment>("attach.container.loc", c =>
+            // {
+            //     return "" + string.Format("{0:0.###}", c.AccessRigidbody()?.transform?.position ?? Vector3.zero);
+            // });
+            // AddProviderFor<ServerPhysicalAttachment>("attach.loc", c =>
+            // {
+            //     return "" + string.Format("{0:0.###}", c.transform.position);
+            // });
+            // AddProviderFor<ServerPhysicalAttachment>("attach.ancestry", c =>
+            // {
+            //     List<string> ancestry = new List<string>();
+            //     for (var parent = c.AccessGameObject().transform.parent; parent != null; parent = parent.parent)
+            //     {
+            //         ancestry.Add(parent.name);
+            //     }
+            //     return string.Join(" -> ", ancestry.ToArray());
+            // });
             // AddProviderFor<ServerThrowableItem>("flying", c =>
             // {
             //     return "" + c.IsFlying();
+            // });
+            // AddProviderFor<ServerIngredientContainer>("isc", c =>
+            // {
+            //     return "" + c.m_contents().Count;
+            // });
+            // AddProviderFor<ClientIngredientContainer>("icc", c =>
+            // {
+            //     return "" + c.m_contents().Count;
+            // });
+            // AddProviderFor<PhysicalAttachment>("id", c =>
+            // {
+            //     return "" + EntitySerialisationRegistry.GetEntry(c.gameObject).m_Header.m_uEntityID;
             // });
         }
 

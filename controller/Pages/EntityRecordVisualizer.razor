@@ -58,11 +58,27 @@
                             @(record.displayName)
                         }
                     </div>
-                    @if (record.progress[frame] != 0) {
+                    @if (record.washingProgress[frame] != 0) {
                         <div class="record-vis-progress">
-                            <MatProgressBar Progress="@(record.progress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
+                            <MatProgressBar Progress="@(record.washingProgress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
                         </div>
                     }
+                    @if (record.choppingProgress[frame] != 0) {
+                        <div class="record-vis-progress">
+                            <MatProgressBar Progress="@(record.choppingProgress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
+                        </div>
+                    }
+                    @if (record.cookingProgress[frame] != 0) {
+                        <div class="record-vis-progress">
+                            <MatProgressBar Progress="@(record.cookingProgress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
+                        </div>
+                    }
+                    @if (record.mixingProgress[frame] != 0) {
+                        <div class="record-vis-progress">
+                            <MatProgressBar Progress="@(record.mixingProgress[frame] / Math.Max(record.prefab.MaxProgress, 0.001))"></MatProgressBar>
+                        </div>
+                    }
+                    
                     @{
                         var data = record.data[frame];
                         var interacters = data.chopInteracters;

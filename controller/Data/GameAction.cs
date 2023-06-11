@@ -37,8 +37,17 @@ namespace Hpmv {
                 case WaitForDirtyPlateAction waitForDirtyPlateAction:
                     result.WaitForDirtyPlate = waitForDirtyPlateAction.ToProto();
                     break;
-                case WaitForProgressAction waitForProgressAction:
-                    result.WaitForProgress = waitForProgressAction.ToProto();
+                case WaitForWashingProgressAction waitForWashingProgressAction:
+                    result.WaitForWashingProgress = waitForWashingProgressAction.ToProto();
+                    break;
+                case WaitForChoppingProgressAction waitForChoppingProgressAction:
+                    result.WaitForChoppingProgress = waitForChoppingProgressAction.ToProto();
+                    break;
+                case WaitForCookingProgressAction waitForCookingProgressAction:
+                    result.WaitForCookingProgress = waitForCookingProgressAction.ToProto();
+                    break;
+                case WaitForMixingProgressAction waitForMixingProgressAction:
+                    result.WaitForMixingProgress = waitForMixingProgressAction.ToProto();
                     break;
                 case WaitForSpawnAction waitForSpawnAction:
                     result.WaitForSpawn = waitForSpawnAction.ToProto();
@@ -67,8 +76,14 @@ namespace Hpmv {
                     return action.WaitForCleanPlate.FromProto(context);
                 case Save.GameAction.ActionOneofCase.WaitForDirtyPlate:
                     return action.WaitForDirtyPlate.FromProto(context);
-                case Save.GameAction.ActionOneofCase.WaitForProgress:
-                    return action.WaitForProgress.FromProto(context);
+                case Save.GameAction.ActionOneofCase.WaitForWashingProgress:
+                    return action.WaitForWashingProgress.FromProto(context);
+                case Save.GameAction.ActionOneofCase.WaitForChoppingProgress:
+                    return action.WaitForChoppingProgress.FromProto(context);
+                case Save.GameAction.ActionOneofCase.WaitForCookingProgress:
+                    return action.WaitForCookingProgress.FromProto(context);
+                case Save.GameAction.ActionOneofCase.WaitForMixingProgress:
+                    return action.WaitForMixingProgress.FromProto(context);
                 case Save.GameAction.ActionOneofCase.WaitForSpawn:
                     return action.WaitForSpawn.FromProto(context);
             }

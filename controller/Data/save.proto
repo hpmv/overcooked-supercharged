@@ -87,9 +87,24 @@ message WaitForDirtyPlateAction {
     int32 count = 2;
 }
 
-message WaitForProgressAction {
+message WaitForWashingProgressAction {
     EntityReference entity = 1;
-    double progress = 2;
+    double washing_progress = 2;
+}
+
+message WaitForChoppingProgressAction {
+    EntityReference entity = 1;
+    double chopping_progress = 2;
+}
+
+message WaitForCookingProgressAction {
+    EntityReference entity = 1;
+    double cooking_progress = 2;
+}
+
+message WaitForMixingProgressAction {
+    EntityReference entity = 1;
+    double mixing_progress = 2;
 }
 
 message WaitForSpawnAction {
@@ -111,7 +126,10 @@ message GameAction {
         WaitAction wait = 104;
         WaitForCleanPlateAction wait_for_clean_plate = 105;
         WaitForDirtyPlateAction wait_for_dirty_plate = 106;
-        WaitForProgressAction wait_for_progress = 107;
+        WaitForWashingProgressAction wait_for_washing_progress = 110;
+        WaitForChoppingProgressAction wait_for_chopping_progress = 111;
+        WaitForCookingProgressAction wait_for_cooking_progress = 112;
+        WaitForMixingProgressAction wait_for_mixing_progress = 113;
         WaitForSpawnAction wait_for_spawn = 108;
     }
 }
@@ -303,7 +321,10 @@ message GameEntityRecord {
     VersionedBool existed = 9;
     VersionedSpecificEntityData data = 10;
     VersionedChefState chef_state = 11;
-    VersionedDouble progress = 12;
+    VersionedDouble washing_progress = 17;
+    VersionedDouble chopping_progress = 18;
+    VersionedDouble cooking_progress = 19;
+    VersionedDouble mixing_progress = 20;
 }
 
 
