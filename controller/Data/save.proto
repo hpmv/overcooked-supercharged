@@ -205,6 +205,7 @@ message SpecificEntityData {
     bytes raw_game_entity_data = 11;
     EntityPath session_interacter = 13;
     float pilot_rotation_angle = 14;
+    int32 switching_index = 15;
 }
 
 message ChefState {
@@ -301,6 +302,8 @@ message PrefabRecord {
     bool is_terminal = 26;
     bool is_mixer = 27;
     bool is_cooking_handler = 28;
+    bool is_pickup_item_switcher = 29;
+    bool has_trigger_color_cycle = 30;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

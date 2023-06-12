@@ -27,6 +27,8 @@ namespace Hpmv {
         public bool IsTerminal { get; set; }
         public bool IsMixer { get; set; }
         public bool IsCookingHandler { get; set; }
+        public bool IsPickupItemSwitcher { get; set; }
+        public bool HasTriggerColorCycle { get; set; }
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
@@ -58,6 +60,8 @@ namespace Hpmv {
                 IsTerminal = IsTerminal,
                 IsMixer = IsMixer,
                 IsCookingHandler = IsCookingHandler,
+                IsPickupItemSwitcher = IsPickupItemSwitcher,
+                HasTriggerColorCycle = HasTriggerColorCycle,
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
@@ -101,6 +105,8 @@ namespace Hpmv {
                 IsTerminal = record.IsTerminal,
                 IsMixer = record.IsMixer,
                 IsCookingHandler = record.IsCookingHandler,
+                IsPickupItemSwitcher = record.IsPickupItemSwitcher,
+                HasTriggerColorCycle = record.HasTriggerColorCycle,
                 Ignore = record.Ignore,
                 OccupiedGridPoints = record.OccupiedGridPoints.Count == 0 ? new Vector2[] { default } : record.OccupiedGridPoints.Select(x => x.FromProto()).ToArray(),
             };

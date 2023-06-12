@@ -83,4 +83,30 @@ namespace SuperchargedPatch
         public abstract AuxEntityType GetAuxEntityType();
         public abstract void Serialise(BitStreamWriter writer);
     }
+
+    public static class EntityRetirementMessageSender
+    {
+        public static void SendMessageToRetireEntity(this ServerSynchroniserBase self)
+        {
+            var entityRetirementMessage = new EntityRetirementMessage()
+            {
+                m_entityHeader = new EntityMessageHeader
+                {
+                    m_uEntityID = self.GetEntityId()
+                },
+            };
+            var serialized = new FastList<byte>();
+            entityRetirementMessage.Serialise(new BitStreamWriter(serialized));
+            var data = Injector.Server.CurrentFrameData;
+            if (data.ServerMessages == null)
+            {
+                data.ServerMessages = new List<ServerMessage>();
+            }
+            data.ServerMessages.Add(new ServerMessage
+            {
+                Type = (int)MessageType.COUNT + 2,
+                Message = serialized.ToArray(),
+            });
+        }
+    }
 }

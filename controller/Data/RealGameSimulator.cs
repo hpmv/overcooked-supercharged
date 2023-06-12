@@ -257,16 +257,10 @@ namespace Hpmv {
                         specificData.rawGameEntityData = icm.ToBytes();
                     }
                 } else if (payload is PlateStationMessage message) {
-                    specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
-                    specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
-                    entityIdToRecord[(int)message.m_delivered].existed.ChangeTo(false, frame);
-                    entityIdToRecord[(int)message.m_delivered].data.AppendWith(frame, d => {
-                        // The plate doesn't actually get destroyed at this point; rather its shaders and stuff get changed to play a fading animation
-                        // and then gets destroyed after. This is too difficult to recover, so if it gets here, we mark the object as unwarpable, so
-                        // that warping would require a new plate to be spawned.
-                        d.isUnwarpable = true;
-                        return d;
-                    });
+                    if (message.m_success) {
+                        specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
+                        specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
+                    }
                 } else if (payload is WashingStationMessage wsm) {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
@@ -320,6 +314,10 @@ namespace Hpmv {
                     specificData.sessionInteracter = interacter;
                 } else if (payload is PilotRotationMessage prm) {
                     specificData.pilotRotationAngle = prm.m_angle;
+                } else if (payload is PickupItemSwitcherMessage pism) {
+                    specificData.switchingIndex = pism.m_itemIndex;
+                } else if (payload is TriggerColourCycleMessage tccm) {
+                    specificData.switchingIndex = tccm.m_colourIndex;
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -356,13 +354,12 @@ namespace Hpmv {
                 entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
                 Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");
-                // TODO: is this loop needed?
-                foreach (var entity in setup.entityRecords.GenAllEntities()) {
-                    if (entity.existed.Last() && entity.data.Last().attachmentParent == r) {
-                        Console.WriteLine($"Destroying child entity {entity.className} {entity.displayName}");
-                        entity.existed.ChangeTo(false, frame);
-                    }
-                }
+            };
+
+            Action<GameEntityRecord, uint> retireEntity = (r, entityId) => {
+                entityIdToRecord.Remove((int)entityId);
+                r.existed.ChangeTo(false, frame);
+                Console.WriteLine($"Retiring {entityId} ({r.className} {r.displayName})");
             };
 
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
@@ -388,6 +385,8 @@ namespace Hpmv {
                 foreach (var i in dems.m_ids) {
                     destroyEntity(entityIdToRecord[(int)i], i);
                 }
+            } else if (item is EntityRetirementMessage erm) {
+                destroyEntity(entityIdToRecord[(int)erm.m_entityHeader.m_uEntityID], erm.m_entityHeader.m_uEntityID);
             }
         }
 

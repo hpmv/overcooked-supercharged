@@ -15,13 +15,9 @@ namespace Hpmv {
                 Entities = new List<EntityWarpSpec>(),
             };
 
-            // Delete entities that don't exist in the desired frame. Also delete entities
-            // that are unwarpable.
             var currentRecordToEntityId = new Dictionary<GameEntityRecord, int>();
             foreach (var kv in currentEntityIdToRecord) {
                 if (!kv.Value.existed[desiredFrame]) {
-                    warpSpec.EntitiesToDelete.Add(kv.Key);
-                } else if (kv.Value.data[originalFrame].isUnwarpable) {
                     warpSpec.EntitiesToDelete.Add(kv.Key);
                 } else {
                     currentRecordToEntityId[kv.Value] = kv.Key;
@@ -190,6 +186,16 @@ namespace Hpmv {
                 if (record.prefab.CanContainIngredients) {
                     spec.IngredientContainer = new IngredientContainerWarpData {
                         MsgData = record.data[desiredFrame].rawGameEntityData,
+                    };
+                }
+                if (record.prefab.IsPickupItemSwitcher) {
+                    spec.PickupItemSwitcher = new PickupItemSwitcherWarpData {
+                        Index = record.data[desiredFrame].switchingIndex,
+                    };
+                }
+                if (record.prefab.HasTriggerColorCycle) {
+                    spec.TriggerColourCycle = new TriggerColourCycleWarpData {
+                        Index = record.data[desiredFrame].switchingIndex,
                     };
                 }
 

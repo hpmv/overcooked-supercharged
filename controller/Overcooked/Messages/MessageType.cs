@@ -92,6 +92,7 @@ namespace Team17.Online.Multiplayer.Messaging {
         COUNT,
 
         EntityAuxMessage,  // Mod.
+        EntityRetirementMessage,  // Mod.
     }
 }
 

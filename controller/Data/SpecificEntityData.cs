@@ -14,10 +14,10 @@ namespace Hpmv {
         public int numPlates;
         public List<TimeSpan> plateRespawnTimers;
         public SpecificEntityData_ThrowableItem throwableItem;
-        public bool isUnwarpable;
         public byte[] rawGameEntityData;
         public GameEntityRecord sessionInteracter;
         public float pilotRotationAngle;
+        public int switchingIndex;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -25,10 +25,10 @@ namespace Hpmv {
                 Attachment = attachment?.path?.ToProto(),
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
                 ThrowableItem = throwableItem.ToProto(),
-                IsUnwarpable = isUnwarpable,
                 RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
                 SessionInteracter = sessionInteracter?.path?.ToProto(),
                 PilotRotationAngle = pilotRotationAngle,
+                SwitchingIndex = switchingIndex,
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -66,10 +66,10 @@ namespace Hpmv {
                 numPlates = data.NumPlates,
                 plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
                 throwableItem = data.ThrowableItem?.FromProto(context) ?? default,
-                isUnwarpable = data.IsUnwarpable,
                 rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
                 sessionInteracter = data.SessionInteracter.FromProtoRef(context),
                 pilotRotationAngle = data.PilotRotationAngle,
+                switchingIndex = data.SwitchingIndex,
             };
         }
     }

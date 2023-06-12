@@ -11,10 +11,13 @@
 * [Done] MixingHandler progress. (simple)
 * [Done] IngredientContainer contents. This should be simply sending over serialized AssembledDefinitionNode[].
 * [Done] AttachStation attachment and detachment. This is subtle, needs to be done carefully.
-* [TODO] Teleportation. Seems like two manual animations (math lerps) being coded into some coroutines. Should be able to unroll all of these without too much difficulty.
-* [TODO] PlateStation (serving). This needs some coroutine hacks. Also, dirty plate spawning needs to be managed.
+* [Done] PickupItemSwitcher, TriggerColourCycle - both are simple, just need to update an index and send a server message.
+* [Done] PlateStation (serving). This was resolved by stopping the plate entity synchronization as soon as it enters the delivery sequence coroutine, and notifying the controller via a new EntityRetirementMessage.
+* [TODO] Also, dirty plate spawning needs to be managed.
 * [TODO] WashingStation progress and plate count (simple).
-* [TODO] PlacementItemSwitcher - condiment switching, need to store which condiment is the one used.
 * [TODO] ServerKitchenFlowController - all the parameters for orders, score.
 * [TODO] Game timer.
 
+Deferred:
+* [TODO] PlacementItemSwitcher - condiment switching, need to store which condiment is the one used. (very simple)
+* [TODO] Teleportation. Seems like two manual animations (math lerps) being coded into some coroutines. Should be able to unroll all of these without too much difficulty.

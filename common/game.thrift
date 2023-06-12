@@ -161,6 +161,14 @@ struct AttachStationWarpData {
     1: optional EntityIdOrRef item,
 }
 
+struct PickupItemSwitcherWarpData {
+    1: i32 index,
+}
+
+struct TriggerColourCycleWarpData {
+    1: i32 index,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -193,6 +201,8 @@ struct EntityWarpSpec {
     19: optional CookingHandlerWarpData cookingHandler,
     20: optional ChefCarryWarpData chefCarry,
     21: optional AttachStationWarpData attachStation,
+    22: optional PickupItemSwitcherWarpData pickupItemSwitcher,
+    23: optional TriggerColourCycleWarpData triggerColourCycle,
     // TODO: more entity types
 }
 

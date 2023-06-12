@@ -77,6 +77,7 @@ namespace Hpmv {
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.TimeSync, () => new TimeSyncMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.LatencyMeasure, () => new LatencyMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityAuxMessage, () => new EntityAuxMessage());
+            SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityRetirementMessage, () => new EntityRetirementMessage());
         }
 
         public static Serialisable Deserialize(int type, byte[] bytes) {

@@ -512,6 +512,28 @@ namespace SuperchargedPatch
                     }
                     smh.SetMixingProgressAndForceStateChangedCallback((float)handler.Progress);
                 }
+
+                if (entity.m_GameObject.GetComponent<ServerPickupItemSwitcher>() is ServerPickupItemSwitcher spis)
+                {
+                    var thrift = entityThrift.PickupItemSwitcher;
+                    if (thrift == null)
+                    {
+                        Log($"[WARP] Failed to warp PickupItemSwitcher: no PickupItemSwitcher specific data");
+                        return;
+                    }
+                    spis.SetCurrentItemPrefabIndexAndSendServerEvent(thrift.Index);
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerTriggerColourCycle>() is ServerTriggerColourCycle stcc)
+                {
+                    var thrift = entityThrift.TriggerColourCycle;
+                    if (thrift == null)
+                    {
+                        Log($"[WARP] Failed to warp TriggerColourCycle: no TriggerColourCycle specific data");
+                        return;
+                    }
+                    stcc.SetCurrentColourIndexAndSendServerEvent(thrift.Index);
+                }
             });
 
             // Handle position setting and chef warping last.
