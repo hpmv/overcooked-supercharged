@@ -30,6 +30,7 @@ namespace controller.Pages {
         private GameSetup level = new GameSetup();
         private bool ShowInputDebug;
         private bool ShowRecordDebug { get; set; }
+        private bool ShowMessageStats;
 
         private void UseLevel(GameSetup level) {
             this.level = level;

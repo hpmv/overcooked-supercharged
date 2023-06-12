@@ -110,9 +110,9 @@
                             }
                         </div>
                     }
-                    @if (record.data[frame].plateRespawnTimers is List<TimeSpan> timers) {
+                    @if (record.data[frame].plateRespawns is List<(GameEntityRecord station, TimeSpan timer)> timers) {
                         <div class="record-vis-plate-respawn-timers">
-                            @foreach (var timer in timers) {
+                            @foreach (var (station, timer) in timers) {
                                 <div class="record-vis-plate-respawn-timer">
                                     @(Math.Ceiling(timer.TotalSeconds))
                                 </div>

@@ -12,12 +12,13 @@ namespace Hpmv {
         public GameEntityRecord itemBeingChopped;
         public HashSet<GameEntityRecord> washers;
         public int numPlates;
-        public List<TimeSpan> plateRespawnTimers;
+        public List<(GameEntityRecord station, TimeSpan timer)> plateRespawns;
         public SpecificEntityData_ThrowableItem throwableItem;
         public byte[] rawGameEntityData;
         public GameEntityRecord sessionInteracter;
         public float pilotRotationAngle;
         public int switchingIndex;
+        public List<GameEntityRecord> stackContents;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -44,9 +45,19 @@ namespace Hpmv {
                 }
             }
             result.NumPlates = numPlates;
-            if (plateRespawnTimers != null) {
-                foreach (var timer in plateRespawnTimers) {
-                    result.PlateRespawnTimers.Add(timer.TotalMilliseconds);
+            if (plateRespawns != null) {
+                foreach (var (station, timer) in plateRespawns) {
+                    result.PlateRespawns.Add(
+                        new Save.SpecificEntityData_PlateRespawn {
+                            PlateReturnStation = station.path.ids[0],
+                            Timer = timer.TotalMilliseconds,
+                        }
+                    );
+                }
+            }
+            if (stackContents != null) {
+                foreach (var item in stackContents) {
+                    result.StackContents.Add(item.path.ToProto());
                 }
             }
             return result;
@@ -64,12 +75,14 @@ namespace Hpmv {
                     data.ChopInteracters.ToDictionary(kv => context.GetRootRecord(kv.Key), kv => TimeSpan.FromMilliseconds(kv.Value)),
                 washers = data.Washers.Count == 0 ? null : data.Washers.Select(washer => washer.FromProtoRef(context)).ToHashSet(),
                 numPlates = data.NumPlates,
-                plateRespawnTimers = data.PlateRespawnTimers.Count == 0 ? null : data.PlateRespawnTimers.Select(t => TimeSpan.FromMilliseconds(t)).ToList(),
+                plateRespawns = data.PlateRespawns.Count == 0 ? null :
+                    data.PlateRespawns.Select(timer => (context.GetRootRecord(timer.PlateReturnStation), TimeSpan.FromMilliseconds(timer.Timer))).ToList(),
                 throwableItem = data.ThrowableItem?.FromProto(context) ?? default,
                 rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
                 sessionInteracter = data.SessionInteracter.FromProtoRef(context),
                 pilotRotationAngle = data.PilotRotationAngle,
                 switchingIndex = data.SwitchingIndex,
+                stackContents = data.StackContents.Count == 0 ? null : data.StackContents.Select(item => item.FromProtoRef(context)).ToList(),
             };
         }
     }

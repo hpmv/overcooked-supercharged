@@ -100,6 +100,8 @@
     <Compile Include="AlteredComponents\ClientCannonMod.cs" />
     <Compile Include="AlteredComponents\ClientCannonPlayerHandlerMod.cs" />
     <Compile Include="AlteredComponents\ClientCannonSessionInteractableMod.cs" />
+    <Compile Include="AlteredComponents\PlateReturnControllerAuxMessage.cs" />
+    <Compile Include="AlteredComponents\PlateReturnControllerPatches.cs" />
     <Compile Include="AlteredComponents\PlateStationPatching.cs" />
     <Compile Include="AlteredComponents\ServerCannonCosmeticDecisionsMod.cs" />
     <Compile Include="AlteredComponents\ServerCannonMod.cs" />
@@ -115,9 +117,12 @@
     <Compile Include="EntityPathReference.cs" />
     <Compile Include="EntityPathReferenceMarker.cs" />
     <Compile Include="Extensions\MultiplayerControllerExt.cs" />
+    <Compile Include="Extensions\PlateReturnControllerExt.cs" />
+    <Compile Include="Extensions\PlateStacksExtensions.cs" />
     <Compile Include="Extensions\ServerAttachStationExt.cs" />
     <Compile Include="Extensions\ServerCookingAndMixingHandlerExt.cs" />
     <Compile Include="Extensions\ServerIngredientContainerExt.cs" />
+    <Compile Include="Extensions\ServerKitchenFlowControllerBaseExt.cs" />
     <Compile Include="Extensions\ServerPhysicalAttachmentExt.cs" />
     <Compile Include="Extensions\ServerPickupItemSwitcherExt.cs" />
     <Compile Include="Extensions\ServerPilotRotationExt.cs" />
@@ -125,6 +130,9 @@
     <Compile Include="Extensions\ServerSessionInteractableExt.cs" />
     <Compile Include="Extensions\ServerTriggerColourCycleExt.cs" />
     <Compile Include="Extensions\ThrowableItemExt.cs" />
+    <Compile Include="gen-csharp\Hpmv\PlatePendingReturnData.cs" />
+    <Compile Include="gen-csharp\Hpmv\PlateReturnControllerWarpData.cs" />
+    <Compile Include="gen-csharp\Hpmv\StackWarpData.cs" />
     <Compile Include="Helpers.cs" />
     <Compile Include="Injection\BlockingQueue.cs" />
     <Compile Include="Injection\Injector.cs" />

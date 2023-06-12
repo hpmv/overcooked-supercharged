@@ -229,6 +229,23 @@ namespace SuperchargedPatch
                         st.OnSessionEnded();
                     }
                 }
+                if (entity.m_GameObject.GetComponent<Stack>() != null)
+                {
+                    var serverPlateStack = entity.m_GameObject.GetComponent<ServerPlateStackBase>();
+                    var clientPlateStack = entity.m_GameObject.GetComponent<ClientPlateStackBase>();
+                    if (serverPlateStack == null)
+                    {
+                        Log($"[WARP] Error warping stack {entity.m_Header.m_uEntityID}: ServerPlateStackBase is null");
+                        return;
+                    }
+                    if (clientPlateStack == null)
+                    {
+                        Log($"[WARP] Error warping stack {entity.m_Header.m_uEntityID}: ClientPlateStackBase is null");
+                        return;
+                    }
+                    serverPlateStack.RemoveAllFromStack();
+                    clientPlateStack.RemoveAllFromStack();
+                }
             });
 
             // Handle attachment changes.
@@ -533,6 +550,72 @@ namespace SuperchargedPatch
                         return;
                     }
                     stcc.SetCurrentColourIndexAndSendServerEvent(thrift.Index);
+                }
+
+                if (entity.m_GameObject.GetComponent<Stack>() != null)
+                {
+                    var thrift = entityThrift.Stack;
+                    if (thrift == null)
+                    {
+                        Log($"[WARP] Failed to warp Stack: no Stack specific data");
+                        return;
+                    }
+                    var stackItems = new List<GameObject>();
+                    foreach (var item in thrift.StackContents)
+                    {
+                        var stackItem = getEntityByIdOrRef(item);
+                        if (stackItem == null)
+                        {
+                            Log($"[WARP] Failed to warp Stack: stack item {item} does not exist");
+                            return;
+                        }
+                        stackItems.Add(stackItem.m_GameObject);
+                    }
+                    var serverPlateStack = entity.m_GameObject.GetComponent<ServerPlateStackBase>();
+                    var clientPlateStack = entity.m_GameObject.GetComponent<ClientPlateStackBase>();
+                    if (serverPlateStack == null)
+                    {
+                        Log($"[WARP] Failed to warp Stack: entity is not a ServerPlateStackBase");
+                        return;
+                    }
+                    if (clientPlateStack == null)
+                    {
+                        Log($"[WARP] Failed to warp Stack: entity is not a ClientPlateStackBase");
+                        return;
+                    }
+                    foreach (var item in stackItems)
+                    {
+                        serverPlateStack.AddToStackAfterTheFact(item);
+                        clientPlateStack.AddToStackAfterTheFact(item);
+                    }
+                }
+
+                if (entity.m_GameObject.GetComponent<ServerKitchenFlowControllerBase>() is ServerKitchenFlowControllerBase skfcb)
+                {
+                    {
+                        var thrift = entityThrift.PlateReturnController;
+                        if (thrift == null)
+                        {
+                            Log($"[WARP] Failed to warp KitchenFlowController: no KitchenFlowController specific data");
+                            return;
+                        }
+                        var ptr = skfcb.GetPlateReturnController().m_platesToReturn();
+                        ptr.Clear();
+                        if (thrift.Plates != null) {
+                            foreach (var plate in thrift.Plates)
+                            {
+                                var returnStation = EntitySerialisationRegistry.GetEntry((uint)plate.ReturnStationEntityId)?.m_GameObject?.GetComponent<ServerPlateReturnStation>();
+                                if (returnStation == null)
+                                {
+                                    Log($"[WARP] Failed to warp KitchenFlowController: plate return station {plate.ReturnStationEntityId} does not exist");
+                                    continue;
+                                }
+                                ptr.Add(PlateReturnController_PlatesPendingReturnExt.Create(
+                                    returnStation, (float)plate.Timer, returnStation.GetPlatingStep()
+                                    ));
+                            }
+                        }
+                    }
                 }
             });
 

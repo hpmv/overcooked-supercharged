@@ -13,7 +13,8 @@
 * [Done] AttachStation attachment and detachment. This is subtle, needs to be done carefully.
 * [Done] PickupItemSwitcher, TriggerColourCycle - both are simple, just need to update an index and send a server message.
 * [Done] PlateStation (serving). This was resolved by stopping the plate entity synchronization as soon as it enters the delivery sequence coroutine, and notifying the controller via a new EntityRetirementMessage.
-* [TODO] Also, dirty plate spawning needs to be managed.
+* [Done] Also, dirty plate spawning needs to be managed.
+* [Done] Plate stack warping. See stacks.md.
 * [TODO] WashingStation progress and plate count (simple).
 * [TODO] ServerKitchenFlowController - all the parameters for orders, score.
 * [TODO] Game timer.

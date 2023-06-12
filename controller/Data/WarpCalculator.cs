@@ -198,6 +198,31 @@ namespace Hpmv {
                         Index = record.data[desiredFrame].switchingIndex,
                     };
                 }
+                if (record.prefab.IsKitchenFlowController) {
+                    spec.PlateReturnController = new PlateReturnControllerWarpData {
+                        Plates = new List<PlatePendingReturnData>()
+                    };
+                    var spawns = record.data[desiredFrame].plateRespawns;
+                    if (spawns != null) {
+                        foreach (var (station, timer) in spawns) {
+                            spec.PlateReturnController.Plates.Add(new PlatePendingReturnData {
+                                ReturnStationEntityId = station.path.ids[0],
+                                Timer = timer.TotalSeconds,
+                            });
+                        }
+                    }
+                }
+                if (record.prefab.IsStack) {
+                    spec.Stack = new StackWarpData {
+                        StackContents = new List<EntityIdOrRef>(),
+                    };
+                    var stackContents = record.data[desiredFrame].stackContents;
+                    if (stackContents != null) {
+                        foreach (var entity in stackContents) {
+                            spec.Stack.StackContents.Add(getEntityIdOrRef(entity));
+                        }
+                    }
+                }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {
                     continue;

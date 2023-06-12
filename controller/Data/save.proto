@@ -191,6 +191,11 @@ message SpecificEntityData_ThrowableItem {
     repeated SavedCollider ignored_colliders = 4;
 }
 
+message SpecificEntityData_PlateRespawn {
+    int32 plate_return_station = 1;
+    double timer = 2;
+}
+
 message SpecificEntityData {
     EntityPath attachment_parent = 1;
     EntityPath attachment = 2;
@@ -199,13 +204,14 @@ message SpecificEntityData {
     EntityPath item_being_chopped = 5;
     repeated EntityPath washers = 6;
     int32 num_plates = 8;
-    repeated double plate_respawn_timers = 7;
+    repeated SpecificEntityData_PlateRespawn plate_respawns = 16;
     SpecificEntityData_ThrowableItem throwable_item = 12;
     bool is_unwarpable = 10;
     bytes raw_game_entity_data = 11;
     EntityPath session_interacter = 13;
     float pilot_rotation_angle = 14;
     int32 switching_index = 15;
+    repeated EntityPath stack_contents = 17;
 }
 
 message ChefState {
@@ -304,6 +310,8 @@ message PrefabRecord {
     bool is_cooking_handler = 28;
     bool is_pickup_item_switcher = 29;
     bool has_trigger_color_cycle = 30;
+    bool is_kitchen_flow_controller = 31;
+    bool is_stack = 32;
     bool ignore = 17;
     repeated Vector2 occupied_grid_points = 18;
 }

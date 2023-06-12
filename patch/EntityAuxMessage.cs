@@ -25,5 +25,6 @@ namespace SuperchargedPatch
     public enum AuxEntityType: byte
     {
         ThrowableItemAux,
+        PlateReturnControllerAux,
     }
 }

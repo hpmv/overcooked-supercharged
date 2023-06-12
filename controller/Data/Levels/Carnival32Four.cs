@@ -254,13 +254,15 @@ namespace Hpmv {
                 entityRecords.RegisterKnownObject(11, PLATE),
                 entityRecords.GetRecordFromPath(new []{33}));
 
-            var DIRTY_PLATE = new PrefabRecord("Dirty Plate", "dirty plate"){ CanBeAttached = true };
-            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner");
-            DIRTY_PLATE_SPAWNER.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"){ CanBeAttached = true });
-            DIRTY_PLATE_SPAWNER.Spawns[0].Spawns.Add(DIRTY_PLATE);
-            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner");
-            CLEAN_PLATE_SPAWNER.Spawns.Add(new PrefabRecord("Clean Plate Stack", "clean-plate-stack"){ CanBeAttached = true });
-            CLEAN_PLATE_SPAWNER.Spawns[0].Spawns.Add(PLATE);
+            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner") { IsAttachStation = true };
+            var DIRTY_PLATE_STACK = new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack") { CanBeAttached = true, IsStack = true };
+            var DIRTY_PLATE = new PrefabRecord("Dirty Plate", "dirty plate");
+            DIRTY_PLATE_STACK.Spawns.Add(DIRTY_PLATE);
+            DIRTY_PLATE_SPAWNER.Spawns.Add(DIRTY_PLATE_STACK);
+            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner") { IsAttachStation = true };
+            var CLEAN_PLATE_STACK = new PrefabRecord("Clean Plate Stack", "clean-plate-stack") { CanBeAttached = true, IsStack = true };
+            CLEAN_PLATE_SPAWNER.Spawns.Add(CLEAN_PLATE_STACK);
+            CLEAN_PLATE_STACK.Spawns.Add(PLATE);
             var WASHING_PART = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true };
             entityRecords.RegisterKnownObject(45, WASHING_PART);
             entityRecords.RegisterKnownObject(46, CLEAN_PLATE_SPAWNER);
@@ -308,11 +310,14 @@ namespace Hpmv {
             var DRINK_BUTTON = new PrefabRecord("Drink Button", "drink-button") { HasTriggerColorCycle = true, IsAttachStation = true, CanUse = true };
             entityRecords.RegisterKnownObject(48, DRINK_BUTTON);
 
+            var FLOW_CONTROLLER = new PrefabRecord("Flow Controller", "flow-controller") { IsKitchenFlowController = true };
+            entityRecords.RegisterKnownObject(60, FLOW_CONTROLLER);
+
             var IGNORE = new PrefabRecord("", "") { Ignore = true };
             for (var i = 49; i <= 55; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
-            for (var i = 60; i <= 73; i++) {
+            for (var i = 61; i <= 73; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
 

@@ -106,6 +106,7 @@ namespace Hpmv {
                 // Don't advance frame if we just started running. This is a special case.
                 if (!didGameJustStart) {
                     simulator.AdvanceFrame();
+                    simulator.AdvanceAutomaticProgress();
                     setup.LastEmpiricalFrame = simulator.Frame;
                     if (output.ServerMessages != null) {
                         foreach (var msg in output.ServerMessages) {
@@ -113,7 +114,6 @@ namespace Hpmv {
                             simulator.ApplyGameUpdate(item);
                         }
                     }
-                    simulator.AdvanceAutomaticProgress();
                 }
 
                 if (output.EntityRegistry != null) {

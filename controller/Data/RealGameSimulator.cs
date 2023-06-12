@@ -256,11 +256,8 @@ namespace Hpmv {
                         specificData.contents = icm.Contents?.Flatten()?.ToList();
                         specificData.rawGameEntityData = icm.ToBytes();
                     }
-                } else if (payload is PlateStationMessage message) {
-                    if (message.m_success) {
-                        specificData.plateRespawnTimers = specificData.plateRespawnTimers == null ? new List<TimeSpan>() : new List<TimeSpan>(specificData.plateRespawnTimers);
-                        specificData.plateRespawnTimers.Add(TimeSpan.FromSeconds(7));
-                    }
+                } else if (payload is KitchenFlowMessage kfm) {
+                    Console.WriteLine("Kitchen flow message: " + toJson(kfm));
                 } else if (payload is WashingStationMessage wsm) {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
@@ -318,6 +315,22 @@ namespace Hpmv {
                     specificData.switchingIndex = pism.m_itemIndex;
                 } else if (payload is TriggerColourCycleMessage tccm) {
                     specificData.switchingIndex = tccm.m_colourIndex;
+                } else if (payload is PlateReturnControllerAuxMessage prcam) {
+                        specificData.plateRespawns = specificData.plateRespawns == null ? new List<(GameEntityRecord station, TimeSpan timer)>() : new List<(GameEntityRecord station, TimeSpan timer)>(specificData.plateRespawns);
+                    if (prcam.type == PlateReturnControllerAuxMessageType.PlateDelivered) {
+                        specificData.plateRespawns.Add((entityIdToRecord[(int)prcam.m_plateReturnStation.m_uEntityID], TimeSpan.FromSeconds(prcam.m_timeToReturn)));
+                    } else if (prcam.type == PlateReturnControllerAuxMessageType.RemovePlates) {
+                        foreach (var i in prcam.indicesToRemove) {
+                            if (i >= specificData.plateRespawns.Count) {
+                                Console.WriteLine($"Warning: plate return controller tried to remove plate {i} but only {specificData.plateRespawns.Count} plates are registered");
+                                continue;
+                            }
+                            specificData.plateRespawns.RemoveAt(i);
+                        }
+                    }
+                } else if (payload is PlateStackMessage psm) {
+                    specificData.stackContents = new List<GameEntityRecord>(specificData.stackContents);
+                    specificData.stackContents.RemoveAt(specificData.stackContents.Count - 1);
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -348,6 +361,14 @@ namespace Hpmv {
                 child.position.ChangeTo(sem.m_Position.ToNumerics(), frame);
                 spawner.nextSpawnId.ChangeTo(spawner.nextSpawnId.Last() + 1, frame);
                 entityIdToRecord[(int)sem.m_DesiredHeader.m_uEntityID] = child;
+                if (spawner.prefab.IsStack) {
+                    // A stack's contents is automatically appended to when it spawns something.
+                    spawner.data.AppendWith(frame, d => {
+                        d.stackContents = d.stackContents == null ? new List<GameEntityRecord>() : new List<GameEntityRecord>(d.stackContents);
+                        d.stackContents.Add(child);
+                        return d;
+                    });
+                }
             };
 
             Action<GameEntityRecord, uint> destroyEntity = (r, entityId) => {
@@ -498,12 +519,11 @@ namespace Hpmv {
                     entity.data.ChangeTo(newData, frame);
                 }
                 if (entity.data.Last().washers is HashSet<GameEntityRecord> washers && washers.Count > 0) {
-                    entity.washingProgress.AppendWith(frame, p => p + washers.Count * 1.0 / Config.FRAMERATE);
+                    entity.washingProgress.AppendWith(frame, p => p + washers.Count * frameTime.TotalSeconds);
                 }
-                if (entity.data.Last().plateRespawnTimers is List<TimeSpan> timers) {
+                if (entity.data.Last().plateRespawns != null) {
                     entity.data.AppendWith(frame, d => {
-                        d.plateRespawnTimers = d.plateRespawnTimers
-                            .Select(t => t - frameTime).Where(t => t > TimeSpan.Zero).ToList();
+                        d.plateRespawns = d.plateRespawns.Select(v => (v.station, v.timer - frameTime)).ToList();
                         return d;
                     });
                 }

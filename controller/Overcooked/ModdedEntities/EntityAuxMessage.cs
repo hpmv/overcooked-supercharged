@@ -33,4 +33,5 @@ public class EntityAuxMessage : Serialisable
 public enum AuxEntityType: byte
 {
     ThrowableItemAux,
+    PlateReturnControllerAux,
 }

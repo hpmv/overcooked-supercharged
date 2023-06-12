@@ -64,6 +64,7 @@ namespace Hpmv {
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.MultiTriggerDisable, () => new TriggerDisableMessage());
 
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.ThrowableItemAux, () => new ThrowableItemAuxMessage());
+            SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.PlateReturnControllerAux, () => new PlateReturnControllerAuxMessage());  // MODDED
 
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntitySynchronisation, () => new EntitySynchronisationMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityEvent, () => new EntityEventMessage());

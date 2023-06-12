@@ -59,6 +59,10 @@
             Icon="pest_control"
             OnClick="(e) => ShowRecordDebug = !ShowRecordDebug"
             class="@(ShowRecordDebug ? "debug-button-on" : "")" />
+        <MatIconButton
+            Icon="speaker_notes"
+            OnClick="(e) => ShowMessageStats = !ShowMessageStats"
+            class="@(ShowMessageStats ? "debug-button-on" : "")" />
         <div class="toolbar-divider"></div>
         @if (realGameConnector == null) {
             <MatIconButton Icon="link" Disabled=@(!level.IsValid()) OnClick="(e) => StartRealSimulation()" />
@@ -125,6 +129,14 @@
                     @foreach (var record in level.entityRecords.FixedEntities)
                     {
                         <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"></EntityRecordRenderer>
+                    }
+                </div>
+            }
+
+            @if (ShowMessageStats && realGameConnector != null) {
+                <div class="debug-panel">
+                    @foreach (var stats in realGameConnector.simulator.Stats.messageTypeStats) {
+                        <div>@stats.Key: @stats.Value</div>
                     }
                 </div>
             }
