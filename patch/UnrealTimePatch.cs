@@ -36,11 +36,10 @@ namespace SuperchargedPatch
         [HarmonyPatch(typeof(ClientTime), "OnTimeSyncReceived")]
         public static class OnTimeSyncReceivedPostfix
         {
-            [HarmonyPostfix]
-            public static void Postfix()
+            [HarmonyPrefix]
+            public static bool Prefix()
             {
-                if (!ENABLE_TIME_PATCH) return;
-                m_m_fLastReceivedTime.SetValue(null, Time.time);
+                return !ENABLE_TIME_PATCH;
             }
         }
 
@@ -52,8 +51,7 @@ namespace SuperchargedPatch
             public static bool Prefix(ref float __result)
             {
                 if (!ENABLE_TIME_PATCH) return true;
-                __result = (float)m_m_fLocalRunningTime.GetValue(null) + Mathf.Lerp((float)m_m_fOldOffset.GetValue(null),
-                    (float)m_m_fCurrentOffset.GetValue(null), (Time.time - (float)m_m_fLastReceivedTime.GetValue(null)) / 3f);
+                __result = Time.time;
                 return false;
             }
         }
@@ -67,7 +65,6 @@ namespace SuperchargedPatch
                 if (!ENABLE_TIME_PATCH) return true;
                 float _time = Time.time;
                 m_m_fDelta.SetValue(null, _time - (float)m_m_fLocalTimeLastFrame.GetValue(null));
-                m_m_fLocalRunningTime.SetValue(null, m_m_fDelta.GetValue(null));
                 m_m_fLocalTimeLastFrame.SetValue(null, _time);
                 return false;
             }
@@ -80,13 +77,6 @@ namespace SuperchargedPatch
             public static bool Prefix()
             {
                 if (!ENABLE_TIME_PATCH) return true;
-                m_m_fServerTime.SetValue(null, (float)m_m_fServerTime.GetValue(null) + Time.time - (float)m_m_fLastTime.GetValue(null));
-                m_m_fLastTime.SetValue(null, m_m_fServerTime.GetValue(null));
-                if ((float)m_m_fServerTime.GetValue(null) > (float)m_m_fNextSyncTime.GetValue(null))
-                {
-                    m_m_fNextSyncTime.SetValue(null, 3f + Time.time);
-                    f_TimeSync.Invoke(null, new object[] { m_m_fServerTime.GetValue(null) });
-                }
                 return false;
             }
         }

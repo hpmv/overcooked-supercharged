@@ -10,7 +10,8 @@ namespace Hpmv {
         // 0.2 seconds per interaction, 7 max progress.
         public Dictionary<GameEntityRecord, TimeSpan> chopInteracters;
         public GameEntityRecord itemBeingChopped;
-        public HashSet<GameEntityRecord> washers;
+        public List<GameEntityRecord> interacters;
+        public GameEntityRecord interactingWith;
         public int numPlates;
         public List<(GameEntityRecord station, TimeSpan timer)> plateRespawns;
         public SpecificEntityData_ThrowableItem throwableItem;
@@ -28,6 +29,7 @@ namespace Hpmv {
                 ThrowableItem = throwableItem.ToProto(),
                 RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
                 SessionInteracter = sessionInteracter?.path?.ToProto(),
+                InteractingWith = interactingWith?.path?.ToProto(),
                 PilotRotationAngle = pilotRotationAngle,
                 SwitchingIndex = switchingIndex,
             };
@@ -39,9 +41,9 @@ namespace Hpmv {
                     result.ChopInteracters[chef.path.ids[0]] = time.TotalMilliseconds;
                 }
             }
-            if (washers != null) {
-                foreach (var washer in washers) {
-                    result.Washers.Add(washer.path.ToProto());
+            if (interacters != null) {
+                foreach (var interacter in interacters) {
+                    result.Interacters.Add(interacter.path.ToProto());
                 }
             }
             result.NumPlates = numPlates;
@@ -73,7 +75,8 @@ namespace Hpmv {
                 contents = data.Contents.Count == 0 ? null : data.Contents.ToList(),
                 chopInteracters = data.ChopInteracters.Count == 0 ? null :
                     data.ChopInteracters.ToDictionary(kv => context.GetRootRecord(kv.Key), kv => TimeSpan.FromMilliseconds(kv.Value)),
-                washers = data.Washers.Count == 0 ? null : data.Washers.Select(washer => washer.FromProtoRef(context)).ToHashSet(),
+                interacters = data.Interacters.Count == 0 ? null : data.Interacters.Select(interacter => interacter.FromProtoRef(context)).ToList(),
+                interactingWith = data.InteractingWith.FromProtoRef(context),
                 numPlates = data.NumPlates,
                 plateRespawns = data.PlateRespawns.Count == 0 ? null :
                     data.PlateRespawns.Select(timer => (context.GetRootRecord(timer.PlateReturnStation), TimeSpan.FromMilliseconds(timer.Timer))).ToList(),
@@ -119,6 +122,15 @@ namespace Hpmv {
                 thrower = data.Thrower.FromProtoRef(context),
                 ignoredColliders = data.IgnoredColliders.Select(collider => (collider.Entity.FromProtoRef(context), collider.ColliderIndex)).ToArray(),
             };
+        }
+    }
+
+    public static class ListShallowCloning {
+        public static List<T> ShallowCopyAndEnsureList<T>(this List<T> list) where T : class {
+            if (list == null) {
+                return new List<T>();
+            }
+            return new List<T>(list);
         }
     }
 }

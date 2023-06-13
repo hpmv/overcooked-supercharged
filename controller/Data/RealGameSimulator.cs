@@ -261,7 +261,7 @@ namespace Hpmv {
                 } else if (payload is WashingStationMessage wsm) {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
-                        specificData.washers = specificData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(specificData.washers);
+                        specificData.interacters = specificData.interacters == null ? new List<GameEntityRecord>() : new List<GameEntityRecord>(specificData.interacters);
                         entityRecord.washingProgress.ChangeTo(wsm.m_progress, frame);
                     } else {
                         specificData.numPlates = wsm.m_plateCount;
@@ -273,28 +273,26 @@ namespace Hpmv {
                     if (iem.inputEventType == InputEventMessage.InputEventType.BeginInteraction) {
                         if (entityIdToRecord.ContainsKey((int)iem.entityId)) {
                             var entity = entityIdToRecord[(int)iem.entityId];
-                            if (entity.className == "sink") // hacky
+                            if (entity.prefab.IsWashingStation)
                             {
                                 // This is different from the other cases above - here we alter the state of a different entity!
-                                var washerData = entity.data.Last();
-                                washerData.washers = washerData.washers == null ? new HashSet<GameEntityRecord>() : new HashSet<GameEntityRecord>(washerData.washers);
+                                var data = entity.data.Last();
+                                data.interacters = data.interacters.ShallowCopyAndEnsureList();
                                 var interacter = entityIdToRecord[entityId];
-                                washerData.washers.Add(interacter);
-                                entity.data.ChangeTo(washerData, frame);
+                                data.interacters.Add(interacter);
+                                entity.data.ChangeTo(data, frame);
                             }
+                        specificData.interactingWith = entity;
                         }
                     } else if (iem.inputEventType == InputEventMessage.InputEventType.EndInteraction) {
-                        // When ending interaction, unfortunately we don't get the object being originally interacted with,
-                        // so we just have to iterate through all entities.
-                        var interacter = entityIdToRecord[entityId];
-                        foreach (var entity in setup.entityRecords.GenAllEntities()) {
-                            if (entity.existed.Last() && entity.data.Last().washers != null && entity.data.Last().washers.Contains(interacter)) {
-                                entity.data.AppendWith(frame, d => {
-                                    d.washers = new HashSet<GameEntityRecord>(d.washers);
-                                    d.washers.Remove(interacter);
-                                    return d;
-                                });
-                            }
+                        var interactingWith = specificData.interactingWith;
+                        if (interactingWith == null) {
+                            Console.WriteLine($"Warning: entity {entityRecord.path} ended interaction with no interactingWith set");
+                        } else {
+                            var data = interactingWith.data.Last();
+                            data.interacters = data.interacters.ShallowCopyAndEnsureList();
+                            data.interacters.Remove(entityRecord);
+                            interactingWith.data.ChangeTo(data, frame);
                         }
                     }
                 } else if (payload is ThrowableItemMessage tim) {
@@ -518,8 +516,8 @@ namespace Hpmv {
                     }
                     entity.data.ChangeTo(newData, frame);
                 }
-                if (entity.data.Last().washers is HashSet<GameEntityRecord> washers && washers.Count > 0) {
-                    entity.washingProgress.AppendWith(frame, p => p + washers.Count * frameTime.TotalSeconds);
+                if (entity.prefab.IsWashingStation && entity.data.Last().interacters is List<GameEntityRecord> interacters && interacters.Count > 0) {
+                    entity.washingProgress.AppendWith(frame, p => p + interacters.Count * frameTime.TotalSeconds);
                 }
                 if (entity.data.Last().plateRespawns != null) {
                     entity.data.AppendWith(frame, d => {

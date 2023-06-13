@@ -119,9 +119,26 @@ namespace SuperchargedPatch
     {
         private static readonly Type type = typeof(ServerPlayerControlsImpl_Default);
         private static readonly FieldInfo f_m_lastInteracted = AccessTools.Field(type, "m_lastInteracted");
+        private static readonly MethodInfo m_BeginInteraction = AccessTools.Method(type, "BeginInteraction");
+        private static readonly MethodInfo m_EndInteraction = AccessTools.Method(type, "EndInteraction");
         public static void set_m_lastInteracted(this ServerPlayerControlsImpl_Default instance, ServerInteractable interactable)
         {
             f_m_lastInteracted.SetValue(instance, interactable);
+        }
+
+        public static ServerInteractable m_lastInteracted(this ServerPlayerControlsImpl_Default instance)
+        {
+            return f_m_lastInteracted.GetValue(instance) as ServerInteractable;
+        }
+
+        public static void BeginInteraction(this ServerPlayerControlsImpl_Default instance, ServerInteractable interactable)
+        {
+            m_BeginInteraction.Invoke(instance, new object[] { interactable });
+        }
+
+        public static void EndInteraction(this ServerPlayerControlsImpl_Default instance)
+        {
+            m_EndInteraction.Invoke(instance, null);
         }
     }
 

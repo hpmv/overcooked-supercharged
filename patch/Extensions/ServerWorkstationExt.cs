@@ -1,9 +1,11 @@
 ﻿using BitStream;
 using HarmonyLib;
+using Hpmv;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Team17.Online.Multiplayer;
 using Team17.Online.Multiplayer.Messaging;
 using UnityEngine;
 using static UnityEngine.PostProcessing.AntialiasingModel;
@@ -26,11 +28,6 @@ namespace SuperchargedPatch
                 result.Add(new ServerWorkstationInteracterExt(interacter));
             }
             return result;
-        }
-
-        public static void OnInteracterAdded(this ServerWorkstation workstation, GameObject interacter, Vector2 directionXZ)
-        {
-            m_OnInteracterAdded.Invoke(workstation, new object[] { interacter, directionXZ });
         }
 
         public static void OnItemAdded(this ServerWorkstation workstation, IAttachment attachment)
@@ -247,30 +244,4 @@ namespace SuperchargedPatch
             return false;
         }
     }
-
-
-    // DEBUG ingredient container
-    [HarmonyPatch(typeof(ServerIngredientCatcher), "CanHandleCatch")]
-    public static class TempPatch1
-    {
-        [HarmonyPostfix]
-        public static void Postfix(ICatchable _object, bool __result, ServerIngredientCatcher __instance, IAttachment ___m_attachment, QueryForCatching ___m_allowCatchingCallback)
-        {
-            var ingredientCatcher = __instance.GetComponent<IngredientCatcher>();
-            Console.WriteLine($"{_object.AccessGameObject().name} CanHandleCatch: {__result}");
-            Console.WriteLine($"  AllowCatch? {_object.AllowCatch(__instance, Vector2.zero)}");
-            Console.WriteLine($"  IngredientCatcher requires attached? {ingredientCatcher.m_requireAttached}");
-            Console.WriteLine($"  m_attachment is null ? {___m_attachment == null}");
-            Console.WriteLine($"  m_attachment is attached ? {___m_attachment?.IsAttached() ?? false}");
-            Console.WriteLine($"  m_allowCatchingCallback? {___m_allowCatchingCallback(_object.AccessGameObject())}");
-            IOrderDefinition orderDefinition = _object.AccessGameObject().RequestInterface<IOrderDefinition>();
-            if (orderDefinition != null)
-            {
-                AssembledDefinitionNode orderComposition = orderDefinition.GetOrderComposition().Simpilfy();
-                Console.WriteLine($"  OrderComposition: {orderComposition.GetType().Name}");
-            }
-        }
-    }
-
-
 }

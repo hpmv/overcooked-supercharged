@@ -202,7 +202,8 @@ message SpecificEntityData {
     repeated int32 contents = 3;
     map<int32, double> chop_interacters = 4;
     EntityPath item_being_chopped = 5;
-    repeated EntityPath washers = 6;
+    repeated EntityPath interacters = 6;
+    EntityPath interacting_with = 18;
     int32 num_plates = 8;
     repeated SpecificEntityData_PlateRespawn plate_respawns = 16;
     SpecificEntityData_ThrowableItem throwable_item = 12;
