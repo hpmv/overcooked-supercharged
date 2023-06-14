@@ -468,6 +468,8 @@ namespace Hpmv {
                 Console.WriteLine($"[WARP] Unmapped destroyed entity {dem.m_Header.m_uEntityID}");
                 entityIdToRecord.Remove((int)dem.m_Header.m_uEntityID);
             } else if (item is DestroyEntitiesMessage dems) {
+                Console.WriteLine($"[WARP] Unmapped destroyed entity {dems.m_rootId}");
+                entityIdToRecord.Remove((int)dems.m_rootId);
                 foreach (var i in dems.m_ids) {
                     Console.WriteLine($"[WARP] Unmapped destroyed entity {i}");
                     entityIdToRecord.Remove((int)i);

@@ -10,9 +10,9 @@ namespace SuperchargedPatch
     [HarmonyPatch(typeof(SynchroniserBase), "IsSynchronising")]
     public static class SkipSynchroniserBaseIfPaused
     {
-        public static bool Prefix()
+        public static bool Prefix(SynchroniserBase __instance)
         {
-            return !Helpers.IsPaused();
+            return __instance is IFlowController || !Helpers.IsPaused();
         }
     }
 

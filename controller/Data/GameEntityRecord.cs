@@ -155,7 +155,7 @@ namespace Hpmv {
                 return new LiteralEntityReference(this);
             }
             if (spawnOwner[frame] == -1) {
-                return null;
+                return new LiteralEntityReference(this);
             }
             return new SpawnedEntityReference(spawnOwner[frame]);
         }

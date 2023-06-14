@@ -182,6 +182,11 @@ struct StackWarpData {
     1: list<EntityIdOrRef> stackContents,
 }
 
+struct WashingStationWarpData {
+    1: i32 plateCount,
+    2: double progress,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -218,6 +223,7 @@ struct EntityWarpSpec {
     23: optional TriggerColourCycleWarpData triggerColourCycle,
     24: optional PlateReturnControllerWarpData plateReturnController,
     25: optional StackWarpData stack,
+    26: optional WashingStationWarpData washingStation,
     // TODO: more entity types
 }
 

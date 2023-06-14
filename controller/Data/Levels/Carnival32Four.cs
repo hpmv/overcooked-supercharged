@@ -263,7 +263,7 @@ namespace Hpmv {
             var CLEAN_PLATE_STACK = new PrefabRecord("Clean Plate Stack", "clean-plate-stack") { CanBeAttached = true, IsStack = true };
             CLEAN_PLATE_SPAWNER.Spawns.Add(CLEAN_PLATE_STACK);
             CLEAN_PLATE_STACK.Spawns.Add(PLATE);
-            var WASHING_PART = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true };
+            var WASHING_PART = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true, IsAttachStation = true };
             entityRecords.RegisterKnownObject(45, WASHING_PART);
             entityRecords.RegisterKnownObject(46, CLEAN_PLATE_SPAWNER);
             entityRecords.RegisterKnownObject(47, DIRTY_PLATE_SPAWNER);

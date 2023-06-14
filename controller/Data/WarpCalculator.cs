@@ -223,6 +223,12 @@ namespace Hpmv {
                         }
                     }
                 }
+                if (record.prefab.IsWashingStation) {
+                    spec.WashingStation = new WashingStationWarpData {
+                        Progress = record.washingProgress[desiredFrame],
+                        PlateCount = record.data[desiredFrame].numPlates,
+                    };
+                }
 
                 if (spec.__isset.Equals(new EntityWarpSpec.Isset() {entityId = true})) {
                     continue;

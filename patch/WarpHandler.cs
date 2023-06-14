@@ -773,6 +773,32 @@ namespace SuperchargedPatch
                     }
                 }
             }
+            if (entity.m_GameObject.GetComponent<ServerWashingStation>() is ServerWashingStation sws)
+            {
+                var client = sws.GetComponent<ClientWashingStation>();
+                var washingStation = sws.GetComponent<WashingStation>();
+                var thrift = entityThrift.WashingStation;
+                if (thrift == null)
+                {
+                    Log($"[WARP] Failed to warp WashingStation: no washing station specific data");
+                    return;
+                }
+                var serverInteractable = sws.GetComponent<ServerInteractable>();
+                var clientInteractable = client.GetComponent<ClientInteractable>();
+                var isBeingInteractedWith = serverInteractable.IsBeingInteractedWith();
+                sws.SetPlateCount(thrift.PlateCount);
+                sws.SetCleaningTimer((float)thrift.Progress);
+                serverInteractable.enabled = thrift.PlateCount > 0;
+
+                client.SetPlateCount(thrift.PlateCount);
+                client.SetCleaningTimer((float)thrift.Progress);
+                client.SetIsWashing(isBeingInteractedWith);
+                var progressUI = client.m_progressUI();
+                progressUI.SetVisibility(thrift.PlateCount > 0);
+                clientInteractable.enabled = thrift.PlateCount > 0;
+                progressUI.SetProgress(Mathf.Clamp01((float)thrift.Progress / washingStation.m_cleanPlateTime));
+                client.UpdateCosmetics();
+            }
         }
     }
 

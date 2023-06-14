@@ -15,7 +15,7 @@
 * [Done] PlateStation (serving). This was resolved by stopping the plate entity synchronization as soon as it enters the delivery sequence coroutine, and notifying the controller via a new EntityRetirementMessage.
 * [Done] Also, dirty plate spawning needs to be managed.
 * [Done] Plate stack warping. See stacks.md.
-* [TODO] WashingStation progress and plate count (simple).
+* [Done] WashingStation progress and plate count (simple).
 * [TODO] ServerKitchenFlowController - all the parameters for orders, score.
 * [TODO] Game timer.
 
