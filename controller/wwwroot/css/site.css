@@ -107,7 +107,7 @@ html, body {
     position: absolute;
     top: 50px;
     width: 900px;
-    background-color: rgb(231, 231, 231);
+    background-color: rgb(245, 245, 245);
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -165,6 +165,8 @@ html, body {
     margin-left: 10px;
     display: flex;
     cursor: pointer;
+    border-left: 1px solid gray;
+    border-right: 1px solid gray;
 }
 
 .schedule-selecting .one-action {
@@ -189,27 +191,29 @@ html, body {
 .one-action-type-GotoAction,
 .one-action-type-PilotRotationAction {
     background-color: rgb(255, 252, 235);
-    /* border: 1px solid rgb(255, 231, 127); */
+    border-top: 1px solid rgb(255, 231, 127);
 }
 
 .one-action-type-InteractAction {
     background-color: rgb(237, 255, 235);
-    /* border: 1px solid rgb(138, 255, 127); */
+    border-top: 1px solid rgb(138, 255, 127);
 }
 
 .one-action-type-ThrowAction,
 .one-action-type-CatchAction,
 .one-action-type-DropAction {
     background-color: rgb(213, 243, 255);
-    /* border: 1px solid rgb(127, 157, 255); */
+    border-top: 1px solid rgb(127, 157, 255);
 }
 
 .one-action-type-WaitForSpawnAction,
 .one-action-type-WaitForPlateAction,
 .one-action-type-WaitForProgressAction,
-.one-action-type-WaitAction {
+.one-action-type-WaitAction,
+.one-action-type-WaitForCookingProgressAction,
+.one-action-type-WaitForDirtyPlateAction {
     background-color: rgb(255, 235, 254);
-    /* border: 1px solid rgb(255, 127, 255); */
+    border-top: 1px solid rgb(255, 127, 255);
 }
 
 
@@ -677,6 +681,7 @@ html, body {
     padding-left: 2px;
     padding-top: 2px;
     cursor: pointer;
+    border: 1px solid gray;
 }
 
 .action-insertion-prompt-selected {
@@ -687,6 +692,7 @@ html, body {
     padding-left: 2px;
     padding-top: 2px;
     cursor: pointer;
+    border: 1px solid gray;
 }
 
 .schedule-selecting .action-insertion-prompt {
@@ -865,6 +871,7 @@ html, body {
     flex: 1;
     flex-direction: column;
     align-items: stretch;
+    max-width: 1000px;
 }
 
 .right-side-content {
@@ -880,6 +887,7 @@ html, body {
 
 .map-path {
     stroke: green;
+    fill: none;
 }
 
 .framerate-controller-editor {

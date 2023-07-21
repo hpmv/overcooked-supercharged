@@ -310,6 +310,10 @@ namespace Hpmv {
                 } else if (payload is PilotRotationMessage prm) {
                     specificData.pilotRotationAngle = prm.m_angle;
                 } else if (payload is PickupItemSwitcherMessage pism) {
+                    // Warning: the game actually reuses PickupItemSwitcherMessage for both PickupItemSwitcher and
+                    // PlacementItemSwitcher. Because our infra here does not really look at the component index,
+                    // we don't know which switcher the message is for. However... in all instances they should be
+                    // equal.
                     specificData.switchingIndex = pism.m_itemIndex;
                 } else if (payload is TriggerColourCycleMessage tccm) {
                     specificData.switchingIndex = tccm.m_colourIndex;

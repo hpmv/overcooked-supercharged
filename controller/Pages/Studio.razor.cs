@@ -148,20 +148,20 @@ namespace controller.Pages {
                     EditorState.SelectedFrame = level.LastEmpiricalFrame;
                     TimelineLayout.DoLayout();
                     if (realGameConnector.State == RealGameState.Running) {
-                        if (realGameConnector.simulator.inProgress.Count == 0 || EditorState.SelectedFrame >= realGameConnector.simulator.LastMadeProgressFrame + 600) {
-                            if (EditorState.SelectedActionIndex != -1) {
+                        if (EditorState.SelectedActionIndex != -1) {
+                            var actions = level.sequences.Actions[level.sequences.ChefIndexByChef[EditorState.SelectedChef]];
+                            int frameToStop;
+                            if (actions.Count == 0) {
+                                frameToStop = 0;
+                            } else if (EditorState.SelectedActionIndex >= actions.Count) {
+                                frameToStop = actions.Last().Predictions.EndFrame ?? -1;
+                            } else {
+                                frameToStop = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? -1;
+                            }
+                            if (frameToStop != -1 && level.LastEmpiricalFrame >= frameToStop) {
                                 await realGameConnector.RequestPause();
-                                if (EditorState.SelectedActionIndex != -1) {
-                                    var actions = level.sequences.Actions[level.sequences.ChefIndexByChef[EditorState.SelectedChef]];
-                                    if (actions.Count == 0) {
-                                        EditorState.SelectedFrame = 0;
-                                    } else if (EditorState.SelectedActionIndex >= actions.Count) {
-                                        EditorState.SelectedFrame = (actions.Last().Predictions.EndFrame ?? 0);
-                                    } else {
-                                        EditorState.SelectedFrame = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? 0;
-                                    }
-                                    await realGameConnector.RequestWarp(EditorState.SelectedFrame);
-                                }
+                                EditorState.SelectedFrame = frameToStop;
+                                await realGameConnector.RequestWarp(EditorState.SelectedFrame);
                             }
                         }
                     }

@@ -564,6 +564,17 @@ namespace SuperchargedPatch
                 spis.SetCurrentItemPrefabIndexAndSendServerEvent(thrift.Index);
             }
 
+            if (entity.m_GameObject.GetComponent<ServerPlacementItemSwitcher>() is ServerPlacementItemSwitcher spis2)
+            {
+                var thrift = entityThrift.PickupItemSwitcher;  // This is not a bug. The message is reused.
+                if (thrift == null)
+                {
+                    Log($"[WARP] Failed to warp PlacementItemSwitcher: no PlacementItemSwitcher specific data");
+                    return;
+                }
+                spis2.SetCurrentItemPrefabIndexAndSendServerEvent(thrift.Index);
+            }
+
             if (entity.m_GameObject.GetComponent<ServerTriggerColourCycle>() is ServerTriggerColourCycle stcc)
             {
                 var thrift = entityThrift.TriggerColourCycle;
