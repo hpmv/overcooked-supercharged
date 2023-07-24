@@ -1,4 +1,5 @@
 ﻿using Hpmv;
+using OrderController;
 using SuperchargedPatch.AlteredComponents;
 using SuperchargedPatch.Extensions;
 using System;
@@ -650,6 +651,104 @@ namespace SuperchargedPatch
                                 ));
                         }
                     }
+                }
+
+                {
+                    var client = skfcb.GetComponent<ClientKitchenFlowControllerBase>();
+                    if (client == null)
+                    {
+                        Log($"[WARP] Failed to warp KitchenFlowController: no ClientKitchenFlowControllerBase");
+                        return;
+                    }
+                    var thrift = entityThrift.KitchenController;
+                    if (thrift == null)
+                    {
+                        Log($"[WARP] Failed to warp KitchenFlowController: no KitchenFlowController specific data");
+                        return;
+                    }
+                    if (skfcb.RoundTimer is ServerRoundTimer srt)
+                    {
+                        srt.SetRoundTimer((float)thrift.RoundTime);
+                    } else
+                    {
+                        Log($"[WARP] Failed to set game time: round timer is not a ServerRoundTimer; actual {skfcb.RoundTimer.GetType().Name}");
+                    }
+                    if (client.RoundTimer is ClientRoundTimer crt)
+                    {
+                        crt.SetRoundTimer((float)thrift.RoundTime);
+                    } else
+                    {
+                        Log($"[WARP] Failed to set game time: round timer is not a ClientRoundTimer; actual {client.RoundTimer.GetType().Name}");
+                    }
+
+                    var score = new TeamMonitor.TeamScoreStats().FromBytes(thrift.TeamScore);
+                    var serverTeamMonitor = skfcb.GetMonitorForTeam(TeamID.One);
+                    serverTeamMonitor.SetScore(score);
+                    var clientTeamMonitor = client.GetMonitorForTeam(TeamID.One);
+                    clientTeamMonitor.SetScore(score);
+                    client.GetDataStore().Write(new DataStore.Id("score.team"), new TeamScore
+                    {
+                        m_team = TeamID.One,
+                        m_score = score,
+                    });
+
+                    var serverOrderController = serverTeamMonitor.OrdersController;
+                    serverOrderController.SetNextOrderID((uint)(thrift.NextOrderId + 1));
+                    serverOrderController.SetTimerUntilOrder(serverOrderController.GetNextTimeBetweenOrders() - (float)thrift.TimeSinceLastOrder);
+                    serverOrderController.SetComboIndex(thrift.LastComboIndex);
+                    serverOrderController.SetActiveOrders(thrift.ActiveOrders.Select(o => new OrderController.ServerOrderData().FromBytes(o)).ToList());
+                    var roundData = serverOrderController.GetRoundData();
+                    var roundInstanceData = serverOrderController.GetRoundInstanceData();
+                    if (roundData is WarpableRoundData wrd && roundInstanceData is WarpableRoundInstanceData wrid)
+                    {
+                        wrd.Warp(wrid, thrift.NextOrderId);
+                    } else
+                    {
+                        Log($"[WARP] Failed to warp KitchenFlowController: round data is not warpable; actual {roundData.GetType().Name} and {roundInstanceData.GetType().Name}");
+                    }
+
+                    var clientOrderController = clientTeamMonitor.OrdersController;
+                    var gui = clientOrderController.GetGUI();
+                    var activeWidgets = gui.GetActiveWidgets();
+                    var dyingWidgets = gui.GetDyingWidgets();
+                    var occupiedTable = gui.GetOccupiedTables();
+                    foreach (var widget in activeWidgets)
+                    {
+                        GameObject.Destroy(widget.m_widget.gameObject);
+                    }
+                    foreach (var widget in dyingWidgets)
+                    {
+                        GameObject.Destroy(widget.m_widget.gameObject);
+                    }
+                    for (int i = 0; i < occupiedTable.Length; i++)
+                    {
+                        occupiedTable[i] = false;
+                    }
+                    activeWidgets.Clear();
+                    dyingWidgets.Clear();
+
+                    var clientActiveOrders = new List<ClientOrderControllerBase_ActiveOrderExt>();
+                    var j = 0;
+                    foreach (var order in thrift.ActiveOrders)
+                    {
+                        var serverOrderData = new ServerOrderData().FromBytes(order);
+                        var widget = GameUtils.InstantiateUIController(gui.GetRecipeWidgetPrefab().gameObject, gui.transform as RectTransform);
+                        var recipeWidgetUIController = widget.GetComponent<RecipeWidgetUIController>();
+                        recipeWidgetUIController.SetRecipeTree(serverOrderData.RecipeListEntry.m_order.m_orderGuiDescription);
+                        recipeWidgetUIController.SetTableNumber(j);
+                        occupiedTable[j] = true;
+                        recipeWidgetUIController.RefreshSubElements();
+                        recipeWidgetUIController.GetTopWidgetTile().SetProgress(serverOrderData.Remaining / serverOrderData.Lifetime);
+                        recipeWidgetUIController.GetAnimator().Play("Nothing", 1, 0);  // TODO: check
+                        var recipeWidgetData = new RecipeFlowGUI.RecipeWidgetData(recipeWidgetUIController, 0f, gui.GetNextIndex(), serverOrderData.Lifetime, (_) => { });
+                        gui.SetNextIndex(gui.GetNextIndex() + 1);
+                        activeWidgets.Add(recipeWidgetData);
+                        clientActiveOrders.Add(new ClientOrderControllerBase_ActiveOrderExt(serverOrderData.ID, serverOrderData.RecipeListEntry, new RecipeFlowGUI.ElementToken(recipeWidgetData)));
+                        j++;
+                    }
+                    clientOrderController.SetActiveOrders(clientActiveOrders);
+                    gui.LayoutWidgets();
+
                 }
             }
         }

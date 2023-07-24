@@ -191,6 +191,14 @@ message SpecificEntityData_ThrowableItem {
     repeated SavedCollider ignored_colliders = 4;
 }
 
+message SpecificEntityData_KitchenFlowController {
+    repeated bytes active_orders = 1;
+    int32 next_order_id = 2;
+    int32 last_combo_index = 3;
+    double time_since_last_order = 4;
+    bytes team_score = 5;
+}
+
 message SpecificEntityData_PlateRespawn {
     int32 plate_return_station = 1;
     double timer = 2;
@@ -213,6 +221,7 @@ message SpecificEntityData {
     float pilot_rotation_angle = 14;
     int32 switching_index = 15;
     repeated EntityPath stack_contents = 17;
+    SpecificEntityData_KitchenFlowController kitchen_flow_controller = 19;
 }
 
 message ChefState {

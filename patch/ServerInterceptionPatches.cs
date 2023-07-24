@@ -218,26 +218,6 @@ namespace SuperchargedPatch
             }
         }
 
-        private static Type t_RoundInstanceData = typeof(RoundData).GetNestedType("RoundInstanceData", BindingFlags.NonPublic);
-        private static FieldInfo m_RecipeCount = t_RoundInstanceData.GetField("RecipeCount", BindingFlags.Instance | BindingFlags.Public);
-        private static FieldInfo m_CumulativeFrequencies = t_RoundInstanceData.GetField("CumulativeFrequencies", BindingFlags.Instance | BindingFlags.Public);
-        private static MethodInfo f_GetWeight = typeof(RoundData).GetMethod("GetWeight", BindingFlags.Instance | BindingFlags.NonPublic);
-
-        [HarmonyPatch(typeof(RoundData), "GetNextRecipe")]
-        public static class GetNextRecipePatch
-        {
-            [HarmonyPrefix]
-            public static bool Prefix(ref RecipeList.Entry[] __result, RoundInstanceDataBase _data, RecipeList ___m_recipes, RoundData __instance)
-            {
-                m_RecipeCount.SetValue(_data, (int)m_RecipeCount.GetValue(_data) + 1);
-                KeyValuePair<int, RecipeList.Entry> weightedRandomElement =
-                    OrderRandom.GetWeightedRandomElement(___m_recipes.m_recipes, (int i, RecipeList.Entry e) => (float)f_GetWeight.Invoke(__instance, new object[] { _data, i }));
-                ((int[])m_CumulativeFrequencies.GetValue(_data))[weightedRandomElement.Key]++;
-                __result = new RecipeList.Entry[] { weightedRandomElement.Value };
-                return false;
-            }
-        }
-
         [HarmonyPatch(typeof(WorkstationMessage), "Serialise")]
         public static class WorkstationMessageSerialisePatch
         {

@@ -12,13 +12,16 @@
 * [Done] IngredientContainer contents. This should be simply sending over serialized AssembledDefinitionNode[].
 * [Done] AttachStation attachment and detachment. This is subtle, needs to be done carefully.
 * [Done] PickupItemSwitcher, TriggerColourCycle - both are simple, just need to update an index and send a server message.
+* [Done] PlacementItemSwitcher - condiment switching, need to store which condiment is the one used. (very simple)
 * [Done] PlateStation (serving). This was resolved by stopping the plate entity synchronization as soon as it enters the delivery sequence coroutine, and notifying the controller via a new EntityRetirementMessage.
 * [Done] Also, dirty plate spawning needs to be managed.
 * [Done] Plate stack warping. See stacks.md.
 * [Done] WashingStation progress and plate count (simple).
-* [TODO] ServerKitchenFlowController - all the parameters for orders, score.
-* [TODO] Game timer.
+* [Done] ServerKitchenFlowController - all the parameters for orders, score.
+* [Done] Game timer.
 
 Deferred:
-* [TODO] PlacementItemSwitcher - condiment switching, need to store which condiment is the one used. (very simple)
 * [TODO] Teleportation. Seems like two manual animations (math lerps) being coded into some coroutines. Should be able to unroll all of these without too much difficulty.
+
+Bugs:
+* [TODO] Sometimes after restarting the level the UI stops updating.

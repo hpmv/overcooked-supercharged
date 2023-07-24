@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace Hpmv {
@@ -55,8 +56,9 @@ namespace Hpmv {
                         EntityId = currentRecordToEntityId[record],
                     };
                 }
+                var data = record.data[desiredFrame];
                 if (record.prefab.CanBeAttached) {
-                    if (record.data[desiredFrame].attachmentParent == null) {
+                    if (data.attachmentParent == null) {
                         spec.Position = record.position[desiredFrame].ToThrift();
                         spec.Rotation = record.rotation[desiredFrame].ToThrift();
                         spec.Velocity = record.velocity[desiredFrame].ToThrift();
@@ -64,7 +66,7 @@ namespace Hpmv {
                     }
                 }
                 if (record.prefab.IsAttachStation) {
-                    if (record.data[desiredFrame].attachment is GameEntityRecord attachment) {
+                    if (data.attachment is GameEntityRecord attachment) {
                         spec.AttachStation = new AttachStationWarpData {
                             Item = getEntityIdOrRef(attachment),
                         };
@@ -77,7 +79,7 @@ namespace Hpmv {
                     spec.Rotation = record.rotation[desiredFrame].ToThrift();
                     spec.Velocity = record.velocity[desiredFrame].ToThrift();
                     spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
-                    if (record.data[desiredFrame].attachment is GameEntityRecord attachment) {
+                    if (data.attachment is GameEntityRecord attachment) {
                         spec.ChefCarry = new ChefCarryWarpData {
                             CarriedItem = getEntityIdOrRef(attachment),
                         };
@@ -86,7 +88,6 @@ namespace Hpmv {
                     }
                 }
                 if (record.prefab.IsCannon) {
-                    var data = record.data[desiredFrame];
                     spec.Cannon = new CannonWarpData {
                         ModData = data.rawGameEntityData,
                     };
@@ -122,7 +123,6 @@ namespace Hpmv {
                 }
                 if (record.prefab.IsBoard) {
                     spec.Workstation = new WorkstationWarpData();
-                    var data = record.data[desiredFrame];
                     if (data.itemBeingChopped != null) {
                         spec.Workstation.Item = getEntityIdOrRef(data.itemBeingChopped);
                     }
@@ -137,7 +137,6 @@ namespace Hpmv {
                     }
                 }
                 if (record.prefab.IsChoppable) {
-                    var data = record.data[desiredFrame];
                     var onWorkstation = data.attachmentParent != null && data.attachmentParent.prefab.IsBoard;
                     spec.WorkableItem = new WorkableItemWarpData {
                         OnWorkstation = onWorkstation,
@@ -146,17 +145,17 @@ namespace Hpmv {
                     };
                 }
                 if (record.prefab.IsThrowable) {
-                    var data = record.data[desiredFrame].throwableItem;
+                    var inner = data.throwableItem;
                     spec.ThrowableItem = new ThrowableItemWarpData
                     {
-                        IsFlying = data.IsFlying,
-                        FlightTimer = data.FlightTimer.TotalMilliseconds,
-                        ThrowerEntityId = data.thrower == null ? -1 : data.thrower.path.ids[0],
+                        IsFlying = inner.IsFlying,
+                        FlightTimer = inner.FlightTimer.TotalMilliseconds,
+                        ThrowerEntityId = inner.thrower == null ? -1 : inner.thrower.path.ids[0],
                         ThrowStartColliders = new List<ColliderRef>(),
                     };
-                    if (data.ignoredColliders != null)
+                    if (inner.ignoredColliders != null)
                     {
-                        foreach (var collider in data.ignoredColliders)
+                        foreach (var collider in inner.ignoredColliders)
                         {
                             spec.ThrowableItem.ThrowStartColliders.Add(new ColliderRef
                             {
@@ -168,7 +167,6 @@ namespace Hpmv {
                 }
                 if (record.prefab.IsTerminal) {
                     spec.Terminal = new TerminalWarpData();
-                    var data = record.data[desiredFrame];
                     if (data.sessionInteracter != null) {
                         spec.Terminal.InteracterEntityId = data.sessionInteracter.path.ids[0];
                     }
@@ -185,24 +183,24 @@ namespace Hpmv {
                 }
                 if (record.prefab.CanContainIngredients) {
                     spec.IngredientContainer = new IngredientContainerWarpData {
-                        MsgData = record.data[desiredFrame].rawGameEntityData,
+                        MsgData = data.rawGameEntityData,
                     };
                 }
                 if (record.prefab.IsPickupItemSwitcher) {
                     spec.PickupItemSwitcher = new PickupItemSwitcherWarpData {
-                        Index = record.data[desiredFrame].switchingIndex,
+                        Index = data.switchingIndex,
                     };
                 }
                 if (record.prefab.HasTriggerColorCycle) {
                     spec.TriggerColourCycle = new TriggerColourCycleWarpData {
-                        Index = record.data[desiredFrame].switchingIndex,
+                        Index = data.switchingIndex,
                     };
                 }
                 if (record.prefab.IsKitchenFlowController) {
                     spec.PlateReturnController = new PlateReturnControllerWarpData {
                         Plates = new List<PlatePendingReturnData>()
                     };
-                    var spawns = record.data[desiredFrame].plateRespawns;
+                    var spawns = data.plateRespawns;
                     if (spawns != null) {
                         foreach (var (station, timer) in spawns) {
                             spec.PlateReturnController.Plates.Add(new PlatePendingReturnData {
@@ -211,12 +209,22 @@ namespace Hpmv {
                             });
                         }
                     }
+
+                    var kfc = data.kitchenFlowController;
+                    spec.KitchenController = new KitchenControllerWarpData {
+                        RoundTime = desiredFrame * 1.0 / Config.FRAMERATE,
+                        ActiveOrders = kfc.activeOrders.EmptyIfNull().Select(o => o.ToBytes()).ToList(),
+                        LastComboIndex = kfc.lastComboIndex,
+                        NextOrderId = kfc.nextOrderId,
+                        TimeSinceLastOrder = kfc.timeSinceLastOrder.TotalSeconds,
+                        TeamScore = (kfc.teamScore ?? new TeamMonitor.TeamScoreStats()).ToBytes(),
+                    };
                 }
                 if (record.prefab.IsStack) {
                     spec.Stack = new StackWarpData {
                         StackContents = new List<EntityIdOrRef>(),
                     };
-                    var stackContents = record.data[desiredFrame].stackContents;
+                    var stackContents = data.stackContents;
                     if (stackContents != null) {
                         foreach (var entity in stackContents) {
                             spec.Stack.StackContents.Add(getEntityIdOrRef(entity));
@@ -226,7 +234,7 @@ namespace Hpmv {
                 if (record.prefab.IsWashingStation) {
                     spec.WashingStation = new WashingStationWarpData {
                         Progress = record.washingProgress[desiredFrame],
-                        PlateCount = record.data[desiredFrame].numPlates,
+                        PlateCount = data.numPlates,
                     };
                 }
 
@@ -236,7 +244,6 @@ namespace Hpmv {
                 warpSpec.Entities.Add(spec);
             }
             warpSpec.Frame = desiredFrame;
-            warpSpec.RemainingTime = 0; // TODO: calculate this
             // Console.WriteLine("WarpSpec dump:");
             // Console.WriteLine(JsonConvert.SerializeObject(warpSpec));
             return warpSpec;

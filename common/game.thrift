@@ -187,6 +187,15 @@ struct WashingStationWarpData {
     2: double progress,
 }
 
+struct KitchenControllerWarpData {
+    1: double roundTime,
+    2: list<binary> activeOrders,
+    3: i32 nextOrderId,
+    4: i32 lastComboIndex,
+    5: double timeSinceLastOrder,
+    6: binary teamScore,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -224,6 +233,7 @@ struct EntityWarpSpec {
     24: optional PlateReturnControllerWarpData plateReturnController,
     25: optional StackWarpData stack,
     26: optional WashingStationWarpData washingStation,
+    27: optional KitchenControllerWarpData kitchenController,
     // TODO: more entity types
 }
 
@@ -231,8 +241,6 @@ struct WarpSpec {
     1: list<EntityWarpSpec> entities,
     2: list<i32> entitiesToDelete,
     3: i32 frame,
-    4: double remainingTime,
-    // TODO: animations
 }
 
 struct InputData {

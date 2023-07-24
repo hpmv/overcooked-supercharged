@@ -256,8 +256,6 @@ namespace Hpmv {
                         specificData.contents = icm.Contents?.Flatten()?.ToList();
                         specificData.rawGameEntityData = icm.ToBytes();
                     }
-                } else if (payload is KitchenFlowMessage kfm) {
-                    Console.WriteLine("Kitchen flow message: " + toJson(kfm));
                 } else if (payload is WashingStationMessage wsm) {
                     // Console.WriteLine($"[{frame}] " + toJson(payload));
                     if (wsm.m_msgType == WashingStationMessage.MessageType.InteractionState) {
@@ -333,6 +331,48 @@ namespace Hpmv {
                 } else if (payload is PlateStackMessage psm) {
                     specificData.stackContents = new List<GameEntityRecord>(specificData.stackContents);
                     specificData.stackContents.RemoveAt(specificData.stackContents.Count - 1);
+                } else if (payload is KitchenFlowMessage kfm) {
+                    ref var data = ref specificData.kitchenFlowController;
+                    switch (kfm.m_msgType) {
+                        case KitchenFlowMessage.MsgType.OrderAdded: {
+                            data.activeOrders = data.activeOrders
+                                .EmptyIfNull()
+                                .Append(kfm.m_orderData).ToArray();
+                            data.nextOrderId++;
+                            data.timeSinceLastOrder = TimeSpan.Zero;
+                            break;
+                        }
+                        case KitchenFlowMessage.MsgType.OrderExpired: {
+                            data.activeOrders = data.activeOrders
+                                .EmptyIfNull()
+                                .Select(o => {
+                                    if (o.ID == kfm.m_orderID) {
+                                        return o.WithRemaining(o.Lifetime);
+                                    }
+                                    return o;
+                                })
+                                .ToArray();
+                            data.teamScore = kfm.m_teamScore;
+                            break;
+                        }
+                        case KitchenFlowMessage.MsgType.Delivery: {
+                            if (kfm.m_success) {
+                                data.lastComboIndex = data.activeOrders
+                                    .EmptyIfNull()
+                                    .FindIndex_Predicate(o => o.ID == kfm.m_orderID);
+                                data.activeOrders = data.activeOrders
+                                    .EmptyIfNull()
+                                    .Where(o => o.ID != kfm.m_orderID)
+                                    .ToArray();
+                            }
+                            data.teamScore = kfm.m_teamScore;
+                            break;
+                        }
+                        case KitchenFlowMessage.MsgType.ScoreOnly: {
+                            Console.WriteLine("Should not happen!");
+                            break;
+                        }
+                    }
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };
@@ -534,6 +574,14 @@ namespace Hpmv {
                 if (entity.data.Last().throwableItem.IsFlying) {
                     entity.data.AppendWith(frame, d => {
                         d.throwableItem.FlightTimer += frameTime;
+                        return d;
+                    });
+                }
+                if (entity.prefab.IsKitchenFlowController) {
+                    entity.data.AppendWith(frame, d => {
+                        ref var data = ref d.kitchenFlowController;
+                        data.timeSinceLastOrder += frameTime;
+                        data.activeOrders = data.activeOrders.EmptyIfNull().Select(o => o.WithRemaining(o.Remaining - (float)frameTime.TotalSeconds)).ToArray();
                         return d;
                     });
                 }

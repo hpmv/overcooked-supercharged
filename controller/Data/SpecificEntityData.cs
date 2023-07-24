@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OrderController;
 
 namespace Hpmv {
     public struct SpecificEntityData {
@@ -20,6 +21,7 @@ namespace Hpmv {
         public float pilotRotationAngle;
         public int switchingIndex;
         public List<GameEntityRecord> stackContents;
+        public SpecificEntityData_KitchenFlowController kitchenFlowController;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -32,6 +34,7 @@ namespace Hpmv {
                 InteractingWith = interactingWith?.path?.ToProto(),
                 PilotRotationAngle = pilotRotationAngle,
                 SwitchingIndex = switchingIndex,
+                KitchenFlowController = kitchenFlowController.ToProto(),
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -86,6 +89,7 @@ namespace Hpmv {
                 pilotRotationAngle = data.PilotRotationAngle,
                 switchingIndex = data.SwitchingIndex,
                 stackContents = data.StackContents.Count == 0 ? null : data.StackContents.Select(item => item.FromProtoRef(context)).ToList(),
+                kitchenFlowController = data.KitchenFlowController?.FromProto(context) ?? default,
             };
         }
     }
@@ -125,12 +129,52 @@ namespace Hpmv {
         }
     }
 
+    public struct SpecificEntityData_KitchenFlowController {
+        public ServerOrderData[] activeOrders;
+        public int nextOrderId;
+        public int lastComboIndex;
+        public TimeSpan timeSinceLastOrder;
+        public TeamMonitor.TeamScoreStats teamScore;
+
+        public Save.SpecificEntityData_KitchenFlowController ToProto() {
+            var result = new Save.SpecificEntityData_KitchenFlowController {
+                NextOrderId = nextOrderId,
+                LastComboIndex = lastComboIndex,
+                TimeSinceLastOrder = timeSinceLastOrder.TotalMilliseconds,
+                TeamScore = teamScore == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(teamScore.ToBytes()),
+            };
+            if (activeOrders != null) {
+                foreach (var order in activeOrders) {
+                    result.ActiveOrders.Add(Google.Protobuf.ByteString.CopyFrom(order.ToBytes()));
+                }
+            }
+            return result;
+        }
+    }
+
+    public static class SpecificEntityData_KitchenFlowControllerFromProto {
+        public static SpecificEntityData_KitchenFlowController FromProto(this Save.SpecificEntityData_KitchenFlowController data, LoadContext context) {
+            return new SpecificEntityData_KitchenFlowController {
+                activeOrders = data.ActiveOrders.Select(order => new ServerOrderData().FromBytes(order.ToByteArray())).ToArray(),
+                nextOrderId = data.NextOrderId,
+                lastComboIndex = data.LastComboIndex,
+                timeSinceLastOrder = TimeSpan.FromMilliseconds(data.TimeSinceLastOrder),
+                teamScore = data.TeamScore.Length == 0 ? null : new TeamMonitor.TeamScoreStats().FromBytes(data.TeamScore.ToByteArray()),
+            };
+        }
+    }
+    
+
     public static class ListShallowCloning {
         public static List<T> ShallowCopyAndEnsureList<T>(this List<T> list) where T : class {
             if (list == null) {
                 return new List<T>();
             }
             return new List<T>(list);
+        }
+
+        public static T[] EmptyIfNull<T>(this T[] array) {
+            return array ?? new T[0];
         }
     }
 }

@@ -83,4 +83,21 @@ namespace SuperchargedPatch
             return new Hpmv.Quaternion { X = quaternion.x, Y = quaternion.y, Z = quaternion.z, W = quaternion.w };
         }
     }
+    public static class BitStreamHelpers
+    {
+        public static byte[] ToBytes(this Serialisable serialisable)
+        {
+            var bytes = new FastList<byte>();
+            var writer = new BitStream.BitStreamWriter(bytes);
+            serialisable.Serialise(writer);
+            return bytes.ToArray();
+        }
+
+        public static T FromBytes<T>(this T obj, byte[] bytes) where T : Serialisable
+        {
+            var reader = new BitStream.BitStreamReader(bytes);
+            obj.Deserialise(reader);
+            return obj;
+        }
+    }
 }

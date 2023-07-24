@@ -285,14 +285,26 @@ namespace SuperchargedPatch
             // {
             //     return "" + EntitySerialisationRegistry.GetEntry(c.gameObject).m_Header.m_uEntityID;
             // });
-            AddProviderFor<ServerPickupItemSwitcher>("pickup#", c =>
-            {
-                return "" + c.GetCurrentItemPrefabIndex();
-            });
-            AddProviderFor<ServerPlacementItemSwitcher>("place#", c =>
-            {
-                return "" + c.GetCurrentItemPrefabIndex();
-            });
+            // AddProviderFor<ServerPickupItemSwitcher>("pickup#", c =>
+            // {
+            //     return "" + c.GetCurrentItemPrefabIndex();
+            // });
+            // AddProviderFor<ServerPlacementItemSwitcher>("place#", c =>
+            // {
+            //     return "" + c.GetCurrentItemPrefabIndex();
+            // });
+            // AddProviderFor<ClientKitchenFlowControllerBase>("recipe", c =>
+            // {
+            //     var s = "";
+            //     var gui = c.GetMonitorForTeam(TeamID.One).OrdersController.GetGUI();
+            //     foreach (var widget in gui.GetActiveWidgets())
+            //     {
+            //         var animator = widget.m_widget.GetAnimator();
+            //         var info = animator.GetCurrentAnimatorStateInfo(1);
+            //         s += $"{info.nameHash}/{info.normalizedTime} ";
+            //     }
+            //     return s;
+            // });
         }
 
         public static void OnGUI()

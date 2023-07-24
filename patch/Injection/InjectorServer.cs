@@ -138,11 +138,6 @@ namespace Hpmv {
                         currentInput = new InputData();
                     }
                 }
-                if (currentInput.ResetOrderSeed != 0) {
-                    // TODO: revisit this; this is a hack right now.
-                    Console.WriteLine("Resetting random seed to " + currentInput.ResetOrderSeed);
-                    OrderRandom.myRandom = new Random(currentInput.ResetOrderSeed);
-                }
                 return currentInput;
             }
         }

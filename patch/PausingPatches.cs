@@ -24,4 +24,13 @@ namespace SuperchargedPatch
             return !Helpers.IsPaused();
         }
     }
+
+    [HarmonyPatch(typeof(ServerOrderControllerBase), "Update")]
+    public static class SkipServerOrderControllerBaseIfPaused
+    {
+        public static bool Prefix()
+        {
+            return !Helpers.IsPaused();
+        }
+    }
 }
