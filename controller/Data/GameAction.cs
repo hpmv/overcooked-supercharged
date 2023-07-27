@@ -31,6 +31,12 @@ namespace Hpmv {
                 case WaitAction waitAction:
                     result.Wait = waitAction.ToProto();
                     break;
+                case DropAction dropAction:
+                    result.Drop = dropAction.ToProto();
+                    break;
+                case PilotRotationAction pilotRotationAction:
+                    result.PilotRotation = pilotRotationAction.ToProto();
+                    break;
                 case WaitForCleanPlateAction waitForCleanPlateAction:
                     result.WaitForCleanPlate = waitForCleanPlateAction.ToProto();
                     break;
@@ -72,6 +78,10 @@ namespace Hpmv {
                     return action.Throw.FromProto(context);
                 case Save.GameAction.ActionOneofCase.Wait:
                     return action.Wait.FromProto();
+                case Save.GameAction.ActionOneofCase.Drop:
+                    return action.Drop.FromProto(context);
+                case Save.GameAction.ActionOneofCase.PilotRotation:
+                    return action.PilotRotation.FromProto(context);
                 case Save.GameAction.ActionOneofCase.WaitForCleanPlate:
                     return action.WaitForCleanPlate.FromProto(context);
                 case Save.GameAction.ActionOneofCase.WaitForDirtyPlate:

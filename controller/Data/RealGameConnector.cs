@@ -23,6 +23,7 @@ namespace Hpmv {
 
         public event Action OnFrameUpdate;
         public event Action OnConnectionTerminated;
+        public event Action OnStateChanged;
 
         public async void Start() {
             connector = new Connector(this);
@@ -170,10 +171,7 @@ namespace Hpmv {
             // earlier because we may have called ComputeInputForNextFrame in the middle and that
             // could affect start and end times of actions that affects UI layout.
             if (State == RealGameState.Running || State == RealGameState.AwaitingPause) {
-                var temp = OnFrameUpdate;
-                if (temp != null) {
-                    temp();
-                }
+                OnFrameUpdate?.Invoke();
             }
             
             // Finally, handle user requests to pause, resume, or warp.
@@ -210,7 +208,6 @@ namespace Hpmv {
                         }
                         break;
                     case RealGameStateRequestKind.Warp:
-                        Console.WriteLine($"Current state: {State}; frame is {output.FrameNumber}");
                         if (State != RealGameState.Warping) {
                             Console.WriteLine($"Unexpected state when handling warp; should be Warping; actual state: {State}");
                             currentRequest.Completed.SetResult(false);
@@ -245,6 +242,7 @@ namespace Hpmv {
                                 Console.WriteLine($"Requesting resume from frame {simulator.Frame}");
                                 inputs.RequestResume = true;
                                 State = RealGameState.AwaitingResume;
+                                simulator.ClearHistoryBeforeSimulation();
                             } else {
                                 currentRequest.Completed.SetResult(false);
                                 currentRequest = null;
@@ -263,26 +261,85 @@ namespace Hpmv {
                 }
             }
 
+            OnStateChanged?.Invoke();
+
             FramerateController.WaitTillNextFrame();
             return inputs;
         }
 
-        public Task<bool> RequestPause() {
+        public void RequestPause() {
+            if (RequestPending) {
+                Console.WriteLine("RequestPause: request already pending");
+                return;
+            }
+            if (State != RealGameState.Running) {
+                Console.WriteLine($"RequestPause: unexpected state {State}; expected Running");
+                return;
+            }
             var request = RealGameStateRequest.Pause();
             requests.Enqueue(request);
-            return request.Completed.Task;
         }
 
-        public Task RequestResume() {
+        public void RequestPauseAndWarp(int frame) {
+            if (RequestPending) {
+                Console.WriteLine("RequestPauseAndWarp: request already pending");
+                return;
+            }
+            if (State != RealGameState.Running) {
+                Console.WriteLine($"RequestPauseAndWarp: unexpected state {State}; expected Running");
+                return;
+            }
+            var request = RealGameStateRequest.Pause();
+            requests.Enqueue(request);
+            request = RealGameStateRequest.Warp(frame);
+            requests.Enqueue(request);
+        }
+
+        public void RequestResume() {
+            if (RequestPending) {
+                Console.WriteLine("RequestResume: request already pending");
+                return;
+            }
+            if (State != RealGameState.Paused) {
+                Console.WriteLine($"RequestResume: unexpected state {State}; expected Paused");
+                return;
+            }
             var request = RealGameStateRequest.Resume();
             requests.Enqueue(request);
-            return request.Completed.Task;
         }
 
-        public Task RequestWarp(int frame) {
+        public void RequestWarp(int frame) {
+            if (RequestPending) {
+                Console.WriteLine("RequestWarp: request already pending");
+                return;
+            }
+            if (State != RealGameState.Paused) {
+                Console.WriteLine($"RequestWarp: unexpected state {State}; expected Paused");
+                return;
+            }
             var request = RealGameStateRequest.Warp(frame);
             requests.Enqueue(request);
-            return request.Completed.Task;
+        }
+
+        public void RequestWarpAndResume(int frame) {
+            if (RequestPending) {
+                Console.WriteLine("RequestWarpAndResume: request already pending");
+                return;
+            }
+            if (State != RealGameState.Paused) {
+                Console.WriteLine($"RequestWarpAndResume: unexpected state {State}; expected Paused");
+                return;
+            }
+            var request = RealGameStateRequest.Warp(frame);
+            requests.Enqueue(request);
+            request = RealGameStateRequest.Resume();
+            requests.Enqueue(request);
+        }
+
+        public bool RequestPending {
+            get {
+                return currentRequest != null || requests.Count > 0;
+            }
         }
     }
 }

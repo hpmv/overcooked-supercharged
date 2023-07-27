@@ -30,8 +30,7 @@ namespace controller.Pages {
         private double EntityMenuX;
         private double EntityMenuY;
 
-        private BaseMatMenu[] Menu = new BaseMatMenu[2];
-        private bool[] EntityMenuOpen = { false, false };
+        private BaseMatMenu Menu;
         private List<GameEntityRecord> EntitiesForMenu = new List<GameEntityRecord>();
 
         private bool ShowControls { get; set; }
@@ -105,27 +104,19 @@ namespace controller.Pages {
             EntityMenuX = x / renderScale;
             EntityMenuY = y / renderScale;
             StateHasChanged();
-            await InvokeAsync(async () => {
-                if (EntityMenuOpen[0]) {
-                    EntityMenuOpen[0] = false;
-                    EntityMenuOpen[1] = true;
-                    await Menu[1].OpenAsync(EntityMenuAnchor);
-                } else {
-                    EntityMenuOpen[0] = true;
-                    EntityMenuOpen[1] = false;
-                    await Menu[0].OpenAsync(EntityMenuAnchor);
-                }
+            await InvokeAsync(() => {
+                Menu.OpenAsync(EntityMenuAnchor);
                 StateHasChanged();
             });
         }
 
-        private async Task HandleTemplateClick(ActionTemplate template) {
+        private void HandleTemplateClick(ActionTemplate template) {
             if (EditorState.SelectedChef != null && CanEdit) {
                 var frame = EditorState.ResimulationFrame();
                 EditorState.ApplyActionTemplate(template);
-                await OnActionAdded.InvokeAsync(frame);
+                OnActionAdded.InvokeAsync(frame);
             }
-            EntityMenuOpen[0] = EntityMenuOpen[1] = false;
+            Menu.CloseAsync();
         }
 
         [JSInvokable]

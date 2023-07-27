@@ -76,15 +76,15 @@ namespace controller.Pages {
         }
 
         [JSInvokable]
-        public async void HandleScheduleBackgroundClick(double x, double y) {
+        public void HandleScheduleBackgroundClick(double x, double y) {
             var frame = Math.Min(level.LastEmpiricalFrame, TimelineLayout.FrameFromOffset(y));
-            await NavigateToFrame(frame, true);
+            NavigateToFrame(frame, true);
         }
 
-        private async Task NavigateToFrame(int frame, bool clearSelection) {
+        private void NavigateToFrame(int frame, bool clearSelection) {
             if (realGameConnector != null) {
-                if (realGameConnector.State == RealGameState.Paused) {
-                    await realGameConnector.RequestWarp(frame);
+                if (realGameConnector.State == RealGameState.Paused && !realGameConnector.RequestPending) {
+                    realGameConnector.RequestWarp(frame);
                 } else {
                     // Don't honor frame navigation if we're in the middle of a simulation.
                     return;
@@ -99,35 +99,38 @@ namespace controller.Pages {
             StateHasChanged();
         }
 
-        public async Task HandleSelectAction(GameEntityRecord chef, int index, int frame) {
+        public void HandleSelectAction(GameEntityRecord chef, int index, int frame) {
             if (nodeSelector.IsSelecting) {
                 nodeSelector.Select(level.sequences.Actions[level.sequences.ChefIndexByChef[chef]][index]);
             } else {
+                if (!CanEdit) {
+                    return;
+                }
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
                 EditorState.SelectedChef = chef;
                 EditorState.SelectedActionIndex = index;
-                await NavigateToFrame(targetFrame, false);
+                NavigateToFrame(targetFrame, false);
             }
         }
 
-        public async Task HandleDeleteAction() {
+        public void HandleDeleteAction() {
             if (!CanEdit) {
                 return;
             }
             var frame = EditorState.ResimulationFrame();
             level.sequences.DeleteAction(EditorState.SelectedChef, EditorState.SelectedActionIndex);
-            await SimulateInResponseToEditorChange(frame);
+            SimulateInResponseToEditorChange(frame);
         }
 
         public bool CanEdit {
             get {
-                return realGameConnector == null || realGameConnector.State == RealGameState.Paused;
+                return realGameConnector == null || (realGameConnector.State == RealGameState.Paused && !realGameConnector.RequestPending);
             }
         }
 
-        public async Task OnDependenciesChanged() {
+        public void OnDependenciesChanged() {
             var frame = EditorState.ResimulationFrame();
-            await SimulateInResponseToEditorChange(frame);
+            SimulateInResponseToEditorChange(frame);
         }
 
         public EditorState EditorState = new EditorState();
@@ -144,7 +147,7 @@ namespace controller.Pages {
             level.pathDebug.Clear();
             realGameConnector = new RealGameConnector(level);
             realGameConnector.OnFrameUpdate += () => {
-                InvokeAsync(async () => {
+                InvokeAsync(() => {
                     EditorState.SelectedFrame = level.LastEmpiricalFrame;
                     TimelineLayout.DoLayout();
                     if (realGameConnector.State == RealGameState.Running) {
@@ -159,14 +162,16 @@ namespace controller.Pages {
                                 frameToStop = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? -1;
                             }
                             if (frameToStop != -1 && level.LastEmpiricalFrame >= frameToStop) {
-                                await realGameConnector.RequestPause();
                                 EditorState.SelectedFrame = frameToStop;
-                                await realGameConnector.RequestWarp(EditorState.SelectedFrame);
+                                realGameConnector.RequestPauseAndWarp(EditorState.SelectedFrame);
                             }
                         }
                     }
                     StateHasChanged();
                 });
+            };
+            realGameConnector.OnStateChanged += () => {
+                StateHasChanged();
             };
             realGameConnector.OnConnectionTerminated += () => {
                 InvokeAsync(() => {
@@ -177,21 +182,20 @@ namespace controller.Pages {
             realGameConnector.Start();
         }
 
-        private async Task PauseRealSimulation() {
-            if (realGameConnector == null) {
+        private void PauseRealSimulation() {
+            if (realGameConnector == null || realGameConnector.RequestPending) {
                 return;
             }
-            await realGameConnector.RequestPause();
+            realGameConnector.RequestPause();
             EditorState.SelectedActionIndex = -1;
             EditorState.SelectedChef = null;
         }
 
-        private async Task ResumeRealSimulation() {
-            if (realGameConnector == null) {
+        private void ResumeRealSimulation() {
+            if (realGameConnector == null || realGameConnector.RequestPending) {
                 return;
             }
-            realGameConnector.simulator.ClearHistoryBeforeSimulation();
-            await realGameConnector.RequestResume();
+            realGameConnector.RequestResume();
             EditorState.SelectedActionIndex = -1;
             EditorState.SelectedChef = null;
         }
@@ -259,11 +263,9 @@ namespace controller.Pages {
             return "";
         }
 
-        private async Task SimulateInResponseToEditorChange(int frame) {
+        private void SimulateInResponseToEditorChange(int frame) {
             if (realGameConnector != null) {
-                await realGameConnector.RequestWarp(frame);
-                realGameConnector.simulator.ClearHistoryBeforeSimulation();
-                await realGameConnector.RequestResume();
+                realGameConnector.RequestWarpAndResume(frame);
             }
         }
 
@@ -288,17 +290,17 @@ namespace controller.Pages {
             ["carnival32-four"] = typeof(Carnival32FourLevel),
         };
 
-        private async Task LoadLevel(string selectedLevel) {
-            var data = await File.ReadAllBytesAsync(selectedLevel);
+        private void LoadLevel(string selectedLevel) {
+            var data = File.ReadAllBytes(selectedLevel);
             var save = new Hpmv.Save.GameSetup();
             save.MergeFrom(data);
             UseLevel(save.FromProto());
         }
 
-        private async Task SaveLevel() {
+        private void SaveLevel() {
             var filePath = "Saves/" + SaveFileName + ".proto";
             var data = level.ToProto();
-            await File.WriteAllBytesAsync(filePath, data.ToByteArray());
+            File.WriteAllBytes(filePath, data.ToByteArray());
         }
 
         private void InitializeNewLevel(string selectedLevel) {

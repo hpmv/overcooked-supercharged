@@ -23,7 +23,7 @@
             </MatDialogContent>
             <MatDialogActions>
                 <MatButton OnClick="(e) => SaveDialogIsOpen = false">Cancel</MatButton>
-                <MatButton OnClick="async (e) => {await SaveLevel(); SaveDialogIsOpen = false;}">Save</MatButton>
+                <MatButton OnClick="(e) => {SaveLevel(); SaveDialogIsOpen = false;}">Save</MatButton>
             </MatDialogActions>
         </MatDialog>
         <MatIconButton
@@ -70,23 +70,24 @@
             <MatIconButton Icon="link_off" OnClick="(e) => StopRealSimulation()" />
             <MatIcon
                 Icon="@(RealGameStateToIcon(realGameConnector.State))"
+                title="@(realGameConnector.State.ToString())"
                 style="@("color: " + RealGameStateToColor(realGameConnector.State))"
                 class="toolbar-status-icon" />
         }
         @if (IsSimulationRunning()) {
-            <MatIconButton Icon="pause" OnClick="async (e) => await PauseRealSimulation()" />
+            <MatIconButton Icon="pause" OnClick="(e) => PauseRealSimulation()" />
         } else {
-            <MatIconButton Icon="play_arrow" Disabled=@(!IsSimulationPaused()) OnClick="async (e) => await ResumeRealSimulation()" />
+            <MatIconButton Icon="play_arrow" Disabled=@(!IsSimulationPaused()) OnClick="(e) => ResumeRealSimulation()" />
         }
         <div class="toolbar-divider"></div>
         <div class="toolbar-text toolbar-text-frame">@(EditorState.SelectedFrame)</div>
         <MatIconButton
             Icon="arrow_back_ios"
-            OnClick="async () => await NavigateToFrame(Math.Max(0, EditorState.SelectedFrame - 1), true)"
+            OnClick="() => NavigateToFrame(Math.Max(0, EditorState.SelectedFrame - 1), true)"
             Disabled="EditorState.SelectedFrame <= 0"/>
         <MatIconButton
             Icon="arrow_forward_ios"
-            OnClick="async () => await NavigateToFrame(Math.Min(EditorState.SelectedFrame + 1, level.LastEmpiricalFrame), true)"
+            OnClick="() => NavigateToFrame(Math.Min(EditorState.SelectedFrame + 1, level.LastEmpiricalFrame), true)"
             Disabled="EditorState.SelectedFrame >= level.LastEmpiricalFrame"/>
         @if (realGameConnector != null) {
             <div class="toolbar-divider"></div>
@@ -192,7 +193,7 @@
                                     string typeClass = "one-action-type-" + node.Action.GetType().Name;
                                     <div class="one-action @(stateClass) @(selectedClass) @(typeClass)"
                                         style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
-                                        @onclick="async () => await HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
+                                        @onclick="() => HandleSelectAction(sequences.Chefs[iCopy], indexCopy, node.Predictions.StartFrame ?? 0)">
                                         <div class="one-action-text">[@(node.Id)] @(node.Action.Describe())</div>
                                         @foreach (var dep in node.Deps) {
                                             var depNode = sequences.NodeById[dep];

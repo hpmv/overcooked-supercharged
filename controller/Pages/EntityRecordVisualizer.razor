@@ -19,6 +19,23 @@
         }
     </svg>
 
+    @{
+        var stationToRespawnTimers = new Dictionary<GameEntityRecord, List<TimeSpan>>();
+        foreach (var record in Level.entityRecords.FixedEntities) {
+            if (record.prefab.IsKitchenFlowController) {
+                var respawns = record.data[frame].plateRespawns;
+                if (respawns != null) {
+                    foreach (var (station, timer) in respawns) {
+                        if (!stationToRespawnTimers.ContainsKey(station)) {
+                            stationToRespawnTimers[station] = new List<TimeSpan>();
+                        }
+                        stationToRespawnTimers[station].Add(timer);
+                    }
+                }
+            }
+        }
+    }
+
     @foreach (var record in Level.entityRecords.GenAllEntities()) {
         if (record.existed[frame] && !record.displayName.Contains("Rigidbody") && !record.displayName.Contains("Content") && !record.prefab.Ignore && record.prefab.Name != "Dirty Plate") {
             var pos = record.position[frame].XZ();
@@ -32,6 +49,12 @@
                         string ingredientClass = "";
                         while (tempPrefab.Spawns.Count > 0) {
                             tempPrefab = tempPrefab.Spawns[0];
+                            if (tempPrefab.IsPickupItemSwitcher) {
+                                var index = record.data[frame].switchingIndex;
+                                if (index < tempPrefab.Spawns.Count) {
+                                    tempPrefab = tempPrefab.Spawns[index];
+                                }
+                            }
                         }
                         if (tempPrefab.IsIngredient) {
                             ingredientClass = "record-vis-ingredient-" + tempPrefab.IngredientId;
@@ -98,10 +121,10 @@
                             </div>
                         }
                     }
-                    @if (record.data[frame].throwableItem.IsFlying) {
+                    @if (data.throwableItem.IsFlying) {
                         <div class="record-vis-flying">▲</div>
                     }
-                    @if (record.prefab.CanContainIngredients && record.data[frame].contents is List<int> contents) {
+                    @if (record.prefab.CanContainIngredients && data.contents is List<int> contents) {
                         <div class="record-vis-ingredient-container">
                             @foreach (var ingredient in contents) {
                                 <div class="record-vis-ingredient record-vis-ingredient-@(ingredient)">
@@ -110,9 +133,9 @@
                             }
                         </div>
                     }
-                    @if (record.data[frame].plateRespawns is List<(GameEntityRecord station, TimeSpan timer)> timers) {
+                    @if (stationToRespawnTimers.ContainsKey(record)) {
                         <div class="record-vis-plate-respawn-timers">
-                            @foreach (var (station, timer) in timers) {
+                            @foreach (var timer in stationToRespawnTimers[record]) {
                                 <div class="record-vis-plate-respawn-timer">
                                     @(Math.Ceiling(timer.TotalSeconds))
                                 </div>
@@ -126,38 +149,33 @@
     <div @ref="EntityMenuAnchor" style="position: absolute; left: @(EntityMenuX)px; top: @(EntityMenuY)px;"></div>
 </div>
 </div>
-@for (var i = 0; i < 2; i++) {
-    var ii = i;
-    <MatMenu @ref="Menu[ii]">
-        @if (EntityMenuOpen[ii]) {
-            @foreach (var entity in EntitiesForMenu) {
-                var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
-                <MatListGroup>
-                    <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
-                    <MatList>
-                        @foreach (var template in actionTemplates) {
-                            <MatListItem OnClick="() => HandleTemplateClick(template)">
-                                <div style="margin-left: 20px">@(template.Describe())</div>
-                            </MatListItem>
-                        }
-                    </MatList>
-                </MatListGroup>
-            }
-            if (Level != null) {
-                var pos = InverseRender(new System.Numerics.Vector2((float)EntityMenuX, (float)EntityMenuY));
-                var actionTemplates = EditorState.GetActionTemplatesForPosition(pos);
-                
-                <MatListGroup>
-                    <MatListGroupSubHeader>Position @(pos)</MatListGroupSubHeader>
-                    <MatList>
-                        @foreach (var template in actionTemplates) {
-                            <MatListItem OnClick="() => HandleTemplateClick(template)">
-                                <div style="margin-left: 20px">@(template.Describe())</div>
-                            </MatListItem>
-                        }
-                    </MatList>
-                </MatListGroup>
-            }
-        }
-    </MatMenu>
-}
+<MatMenu @ref="Menu">
+    @foreach (var entity in EntitiesForMenu) {
+        var actionTemplates = EditorState.GetActionTemplatesForEntity(entity);
+        <MatListGroup>
+            <MatListGroupSubHeader>@(entity.displayName) [@(entity.path)]</MatListGroupSubHeader>
+            <MatList>
+                @foreach (var template in actionTemplates) {
+                    <MatListItem OnClick="() => HandleTemplateClick(template)">
+                        <div style="margin-left: 20px">@(template.Describe())</div>
+                    </MatListItem>
+                }
+            </MatList>
+        </MatListGroup>
+    }
+    @if (Level?.geometry != null) {
+        var pos = InverseRender(new System.Numerics.Vector2((float)EntityMenuX, (float)EntityMenuY));
+        var actionTemplates = EditorState.GetActionTemplatesForPosition(pos);
+        
+        <MatListGroup>
+            <MatListGroupSubHeader>Position @(pos)</MatListGroupSubHeader>
+            <MatList>
+                @foreach (var template in actionTemplates) {
+                    <MatListItem OnClick="() => HandleTemplateClick(template)">
+                        <div style="margin-left: 20px">@(template.Describe())</div>
+                    </MatListItem>
+                }
+            </MatList>
+        </MatListGroup>
+    }
+</MatMenu>

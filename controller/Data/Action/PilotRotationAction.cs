@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Google.Protobuf;
 
 namespace Hpmv {
     public class PilotRotationAction : GameAction {
@@ -58,6 +59,26 @@ namespace Hpmv {
                 ControllerInput = new DesiredControllerInput {
                     axes = movementAxes,
                 }
+            };
+        }
+
+        public new Save.PilotRotationAction ToProto()
+        {
+            return new Save.PilotRotationAction {
+                PilotRotationEntity = PilotRotationEntity.ToProto(),
+                TargetAngle = TargetAngle,
+                AngleAllowance = AngleAllowance,
+            };
+        }
+    }
+
+    public static class PilotRotationActionFromProto {
+        public static PilotRotationAction FromProto(this Save.PilotRotationAction action, LoadContext context)
+        {
+            return new PilotRotationAction {
+                PilotRotationEntity = action.PilotRotationEntity.FromProto(context),
+                TargetAngle = action.TargetAngle,
+                AngleAllowance = action.AngleAllowance,
             };
         }
     }

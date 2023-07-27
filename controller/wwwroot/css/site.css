@@ -471,26 +471,47 @@ html, body {
 .record-vis-type-chef-red,
 .record-vis-type-chef-green,
 .record-vis-type-chef-yellow,
-.record-vis-type-chef-blue
-{
-    width: 36px;
-    height: 36px;
-    border-radius: 18px;
-    border: 4px solid;
-    background-color: white;
-    z-index: 1;
+.record-vis-type-chef-blue {
+    width: 32px;
+    height: 32px;
+    color: transparent;
+    overflow: visible;
+    border: none;
+    background: none;
 }
 
-.record-vis-type-chef-red {
+.record-vis-type-chef-red::after,
+.record-vis-type-chef-green::after,
+.record-vis-type-chef-yellow::after,
+.record-vis-type-chef-blue::after
+{
+    content: "";
+    display: block;
+    box-sizing: border-box;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    border: 4px solid;
+    background-color: white;
+    color: transparent;
+    z-index: 1;
+    border-top-right-radius: 0px;
+    transform: rotate(-45deg);
+}
+
+.record-vis-type-chef-red::after {
     border-color: red;
 }
-.record-vis-type-chef-yellow {
+.record-vis-type-chef-yellow::after {
     border-color: rgb(224, 202, 0);
 }
-.record-vis-type-chef-green {
+.record-vis-type-chef-green::after {
     border-color: green;
 }
-.record-vis-type-chef-blue {
+.record-vis-type-chef-blue::after {
     border-color: blue;
 }
 
@@ -514,7 +535,8 @@ html, body {
     background-size: contain;
 }
 
-.record-vis-type-crate {
+.record-vis-type-crate,
+.record-vis-type-drink-dispenser {
     width: 46px;
     height: 46px;
     background-color: rgb(211, 191, 175);
@@ -532,8 +554,34 @@ html, body {
     z-index: 4;
 }
 
+.record-vis-type-fire-extinguisher {
+    border: 2px solid darkgray;
+    background-color: rgb(255, 205, 205);
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    z-index: 4;
+}
+
+.record-vis-type-board {
+    width: 46px;
+    height: 46px;
+    background-color: rgb(227, 229, 255);
+    z-index: 2;
+    background-size: contain;
+}
+
+.record-vis-type-flow-controller {
+    display: none;
+}
+
+.record-vis-type-counter {
+    color: transparent;
+}
+
 .record-vis-type-unknown {
-    color: white;
+    background-color: gray;
+    color: transparent;
 }
 
 .record-vis-ingredient-container {
@@ -598,6 +646,33 @@ html, body {
 }
 .record-vis-ingredient-262914 {
     background-image: url('../images/Bun_Icon-resources.assets-533.png');
+}
+.record-vis-ingredient-421028 {
+    background-image: url('../images/Chicken_Icon-resources.assets-235.png');
+}
+.record-vis-ingredient-12958 {
+    background-image: url('../images/Meat_Icon-resources.assets-375.png');
+}
+.record-vis-ingredient-16088 {
+    background-image: url('../images/Bun_Icon-resources.assets-533.png');
+}
+.record-vis-ingredient-419988 {
+    background-image: url('../images/Potato_Icon-resources.assets-532.png');
+}
+.record-vis-ingredient-442282 {
+    background-image: url('../images/Onion_Icon-resources.assets-488.png');
+}
+.record-vis-ingredient-509482 {
+    background-image: url('../images/Cheese_Icon-resources.assets-314.png');
+}
+.record-vis-ingredient-430608 {
+    background-image: url('../images/Drink01_Icon.png');
+}
+.record-vis-ingredient-430622 {
+    background-image: url('../images/Drink02_Icon.png');
+}
+.record-vis-ingredient-430630 {
+    background-image: url('../images/Drink03_Icon.png');
 }
 
 
@@ -949,4 +1024,16 @@ html, body {
 
 .debug-panel:last-child {
     flex: 1;
+}
+
+.mdc-menu-surface {
+    transition: none;
+}
+
+.mdc-menu-surface--animating-closed {
+    opacity: 1;
+}
+.mdc-menu-surface--animating-open {
+    opacity: 1;
+    transform: initial;
 }

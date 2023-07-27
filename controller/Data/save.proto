@@ -74,6 +74,12 @@ message DropAction {
     double angle_allowance = 2;
 }
 
+message PilotRotationAction {
+    EntityReference pilot_rotation_entity = 1;
+    float target_angle = 2;
+    float angle_allowance = 3;
+}
+
 message WaitAction {
     int32 num_frames = 1;
 }
@@ -124,6 +130,7 @@ message GameAction {
         ThrowAction throw = 103;
         DropAction drop = 109;
         WaitAction wait = 104;
+        PilotRotationAction pilot_rotation = 114;
         WaitForCleanPlateAction wait_for_clean_plate = 105;
         WaitForDirtyPlateAction wait_for_dirty_plate = 106;
         WaitForWashingProgressAction wait_for_washing_progress = 110;

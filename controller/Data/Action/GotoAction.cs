@@ -51,7 +51,7 @@ namespace Hpmv {
                 if (DASH_TIME - chefState.dashTimer < DASH_COOLDOWN) {
                     var dashT = (float)chefState.dashTimer / DASH_TIME;
                     var remainingDashDistance = 0.5f * (dashT - Math.Sin(dashT * Math.PI) / Math.PI) * DASH_SPEED * DASH_TIME;
-                    if (path.Count > 0 && remainingDashDistance > remainDistance && Vector2.Dot(chefForward, path[0]) > 0.999) {
+                    if (path.Count > 0 && remainingDashDistance > remainDistance && Vector2.Dot(chefForward, path[0]) > 0.9999) {
                         shouldRelyOnDashOnly = true;
                     }
                 } else {

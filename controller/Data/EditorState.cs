@@ -216,7 +216,7 @@ namespace Hpmv {
         }
 
         public string Describe() {
-            return $"Get {Record.prefab.Spawns[0].Name} from create";
+            return $"Get {Record.prefab.Spawns[0].Name} from crate";
         }
 
         public List<GameAction> GenerateActions(int frame) {
