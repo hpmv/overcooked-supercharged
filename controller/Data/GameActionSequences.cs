@@ -63,43 +63,23 @@ namespace Hpmv {
             return id;
         }
 
-        public void CleanTimingsAfterFrame(int frame) {
+        public void CleanTimingsOnOrAfterFrame(int frame) {
             foreach (var actions in Actions) {
                 foreach (var action in actions) {
-                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame > frame) {
+                    if (action.Predictions.StartFrame != null && action.Predictions.StartFrame >= frame) {
                         action.Predictions.StartFrame = null;
                     }
-                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame > frame) {
+                    if (action.Predictions.EndFrame != null && action.Predictions.EndFrame >= frame) {
                         action.Predictions.EndFrame = null;
                     }
                 }
             }
         }
 
-        public void FillSaneFutureTimings(int lastSimulatedFrame) {
-            foreach (var actions in Actions) {
-                var lastFrame = 0;
-                foreach (var action in actions) {
-                    if (action.Predictions.StartFrame == null) {
-                        action.Predictions.StartFrame = lastFrame;
-                    }
-                    lastFrame = action.Predictions.StartFrame ?? 0;
-
-                    if (action.Predictions.StartFrame <= lastSimulatedFrame && action.Predictions.EndFrame == null) {
-                        action.Predictions.EndFrame = lastSimulatedFrame + 1;
-                    }
-                    if (action.Predictions.EndFrame == null) {
-                        action.Predictions.EndFrame = lastFrame;
-                    }
-                    lastFrame = (action.Predictions.EndFrame ?? 0) + 1;
-                }
-            }
-
-        }
-
-        public void DeleteAction(GameEntityRecord chef, int index) {
-            var action = Actions[ChefIndexByChef[chef]][index];
-            Actions[ChefIndexByChef[chef]].RemoveAt(index);
+        public void DeleteAction((int chef, int index) selectedIndex) {
+            var (chef, index) = selectedIndex;
+            var action = Actions[chef][index];
+            Actions[chef].RemoveAt(index);
             NodeById.Remove(action.Id);
             foreach (var actions in Actions) {
                 foreach (var other in actions) {
@@ -108,18 +88,18 @@ namespace Hpmv {
             }
         }
 
-        public int InsertAction(GameEntityRecord chef, int beforeIndex, GameAction action) {
-            var chefIndex = ChefIndexByChef[chef];
+        public int InsertAction((int chef, int index) insertBefore, GameAction action) {
+            var (chef, index) = insertBefore;
             var id = NextId++;
             action.ActionId = id;
-            action.Chef = chef;
+            action.Chef = Chefs[chef];
             var node = new GameActionNode {
                 Id = id,
                 Action = action,
                 Deps = new List<int>(),
                 Predictions = new GameActionPredictions { }
             };
-            Actions[chefIndex].Insert(beforeIndex, node);
+            Actions[chef].Insert(index, node);
             NodeById[id] = node;
             return id;
         }

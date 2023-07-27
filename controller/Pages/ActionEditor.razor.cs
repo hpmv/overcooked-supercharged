@@ -62,13 +62,11 @@ namespace controller.Pages {
 
         private bool TargetProgressEdited => targetProgressEditing != null;
 
-        private async Task AddDependency() {
-            StateHasChanged();
-            var dep = await Selector.BeginSelect();
-            if (dep != null) {
+        private void AddDependency() {
+            Selector.BeginSelect((dep) => {
                 Node.Deps.Add(dep.Id);
-                await DependenciesChanged.InvokeAsync(false);
-            }
+                DependenciesChanged.InvokeAsync(false);
+            });
         }
 
         private void HandleDelete(int dep) {

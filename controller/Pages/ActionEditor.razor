@@ -65,6 +65,10 @@
                 <MatIconButton Icon="close" class="action-editor-dep-delete" OnClick="() => HandleDelete(dep)" Disabled="@(!CanEdit)" />
             </div>
         }
-        <button class="action-editor-deps-add" @onclick="AddDependency" disabled="@(!CanEdit)">Add Dependency</button>
+        @if (Selector.IsSelecting) {
+            <button class="action-editor-deps-add" @onclick="() => Selector.Cancel()">Cancel</button>
+        } else {
+            <button class="action-editor-deps-add" @onclick="AddDependency" disabled="@(!CanEdit)">Add Dependency</button>
+        }
     </div>
 </div>

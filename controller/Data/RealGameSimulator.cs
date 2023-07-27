@@ -22,25 +22,13 @@ namespace Hpmv {
 
         public void Reset() {
             FakeEntityRegistry.entityToTypes.Clear();
-            frame = 0;
-            depsRemaining.Clear();
-            inProgress.Clear();
             entityIdToRecord.Clear();
-            Stats.Clear();
-
-            setup.entityRecords.CleanRecordsAfterFrame(0);
             foreach (var entry in setup.entityRecords.FixedEntities) {
                 entityIdToRecord[entry.path.ids[0]] = entry;
             }
-
-            foreach (var (i, action) in Graph.actions) {
-                if (Graph.deps[i].Count == 0) {
-                    inProgress.Add(i);
-                    setup.sequences.NodeById[i].Predictions.StartFrame = frame;
-                } else {
-                    depsRemaining[i] = Graph.deps[i].Count;
-                }
-            }
+            frame = 0;
+            Stats.Clear();
+            ClearHistoryBeforeSimulation();
         }
 
         public void ClearHistoryBeforeSimulation() {
@@ -49,7 +37,9 @@ namespace Hpmv {
             inProgress.Clear();
 
             setup.entityRecords.CleanRecordsAfterFrame(frame);
-            setup.sequences.CleanTimingsAfterFrame(frame);
+            // Action timings >= frame must be cleared, not > frame, because when we're on frame N,
+            // the action processing for frame N is not yet done.
+            setup.sequences.CleanTimingsOnOrAfterFrame(frame);
             setup.inputHistory.CleanHistoryAfterFrame(frame);
             setup.LastEmpiricalFrame = Math.Min(setup.LastEmpiricalFrame, frame);
 
@@ -73,14 +63,13 @@ namespace Hpmv {
                 if (depsRemaining[i] == 0 && !completedActions.Contains(i)) {
                     inProgress.Add(i);
                     var predictions = setup.sequences.NodeById[i].Predictions;
-                    if (predictions.StartFrame == null || predictions.StartFrame >= frame) {
-                        // This is just for display. When we run these actions we'll give
-                        // them actual frames.
+                    if (predictions.StartFrame == null) {
+                        // If any action could start right here and it doesn't already have a start frame,
+                        // that means it should start exactly on this frame.
                         predictions.StartFrame = frame;
                     }
                 }
             }
-            Console.WriteLine($"In progress: {string.Join(',', inProgress)}");
         }
 
         /// Advance frame in response to in-game logical frame advance.
@@ -381,11 +370,15 @@ namespace Hpmv {
                 var spawner = entityIdToRecord[(int)sem.m_SpawnerHeader.m_uEntityID];
                 Console.WriteLine($"Spawning {sem.m_DesiredHeader.m_uEntityID}");
                 GameEntityRecord child = null;
+                var spawnedPrefab = spawner.prefab.Spawns[sem.m_SpawnableID];
                 if (spawner.nextSpawnId.Last() < spawner.spawned.Count) {
                     child = spawner.spawned[spawner.nextSpawnId.Last()];
+                    // It's possible that the previously recorded spawn was for a different
+                    // element, for spawners that have multiple spawns. So, reassign the
+                    // prefab.
+                    child.prefab = spawnedPrefab;
                 }
                 if (child == null) {
-                    var spawnedPrefab = spawner.prefab.Spawns[sem.m_SpawnableID];
                     child = new GameEntityRecord {
                         path = new EntityPath {
                             ids = spawner.path.ids.Append(spawner.spawned.Count).ToArray(),

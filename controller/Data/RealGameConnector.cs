@@ -43,7 +43,6 @@ namespace Hpmv {
 
         public void Stop() {
             cancellationTokenSource.Cancel();
-            setup.sequences.FillSaneFutureTimings(simulator.Frame);
         }
 
         public RealGameConnector(GameSetup level) {
@@ -57,10 +56,6 @@ namespace Hpmv {
 
         private void RestartLevel() {
             simulator.Reset();
-            setup.entityRecords.CleanRecordsAfterFrame(0);
-            setup.sequences.CleanTimingsAfterFrame(0);
-            setup.inputHistory.CleanHistoryAfterFrame(0);
-            setup.LastEmpiricalFrame = 0;
             State = RealGameState.AwaitingStart;
             OnFrameUpdate?.Invoke();
         }

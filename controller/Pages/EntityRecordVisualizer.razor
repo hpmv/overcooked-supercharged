@@ -48,12 +48,15 @@
                         var tempPrefab = record.prefab;
                         string ingredientClass = "";
                         while (tempPrefab.Spawns.Count > 0) {
-                            tempPrefab = tempPrefab.Spawns[0];
                             if (tempPrefab.IsPickupItemSwitcher) {
                                 var index = record.data[frame].switchingIndex;
                                 if (index < tempPrefab.Spawns.Count) {
                                     tempPrefab = tempPrefab.Spawns[index];
+                                } else {
+                                    tempPrefab = tempPrefab.Spawns[0];
                                 }
+                            } else {
+                                tempPrefab = tempPrefab.Spawns[0];
                             }
                         }
                         if (tempPrefab.IsIngredient) {

@@ -4,8 +4,7 @@ using System.Numerics;
 
 namespace Hpmv {
     public class EditorState {
-        public GameEntityRecord SelectedChef { get; set; }
-        public int SelectedActionIndex { get; set; }
+        public (int chef, int index)? SelectedActionIndex { get; set; }
         public int SelectedFrame { get; set; }
 
         public GameActionSequences Sequences { get; set; }
@@ -71,18 +70,30 @@ namespace Hpmv {
         }
 
         public void ApplyActionTemplate(ActionTemplate template) {
+            if (SelectedActionIndex == null) {
+                return;
+            }
             var generated = template.GenerateActions(SelectedFrame);
             foreach (var action in generated) {
-                Sequences.InsertAction(SelectedChef, SelectedActionIndex, action);
-                SelectedActionIndex++;
+                Sequences.InsertAction(SelectedActionIndex.Value, action);
+                SelectedActionIndex = (SelectedActionIndex.Value.chef, SelectedActionIndex.Value.index + 1);
             }
         }
 
-        public int ResimulationFrame() {
-            if (SelectedActionIndex == 0 || SelectedChef == null) {
+        public int ResimulationFrame(int lastEmpiricalFrame) {
+            if (SelectedActionIndex == null) {
                 return 0;
             }
-            return Sequences.Actions[Sequences.ChefIndexByChef[SelectedChef]][SelectedActionIndex - 1].Predictions.EndFrame ?? 0;
+            var (chef, index) = SelectedActionIndex.Value;
+            if (index == 0) {
+                return 0;
+            }
+            var action = Sequences.Actions[chef][index - 1];
+            if (action.Predictions.EndFrame != null) {
+                // Do we need the Math.Min? Well, we may as well be safe.
+                return Math.Min(lastEmpiricalFrame, action.Predictions.EndFrame.Value);
+            }
+            return lastEmpiricalFrame;
         }
     }
 

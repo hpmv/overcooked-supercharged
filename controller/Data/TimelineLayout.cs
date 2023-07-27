@@ -8,15 +8,15 @@ namespace Hpmv {
         public GameEntityRecords Records { get; set; }
 
         public double PixelsPerFrame { get; set; } = 2;
-        public int MinFrames { get; set; } = 10;
+        public int MinLayoutFrames { get; set; } = 10;
 
-        List<(int frame, int length)> FrameRifts = new List<(int, int)>();
-        public readonly List<(double margin, double height)> Rifts = new List<(double margin, double height)>();
-        public readonly List<(double offset, double height)> CriticalSections = new List<(double offset, double height)>();
+        List<(int frame, int length)> FrameRifts = new();
+        public readonly List<(double margin, double height, int frame)> Rifts = new();
+        public readonly List<(double offset, double height)> CriticalSections = new();
 
         public int FrameFromOffset(double offset) {
             double count = 0;
-            foreach (var (margin, height) in Rifts) {
+            foreach (var (margin, height, _) in Rifts) {
                 if (margin < offset) {
                     offset -= margin + height;
                     count += margin / PixelsPerFrame;
@@ -40,15 +40,13 @@ namespace Hpmv {
             return (frame + offset) * PixelsPerFrame;
         }
 
-        public void DoLayout() {
+        public void DoLayout(int lastEmpiricalFrame) {
             List<List<(int time, bool start, GameActionNode node, int column)>> allNodes =
                 Sequences.Actions.Select((list, column) => {
                     var result = new List<(int time, bool start, GameActionNode node, int column)>();
-                    var prevTime = 0;
                     foreach (var item in list) {
-                        var startTime = item.Predictions.StartFrame ?? prevTime;
-                        var endTime = item.Predictions.EndFrame ?? startTime;
-                        prevTime = endTime;
+                        var startTime = item.Predictions.StartFrame ?? lastEmpiricalFrame;
+                        var endTime = item.Predictions.EndFrame ?? lastEmpiricalFrame;
                         result.Add((startTime, true, item, column));
                         result.Add((endTime, false, item, column));
                     }
@@ -73,58 +71,78 @@ namespace Hpmv {
                 ptrs[next]++;
             }
 
-            List<(int frame, int length, int endingLayoutFrame)> rifts = new List<(int, int, int)>();
-            List<double> columnOffsets = Sequences.Chefs.Select(x => 0.0).ToList();
-            List<int> columnLastLayoutFrames = Sequences.Chefs.Select(x => 0).ToList();
-            double currentY = 0;
-            int currentFrame = 0;
-            int currentLayoutFrame = 0;
+            // The terminologies here are sensitive. "frame" means the actual time; "layout frame"
+            // means the number of frames we display on the screen. These are different because we
+            // add rifts in between if we don't have enough space to display the nodes.
+            List<(int frame, int startLayoutFrame, int numLayoutFrames)> rifts = new();
+            List<int> columnLastLayoutFrame = Sequences.Chefs.Select(x => 0).ToList();
             foreach (var (time, start, node, column) in merged) {
-                currentY += (time - currentFrame) * PixelsPerFrame;
-                currentLayoutFrame += time - currentFrame;
-                currentFrame = time;
                 if (start) {
-                    node.Predictions.LayoutTopFrame = currentFrame;
-                    node.Predictions.LayoutTopOffset = currentY;
-                    node.Predictions.LayoutTopMargin = currentY - columnOffsets[column];
+                    // The start layout frame is one of these cases:
+                    //  - If the start frame is after the last rift, then the start layout frame is
+                    //    simply the last rift's layout frame plus the number of frames in between.
+                    //  - If the start frame is equal to the frame of the last rift, then the start
+                    //    layout frame is either the start layout frame of the last rift, or the
+                    //    column's last layout frame, whichever is greater.
+                    // Note that it's not possible for the start frame to be earlier than the last
+                    // rift because we iterate in an order of increasing frame.
+                    var lastRift = rifts.LastOrDefault();
+                    int startLayoutFrame;
+                    if (time > lastRift.frame) {
+                        startLayoutFrame = lastRift.startLayoutFrame + lastRift.numLayoutFrames + time - lastRift.frame;
+                    } else {
+                        startLayoutFrame = Math.Max(columnLastLayoutFrame[column], lastRift.startLayoutFrame);
+                    }
+                    node.Predictions.LayoutTopFrame = time;
+                    node.Predictions.LayoutTopLayoutFrame = startLayoutFrame;
+                    node.Predictions.LayoutTopMargin = (startLayoutFrame - columnLastLayoutFrame[column]) * PixelsPerFrame;
                 } else {
-                    var frameLength = currentFrame - node.Predictions.LayoutTopFrame;
-                    var originalFrameLength = frameLength;
+                    var layoutFramesLength = time - node.Predictions.LayoutTopFrame;
+                    var availableExtension = 0;
                     for (int i = rifts.Count - 1; i >= 0; i--) {
-                        var (frame, length, endingLayoutFrame) = rifts[i];
-                        if (frame > node.Predictions.LayoutTopFrame) {
-                            frameLength += length;
-                        } else if (frame == node.Predictions.LayoutTopFrame) {
-                            var extensibleLength = endingLayoutFrame - columnLastLayoutFrames[column];
-                            frameLength += extensibleLength;
+                        var (frame, startLayoutFrame, numLayoutFrames) = rifts[i];
+                        if (frame < node.Predictions.LayoutTopFrame) {
+                            break;
+                        }
+                        if (frame < time) {
+                            // Calculate the length of the element that we're supposed to display so that the end of the element
+                            // lands at the correct frame. a Max is used here, so that if the element begins in the
+                            // middle of a rift, we don't count the rift layout frames before the start of the element.
+                            var startCountingFrom = Math.Max(startLayoutFrame, node.Predictions.LayoutTopLayoutFrame);
+                            layoutFramesLength += startLayoutFrame + numLayoutFrames - startCountingFrom;
+                        } else {
+                            // There is already a rift at the end frame. Allow the element to extend into the rift,
+                            // but once again don't take into account any layout frames before the start of the element.
+                            var startCountingFrom = Math.Max(startLayoutFrame, node.Predictions.LayoutTopLayoutFrame);
+                            availableExtension += startLayoutFrame + numLayoutFrames - startCountingFrom;
                         }
                     }
-                    if (frameLength > MinFrames) {
-                        frameLength = Math.Min(Math.Max(MinFrames, originalFrameLength), frameLength);
-                    }
-                    if (frameLength < MinFrames) {
-                        var extensionLength = MinFrames - frameLength;
-                        currentY += (MinFrames - frameLength) * PixelsPerFrame;
-                        currentLayoutFrame += MinFrames - frameLength;
-                        frameLength = MinFrames;
-                        if (rifts.Count > 0 && rifts.Last().frame == currentFrame) {
-                            var last = rifts.Last();
-                            extensionLength += last.length;
+                    if (layoutFramesLength + availableExtension >= MinLayoutFrames) {
+                        // If it's already possible to have MinFrames without creating additional rifts,
+                        // then just directly perform the layout.
+                        layoutFramesLength = Math.Max(layoutFramesLength, MinLayoutFrames);
+                    } else {
+                        // Otherwise, we need to create a rift.
+                        var riftStartLayoutFrame = node.Predictions.LayoutTopLayoutFrame + layoutFramesLength + availableExtension;
+                        layoutFramesLength = MinLayoutFrames;
+                        var riftEndLayoutFrame = node.Predictions.LayoutTopLayoutFrame + layoutFramesLength;
+                        if (rifts.Count > 0 && rifts.Last().frame == time) {
+                            // If the last rift exists at the same frame then merge into it.
+                            riftStartLayoutFrame = rifts.Last().startLayoutFrame;
                             rifts.RemoveAt(rifts.Count - 1);
                         }
-                        rifts.Add((currentFrame, extensionLength, currentLayoutFrame));
+                        rifts.Add((time, riftStartLayoutFrame, riftEndLayoutFrame - riftStartLayoutFrame));
                     }
-                    node.Predictions.LayoutHeight = currentY - node.Predictions.LayoutTopOffset;
-                    columnOffsets[column] = node.Predictions.LayoutTopOffset + node.Predictions.LayoutHeight;
-                    columnLastLayoutFrames[column] = currentLayoutFrame;
+                    columnLastLayoutFrame[column] = node.Predictions.LayoutTopLayoutFrame + layoutFramesLength;
+                    node.Predictions.LayoutHeight = layoutFramesLength * PixelsPerFrame;
                 }
             }
             Rifts.Clear();
             FrameRifts.Clear();
             int prevFrame = 0;
-            foreach (var (frame, length, _) in rifts) {
-                Rifts.Add(((frame - prevFrame) * PixelsPerFrame, length * PixelsPerFrame));
-                FrameRifts.Add((frame, length));
+            foreach (var (frame, _, numLayoutFrames) in rifts) {
+                Rifts.Add(((frame - prevFrame) * PixelsPerFrame, numLayoutFrames * PixelsPerFrame, frame));
+                FrameRifts.Add((frame, numLayoutFrames));
                 prevFrame = frame;
             }
 

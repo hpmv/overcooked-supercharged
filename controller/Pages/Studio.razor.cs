@@ -16,7 +16,7 @@ namespace controller.Pages {
 
         private ElementReference scheduleBackgroundRef;
         private DotNetObjectReference<Studio> thisRef;
-        private NodeSelector nodeSelector = new NodeSelector();
+        private NodeSelector nodeSelector;
         private MatIconButton LoadButton;
         private MatIconButton InitializeButton;
         private MatIconButton PatchPrefabButton;
@@ -38,16 +38,18 @@ namespace controller.Pages {
             TimelineLayout.Records = level.entityRecords;
             EditorState.Records = level.entityRecords;
             EditorState.Sequences = level.sequences;
-            EditorState.SelectedChef = null;
-            EditorState.SelectedActionIndex = -1;
+            EditorState.SelectedActionIndex = null;
             EditorState.SelectedFrame = 0;
             EditorState.Geometry = level.geometry;
             EditorState.MapByChef = level.mapByChef;
-            TimelineLayout.DoLayout();
+            TimelineLayout.DoLayout(level.LastEmpiricalFrame);
         }
 
         protected override void OnInitialized() {
             RefreshAvailableSaveFiles();
+            nodeSelector = new NodeSelector(() => {
+                StateHasChanged();
+            });
         }
 
         protected override void OnAfterRender(bool firstRender) {
@@ -71,7 +73,7 @@ namespace controller.Pages {
             realGameConnector.Stop();
             realGameConnector = null;
             EditorState.SelectedFrame = level.LastEmpiricalFrame;
-            TimelineLayout.DoLayout();
+            TimelineLayout.DoLayout(level.LastEmpiricalFrame);
             StateHasChanged();
         }
 
@@ -92,33 +94,31 @@ namespace controller.Pages {
             }
             EditorState.SelectedFrame = frame;
             if (clearSelection) {
-                EditorState.SelectedChef = null;
-                EditorState.SelectedActionIndex = 0;
+                EditorState.SelectedActionIndex = null;
             }
             level.pathDebug.Clear();
             StateHasChanged();
         }
 
-        public void HandleSelectAction(GameEntityRecord chef, int index, int frame) {
+        public void HandleSelectAction(int chef, int index, int frame) {
             if (nodeSelector.IsSelecting) {
-                nodeSelector.Select(level.sequences.Actions[level.sequences.ChefIndexByChef[chef]][index]);
+                nodeSelector.Select(level.sequences.Actions[chef][index]);
             } else {
                 if (!CanEdit) {
                     return;
                 }
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
-                EditorState.SelectedChef = chef;
-                EditorState.SelectedActionIndex = index;
+                EditorState.SelectedActionIndex = (chef, index);
                 NavigateToFrame(targetFrame, false);
             }
         }
 
         public void HandleDeleteAction() {
-            if (!CanEdit) {
+            if (!CanEdit || EditorState.SelectedActionIndex == null) {
                 return;
             }
-            var frame = EditorState.ResimulationFrame();
-            level.sequences.DeleteAction(EditorState.SelectedChef, EditorState.SelectedActionIndex);
+            var frame = EditorState.ResimulationFrame(level.LastEmpiricalFrame);
+            level.sequences.DeleteAction(EditorState.SelectedActionIndex.Value);
             SimulateInResponseToEditorChange(frame);
         }
 
@@ -129,7 +129,7 @@ namespace controller.Pages {
         }
 
         public void OnDependenciesChanged() {
-            var frame = EditorState.ResimulationFrame();
+            var frame = EditorState.ResimulationFrame(level.LastEmpiricalFrame);
             SimulateInResponseToEditorChange(frame);
         }
 
@@ -148,18 +148,21 @@ namespace controller.Pages {
             realGameConnector = new RealGameConnector(level);
             realGameConnector.OnFrameUpdate += () => {
                 InvokeAsync(() => {
-                    EditorState.SelectedFrame = level.LastEmpiricalFrame;
-                    TimelineLayout.DoLayout();
+                    if (!realGameConnector.RequestPending) {
+                        EditorState.SelectedFrame = level.LastEmpiricalFrame;
+                    }
+                    TimelineLayout.DoLayout(level.LastEmpiricalFrame);
                     if (realGameConnector.State == RealGameState.Running) {
-                        if (EditorState.SelectedActionIndex != -1) {
-                            var actions = level.sequences.Actions[level.sequences.ChefIndexByChef[EditorState.SelectedChef]];
+                        if (EditorState.SelectedActionIndex != null) {
+                            var (chef, index) = EditorState.SelectedActionIndex.Value;
+                            var actions = level.sequences.Actions[chef];
                             int frameToStop;
                             if (actions.Count == 0) {
                                 frameToStop = 0;
-                            } else if (EditorState.SelectedActionIndex >= actions.Count) {
+                            } else if (index >= actions.Count) {
                                 frameToStop = actions.Last().Predictions.EndFrame ?? -1;
                             } else {
-                                frameToStop = actions[EditorState.SelectedActionIndex].Predictions.StartFrame ?? -1;
+                                frameToStop = actions[index].Predictions.StartFrame ?? -1;
                             }
                             if (frameToStop != -1 && level.LastEmpiricalFrame >= frameToStop) {
                                 EditorState.SelectedFrame = frameToStop;
@@ -187,8 +190,7 @@ namespace controller.Pages {
                 return;
             }
             realGameConnector.RequestPause();
-            EditorState.SelectedActionIndex = -1;
-            EditorState.SelectedChef = null;
+            EditorState.SelectedActionIndex = null;
         }
 
         private void ResumeRealSimulation() {
@@ -196,8 +198,7 @@ namespace controller.Pages {
                 return;
             }
             realGameConnector.RequestResume();
-            EditorState.SelectedActionIndex = -1;
-            EditorState.SelectedChef = null;
+            EditorState.SelectedActionIndex = null;
         }
 
         private bool IsSimulationRunning() {

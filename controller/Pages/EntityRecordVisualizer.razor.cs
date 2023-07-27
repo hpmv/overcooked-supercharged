@@ -111,8 +111,8 @@ namespace controller.Pages {
         }
 
         private void HandleTemplateClick(ActionTemplate template) {
-            if (EditorState.SelectedChef != null && CanEdit) {
-                var frame = EditorState.ResimulationFrame();
+            if (EditorState.SelectedActionIndex != null && CanEdit) {
+                var frame = EditorState.ResimulationFrame(Level.LastEmpiricalFrame);
                 EditorState.ApplyActionTemplate(template);
                 OnActionAdded.InvokeAsync(frame);
             }
