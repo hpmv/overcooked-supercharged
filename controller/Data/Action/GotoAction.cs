@@ -78,7 +78,7 @@ namespace Hpmv {
             return $"Goto {DesiredPos}";
         }
 
-        public Save.GotoAction ToProto() {
+        public new Save.GotoAction ToProto() {
             return new Save.GotoAction {
                 Location = DesiredPos.ToProto(),
                 AllowedError = AllowedError,

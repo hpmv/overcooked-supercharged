@@ -148,7 +148,7 @@ namespace Hpmv {
             return CalculateGotoResult(subjectEntity, input);
         }
 
-        public Save.InteractAction ToProto() {
+        public new Save.InteractAction ToProto() {
             return new Save.InteractAction {
                 Subject = Subject.ToProto(),
                 Primary = Primary,

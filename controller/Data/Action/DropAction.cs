@@ -43,7 +43,7 @@ namespace Hpmv {
             };
         }
 
-        public Save.DropAction ToProto() {
+        public new Save.DropAction ToProto() {
             return new Save.DropAction {
                 Location = Location.ToProto(),
                 AngleAllowance = AngleAllowance

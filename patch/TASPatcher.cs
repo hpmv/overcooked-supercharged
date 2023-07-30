@@ -38,6 +38,7 @@ namespace SuperchargedPatch
         public void OnGUI()
         {
             DebugItemOverlay.OnGUI();
+            StateInvalidityManager.OnGUI();
         }
 
         public void OnDestroy()
@@ -46,6 +47,7 @@ namespace SuperchargedPatch
             Injector.Destroy();
             WarpHandler.Destroy();
             DebugItemOverlay.Destroy();
+            StateInvalidityManager.Destroy();
         }
     }
 }

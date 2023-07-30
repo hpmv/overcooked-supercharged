@@ -21,6 +21,10 @@ namespace Hpmv {
                 this.initialValue = value;
                 return;
             }
+            var last = Last();
+            if ((value == null && last == null) || value.Equals(last)) {
+                return;
+            }
             changes.Add((time, value));
         }
 

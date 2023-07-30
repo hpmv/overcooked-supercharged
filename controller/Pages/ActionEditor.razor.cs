@@ -22,7 +22,7 @@ namespace controller.Pages {
 
         private int? numFramesEditing;
         private float? targetAngleEditing;
-        private double? targetProgressEditing;
+        private string targetProgressEditing;
 
         private int NumFramesEditing {
             get => numFramesEditing ?? (Node.Action as WaitAction).NumFrames;
@@ -38,29 +38,29 @@ namespace controller.Pages {
 
         private bool TargetAngleEdited => targetAngleEditing != null;
 
-        private double TargetProgressEditing {
+        private string TargetProgressEditing {
             get {
                 if (targetProgressEditing != null) {
-                    return targetProgressEditing.Value;
+                    return targetProgressEditing;
                 }
                 if (Node.Action is WaitForWashingProgressAction wpa) {
-                    return wpa.WashingProgress;
+                    return wpa.WashingProgress.ToString();
                 }
                 if (Node.Action is WaitForChoppingProgressAction cpa) {
-                    return cpa.ChoppingProgress;
+                    return cpa.ChoppingProgress.ToString();
                 }
                 if (Node.Action is WaitForCookingProgressAction cpa2) {
-                    return cpa2.CookingProgress;
+                    return cpa2.CookingProgress.ToString();
                 }
                 if (Node.Action is WaitForMixingProgressAction mpa) {
-                    return mpa.MixingProgress;
+                    return mpa.MixingProgress.ToString();
                 }
-                return 0;
+                return "0";
             }
             set => targetProgressEditing = value;
         }
 
-        private bool TargetProgressEdited => targetProgressEditing != null;
+        private bool TargetProgressEdited => targetProgressEditing != null && float.TryParse(targetProgressEditing, out _);
 
         private void AddDependency() {
             Selector.BeginSelect((dep) => {

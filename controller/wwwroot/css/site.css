@@ -121,6 +121,7 @@ html, body {
     background-color: rgb(255, 0, 0);
     z-index: 10;
     opacity: 0.2;
+    pointer-events: none;
 }
 
 .timeline-critical-section {
@@ -218,7 +219,11 @@ html, body {
 .one-action-type-WaitForProgressAction,
 .one-action-type-WaitAction,
 .one-action-type-WaitForCookingProgressAction,
-.one-action-type-WaitForDirtyPlateAction {
+.one-action-type-WaitForDirtyPlateAction,
+.one-action-type-WaitForChoppingProgressAction,
+.one-action-type-WaitForMixingProgressAction,
+.one-action-type-WaitForCookingProgressAction,
+.one-action-type-WaitForWashingProgressAction {
     background-color: rgb(255, 235, 254);
     border-top: 1px solid rgb(255, 127, 255);
 }

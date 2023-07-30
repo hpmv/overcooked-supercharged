@@ -446,6 +446,13 @@ namespace Hpmv {
             }
         }
 
+        public void ApplyInvalidGameState(string reason) {
+            if (reason != null) {
+                Console.WriteLine($"Invalid game state: {reason}");
+            }
+            setup.entityRecords.InvalidStateReason.ChangeTo(reason, frame);
+        }
+
         public void ApplyChefUpdate(int chefId, ChefSpecificData chef) {
             if (chefId == 0) {
                 // Console.WriteLine(chef);

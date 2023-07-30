@@ -26,7 +26,7 @@
         <div class="action-editor-row">
             Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
             <button
-                @onclick="() => {wpa.WashingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                @onclick="() => {wpa.WashingProgress = float.Parse(TargetProgressEditing); DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
         </div>
     }
@@ -34,7 +34,7 @@
         <div class="action-editor-row">
             Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
             <button
-                @onclick="() => {cpa.ChoppingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                @onclick="() => {cpa.ChoppingProgress = float.Parse(TargetProgressEditing); DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
         </div>
     }
@@ -42,7 +42,7 @@
         <div class="action-editor-row">
             Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
             <button
-                @onclick="() => {cpa2.CookingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                @onclick="() => {cpa2.CookingProgress = float.Parse(TargetProgressEditing); DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
         </div>
     }
@@ -50,7 +50,7 @@
         <div class="action-editor-row">
             Target progress: <input @bind="TargetProgressEditing" @bind:event="oninput"/>
             <button
-                @onclick="() => {mpa.MixingProgress = TargetProgressEditing; DependenciesChanged.InvokeAsync(false); }"
+                @onclick="() => {mpa.MixingProgress = float.Parse(TargetProgressEditing); DependenciesChanged.InvokeAsync(false); }"
                 disabled="@(!CanEdit || !TargetProgressEdited)">Change</button>
         </div>
     }

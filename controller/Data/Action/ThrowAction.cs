@@ -44,7 +44,7 @@ namespace Hpmv {
             return default;
         }
 
-        public Save.ThrowAction ToProto() {
+        public new Save.ThrowAction ToProto() {
             return new Save.ThrowAction {
                 Location = Location.ToProto(),
                 Bias = Bias.ToProto(),

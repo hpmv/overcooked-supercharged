@@ -21,8 +21,7 @@ message Quaternion {
 }
 
 message CatchAction {
-    Vector2 facing_direction = 1;
-    string label = 2;
+    Vector2 facing_position = 1;
 }
 
 message EntityPath {

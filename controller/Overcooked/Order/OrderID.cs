@@ -31,6 +31,17 @@ namespace OrderController {
             return true;
         }
 
+        public override bool Equals(object obj)
+        {
+            return obj is OrderID iD &&
+                   m_id == iD.m_id;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(m_id);
+        }
+
         // Token: 0x04001FE6 RID: 8166
         private const int kBitsPerID = 8;
 

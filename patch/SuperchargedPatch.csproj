@@ -108,6 +108,7 @@
     <Compile Include="AlteredComponents\ServerCannonMod.cs" />
     <Compile Include="AlteredComponents\ServerCannonPlayerHandlerMod.cs" />
     <Compile Include="AlteredComponents\ServerCannonSessionInteractableMod.cs" />
+    <Compile Include="AlteredComponents\InvalidStatePatches.cs" />
     <Compile Include="AlteredComponents\ThrowableItemAuxMessage.cs" />
     <Compile Include="AlteredComponents\ThrowableItemPatches.cs" />
     <Compile Include="AlteredComponents\WarpableRoundData.cs" />
@@ -151,6 +152,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Extensions\ServerWorkableItemExt.cs" />
     <Compile Include="Extensions\ServerWorkstationExt.cs" />
+    <Compile Include="StateInvalidityManager.cs" />
     <Compile Include="TASLogicalButton.cs" />
     <Compile Include="TASPatcher.cs" />
     <Compile Include="UnrealTimePatch.cs" />

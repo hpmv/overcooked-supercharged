@@ -45,6 +45,7 @@ namespace SuperchargedPatch
             {
                 Helpers.Resume();
             }
+            StateInvalidityManager.PreventInvalidState = Injector.Server.CurrentInput.PreventInvalidState;
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrame();

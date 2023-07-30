@@ -118,6 +118,8 @@ namespace SuperchargedPatch
 
             // Flush one last time.
             FlushAllPendingBatchedMessages();
+
+            StateInvalidityManager.InvalidReason = warp.InvalidStateReason;
         }
 
         private void FlushAllPendingBatchedMessages()

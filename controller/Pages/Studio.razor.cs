@@ -153,7 +153,9 @@ namespace controller.Pages {
                     }
                     TimelineLayout.DoLayout(level.LastEmpiricalFrame);
                     if (realGameConnector.State == RealGameState.Running) {
-                        if (EditorState.SelectedActionIndex != null) {
+                        if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != null) {
+                            realGameConnector.RequestPause();
+                        } else if (EditorState.SelectedActionIndex != null) {
                             var (chef, index) = EditorState.SelectedActionIndex.Value;
                             var actions = level.sequences.Actions[chef];
                             int frameToStop;

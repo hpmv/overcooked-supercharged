@@ -42,6 +42,7 @@ namespace Hpmv {
                 EntityWarpSpec spec;
                 if (!currentRecordToEntityId.ContainsKey(record)) {
                     var spawningPath = record.prefab.SpawningPath;
+                    // TODO: This can be null for some reason, should fix.
                     var spawningPathEncoded = new List<int> {spawningPath.InitialFixedEntityId};
                     foreach (var spawnableId in spawningPath.SpawnableIds) {
                         spawningPathEncoded.Add(spawnableId);
@@ -244,6 +245,7 @@ namespace Hpmv {
                 warpSpec.Entities.Add(spec);
             }
             warpSpec.Frame = desiredFrame;
+            warpSpec.InvalidStateReason = records.InvalidStateReason[desiredFrame];
             // Console.WriteLine("WarpSpec dump:");
             // Console.WriteLine(JsonConvert.SerializeObject(warpSpec));
             return warpSpec;

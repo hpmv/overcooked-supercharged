@@ -18,6 +18,12 @@ public class OrderDefinitionNode {
         return AssembledDefinitionNode.Matching(this, _node as OrderDefinitionNode);
     }
 
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(m_platingPrefab, m_uID);
+    }
+
+
     // Token: 0x04002C75 RID: 11381
     public int m_platingPrefab = -1;
 

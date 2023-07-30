@@ -64,8 +64,10 @@ namespace Hpmv {
             var (gridX, gridY) = Geometry.CoordsToGridPosRounded(pos);
             templates.Add(new ThrowTowardsPositionActionTemplate(pos));
             templates.Add(new DropTowardsPositionActionTemplate(pos));
-            templates.Add(new GotoPosActionTemplate(gridX, gridY));
+            templates.Add(new GotoGridPosActionTemplate(gridX, gridY));
+            templates.Add(new GotoPosActionTemplate(pos));
             templates.Add(new WaitForFramesActionTemplate(5));
+            templates.Add(new CatchActionTemplate(pos));
             return templates;
         }
 
@@ -159,11 +161,11 @@ namespace Hpmv {
         }
     }
 
-    public class GotoPosActionTemplate : ActionTemplate {
+    public class GotoGridPosActionTemplate : ActionTemplate {
         public int GridX { get; set; }
         public int GridY { get; set; }
 
-        public GotoPosActionTemplate(int gridX, int gridY) {
+        public GotoGridPosActionTemplate(int gridX, int gridY) {
             GridX = gridX;
             GridY = gridY;
         }
@@ -176,6 +178,26 @@ namespace Hpmv {
             return new List<GameAction>{
                  new GotoAction{
                      DesiredPos = new GridPosLocationToken(GridX, GridY)}
+                 };
+        }
+    }
+
+    public class GotoPosActionTemplate : ActionTemplate {
+        public Vector2 Pos { get; set; }
+
+        public GotoPosActionTemplate(Vector2 pos)
+        {
+            Pos = pos;
+        }
+
+        public string Describe() {
+            return $"Goto position {Pos}";
+        }
+
+        public List<GameAction> GenerateActions(int frame) {
+            return new List<GameAction>{
+                 new GotoAction{
+                     DesiredPos = new LiteralLocationToken(Pos)}
                  };
         }
     }
@@ -471,6 +493,31 @@ namespace Hpmv {
                 new PilotRotationAction {
                     PilotRotationEntity = Entity.ReverseEngineerStableEntityReference(frame),
                     TargetAngle = Entity.data[frame].pilotRotationAngle,
+                }
+            };
+        }
+    }
+
+    public class CatchActionTemplate : ActionTemplate
+    {
+        public CatchActionTemplate(Vector2 pos)
+        {
+            Pos = pos;
+        }
+
+        public Vector2 Pos { get; set; }
+
+        public string Describe()
+        {
+            return "Catch towards " + Pos;
+        }
+
+        public List<GameAction> GenerateActions(int frame)
+        {
+            
+            return new List<GameAction> {
+                new CatchAction {
+                    FacingPosition = Pos,
                 }
             };
         }

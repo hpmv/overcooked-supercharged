@@ -80,7 +80,7 @@ namespace controller.Pages {
             CaptureMap parent;
             public Dictionary<int, string> posCache = new Dictionary<int, string>();
 
-            public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+            public Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
                 // TODO: fix.
                 // if (output.Items != null) {
                 //     foreach (var pos in output.Items) {
@@ -137,7 +137,7 @@ namespace controller.Pages {
                 if (pointsAdded) {
                     parent.StateHasChanged();
                 }
-                return new InputData();
+                return Task.FromResult(new InputData());
             }
         }
     }

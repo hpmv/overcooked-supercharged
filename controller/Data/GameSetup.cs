@@ -10,6 +10,7 @@ namespace Hpmv {
         public InputHistory inputHistory = new InputHistory();
         public Dictionary<int, List<Vector2>> pathDebug = new Dictionary<int, List<Vector2>>();
         public int LastEmpiricalFrame { get; set; }
+        public bool PreventInvalidState { get; set; } = false;
 
         public void RegisterChef(GameEntityRecord chef) {
             sequences.AddChef(chef);

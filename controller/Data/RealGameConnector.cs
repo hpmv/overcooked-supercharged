@@ -60,7 +60,7 @@ namespace Hpmv {
             OnFrameUpdate?.Invoke();
         }
 
-        public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+        public Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
             // We do this step first because this is needed to deserialize further game messages.
             // See FakeEntityRegistry for more information.
             //
@@ -110,6 +110,7 @@ namespace Hpmv {
                             simulator.ApplyGameUpdate(item);
                         }
                     }
+                    simulator.ApplyInvalidGameState(output.InvalidStateReason);
                 }
 
                 if (output.EntityRegistry != null) {
@@ -142,6 +143,7 @@ namespace Hpmv {
             } else {
                 inputs.NextFrame = simulator.Frame;
             }
+            inputs.PreventInvalidState = setup.PreventInvalidState;
 
             if (State == RealGameState.Warping) {
                 var entityIdToPathWhenWarping = new Dictionary<int, EntityPath>();
@@ -259,7 +261,7 @@ namespace Hpmv {
             OnStateChanged?.Invoke();
 
             FramerateController.WaitTillNextFrame();
-            return inputs;
+            return Task.FromResult(inputs);
         }
 
         public void RequestPause() {

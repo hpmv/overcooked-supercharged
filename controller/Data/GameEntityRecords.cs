@@ -7,6 +7,8 @@ namespace Hpmv {
         public readonly List<GameEntityRecord> FixedEntities = new List<GameEntityRecord>();
         public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new Dictionary<GameEntityRecord, Versioned<ControllerState>>();
         public readonly Dictionary<int, Vector3> CapturedInitialPositions = new Dictionary<int, Vector3>();
+        // TODO: serialize this. It's not that important though.
+        public readonly Versioned<string> InvalidStateReason = new Versioned<string>(null);
 
         // Represents whether the game is currently in a critical section, where warping in or out of
         // the critical section is not correctly implemented and should be avoided.
@@ -111,6 +113,7 @@ namespace Hpmv {
                 state.Value.RemoveAllAfter(frame);
             }
             CriticalSectionForWarping.RemoveAllAfter(frame);
+            InvalidStateReason.RemoveAllAfter(frame);
         }
 
         public void CalculateSpawningPathsForPrefabs() {

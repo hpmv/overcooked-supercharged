@@ -2,11 +2,10 @@
 
 namespace Hpmv {
     public class CatchAction : GameAction {
-        public Vector2 FacingDirection { get; set; }
-        public string Label { get; set; } = "?";
+        public Vector2 FacingPosition { get; set; }
 
         public override string Describe() {
-            return $"Catch {Label}";
+            return $"Catch towards {FacingPosition}";
         }
 
         public override GameActionOutput Step(GameActionInput input) {
@@ -14,20 +13,21 @@ namespace Hpmv {
                 return new GameActionOutput { Done = true };
             }
             var chefForward = Chef.rotation[input.Frame].ToForwardVector();
-            if (Vector2.Dot(chefForward, FacingDirection) < 0.85) {
+            var chefPosition = Chef.position[input.Frame].XZ();
+            var facingDirection = Vector2.Normalize(FacingPosition - chefPosition);
+            if (Vector2.Dot(chefForward, facingDirection) < 0.85) {
                 return new GameActionOutput {
                     ControllerInput = new DesiredControllerInput {
-                        axes = new Vector2(FacingDirection.X, -FacingDirection.Y)
+                        axes = new Vector2(facingDirection.X, -facingDirection.Y)
                     }
                 };
             }
             return default;
         }
 
-        public Save.CatchAction ToProto() {
+        public new Save.CatchAction ToProto() {
             return new Save.CatchAction {
-                FacingDirection = FacingDirection.ToProto(),
-                Label = Label
+                FacingPosition = FacingPosition.ToProto(),
             };
         }
     }
@@ -35,8 +35,7 @@ namespace Hpmv {
     public static class CatchActionFromProto {
         public static CatchAction FromProto(this Save.CatchAction action) {
             return new CatchAction {
-                FacingDirection = action.FacingDirection.FromProto(),
-                Label = action.Label
+                FacingPosition = action.FacingPosition.FromProto(),
             };
         }
     }

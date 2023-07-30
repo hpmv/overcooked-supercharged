@@ -84,6 +84,7 @@ struct OutputData {
     6: bool lastFramePaused,
     7: bool nextFramePaused,
     8: i32 frameNumber,
+    9: optional string invalidStateReason,
 }
 
 struct EntityIdOrRef {
@@ -241,6 +242,7 @@ struct WarpSpec {
     1: list<EntityWarpSpec> entities,
     2: list<i32> entitiesToDelete,
     3: i32 frame,
+    4: string invalidStateReason,
 }
 
 struct InputData {
@@ -251,6 +253,7 @@ struct InputData {
     5: optional bool requestPause,
     6: optional bool requestResume,
     7: optional i32 nextFrame,
+    8: bool preventInvalidState,
 }
 
 service Interceptor {

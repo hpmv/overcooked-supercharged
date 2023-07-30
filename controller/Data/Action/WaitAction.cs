@@ -15,7 +15,7 @@ namespace Hpmv {
             return default;
         }
 
-        public Save.WaitAction ToProto() {
+        public new Save.WaitAction ToProto() {
             return new Save.WaitAction {
                 NumFrames = NumFrames
             };

@@ -19,9 +19,7 @@
 * [Done] WashingStation progress and plate count (simple).
 * [Done] ServerKitchenFlowController - all the parameters for orders, score.
 * [Done] Game timer.
+* [TODO] ServerCookingStation - this is different from ServerCookingHandler.
 
 Deferred:
 * [TODO] Teleportation. Seems like two manual animations (math lerps) being coded into some coroutines. Should be able to unroll all of these without too much difficulty.
-
-Bugs:
-* [TODO] Sometimes after restarting the level the UI stops updating.

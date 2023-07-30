@@ -60,6 +60,10 @@
             OnClick="(e) => ShowRecordDebug = !ShowRecordDebug"
             class="@(ShowRecordDebug ? "debug-button-on" : "")" />
         <MatIconButton
+            Icon="health_and_safety"
+            OnClick="(e) => level.PreventInvalidState = !level.PreventInvalidState"
+            class="@(level.PreventInvalidState ? "debug-button-on" : "")" />
+        <MatIconButton
             Icon="speaker_notes"
             OnClick="(e) => ShowMessageStats = !ShowMessageStats"
             class="@(ShowMessageStats ? "debug-button-on" : "")" />
@@ -149,7 +153,7 @@
                     var hideTimelineSelectionLine = false;
                 }
                 <div class="schedule-background" @ref="scheduleBackgroundRef"
-                    style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastEmpiricalFrame) + 100)px">
+                    style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastEmpiricalFrame + 1) + 400)px">
                     @foreach (var rift in TimelineLayout.Rifts) {
                         var selectionClass = "";
                         if (rift.frame == EditorState.SelectedFrame && EditorState.SelectedFrame != level.LastEmpiricalFrame) {

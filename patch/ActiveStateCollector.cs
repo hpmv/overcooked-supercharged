@@ -125,6 +125,7 @@ namespace SuperchargedPatch
                 }
             }
             currentFrameData.FrameNumber = FrameNumber;
+            currentFrameData.InvalidStateReason = StateInvalidityManager.InvalidReason;
         }
 
         private static ChefSpecificData CollectDataForChef(ClientPlayerControlsImpl_Default cpci)
