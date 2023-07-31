@@ -22,6 +22,8 @@ namespace Hpmv {
         public int switchingIndex;
         public List<GameEntityRecord> stackContents;
         public SpecificEntityData_KitchenFlowController kitchenFlowController;
+        public bool isCookingStationTurnedOn;
+        public bool isCookingStationCooking;
 
         public Save.SpecificEntityData ToProto() {
             var result = new Save.SpecificEntityData {
@@ -35,6 +37,8 @@ namespace Hpmv {
                 PilotRotationAngle = pilotRotationAngle,
                 SwitchingIndex = switchingIndex,
                 KitchenFlowController = kitchenFlowController.ToProto(),
+                IsCookingStationTurnedOn = isCookingStationTurnedOn,
+                IsCookingStationCooking = isCookingStationCooking,
             };
             if (contents != null) {
                 result.Contents.AddRange(contents);
@@ -90,6 +94,8 @@ namespace Hpmv {
                 switchingIndex = data.SwitchingIndex,
                 stackContents = data.StackContents.Count == 0 ? null : data.StackContents.Select(item => item.FromProtoRef(context)).ToList(),
                 kitchenFlowController = data.KitchenFlowController?.FromProto(context) ?? default,
+                isCookingStationTurnedOn = data.IsCookingStationTurnedOn,
+                isCookingStationCooking = data.IsCookingStationCooking,
             };
         }
     }

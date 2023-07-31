@@ -412,7 +412,7 @@ namespace Hpmv {
 
 
             var MIXER = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, IsMixer = true, IsCookingHandler = true, CanBeAttached = true };
-            var MIXER_STATION = new PrefabRecord("Mixer Station", "mixer-station") { IsAttachStation = true }; 
+            var MIXER_STATION = new PrefabRecord("Mixer Station", "mixer-station") { IsAttachStation = true, IsCookingStation = true }; 
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(3, MIXER),
                 entityRecords.RegisterKnownObject(14, MIXER_STATION));
@@ -421,7 +421,7 @@ namespace Hpmv {
                 entityRecords.RegisterKnownObject(18, MIXER_STATION));
 
             var FRIER = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, IsCookingHandler = true, CanBeAttached = true };
-            var FRIER_STATION = new PrefabRecord("Frier Station", "frier-station") { IsAttachStation = true };
+            var FRIER_STATION = new PrefabRecord("Frier Station", "frier-station") { IsAttachStation = true, IsCookingStation = true };
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(5, FRIER),
                 entityRecords.RegisterKnownObject(15, FRIER_STATION));
@@ -430,7 +430,7 @@ namespace Hpmv {
                 entityRecords.RegisterKnownObject(20, FRIER_STATION));
 
             var POT = new PrefabRecord("Pot", "pot") { MaxProgress = 12, CanContainIngredients = true, IsCookingHandler = true, CanBeAttached = true };
-            var HEAT_STATION = new PrefabRecord("Heat Station", "heat-station") { IsAttachStation = true };
+            var HEAT_STATION = new PrefabRecord("Heat Station", "heat-station") { IsAttachStation = true, IsCookingStation = true };
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(7, POT),
                 entityRecords.RegisterKnownObject(19, HEAT_STATION));

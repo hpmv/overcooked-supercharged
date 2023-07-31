@@ -125,6 +125,7 @@
     <Compile Include="Extensions\RecipeFlowGUIExt.cs" />
     <Compile Include="Extensions\ServerAttachStationExt.cs" />
     <Compile Include="Extensions\ServerCookingAndMixingHandlerExt.cs" />
+    <Compile Include="Extensions\ServerCookingStationExt.cs" />
     <Compile Include="Extensions\ServerIngredientContainerExt.cs" />
     <Compile Include="Extensions\ServerKitchenFlowControllerBaseExt.cs" />
     <Compile Include="Extensions\ServerOrderControllerBaseExt.cs" />
@@ -138,6 +139,7 @@
     <Compile Include="Extensions\ServerTriggerColourCycleExt.cs" />
     <Compile Include="Extensions\ServerWashingStationExt.cs" />
     <Compile Include="Extensions\ThrowableItemExt.cs" />
+    <Compile Include="gen-csharp\Hpmv\CookingStationWarpData.cs" />
     <Compile Include="gen-csharp\Hpmv\KitchenControllerWarpData.cs" />
     <Compile Include="gen-csharp\Hpmv\PlatePendingReturnData.cs" />
     <Compile Include="gen-csharp\Hpmv\PlateReturnControllerWarpData.cs" />

@@ -291,7 +291,7 @@ namespace Hpmv {
             var FIRE_EXTINGUISHER = new PrefabRecord("Fire Extinguisher", "fire-extinguisher") { CanBeAttached = true };
             entityRecords.RegisterKnownObject(6, FIRE_EXTINGUISHER);
 
-            var HEAT_STATION = new PrefabRecord("Heat Station", "heat-station") { IsAttachStation = true };
+            var HEAT_STATION = new PrefabRecord("Heat Station", "heat-station") { IsAttachStation = true, IsCookingStation = true };
             var PAN = new PrefabRecord("Pan", "pan") { MaxProgress = 12, CanContainIngredients = true, IsCookingHandler = true, CanBeAttached = true };
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(7, PAN),
@@ -304,7 +304,7 @@ namespace Hpmv {
                 entityRecords.RegisterKnownObject(15, HEAT_STATION));
             
             var FRIER = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, IsCookingHandler = true, CanBeAttached = true };
-            var FRIER_STATION = new PrefabRecord("Frier Station", "frier-station") { IsAttachStation = true };
+            var FRIER_STATION = new PrefabRecord("Frier Station", "frier-station") { IsAttachStation = true, IsCookingStation = true };
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(4, FRIER),
                 entityRecords.RegisterKnownObject(13, FRIER_STATION));

@@ -545,6 +545,23 @@ namespace SuperchargedPatch
                 sch.SetCookingProgressAndForceStateChangedCallback((float)handler.Progress);
             }
 
+            if (entity.m_GameObject.GetComponent<ServerCookingStation>() is ServerCookingStation scs)
+            {
+                var thrift = entityThrift.CookingStation;
+                if (thrift == null)
+                {
+                    Log($"[WARP] Failed to warp CookingStation: no CookingStation specific data");
+                    return;
+                }
+                scs.SetIsTurnedOn(thrift.IsTurnedOn);
+                scs.SetIsCooking(thrift.IsCooking);
+                scs.SendServerEvent(new CookingStationMessage
+                {
+                    m_isTurnedOn = thrift.IsTurnedOn,
+                    m_isCooking = thrift.IsCooking,
+                });
+            }
+
             if (entity.m_GameObject.GetComponent<ServerMixingHandler>() is ServerMixingHandler smh)
             {
                 var handler = entityThrift.MixingHandler;

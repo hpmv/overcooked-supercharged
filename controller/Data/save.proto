@@ -228,6 +228,8 @@ message SpecificEntityData {
     int32 switching_index = 15;
     repeated EntityPath stack_contents = 17;
     SpecificEntityData_KitchenFlowController kitchen_flow_controller = 19;
+    bool is_cooking_station_turned_on = 20;
+    bool is_cooking_station_cooking = 21;
 }
 
 message ChefState {

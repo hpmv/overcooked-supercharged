@@ -209,6 +209,9 @@ namespace Hpmv {
                     entityRecord.mixingProgress.ChangeTo(msm.m_mixingProgress, frame);
                 } else if (payload is CookingStateMessage csm) {
                     entityRecord.cookingProgress.ChangeTo(csm.m_cookingProgress, frame);
+                } else if (payload is CookingStationMessage csm2) {
+                    specificData.isCookingStationTurnedOn = csm2.m_isTurnedOn;
+                    specificData.isCookingStationCooking = csm2.m_isCooking;
                 } else if (payload is PhysicalAttachMessage pam) {
                     if (specificData.attachmentParent != null) {
                         specificData.attachmentParent.data.AppendWith(frame, d => {

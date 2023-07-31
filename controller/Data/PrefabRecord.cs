@@ -27,6 +27,7 @@ namespace Hpmv {
         public bool IsTerminal { get; set; }
         public bool IsMixer { get; set; }
         public bool IsCookingHandler { get; set; }
+        public bool IsCookingStation { get; set; }
         public bool IsPickupItemSwitcher { get; set; }
         public bool HasTriggerColorCycle { get; set; }
         public bool IsKitchenFlowController { get; set; }

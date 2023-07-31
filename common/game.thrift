@@ -197,6 +197,11 @@ struct KitchenControllerWarpData {
     6: binary teamScore,
 }
 
+struct CookingStationWarpData {
+    1: bool isTurnedOn,
+    2: bool isCooking,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -235,6 +240,7 @@ struct EntityWarpSpec {
     25: optional StackWarpData stack,
     26: optional WashingStationWarpData washingStation,
     27: optional KitchenControllerWarpData kitchenController,
+    28: optional CookingStationWarpData cookingStation,
     // TODO: more entity types
 }
 

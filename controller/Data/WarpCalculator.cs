@@ -182,6 +182,12 @@ namespace Hpmv {
                         Progress = record.cookingProgress[desiredFrame],
                     };
                 }
+                if (record.prefab.IsCookingStation) {
+                    spec.CookingStation = new CookingStationWarpData {
+                        IsTurnedOn = data.isCookingStationTurnedOn,
+                        IsCooking = data.isCookingStationCooking,
+                    };
+                }
                 if (record.prefab.CanContainIngredients) {
                     spec.IngredientContainer = new IngredientContainerWarpData {
                         MsgData = data.rawGameEntityData,
