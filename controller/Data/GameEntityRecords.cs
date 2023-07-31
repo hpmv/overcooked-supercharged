@@ -1,9 +1,11 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 
-namespace Hpmv {
+namespace Hpmv
+{
     public class GameEntityRecords {
+        public readonly List<PrefabRecord> Prefabs = new List<PrefabRecord>();
+        public readonly Dictionary<PrefabRecord, int> PrefabToIndex = new Dictionary<PrefabRecord, int>();
         public readonly List<GameEntityRecord> FixedEntities = new List<GameEntityRecord>();
         public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new Dictionary<GameEntityRecord, Versioned<ControllerState>>();
         public readonly Dictionary<int, Vector3> CapturedInitialPositions = new Dictionary<int, Vector3>();
@@ -42,14 +44,18 @@ namespace Hpmv {
             return item;
         }
 
-        public GameEntityRecord RegisterKnownObject(int entityId) {
-            var prefab = new PrefabRecord("", "unknown") { IsAttachStation = true };
-            var pos = CapturedInitialPositions[entityId];
-            CapturedInitialPositions.Remove(entityId);
-            return RegisterKnownObject(prefab.Name, prefab.ClassName, entityId, pos, prefab);
+        private void AddPrefabIfNotExists(PrefabRecord prefab) {
+            foreach (var spawn in prefab.Spawns) {
+                AddPrefabIfNotExists(spawn);
+            }
+            if (!PrefabToIndex.ContainsKey(prefab)) {
+                PrefabToIndex[prefab] = Prefabs.Count;
+                Prefabs.Add(prefab);
+            }
         }
 
         public GameEntityRecord RegisterKnownObject(int entityId, PrefabRecord prefab) {
+            AddPrefabIfNotExists(prefab);
             var name = prefab.Name;
             var className = prefab.ClassName;
             var pos = CapturedInitialPositions[entityId];
@@ -58,6 +64,7 @@ namespace Hpmv {
         }
 
         private GameEntityRecord RegisterKnownObject(string name, string className, int entityId, Vector3 pos, PrefabRecord prefab) {
+            AddPrefabIfNotExists(prefab);
             var record = new GameEntityRecord {
                 displayName = name,
                 className = className,
@@ -84,12 +91,14 @@ namespace Hpmv {
         }
 
         public void RegisterOtherInitialObjects() {
+            var unknownPrefab = new PrefabRecord("", "unknown");
             foreach (var entry in CapturedInitialPositions) {
-                RegisterKnownObject(entry.Key);
+                RegisterKnownObject(entry.Key, unknownPrefab);
             }
         }
 
         public GameEntityRecord RegisterChef(string name, int entityId, PrefabRecord prefab) {
+            AddPrefabIfNotExists(prefab);
             var record = new GameEntityRecord {
                 displayName = name,
                 className = prefab.ClassName,
@@ -132,8 +141,11 @@ namespace Hpmv {
 
         public Save.GameEntityRecords ToProto() {
             var result = new Save.GameEntityRecords();
+            foreach (var prefab in Prefabs) {
+                result.Prefabs.Add(prefab.ToProto(this));
+            }
             foreach (var entity in GenAllEntities()) {
-                result.AllRecords.Add(entity.ToProto());
+                result.AllRecords.Add(entity.ToProto(this));
             }
             foreach (var (chef, controller) in Chefs) {
                 result.Controllers[chef.path.ids[0]] = controller.ToProto();

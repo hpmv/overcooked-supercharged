@@ -62,6 +62,10 @@ message InteractAction {
     bool expect_spawn = 5;
 }
 
+message PickupClosestAction {
+    string prefab_name = 1;
+}
+
 message ThrowAction {
     LocationToken location = 1;
     Vector2 bias = 2;
@@ -126,6 +130,7 @@ message GameAction {
         CatchAction catch = 100;
         GotoAction goto = 101;
         InteractAction interact = 102;
+        PickupClosestAction pickup_closest = 115;
         ThrowAction throw = 103;
         DropAction drop = 109;
         WaitAction wait = 104;
@@ -306,7 +311,7 @@ message SpawningPath {
 message PrefabRecord {
     string name = 1;
     string class_name = 2;
-    repeated PrefabRecord spawns = 3;
+    repeated int32 spawns_indices = 3;
     SpawningPath spawning_path = 21;
     bool can_use = 4;
     bool is_crate = 5;
@@ -338,7 +343,7 @@ message GameEntityRecord {
     EntityPath path = 1;
     string display_name = 2;
     string class_name = 3;
-    PrefabRecord prefab = 4;
+    int32 prefab_index = 21;
     EntityPath spawner = 13;
     repeated EntityPath spawned = 14;
     VersionedInt next_spawn_id = 5;
@@ -358,6 +363,7 @@ message GameEntityRecord {
 
 
 message GameEntityRecords {
+    repeated PrefabRecord prefabs = 4;
     repeated GameEntityRecord all_records = 1;
     map<int32, VersionedControllerState> controllers = 2;
     VersionedInt critical_section_for_warping = 3;

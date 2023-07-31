@@ -1,9 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace Hpmv {
+namespace Hpmv
+{
     public class PrefabRecord {
         public string Name { get; set; }
         public string ClassName { get; set; }
@@ -40,7 +40,7 @@ namespace Hpmv {
             ClassName = className;
         }
 
-        public Save.PrefabRecord ToProto() {
+        public Save.PrefabRecord ToProto(GameEntityRecords records) {
             var result = new Save.PrefabRecord {
                 Name = Name,
                 ClassName = ClassName,
@@ -70,7 +70,7 @@ namespace Hpmv {
                 Ignore = Ignore,
             };
             foreach (var prefab in Spawns) {
-                result.Spawns.Add(prefab.ToProto());
+                result.SpawnsIndices.Add(records.PrefabToIndex[prefab]);
             }
             result.OccupiedGridPoints.AddRange(OccupiedGridPoints.Select(x => x.ToProto()));
             return result;
@@ -88,9 +88,9 @@ namespace Hpmv {
     }
 
     public static class PrefabRecordFromProto {
-        public static PrefabRecord FromProto(this Save.PrefabRecord record) {
+        public static PrefabRecord FromProto(this Save.PrefabRecord record, LoadContext context) {
             return new PrefabRecord(record.Name, record.ClassName) {
-                Spawns = record.Spawns.Select(s => s.FromProto()).ToList(),
+                Spawns = record.SpawnsIndices.Select(s => context.Records.Prefabs[s]).ToList(),
                 SpawningPath = record.SpawningPath?.FromProto(),
                 CanUse = record.CanUse,
                 IsCrate = record.IsCrate,

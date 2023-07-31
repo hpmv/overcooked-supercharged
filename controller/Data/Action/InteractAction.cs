@@ -1,7 +1,7 @@
-using System;
 using System.Numerics;
 
-namespace Hpmv {
+namespace Hpmv
+{
     public class InteractAction : GameAction {
         public IEntityReference Subject { get; set; }
         public bool Primary { get; set; } = true;

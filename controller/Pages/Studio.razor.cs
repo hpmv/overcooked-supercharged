@@ -287,8 +287,6 @@ namespace controller.Pages {
 
         private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type> {
             ["carnival31-four"] = typeof(Carnival31FourLevel),
-            ["campfire14-two"] = typeof(Campture14TwoLevel),
-            ["horde13-two"] = typeof(Horde13TwoLevel),
             ["carnival34-four"] = typeof(Carnival34FourLevel),
             ["carnival32-four"] = typeof(Carnival32FourLevel),
         };
@@ -316,27 +314,38 @@ namespace controller.Pages {
             var stock = Activator.CreateInstance(initializer) as GameSetup;
             var dict = new Dictionary<string, PrefabRecord>();
 
-            Queue<PrefabRecord> queue = new Queue<PrefabRecord>();
-            foreach (var record in stock.entityRecords.GenAllEntities()) {
-                queue.Enqueue(record.prefab);
-            }
-
-            while (queue.Count > 0) {
-                var rec = queue.Dequeue();
-                foreach (var spawn in rec.Spawns) {
-                    queue.Enqueue(spawn);
+            var prefabs = stock.entityRecords.Prefabs;
+            foreach (var prefab in prefabs) {
+                if (dict.ContainsKey(prefab.Name)) {
+                    Console.WriteLine("Error: duplicate prefab name: {0}, patching aborted.", prefab.Name);
+                    return;
                 }
-                dict[rec.ClassName] = rec;
-                Console.WriteLine($"{rec.ClassName}");
+                dict[prefab.Name] = prefab;
             }
-
+            if (level.entityRecords.Prefabs.Count != stock.entityRecords.Prefabs.Count) {
+                Console.WriteLine("Error: different number of prefabs: stock = {0}, current = {1}, patching aborted.",
+                    stock.entityRecords.Prefabs.Count, level.entityRecords.Prefabs.Count);
+                return;
+            }
 
             foreach (var entity in level.entityRecords.GenAllEntities()) {
                 var prefab = entity.prefab;
-                if (dict.ContainsKey(prefab.ClassName)) {
-                    var val = dict[prefab.ClassName];
-                    entity.prefab = val;
+                if (!dict.ContainsKey(prefab.Name)) {
+                    Console.WriteLine("Error: prefab {0} not found in stock, patching aborted.", prefab.Name);
+                    return;
                 }
+            }
+
+            level.entityRecords.Prefabs.Clear();
+            level.entityRecords.Prefabs.AddRange(stock.entityRecords.Prefabs);
+            level.entityRecords.PrefabToIndex.Clear();
+            for (int i = 0; i < level.entityRecords.Prefabs.Count; i++) {
+                level.entityRecords.PrefabToIndex[level.entityRecords.Prefabs[i]] = i;
+            }
+
+            foreach (var entity in level.entityRecords.GenAllEntities()) {
+                var prefab = entity.prefab;
+                entity.prefab = dict[prefab.ClassName];
             }
         }
     }

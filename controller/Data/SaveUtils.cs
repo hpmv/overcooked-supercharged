@@ -226,12 +226,17 @@ namespace Hpmv {
         }
 
         public void Load(Save.GameEntityRecords records) {
+            foreach (var prefab in records.Prefabs) {
+                var prefabObj = prefab.FromProto(this);
+                Records.PrefabToIndex[prefabObj] = Records.Prefabs.Count;
+                Records.Prefabs.Add(prefabObj);
+            }
             foreach (var record in records.AllRecords) {
                 var obj = new GameEntityRecord {
                     path = record.Path.FromProto(),
                     displayName = record.DisplayName,
                     className = record.ClassName,
-                    prefab = record.Prefab.FromProto(),
+                    prefab = Records.Prefabs[record.PrefabIndex],
                 };
                 PathToRecord[record.Path.FromProto().ToString()] = obj;
                 if (obj.path.ids.Length == 1) {

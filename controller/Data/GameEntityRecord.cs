@@ -28,12 +28,12 @@ namespace Hpmv {
         public Versioned<double> cookingProgress = new Versioned<double>(0);
         public Versioned<double> mixingProgress = new Versioned<double>(0);
 
-        public Save.GameEntityRecord ToProto() {
+        public Save.GameEntityRecord ToProto(GameEntityRecords context) {
             var result = new Save.GameEntityRecord {
                 Path = path.ToProto(),
                 DisplayName = displayName,
                 ClassName = className,
-                Prefab = prefab.ToProto(),
+                PrefabIndex = context.PrefabToIndex[prefab],
                 Spawner = spawner?.path?.ToProto(),
                 NextSpawnId = nextSpawnId.ToProto(),
                 SpawnOwner = spawnOwner.ToProto(),

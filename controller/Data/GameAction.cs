@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 
-namespace Hpmv {
+namespace Hpmv
+{
 
     public abstract class GameAction {
         public int ActionId { get; set; }
@@ -24,6 +24,9 @@ namespace Hpmv {
                     break;
                 case InteractAction interactAction:
                     result.Interact = interactAction.ToProto();
+                    break;
+                case PickupClosestAction pickupClosestAction:
+                    result.PickupClosest = pickupClosestAction.ToProto();
                     break;
                 case ThrowAction throwAction:
                     result.Throw = throwAction.ToProto();
@@ -74,6 +77,8 @@ namespace Hpmv {
                     return action.Goto.FromProto(context);
                 case Save.GameAction.ActionOneofCase.Interact:
                     return action.Interact.FromProto(context);
+                case Save.GameAction.ActionOneofCase.PickupClosest:
+                    return action.PickupClosest.FromProto(context);
                 case Save.GameAction.ActionOneofCase.Throw:
                     return action.Throw.FromProto(context);
                 case Save.GameAction.ActionOneofCase.Wait:

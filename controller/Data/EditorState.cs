@@ -18,20 +18,24 @@ namespace Hpmv {
             if (data.attachmentParent != null && data.attachmentParent.chefState != null) {
                 return templates;
             }
-            templates.Add(new ThrowTowardsActionTemplate(entity));
             if (entity.prefab.CanUse || entity.prefab.IsCannon) {
                 templates.Add(new UseItemActionTemplate(entity));
             }
             if (entity.prefab.IsCrate) {
                 templates.Add(new GetFromCrateActionTemplate(entity));
-            } else {
+            }
+            if (data.attachmentParent == null) {
+                templates.Add(new ThrowTowardsActionTemplate(entity));
                 templates.Add(new PickupItemActionTemplate(entity));
+                templates.Add(new PlaceItemActionTemplate(entity));
+                templates.Add(new PrepareToInteractActionTemplate(entity));
+                if (entity.prefab.CanBeAttached) {
+                    templates.Add(new PickupClosestActionTemplate(entity));
+                }
             }
             if (entity.prefab.IsCannon) {
                 templates.Add(new PilotRotationActionTemplate(entity));
             }
-            templates.Add(new PlaceItemActionTemplate(entity));
-            templates.Add(new PrepareToInteractActionTemplate(entity));
             if (entity.prefab.Name == "Dirty Plate Spawner") {
                 templates.Add(new WaitForDirtyPlateActionTemplate(entity, 1));
                 templates.Add(new WaitForDirtyPlateActionTemplate(entity, 2));
@@ -47,7 +51,7 @@ namespace Hpmv {
             if (entity.prefab.IsWashingStation) {
                 templates.Add(new WaitForWashingProgressActionTemplate(entity));
             }
-            if (entity.prefab.IsChoppable) {
+            if (entity.prefab.IsChoppable && data.attachmentParent != null && data.attachmentParent.prefab.IsBoard) {
                 templates.Add(new WaitForChoppingProgressActionTemplate(entity));
             }
             if (entity.prefab.IsCookingHandler) {
@@ -518,6 +522,30 @@ namespace Hpmv {
             return new List<GameAction> {
                 new CatchAction {
                     FacingPosition = Pos,
+                }
+            };
+        }
+    }
+
+    public class PickupClosestActionTemplate : ActionTemplate
+    {
+        public PickupClosestActionTemplate(GameEntityRecord entity)
+        {
+            Entity = entity;
+        }
+
+        public GameEntityRecord Entity { get; set; }
+
+        public string Describe()
+        {
+            return "Pickup closest " + Entity.prefab.Name;
+        }
+
+        public List<GameAction> GenerateActions(int frame)
+        {
+            return new List<GameAction> {
+                new PickupClosestAction {
+                    PrefabName = Entity.prefab.Name,
                 }
             };
         }

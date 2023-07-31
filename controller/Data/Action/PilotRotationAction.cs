@@ -1,8 +1,8 @@
 using System;
 using System.Numerics;
-using Google.Protobuf;
 
-namespace Hpmv {
+namespace Hpmv
+{
     public class PilotRotationAction : GameAction {
         public IEntityReference PilotRotationEntity { get; set; }
         public float TargetAngle { get; set; }
