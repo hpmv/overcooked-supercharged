@@ -21,9 +21,13 @@
 
     @{
         var stationToRespawnTimers = new Dictionary<GameEntityRecord, List<TimeSpan>>();
+        var activeOrders = new OrderController.ServerOrderData[0];
+        var futureOrders = new List<FutureOrder>();
+
         foreach (var record in Level.entityRecords.FixedEntities) {
             if (record.prefab.IsKitchenFlowController) {
-                var respawns = record.data[frame].plateRespawns;
+                var data = record.data[frame];
+                var respawns = data.plateRespawns;
                 if (respawns != null) {
                     foreach (var (station, timer) in respawns) {
                         if (!stationToRespawnTimers.ContainsKey(station)) {
@@ -31,6 +35,12 @@
                         }
                         stationToRespawnTimers[station].Add(timer);
                     }
+                }
+                if (data.kitchenFlowController.activeOrders != null) {
+                    activeOrders = data.kitchenFlowController.activeOrders;
+                }
+                if (data.kitchenFlowController.futureOrders != null) {
+                    futureOrders = data.kitchenFlowController.futureOrders;
                 }
             }
         }
@@ -149,6 +159,30 @@
             </div>
         }
     }
+
+    <div class="entity-record-renderer-order-list">
+        @for (int i = 0; i < futureOrders.Count; i++) {
+            var activeOrder = i < activeOrders.Length ? activeOrders[i] : null;
+            var futureOrder = futureOrders[i];
+            var futureClass = activeOrder == null ? "one-order-future" : "";
+            <div class="order-list-one-order @(futureClass)">
+                <div class="order-list-one-order-index">@(futureOrder.Index)</div>
+                <div class="order-list-one-order-recipe">
+                    @foreach (var ingredient in futureOrder.Order) {
+                        <div class="order-list-one-order-recipe-ingredient record-vis-ingredient-@(ingredient)"></div>
+                    }
+                </div>
+                @if (activeOrder != null) {
+                    var ratio = activeOrder.Remaining / activeOrder.Lifetime;
+                    var displayClass = ratio < 1.0f/3 ? "remaining-time-red" : ratio < 2.0f/3 ? "remaining-time-yellow" : "remaining-time-green";
+                    <div class="order-list-one-order-remaining-time @(displayClass)">
+                        @(Math.Round(activeOrder.Remaining))s
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
     <div @ref="EntityMenuAnchor" style="position: absolute; left: @(EntityMenuX)px; top: @(EntityMenuY)px;"></div>
 </div>
 </div>

@@ -965,7 +965,7 @@ html, body {
     flex: 1;
     flex-direction: column;
     align-items: stretch;
-    max-width: 1000px;
+    max-width: 1200px;
 }
 
 .right-side-content {
@@ -1055,4 +1055,68 @@ html, body {
 .mdc-menu-surface--animating-open {
     opacity: 1;
     transform: initial;
+}
+
+.entity-record-renderer-order-list {
+    position: absolute;
+    width: 200px;
+    padding-left: 10px;
+    top: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.order-list-one-order {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgb(175, 209, 229);
+    padding: 4px 4px;
+}
+
+.order-list-one-order.one-order-future {
+    opacity: 0.5;
+}
+
+.order-list-one-order-index {
+    margin-left: 3px;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    line-height: 22px;
+    background-color: white;
+    text-align: center;
+    border-radius: 10px;
+}
+
+.order-list-one-order-recipe {
+    flex: 1;
+    margin-left: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.order-list-one-order-recipe-ingredient {
+    width: 24px;
+    height: 24px;
+    background-size: contain;
+}
+
+.order-list-one-order-remaining-time {
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.remaining-time-green {
+    color: green;
+}
+
+.remaining-time-red {
+    color: red;
+}
+
+.remaining-time-yellow {
+    color: rgb(224, 202, 0);
 }

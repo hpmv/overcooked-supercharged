@@ -65,6 +65,7 @@ namespace Hpmv {
 
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.ThrowableItemAux, () => new ThrowableItemAuxMessage());
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.PlateReturnControllerAux, () => new PlateReturnControllerAuxMessage());  // MODDED
+            SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.RoundDataAux, () => new RoundDataAuxMessage());
 
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntitySynchronisation, () => new EntitySynchronisationMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityEvent, () => new EntityEventMessage());

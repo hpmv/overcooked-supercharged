@@ -365,6 +365,17 @@ namespace Hpmv {
                             break;
                         }
                     }
+                } else if (payload is RoundDataAuxMessage rdam) {
+                    ref var data = ref specificData.kitchenFlowController;
+                    var futureOrders = new List<FutureOrder>();
+                    for (int i = 0; i < rdam.recipes.Length; i++) {
+                        var order = rdam.recipes[i];
+                        futureOrders.Add(new FutureOrder(
+                            order.Flatten().ToList(),
+                            i + rdam.currentIndex
+                        ));
+                    }
+                    data.futureOrders = futureOrders;
                 }
                 entityRecord.data.ChangeTo(specificData, frame);
             };

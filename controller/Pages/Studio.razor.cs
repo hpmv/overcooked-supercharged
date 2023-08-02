@@ -322,11 +322,6 @@ namespace controller.Pages {
                 }
                 dict[prefab.Name] = prefab;
             }
-            if (level.entityRecords.Prefabs.Count != stock.entityRecords.Prefabs.Count) {
-                Console.WriteLine("Error: different number of prefabs: stock = {0}, current = {1}, patching aborted.",
-                    stock.entityRecords.Prefabs.Count, level.entityRecords.Prefabs.Count);
-                return;
-            }
 
             foreach (var entity in level.entityRecords.GenAllEntities()) {
                 var prefab = entity.prefab;
@@ -345,7 +340,7 @@ namespace controller.Pages {
 
             foreach (var entity in level.entityRecords.GenAllEntities()) {
                 var prefab = entity.prefab;
-                entity.prefab = dict[prefab.ClassName];
+                entity.prefab = dict[prefab.Name];
             }
         }
     }

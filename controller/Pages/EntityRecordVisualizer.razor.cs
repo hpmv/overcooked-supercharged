@@ -37,12 +37,12 @@ namespace controller.Pages {
 
         private Vector2 Render(Vector2 point) {
             var pos = Level.geometry.CoordsToGridPos(point);
-            pos += new Vector2(1, 1);
+            pos += new Vector2(5, 1);
             return pos * SCALE;
         }
 
         private Vector2 InverseRender(Vector2 pos) {
-            return Level.geometry.GridPosToCoords(pos / SCALE - new Vector2(1, 1));
+            return Level.geometry.GridPosToCoords(pos / SCALE - new Vector2(5, 1));
         }
 
         private int SvgWidth {
@@ -50,7 +50,7 @@ namespace controller.Pages {
                 if (Level?.geometry == null) {
                     return Width;
                 }
-                return (int)((Level.geometry.size.X + 2) / 1.2 * SCALE);
+                return (int)((Level.geometry.size.X / 1.2 + 6) * SCALE);
             }
         }
 
@@ -59,7 +59,7 @@ namespace controller.Pages {
                 if (Level?.geometry == null) {
                     return Width;
                 }
-                return (int)((Level.geometry.size.Y + 2) / 1.2 * SCALE);
+                return (int)((Level.geometry.size.Y / 1.2 + 2) * SCALE);
             }
         }
 
@@ -68,7 +68,7 @@ namespace controller.Pages {
                 if (Level?.geometry == null) {
                     return 1;
                 }
-                return Width / (Math.Max(Level.geometry.size.Y + 2, Level.geometry.size.X + 2) * SCALE / 1.2f);
+                return Width * 1.0f / SvgWidth;
             }
         }
 

@@ -1,12 +1,8 @@
 ﻿using BepInEx;
-using BepInEx.Harmony;
 using HarmonyLib;
 using Hpmv;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace SuperchargedPatch
 {
@@ -17,7 +13,7 @@ namespace SuperchargedPatch
         private static Harmony patcher;
         public void Awake()
         {
-            patcher = new HarmonyLib.Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
+            patcher = new Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll(Assembly.GetExecutingAssembly());
             foreach (var patched in Harmony.GetAllPatchedMethods()) {
                 Console.WriteLine("Patched: " + patched.FullDescription());
@@ -32,7 +28,7 @@ namespace SuperchargedPatch
 
         public void LateUpdate()
         {
-            ServerInterceptionPatches.LateUpdate();
+            ControllerHandler.LateUpdate();
         }
 
         public void OnGUI()

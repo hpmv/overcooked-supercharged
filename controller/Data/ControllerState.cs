@@ -5,10 +5,10 @@ using System.Numerics;
 namespace Hpmv {
     public struct ControllerState {
         private static TimeSpan AXIS_SPEED = TimeSpan.FromMilliseconds(50);
-        private static TimeSpan BUTTON_MIN_HOLD = TimeSpan.FromMilliseconds(40);
-        private static TimeSpan BUTTON_COOLDOWN = TimeSpan.FromMilliseconds(70);
+        private static TimeSpan BUTTON_MIN_HOLD = TimeSpan.FromMilliseconds(0);
+        private static TimeSpan BUTTON_COOLDOWN = TimeSpan.FromMilliseconds(0);
         private static TimeSpan PICKUP_COOLDOWN = TimeSpan.FromMilliseconds(500);
-        private static TimeSpan AXIS_COOLDOWN = TimeSpan.FromMilliseconds(50);
+        private static TimeSpan AXIS_COOLDOWN = TimeSpan.FromMilliseconds(0);
 
         private static ControllerState Initial {
             get {
@@ -93,13 +93,14 @@ namespace Hpmv {
             //     axesVelocity = Vector2.Zero;
             // }
 
-            TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / Config.FRAMERATE);
-            Vector2 direction = newAxes - axes;
-            if (direction.Length() <= 2.0 / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) {
-                axes = newAxes;
-            } else {
-                axes = direction / direction.Length() * (2.0f / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) + axes;
-            }
+            // TimeSpan elapsed = TimeSpan.FromMilliseconds(1000.0 / Config.FRAMERATE);
+            // Vector2 direction = newAxes - axes;
+            // if (direction.Length() <= 2.0 / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) {
+            //     axes = newAxes;
+            // } else {
+            //     axes = direction / direction.Length() * (2.0f / AXIS_SPEED.Milliseconds * elapsed.Milliseconds) + axes;
+            // }
+            axes = newAxes;
         }
 
         public bool PrimaryButtonDown { get { return primaryButtonDown; } }

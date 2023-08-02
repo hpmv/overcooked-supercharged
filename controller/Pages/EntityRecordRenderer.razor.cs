@@ -9,6 +9,9 @@ namespace controller.Pages {
         public GameEntityRecord Record { get; set; }
 
         [Parameter]
+        public GameEntityRecords AllRecords { get; set; }
+
+        [Parameter]
         public int Frame { get; set; }
 
         private bool ShowDetails { get; set; }

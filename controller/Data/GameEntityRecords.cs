@@ -91,7 +91,7 @@ namespace Hpmv
         }
 
         public void RegisterOtherInitialObjects() {
-            var unknownPrefab = new PrefabRecord("", "unknown");
+            var unknownPrefab = new PrefabRecord("Unknown", "unknown");
             foreach (var entry in CapturedInitialPositions) {
                 RegisterKnownObject(entry.Key, unknownPrefab);
             }

@@ -47,12 +47,13 @@ Spawn Owner: @(Record.spawnOwner[Frame])
 @if (Record.prefab.IsCannon && Record.data[Frame].rawGameEntityData != null) {
     @("Cannon: " + new CannonModMessage().FromBytes(Record.data[Frame].rawGameEntityData).ToJson())
 }
+@("Prefab: " + ToJson(Record.prefab.ToProto(AllRecords)))
 </pre>
         </div>
     }
     <div class="record-children">
         @foreach (var spawned in Record.spawned) {
-            <EntityRecordRenderer Record="@spawned" Frame="@Frame"></EntityRecordRenderer>
+            <EntityRecordRenderer Record="@spawned" AllRecords="@AllRecords" Frame="@Frame"></EntityRecordRenderer>
         }
     </div>
 </div>

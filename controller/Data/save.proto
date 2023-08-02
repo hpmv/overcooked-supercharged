@@ -202,12 +202,18 @@ message SpecificEntityData_ThrowableItem {
     repeated SavedCollider ignored_colliders = 4;
 }
 
+message FutureOrder {
+    repeated int32 ingredients = 1;
+    int32 order_index = 2;
+}
+
 message SpecificEntityData_KitchenFlowController {
     repeated bytes active_orders = 1;
     int32 next_order_id = 2;
     int32 last_combo_index = 3;
     double time_since_last_order = 4;
     bytes team_score = 5;
+    repeated FutureOrder future_orders = 6;
 }
 
 message SpecificEntityData_PlateRespawn {
@@ -331,6 +337,7 @@ message PrefabRecord {
     bool is_terminal = 26;
     bool is_mixer = 27;
     bool is_cooking_handler = 28;
+    bool is_cooking_station = 33;
     bool is_pickup_item_switcher = 29;
     bool has_trigger_color_cycle = 30;
     bool is_kitchen_flow_controller = 31;

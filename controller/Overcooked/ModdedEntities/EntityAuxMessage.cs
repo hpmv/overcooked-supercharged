@@ -34,4 +34,5 @@ public enum AuxEntityType: byte
 {
     ThrowableItemAux,
     PlateReturnControllerAux,
+    RoundDataAux,
 }

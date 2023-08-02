@@ -214,7 +214,7 @@ namespace Hpmv {
             entityRecords.RegisterKnownObject(37, CHICKEN_CRATE);
 
             var BUN_CRATE = new PrefabRecord("Bun Crate", "bun-crate") { IsCrate = true, IsAttachStation = true };
-            var BUN = new PrefabRecord("Bun", "bun") { CanBeAttached = true, IsThrowable = true, IsIngredient = true, IngredientId = 16088 };
+            var BUN = new PrefabRecord("Bun", "bun") { CanBeAttached = true, IsThrowable = true, IsIngredient = true, IngredientId = 16088, CanContainIngredients = true };
             BUN_CRATE.Spawns.Add(BUN);
             entityRecords.RegisterKnownObject(38, BUN_CRATE);
 

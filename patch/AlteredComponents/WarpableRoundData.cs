@@ -22,6 +22,24 @@ namespace SuperchargedPatch.AlteredComponents
             };
         }
 
+        public RoundDataAuxMessage GetAuxMessage(RoundInstanceDataBase data, int numToRewind)
+        {
+            var warpableData = data as WarpableRoundInstanceData;
+            var currentIndex = warpableData.nextIndex;
+            Warp(warpableData, Math.Max(0, currentIndex - numToRewind));
+            var recipes = new AssembledDefinitionNode[10];
+            for (int i = 0; i < recipes.Length; i++)
+            {
+                recipes[i] = GetNextRecipe(data)[0].m_order.Convert();
+            }
+            Warp(warpableData, currentIndex);
+            return new RoundDataAuxMessage
+            {
+                recipes = recipes,
+                currentIndex = Math.Max(0, currentIndex - numToRewind)
+            };
+        }
+
         public override RecipeList.Entry[] GetNextRecipe(RoundInstanceDataBase _data)
         {
             var data = _data as WarpableRoundInstanceData;

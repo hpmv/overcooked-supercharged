@@ -141,6 +141,7 @@ namespace Hpmv {
         public int lastComboIndex;
         public TimeSpan timeSinceLastOrder;
         public TeamMonitor.TeamScoreStats teamScore;
+        public List<FutureOrder> futureOrders;
 
         public Save.SpecificEntityData_KitchenFlowController ToProto() {
             var result = new Save.SpecificEntityData_KitchenFlowController {
@@ -152,6 +153,14 @@ namespace Hpmv {
             if (activeOrders != null) {
                 foreach (var order in activeOrders) {
                     result.ActiveOrders.Add(Google.Protobuf.ByteString.CopyFrom(order.ToBytes()));
+                }
+            }
+            if (futureOrders != null) {
+                foreach (var order in futureOrders) {
+                    result.FutureOrders.Add(new Save.FutureOrder {
+                        Ingredients = { order.Order },
+                        OrderIndex = order.Index,
+                    });
                 }
             }
             return result;
@@ -166,10 +175,12 @@ namespace Hpmv {
                 lastComboIndex = data.LastComboIndex,
                 timeSinceLastOrder = TimeSpan.FromMilliseconds(data.TimeSinceLastOrder),
                 teamScore = data.TeamScore.Length == 0 ? null : new TeamMonitor.TeamScoreStats().FromBytes(data.TeamScore.ToByteArray()),
+                futureOrders = data.FutureOrders.Select(order => new FutureOrder(order.Ingredients.ToList(), order.OrderIndex)).ToList(),
             };
         }
     }
     
+    public record class FutureOrder(List<int> Order, int Index);
 
     public static class ListShallowCloning {
         public static List<T> ShallowCopyAndEnsureList<T>(this List<T> list) where T : class {

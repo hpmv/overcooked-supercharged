@@ -366,7 +366,7 @@ namespace SuperchargedPatch
             {
                 if (entityThrift.Cannon == null)
                 {
-                    Log($"[WARP] Failed to warp cannon: no cannon specific warp data");
+                    Log($"[WARP] Failed to warp cannon {entity.m_Header.m_uEntityID}: no cannon specific warp data");
                     return;
                 }
                 CannonModMessage message = new CannonModMessage();
@@ -382,7 +382,7 @@ namespace SuperchargedPatch
                 var workableItem = entityThrift.WorkableItem;
                 if (workableItem == null)
                 {
-                    Log($"[WARP] Failed to warp WorkableItem: no WorkableItem specific data");
+                    Log($"[WARP] Failed to warp WorkableItem {entity.m_Header.m_uEntityID}: no WorkableItem specific data");
                     return;
                 }
 
@@ -398,7 +398,7 @@ namespace SuperchargedPatch
                 var wasFlying = sti.m_flying();
                 if (throwableItem == null)
                 {
-                    Log($"[WARP] Failed to warp ThrowableItem: no ThrowableItem specific data");
+                    Log($"[WARP] Failed to warp ThrowableItem {entity.m_Header.m_uEntityID}: no ThrowableItem specific data");
                     return;
                 }
 
@@ -415,7 +415,7 @@ namespace SuperchargedPatch
                     var thrower = EntitySerialisationRegistry.GetEntry((uint)throwableItem.ThrowerEntityId)?.m_GameObject;
                     if (thrower == null)
                     {
-                        Log($"[WARP] Failed to warp ThrowableItem: thrower entity {throwableItem.ThrowerEntityId} does not exist");
+                        Log($"[WARP] Failed to warp ThrowableItem {entity.m_Header.m_uEntityID}: thrower entity {throwableItem.ThrowerEntityId} does not exist");
                         return;
                     }
                     sti.SetThrower(thrower.GetComponent<IThrower>());
@@ -469,12 +469,12 @@ namespace SuperchargedPatch
                 var terminal = entityThrift.Terminal;
                 if (terminal == null)
                 {
-                    Log($"[WARP] Failed to warp Terminal: no Terminal specific data");
+                    Log($"[WARP] Failed to warp Terminal {entity.m_Header.m_uEntityID}: no Terminal specific data");
                     return;
                 }
                 if (st.GetSession() != null)
                 {
-                    Log($"[WARP] Warning: Terminal should no longer have a session after previous stage");
+                    Log($"[WARP] Warning: Terminal {entity.m_Header.m_uEntityID} should no longer have a session after previous stage");
                     return;
                 }
                 if (terminal.__isset.interacterEntityId)
@@ -482,13 +482,13 @@ namespace SuperchargedPatch
                     var interacter = EntitySerialisationRegistry.GetEntry((uint)terminal.InteracterEntityId)?.m_GameObject;
                     if (interacter == null)
                     {
-                        Log($"[WARP] Failed to warp Terminal: interacter entity {terminal.InteracterEntityId} does not exist");
+                        Log($"[WARP] Failed to warp Terminal {entity.m_Header.m_uEntityID}: interacter entity {terminal.InteracterEntityId} does not exist");
                         return;
                     }
                     st.StartSession(interacter, default);
                     if (st.GetSession() == null)
                     {
-                        Log($"[WARP] Warning: Terminal failed to start session; session is still null after StartSession");
+                        Log($"[WARP] Warning: Terminal {entity.m_Header.m_uEntityID} failed to start session; session is still null after StartSession");
                         return;
                     }
                 }
@@ -499,7 +499,7 @@ namespace SuperchargedPatch
                 var pilotRotation = entityThrift.PilotRotation;
                 if (pilotRotation == null)
                 {
-                    Log($"[WARP] Failed to warp PilotRotation: no Rotation specific data");
+                    Log($"[WARP] Failed to warp PilotRotation {entity.m_Header.m_uEntityID}: no Rotation specific data");
                     return;
                 }
                 // Set the angle on the server side.
@@ -522,7 +522,7 @@ namespace SuperchargedPatch
                 var container = entityThrift.IngredientContainer;
                 if (container == null)
                 {
-                    Log($"[WARP] Failed to warp IngredientContainer: no IngredientContainer specific data");
+                    Log($"[WARP] Failed to warp IngredientContainer {entity.m_Header.m_uEntityID}: no IngredientContainer specific data");
                     return;
                 }
                 IngredientContainerMessage msg = new IngredientContainerMessage();
@@ -539,7 +539,7 @@ namespace SuperchargedPatch
                 var handler = entityThrift.CookingHandler;
                 if (handler == null)
                 {
-                    Log($"[WARP] Failed to warp CookingHandler: no CookingHandler specific data");
+                    Log($"[WARP] Failed to warp CookingHandler {entity.m_Header.m_uEntityID}: no CookingHandler specific data");
                     return;
                 }
                 sch.SetCookingProgressAndForceStateChangedCallback((float)handler.Progress);
@@ -550,7 +550,7 @@ namespace SuperchargedPatch
                 var thrift = entityThrift.CookingStation;
                 if (thrift == null)
                 {
-                    Log($"[WARP] Failed to warp CookingStation: no CookingStation specific data");
+                    Log($"[WARP] Failed to warp CookingStation {entity.m_Header.m_uEntityID}: no CookingStation specific data");
                     return;
                 }
                 scs.SetIsTurnedOn(thrift.IsTurnedOn);
@@ -567,7 +567,7 @@ namespace SuperchargedPatch
                 var handler = entityThrift.MixingHandler;
                 if (handler == null)
                 {
-                    Log($"[WARP] Failed to warp MixingHandler: no MixingHandler specific data");
+                    Log($"[WARP] Failed to warp MixingHandler {entity.m_Header.m_uEntityID}: no MixingHandler specific data");
                     return;
                 }
                 smh.SetMixingProgressAndForceStateChangedCallback((float)handler.Progress);
@@ -578,7 +578,7 @@ namespace SuperchargedPatch
                 var thrift = entityThrift.PickupItemSwitcher;
                 if (thrift == null)
                 {
-                    Log($"[WARP] Failed to warp PickupItemSwitcher: no PickupItemSwitcher specific data");
+                    Log($"[WARP] Failed to warp PickupItemSwitcher {entity.m_Header.m_uEntityID}: no PickupItemSwitcher specific data");
                     return;
                 }
                 spis.SetCurrentItemPrefabIndexAndSendServerEvent(thrift.Index);
@@ -589,7 +589,7 @@ namespace SuperchargedPatch
                 var thrift = entityThrift.PickupItemSwitcher;  // This is not a bug. The message is reused.
                 if (thrift == null)
                 {
-                    Log($"[WARP] Failed to warp PlacementItemSwitcher: no PlacementItemSwitcher specific data");
+                    Log($"[WARP] Failed to warp PlacementItemSwitcher {entity.m_Header.m_uEntityID}: no PlacementItemSwitcher specific data");
                     return;
                 }
                 spis2.SetCurrentItemPrefabIndexAndSendServerEvent(thrift.Index);
@@ -600,7 +600,7 @@ namespace SuperchargedPatch
                 var thrift = entityThrift.TriggerColourCycle;
                 if (thrift == null)
                 {
-                    Log($"[WARP] Failed to warp TriggerColourCycle: no TriggerColourCycle specific data");
+                    Log($"[WARP] Failed to warp TriggerColourCycle {entity.m_Header.m_uEntityID}: no TriggerColourCycle specific data");
                     return;
                 }
                 stcc.SetCurrentColourIndexAndSendServerEvent(thrift.Index);
@@ -611,7 +611,7 @@ namespace SuperchargedPatch
                 var thrift = entityThrift.Stack;
                 if (thrift == null)
                 {
-                    Log($"[WARP] Failed to warp Stack: no Stack specific data");
+                    Log($"[WARP] Failed to warp Stack {entity.m_Header.m_uEntityID}: no Stack specific data");
                     return;
                 }
                 var stackItems = new List<GameObject>();
@@ -620,7 +620,7 @@ namespace SuperchargedPatch
                     var stackItem = GetEntityByIdOrRef(item);
                     if (stackItem == null)
                     {
-                        Log($"[WARP] Failed to warp Stack: stack item {item} does not exist");
+                        Log($"[WARP] Failed to warp Stack {entity.m_Header.m_uEntityID}: stack item {item} does not exist");
                         return;
                     }
                     stackItems.Add(stackItem.m_GameObject);
@@ -629,12 +629,12 @@ namespace SuperchargedPatch
                 var clientPlateStack = entity.m_GameObject.GetComponent<ClientPlateStackBase>();
                 if (serverPlateStack == null)
                 {
-                    Log($"[WARP] Failed to warp Stack: entity is not a ServerPlateStackBase");
+                    Log($"[WARP] Failed to warp Stack {entity.m_Header.m_uEntityID}: entity is not a ServerPlateStackBase");
                     return;
                 }
                 if (clientPlateStack == null)
                 {
-                    Log($"[WARP] Failed to warp Stack: entity is not a ClientPlateStackBase");
+                    Log($"[WARP] Failed to warp Stack {entity.m_Header.m_uEntityID}: entity is not a ClientPlateStackBase");
                     return;
                 }
                 foreach (var item in stackItems)

@@ -133,7 +133,7 @@
                 <div class="debug-panel">
                     @foreach (var record in level.entityRecords.FixedEntities)
                     {
-                        <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"></EntityRecordRenderer>
+                        <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame" AllRecords="level.entityRecords"></EntityRecordRenderer>
                     }
                 </div>
             }

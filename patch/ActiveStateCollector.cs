@@ -123,6 +123,33 @@ namespace SuperchargedPatch
                 {
                     currentFrameData.Chefs[mUEntityID] = CollectDataForChef(cpci);
                 }
+
+                // Force send messages from any entities that automatically synchronize.
+                for (int j = 0; j < t.m_ServerSynchronisedComponents.Count; j++)
+                {
+                    var component = t.m_ServerSynchronisedComponents._items[j];
+                    if (component is ServerIngredientContainer || component is ServerCookingHandler || component is ServerMixingHandler)
+                    {
+                        if (component.GetServerUpdate() is Serialisable ser)
+                        {
+                            if (currentFrameData.ServerMessages == null)
+                            {
+                                currentFrameData.ServerMessages = new List<ServerMessage>();
+                            }
+                            currentFrameData.ServerMessages.Add(new ServerMessage()
+                            {
+                                Type = (int)MessageType.EntityEvent,
+                                Message = new EntityEventMessage
+                                {
+                                    m_Header = t.m_Header,
+                                    m_ComponentId = (uint)j,
+                                    m_Payload = ser,
+                                }.ToBytes()
+                            });
+                        }
+                    }
+                }
+
             }
             currentFrameData.FrameNumber = FrameNumber;
             currentFrameData.InvalidStateReason = StateInvalidityManager.InvalidReason;
