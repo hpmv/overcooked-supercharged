@@ -93,6 +93,11 @@ namespace SuperchargedPatch.AlteredComponents
     {
         public static void Prefix(NetworkConnection connection, MessageType type, Serialisable message, bool bReliable)
         {
+            if (type == MessageType.EntitySynchronisation)
+            {
+                // Don't need these. We synchronize these ourselves.
+                return;
+            }
             try
             {
                 var currentFrameData = Injector.Server.CurrentFrameData;

@@ -8,6 +8,8 @@ namespace Hpmv
         public bool Prepare { get; set; } = false;
         public bool IsPickup { get; set; } = false;
         public bool ExpectSpawn { get; set; } = false;
+        public bool DisallowDash { get; set; } = false;
+        public bool DisallowOvershoot { get; set; } = false;
 
         public override string Describe() {
             if (IsPickup) {
@@ -43,7 +45,9 @@ namespace Hpmv
         private GameActionOutput CalculateGotoResult(GameEntityRecord subjectEntity, GameActionInput input) {
             GotoAction gotoAction = new GotoAction {
                 Chef = Chef,
-                DesiredPos = new InteractionPointsLocationToken(new LiteralEntityReference(subjectEntity))
+                DesiredPos = new InteractionPointsLocationToken(new LiteralEntityReference(subjectEntity)),
+                DisallowDash = DisallowDash,
+                DisallowOvershoot = DisallowOvershoot,
             };
 
             var output = gotoAction.Step(input);
@@ -155,6 +159,8 @@ namespace Hpmv
                 Prepare = Prepare,
                 IsPickup = IsPickup,
                 ExpectSpawn = ExpectSpawn,
+                DisallowDash = DisallowDash,
+                DisallowOvershoot = DisallowOvershoot,
             };
         }
     }
@@ -167,6 +173,8 @@ namespace Hpmv
                 Prepare = action.Prepare,
                 IsPickup = action.IsPickup,
                 ExpectSpawn = action.ExpectSpawn,
+                DisallowDash = action.DisallowDash,
+                DisallowOvershoot = action.DisallowOvershoot,
             };
         }
     }

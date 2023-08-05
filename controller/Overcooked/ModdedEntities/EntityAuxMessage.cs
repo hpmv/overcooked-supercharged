@@ -11,8 +11,8 @@ public class EntityAuxMessage : Serialisable
         }
         m_auxEntityType = (AuxEntityType)reader.ReadByte(8);
         if (!SerialisationRegistry<AuxEntityType>.Deserialise(out this.m_payload, m_auxEntityType, reader)) {
-            Console.WriteLine(
-                $"Unable to deserialize EntityAuxMessage for entity {this.m_entityHeader.m_uEntityID} entity type {m_auxEntityType}: deserialization failed");
+            // Console.WriteLine(
+            //     $"Unable to deserialize EntityAuxMessage for entity {this.m_entityHeader.m_uEntityID} entity type {m_auxEntityType}: deserialization failed");
             return false;
         }
         return true;

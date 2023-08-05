@@ -434,9 +434,9 @@ namespace Hpmv {
 
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
             if (item is EntitySynchronisationMessage sync) {
-                foreach (var (type, payload) in sync.m_Payloads) {
-                    entityHandler((int)sync.m_Header.m_uEntityID, payload);
-                }
+                // foreach (var (type, payload) in sync.m_Payloads) {
+                //     entityHandler((int)sync.m_Header.m_uEntityID, payload);
+                // }
             } else if (item is EntityEventMessage eem) {
                 entityHandler((int)eem.m_Header.m_uEntityID, eem.m_Payload);
             } else if (item is EntityAuxMessage eam) {

@@ -32,6 +32,19 @@ namespace controller.Pages {
         private bool ShowRecordDebug { get; set; }
         private bool ShowMessageStats;
 
+        private bool pauseTimelineLayout;
+        private bool PauseTimelineLayout {
+            get {
+                return pauseTimelineLayout;
+            }
+            set {
+                pauseTimelineLayout = value;
+                if (!pauseTimelineLayout) {
+                    TimelineLayout.DoLayout(level.LastEmpiricalFrame);
+                }
+            }
+        }
+
         private void UseLevel(GameSetup level) {
             this.level = level;
             TimelineLayout.Sequences = level.sequences;
@@ -151,7 +164,9 @@ namespace controller.Pages {
                     if (!realGameConnector.RequestPending) {
                         EditorState.SelectedFrame = level.LastEmpiricalFrame;
                     }
-                    TimelineLayout.DoLayout(level.LastEmpiricalFrame);
+                    if (!PauseTimelineLayout) {
+                        TimelineLayout.DoLayout(level.LastEmpiricalFrame);
+                    }
                     if (realGameConnector.State == RealGameState.Running) {
                         if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != null) {
                             realGameConnector.RequestPause();

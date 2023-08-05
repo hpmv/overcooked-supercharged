@@ -29,14 +29,14 @@ namespace Team17.Online.Multiplayer.Messaging {
             var entry = FakeEntityRegistry.entityToTypes.GetValueOrDefault((int) this.m_Header.m_uEntityID);
             if (entry != null) {
                 if ((int)this.m_ComponentId >= entry.Count || (int)this.m_ComponentId < 0) {
-                    Console.WriteLine(
-                        $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}");
+                    // Console.WriteLine(
+                    //     $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}");
                         return false;
                 }
                 m_EntityType = entry[(int) this.m_ComponentId];
                 if (!SerialisationRegistry<EntityType>.Deserialise(out this.m_Payload, entry[(int) this.m_ComponentId], reader)) {
-                    Console.WriteLine(
-                        $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId} entity type {m_EntityType}: deserialization failed");
+                    // Console.WriteLine(
+                    //     $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId} entity type {m_EntityType}: deserialization failed");
                     List<byte> remainder = new List<byte>();
                     while (reader.RemainingBits >= 8) {
                         remainder.Add(reader.ReadByte(8));
@@ -49,8 +49,8 @@ namespace Team17.Online.Multiplayer.Messaging {
                 }
                 return true;
             }
-            Console.WriteLine(
-                $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}: no entity type found");
+            // Console.WriteLine(
+            //     $"Unable to deserialize EntityEventMessage for entity {this.m_Header.m_uEntityID} component {this.m_ComponentId}: no entity type found");
             return false;
         }
 

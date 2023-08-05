@@ -67,6 +67,10 @@
             Icon="speaker_notes"
             OnClick="(e) => ShowMessageStats = !ShowMessageStats"
             class="@(ShowMessageStats ? "debug-button-on" : "")" />
+        <MatIconButton
+            Icon="motion_photos_paused"
+            OnClick="(e) => PauseTimelineLayout = !PauseTimelineLayout"
+            class="@(PauseTimelineLayout ? "debug-button-on" : "")" />
         <div class="toolbar-divider"></div>
         @if (realGameConnector == null) {
             <MatIconButton Icon="link" Disabled=@(!level.IsValid()) OnClick="(e) => StartRealSimulation()" />

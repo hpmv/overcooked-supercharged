@@ -1,20 +1,19 @@
 ﻿using HarmonyLib;
 using Hpmv;
-using System;
-using Team17.Online.Multiplayer.Messaging;
-using UnityEngine;
 using SuperchargedPatch.Extensions;
 
 namespace SuperchargedPatch
 {
     public static class ControllerHandler
     {
+        public static MultiplayerController MultiplayerController;
+
         public static void LateUpdate()
         {
             // Make sure to flush any network messages before capturing state. Normally this
             // is done as part of MultiplayerController.LateUpdate(), but we're also executing in
             // LateUpdate so the order is not deterministic.
-            GameObject.FindObjectOfType<MultiplayerController>()?.FlushAllPendingBatchedMessages();
+            MultiplayerController?.FlushAllPendingBatchedMessages();
 
             if (Helpers.IsPaused())
             {
@@ -41,6 +40,16 @@ namespace SuperchargedPatch
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrame();
+        }
+    }
+
+    [HarmonyPatch(typeof(MultiplayerController), "Update")]
+    public static class MultiplayerControllerAwakePatch
+    {
+        public static void Postfix(MultiplayerController __instance)
+        {
+            // Do this, because FindObjectOfType is very very slow.
+            ControllerHandler.MultiplayerController = __instance;
         }
     }
 }

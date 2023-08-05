@@ -51,7 +51,8 @@ message LocationToken {
 message GotoAction {
     LocationToken location = 1;
     float allowed_error = 2;
-    bool allow_dash = 3;
+    bool disallow_dash = 4;
+    bool disallow_overshoot = 5;
 }
 
 message InteractAction {
@@ -60,6 +61,8 @@ message InteractAction {
     bool prepare = 3;
     bool is_pickup = 4;
     bool expect_spawn = 5;
+    bool disallow_dash = 6;
+    bool disallow_overshoot = 7;
 }
 
 message PickupClosestAction {

@@ -6,6 +6,18 @@
             to @(Node.Predictions.EndFrame == null ? "??" : ("" + Node.Predictions.EndFrame)))
         </div>
     </div>
+    @if (Node.Action is GotoAction gotoAction) {
+        <div class="action-editor-row">
+            @(gotoAction.DisallowDash ? "Disallowing Dash" : "Allowing Dash") <button @onclick="() => {gotoAction.DisallowDash = !gotoAction.DisallowDash; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Toggle</button>
+            @(gotoAction.DisallowOvershoot ? "Disallowing Overshoot" : "Allowing Overshoot") <button @onclick="() => {gotoAction.DisallowOvershoot = !gotoAction.DisallowOvershoot; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Toggle</button>
+        </div>
+    }
+    @if (Node.Action is InteractAction interact) {
+        <div class="action-editor-row">
+            @(interact.DisallowDash ? "Disallowing Dash" : "Allowing Dash") <button @onclick="() => {interact.DisallowDash = !interact.DisallowDash; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Toggle</button>
+            @(interact.DisallowOvershoot ? "Disallowing Overshoot" : "Allowing Overshoot") <button @onclick="() => {interact.DisallowOvershoot = !interact.DisallowOvershoot; DependenciesChanged.InvokeAsync(false); }" disabled="@(!CanEdit)">Toggle</button>
+        </div>
+    }
     @if (Node.Action is WaitAction wait) {
         <div class="action-editor-row">
             Change to <input @bind="NumFramesEditing" @bind:event="oninput"/>

@@ -42,6 +42,10 @@ namespace Hpmv {
                 EntityWarpSpec spec;
                 if (!currentRecordToEntityId.ContainsKey(record)) {
                     var spawningPath = record.prefab.SpawningPath;
+                    if (spawningPath == null) {
+                        Console.WriteLine($"[WARP] Error: Entity {record.path} has no spawning path!");
+                        continue;
+                    }
                     // TODO: This can be null for some reason, should fix.
                     var spawningPathEncoded = new List<int> {spawningPath.InitialFixedEntityId};
                     foreach (var spawnableId in spawningPath.SpawnableIds) {

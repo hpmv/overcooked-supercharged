@@ -5,8 +5,9 @@ using System.Numerics;
 namespace Hpmv {
     public class GotoAction : GameAction {
         public LocationToken DesiredPos { get; set; }
-        public float AllowedError { get; set; } = 0.2f;
-        public bool AllowDash { get; set; } = true;
+        public float AllowedError { get; set; } = 0.05f;
+        public bool DisallowDash { get; set; } = false;
+        public bool DisallowOvershoot { get; set; } = false;
 
         private const float DASH_TIME = 0.3f;
         private const float DASH_COOLDOWN = 0.4f;
@@ -20,9 +21,16 @@ namespace Hpmv {
             try {
                 var chefPos = Chef.position[input.Frame].XZ();
                 var chefForward = Chef.rotation[input.Frame].ToForwardVector();
+                var chefState = Chef.chefState[input.Frame];
                 var desired = DesiredPos.GetLocation(input, Chef);
                 // Console.WriteLine($"Stepping for chef {Chef} and frame {input.Frame} to {desired.Length}");
-                if (desired.Any(DesiredPos => (chefPos - DesiredPos).Length() < AllowedError)) {
+                if (desired.Any(DesiredPos => {
+                        if (Vector2.Dot(Vector2.Normalize(DesiredPos - chefPos), chefForward) > 0.5) {
+                            return (chefPos - DesiredPos).Length() < AllowedError;
+                        } else {
+                            return (chefPos - DesiredPos).Length() < AllowedError * 4;
+                        }
+                    })) {
                     return new GameActionOutput { Done = true };
                 }
                 var path = input.MapByChef[Chef.path.ids[0]].FindPath(chefPos, desired.ToList());
@@ -42,21 +50,21 @@ namespace Hpmv {
                 }
 
                 var dash = false;
-                var chefState = Chef.chefState[input.Frame];
                 double remainDistance = 0;
                 for (int i = 1; i < path.Count; i++) {
                     remainDistance += (path[i - 1] - path[i]).Length();
                 }
                 var shouldRelyOnDashOnly = false;
-                if (DASH_TIME - chefState.dashTimer < DASH_COOLDOWN) {
+                if (chefState.dashTimer > 0) {
                     var dashT = (float)chefState.dashTimer / DASH_TIME;
                     var remainingDashDistance = 0.5f * (dashT - Math.Sin(dashT * Math.PI) / Math.PI) * DASH_SPEED * DASH_TIME;
-                    if (path.Count > 0 && remainingDashDistance > remainDistance && Vector2.Dot(chefForward, path[0]) > 0.9999) {
+                    if (path.Count > 0 && remainingDashDistance > remainDistance && Vector2.Dot(chefForward, path[0]) > 0.99) {
                         shouldRelyOnDashOnly = true;
                     }
-                } else {
-                    if (AllowDash && remainDistance > USE_DASH_IF_REMAIN * DASH_SPEED * DASH_TIME * DASH_INTEGRAL) {
-                        if (Vector2.Dot(chefForward, direction) > 0.99) {
+                } else if (DASH_TIME - chefState.dashTimer >= DASH_COOLDOWN) {
+                    var useDashIfRemain = DisallowOvershoot ? 1 : USE_DASH_IF_REMAIN;
+                    if (!DisallowDash && remainDistance > useDashIfRemain * DASH_SPEED * DASH_TIME * DASH_INTEGRAL) {
+                        if (Vector2.Dot(chefForward, direction) > 0.9999) {
                             dash = true;
                         }
                     }
@@ -82,7 +90,8 @@ namespace Hpmv {
             return new Save.GotoAction {
                 Location = DesiredPos.ToProto(),
                 AllowedError = AllowedError,
-                AllowDash = AllowDash
+                DisallowDash = DisallowDash,
+                DisallowOvershoot = DisallowOvershoot
             };
         }
     }
@@ -91,8 +100,9 @@ namespace Hpmv {
         public static GotoAction FromProto(this Save.GotoAction action, LoadContext context) {
             return new GotoAction {
                 DesiredPos = action.Location.FromProto(context),
-                AllowedError = action.AllowedError,
-                AllowDash = action.AllowDash
+                AllowedError = 0.05f,  // TODO: temporary override
+                DisallowDash = action.DisallowDash,
+                DisallowOvershoot = action.DisallowOvershoot
             };
         }
     }

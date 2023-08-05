@@ -55,7 +55,7 @@ namespace Hpmv {
 
             var gotoAction = new GotoAction {
                 Chef = Chef,
-                AllowDash = false,
+                DisallowDash = true,
                 DesiredPos = new LiteralLocationToken(closestEntity.position[input.Frame].XZ()),
             };
             return gotoAction.Step(input);
