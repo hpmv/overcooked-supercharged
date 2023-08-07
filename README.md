@@ -1,6 +1,6 @@
 # Overcooked! 2 TAS Development Framework
 
-See https://hpmv.dev/docs/tas/
+See https://hpmv.dev/docs/tas/ for an overview.
 
 ## Some Pointers to Get Started With
 
