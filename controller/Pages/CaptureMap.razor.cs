@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using ChartJs.Blazor.ChartJS.ScatterChart;
@@ -80,7 +79,7 @@ namespace controller.Pages {
             CaptureMap parent;
             public Dictionary<int, string> posCache = new Dictionary<int, string>();
 
-            public Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+            public Task<InputData> getNext(OutputData output, CancellationToken cancellationToken = default) {
                 // TODO: fix.
                 // if (output.Items != null) {
                 //     foreach (var pos in output.Items) {

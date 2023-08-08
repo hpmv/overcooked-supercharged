@@ -60,7 +60,7 @@ namespace Hpmv {
             OnFrameUpdate?.Invoke();
         }
 
-        public Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+        public Task<InputData> getNext(OutputData output, CancellationToken cancellationToken = default) {
             // We do this step first because this is needed to deserialize further game messages.
             // See FakeEntityRegistry for more information.
             //

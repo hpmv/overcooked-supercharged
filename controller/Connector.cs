@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -9,7 +8,8 @@ using Thrift.Protocol;
 using Thrift.Transport;
 using Thrift.Transport.Client;
 
-namespace Hpmv {
+namespace Hpmv
+{
     class Connector {
         private Interceptor.IAsync handler;
 
@@ -24,7 +24,7 @@ namespace Hpmv {
             await client.ConnectAsync("localhost", 14455);
             Console.WriteLine("Connected");
 
-            TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream());
+            TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream(), new Thrift.TConfiguration());
             TProtocol protocol = new TBinaryProtocol(transport);
             var server = new Interceptor.AsyncProcessor(handler);
             while (!token.IsCancellationRequested) {
@@ -42,9 +42,9 @@ namespace Hpmv {
     }
 
     class DebugHandler : Interceptor.IAsync {
-        public async Task<InputData> getNextAsync(OutputData output, CancellationToken cancellationToken = default) {
+        public async Task<InputData> getNext(OutputData output, CancellationToken cancellationToken = default) {
             MemoryStream ms = new MemoryStream();
-            TTransport trans = new TStreamTransport(ms, ms);
+            TTransport trans = new TStreamTransport(ms, ms, new Thrift.TConfiguration());
             TJsonProtocol prot = new TJsonProtocol(trans);
             await output.WriteAsync(prot, cancellationToken);
             var buf = ms.GetBuffer();
