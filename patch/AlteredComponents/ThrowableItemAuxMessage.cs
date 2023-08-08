@@ -8,11 +8,6 @@ namespace SuperchargedPatch.AlteredComponents
 {
     class ThrowableItemAuxMessage : AuxMessageBase
     {
-        public bool Deserialise(BitStreamReader reader)
-        {
-            throw new NotImplementedException();
-        }
-
         public override void Serialise(BitStreamWriter writer)
         {
             var validColliders = m_colliders.Select(GetEntityIdFromCollider).Where(x => x != null).ToArray();

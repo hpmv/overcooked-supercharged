@@ -11,8 +11,10 @@ using Microsoft.JSInterop;
 using Google.Protobuf;
 using MatBlazor;
 
-namespace controller.Pages {
-    partial class Studio : IDisposable {
+namespace controller.Pages
+{
+    partial class Studio : IDisposable
+    {
 
         private ElementReference scheduleBackgroundRef;
         private DotNetObjectReference<Studio> thisRef;
@@ -24,8 +26,6 @@ namespace controller.Pages {
         private BaseMatMenu InitializeMenu;
         private BaseMatMenu PatchPrefabMenu;
         private bool SaveDialogIsOpen;
-        private Canvas2DContext _context;
-        private BECanvasComponent _canvasReference;
         private RealGameConnector realGameConnector;
         private GameSetup level = new GameSetup();
         private bool ShowInputDebug;
@@ -33,19 +33,24 @@ namespace controller.Pages {
         private bool ShowMessageStats;
 
         private bool pauseTimelineLayout;
-        private bool PauseTimelineLayout {
-            get {
+        private bool PauseTimelineLayout
+        {
+            get
+            {
                 return pauseTimelineLayout;
             }
-            set {
+            set
+            {
                 pauseTimelineLayout = value;
-                if (!pauseTimelineLayout) {
+                if (!pauseTimelineLayout)
+                {
                     TimelineLayout.DoLayout(level.LastEmpiricalFrame);
                 }
             }
         }
 
-        private void UseLevel(GameSetup level) {
+        private void UseLevel(GameSetup level)
+        {
             this.level = level;
             TimelineLayout.Sequences = level.sequences;
             TimelineLayout.Records = level.entityRecords;
@@ -58,29 +63,37 @@ namespace controller.Pages {
             TimelineLayout.DoLayout(level.LastEmpiricalFrame);
         }
 
-        protected override void OnInitialized() {
+        protected override void OnInitialized()
+        {
             RefreshAvailableSaveFiles();
-            nodeSelector = new NodeSelector(() => {
+            nodeSelector = new NodeSelector(() =>
+            {
                 StateHasChanged();
             });
         }
 
-        protected override void OnAfterRender(bool firstRender) {
-            if (firstRender) {
+        protected override void OnAfterRender(bool firstRender)
+        {
+            if (firstRender)
+            {
                 thisRef = DotNetObjectReference.Create(this);
                 JSRuntime.InvokeVoidAsync("setUpScheduleBackgroundClick", scheduleBackgroundRef, thisRef);
             }
         }
 
 
-        public void Dispose() {
-            if (realGameConnector != null) {
+        public void Dispose()
+        {
+            if (realGameConnector != null)
+            {
                 StopRealSimulation();
             }
         }
 
-        private void StopRealSimulation() {
-            if (realGameConnector == null) {
+        private void StopRealSimulation()
+        {
+            if (realGameConnector == null)
+            {
                 return;
             }
             realGameConnector.Stop();
@@ -91,33 +104,45 @@ namespace controller.Pages {
         }
 
         [JSInvokable]
-        public void HandleScheduleBackgroundClick(double x, double y) {
+        public void HandleScheduleBackgroundClick(double x, double y)
+        {
             var frame = Math.Min(level.LastEmpiricalFrame, TimelineLayout.FrameFromOffset(y));
             NavigateToFrame(frame, true);
         }
 
-        private void NavigateToFrame(int frame, bool clearSelection) {
-            if (realGameConnector != null) {
-                if (realGameConnector.State == RealGameState.Paused && !realGameConnector.RequestPending) {
+        private void NavigateToFrame(int frame, bool clearSelection)
+        {
+            if (realGameConnector != null)
+            {
+                if (realGameConnector.State == RealGameState.Paused && !realGameConnector.RequestPending)
+                {
                     realGameConnector.RequestWarp(frame);
-                } else {
+                }
+                else
+                {
                     // Don't honor frame navigation if we're in the middle of a simulation.
                     return;
                 }
             }
             EditorState.SelectedFrame = frame;
-            if (clearSelection) {
+            if (clearSelection)
+            {
                 EditorState.SelectedActionIndex = null;
             }
             level.pathDebug.Clear();
             StateHasChanged();
         }
 
-        public void HandleSelectAction(int chef, int index, int frame) {
-            if (nodeSelector.IsSelecting) {
+        public void HandleSelectAction(int chef, int index, int frame)
+        {
+            if (nodeSelector.IsSelecting)
+            {
                 nodeSelector.Select(level.sequences.Actions[chef][index]);
-            } else {
-                if (!CanEdit) {
+            }
+            else
+            {
+                if (!CanEdit)
+                {
                     return;
                 }
                 var targetFrame = Math.Min(level.LastEmpiricalFrame, frame);
@@ -126,8 +151,10 @@ namespace controller.Pages {
             }
         }
 
-        public void HandleDeleteAction() {
-            if (!CanEdit || EditorState.SelectedActionIndex == null) {
+        public void HandleDeleteAction()
+        {
+            if (!CanEdit || EditorState.SelectedActionIndex == null)
+            {
                 return;
             }
             var frame = EditorState.ResimulationFrame(level.LastEmpiricalFrame);
@@ -135,13 +162,16 @@ namespace controller.Pages {
             SimulateInResponseToEditorChange(frame);
         }
 
-        public bool CanEdit {
-            get {
+        public bool CanEdit
+        {
+            get
+            {
                 return realGameConnector == null || (realGameConnector.State == RealGameState.Paused && !realGameConnector.RequestPending);
             }
         }
 
-        public void OnDependenciesChanged() {
+        public void OnDependenciesChanged()
+        {
             var frame = EditorState.ResimulationFrame(level.LastEmpiricalFrame);
             SimulateInResponseToEditorChange(frame);
         }
@@ -152,36 +182,52 @@ namespace controller.Pages {
         public TimelineLayout TimelineLayout = new TimelineLayout();
 
 
-        private void StartRealSimulation() {
-            if (realGameConnector != null) {
+        private void StartRealSimulation()
+        {
+            if (realGameConnector != null)
+            {
                 StopRealSimulation();
             }
             EditorState.SelectedFrame = 0;
             level.pathDebug.Clear();
             realGameConnector = new RealGameConnector(level);
-            realGameConnector.OnFrameUpdate += () => {
-                InvokeAsync(() => {
-                    if (!realGameConnector.RequestPending) {
+            realGameConnector.OnFrameUpdate += () =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (!realGameConnector.RequestPending)
+                    {
                         EditorState.SelectedFrame = level.LastEmpiricalFrame;
                     }
-                    if (!PauseTimelineLayout) {
+                    if (!PauseTimelineLayout)
+                    {
                         TimelineLayout.DoLayout(level.LastEmpiricalFrame);
                     }
-                    if (realGameConnector.State == RealGameState.Running) {
-                        if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != null) {
+                    if (realGameConnector.State == RealGameState.Running)
+                    {
+                        if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != null)
+                        {
                             realGameConnector.RequestPause();
-                        } else if (EditorState.SelectedActionIndex != null) {
+                        }
+                        else if (EditorState.SelectedActionIndex != null)
+                        {
                             var (chef, index) = EditorState.SelectedActionIndex.Value;
                             var actions = level.sequences.Actions[chef];
                             int frameToStop;
-                            if (actions.Count == 0) {
+                            if (actions.Count == 0)
+                            {
                                 frameToStop = 0;
-                            } else if (index >= actions.Count) {
+                            }
+                            else if (index >= actions.Count)
+                            {
                                 frameToStop = actions.Last().Predictions.EndFrame ?? -1;
-                            } else {
+                            }
+                            else
+                            {
                                 frameToStop = actions[index].Predictions.StartFrame ?? -1;
                             }
-                            if (frameToStop != -1 && level.LastEmpiricalFrame >= frameToStop) {
+                            if (frameToStop != -1 && level.LastEmpiricalFrame >= frameToStop)
+                            {
                                 EditorState.SelectedFrame = frameToStop;
                                 realGameConnector.RequestPauseAndWarp(EditorState.SelectedFrame);
                             }
@@ -190,11 +236,14 @@ namespace controller.Pages {
                     StateHasChanged();
                 });
             };
-            realGameConnector.OnStateChanged += () => {
+            realGameConnector.OnStateChanged += () =>
+            {
                 StateHasChanged();
             };
-            realGameConnector.OnConnectionTerminated += () => {
-                InvokeAsync(() => {
+            realGameConnector.OnConnectionTerminated += () =>
+            {
+                InvokeAsync(() =>
+                {
                     StopRealSimulation();
                     StateHasChanged();
                 });
@@ -202,39 +251,49 @@ namespace controller.Pages {
             realGameConnector.Start();
         }
 
-        private void PauseRealSimulation() {
-            if (realGameConnector == null || realGameConnector.RequestPending) {
+        private void PauseRealSimulation()
+        {
+            if (realGameConnector == null || realGameConnector.RequestPending)
+            {
                 return;
             }
             realGameConnector.RequestPause();
             EditorState.SelectedActionIndex = null;
         }
 
-        private void ResumeRealSimulation() {
-            if (realGameConnector == null || realGameConnector.RequestPending) {
+        private void ResumeRealSimulation()
+        {
+            if (realGameConnector == null || realGameConnector.RequestPending)
+            {
                 return;
             }
             realGameConnector.RequestResume();
             EditorState.SelectedActionIndex = null;
         }
 
-        private bool IsSimulationRunning() {
+        private bool IsSimulationRunning()
+        {
             return realGameConnector != null && realGameConnector.State == RealGameState.Running;
         }
 
-        private bool IsSimulationPaused() {
+        private bool IsSimulationPaused()
+        {
             return realGameConnector != null && realGameConnector.State == RealGameState.Paused;
         }
 
-        private string GetRealGameState() {
-            if (realGameConnector == null) {
+        private string GetRealGameState()
+        {
+            if (realGameConnector == null)
+            {
                 return "Not connected";
             }
             return realGameConnector.State.ToString();
         }
 
-        private string RealGameStateToIcon(RealGameState state) {
-            switch (state) {
+        private string RealGameStateToIcon(RealGameState state)
+        {
+            switch (state)
+            {
                 case RealGameState.NotInLevel:
                     return "pending";
                 case RealGameState.AwaitingStart:
@@ -257,8 +316,10 @@ namespace controller.Pages {
             return "";
         }
 
-        private string RealGameStateToColor(RealGameState state) {
-            switch (state) {
+        private string RealGameStateToColor(RealGameState state)
+        {
+            switch (state)
+            {
                 case RealGameState.NotInLevel:
                     return "gray";
                 case RealGameState.AwaitingStart:
@@ -281,18 +342,23 @@ namespace controller.Pages {
             return "";
         }
 
-        private void SimulateInResponseToEditorChange(int frame) {
-            if (realGameConnector != null) {
+        private void SimulateInResponseToEditorChange(int frame)
+        {
+            if (realGameConnector != null)
+            {
                 realGameConnector.RequestWarpAndResume(frame);
             }
         }
 
         private List<string> availableSaveFiles = new List<string>();
-        private void RefreshAvailableSaveFiles() {
+        private void RefreshAvailableSaveFiles()
+        {
             availableSaveFiles.Clear();
             var files = Directory.GetFiles("Saves");
-            foreach (var file in files) {
-                if (file.EndsWith(".proto")) {
+            foreach (var file in files)
+            {
+                if (file.EndsWith(".proto"))
+                {
                     availableSaveFiles.Add(file);
                 }
             }
@@ -300,47 +366,56 @@ namespace controller.Pages {
 
         private string SaveFileName { get; set; }
 
-        private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type> {
+        private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type>
+        {
             ["carnival31-four"] = typeof(Carnival31FourLevel),
             ["carnival34-four"] = typeof(Carnival34FourLevel),
             ["carnival32-four"] = typeof(Carnival32FourLevel),
         };
 
-        private void LoadLevel(string selectedLevel) {
+        private void LoadLevel(string selectedLevel)
+        {
             var data = File.ReadAllBytes(selectedLevel);
             var save = new Hpmv.Save.GameSetup();
             save.MergeFrom(data);
             UseLevel(save.FromProto());
         }
 
-        private void SaveLevel() {
+        private void SaveLevel()
+        {
             var filePath = "Saves/" + SaveFileName + ".proto";
             var data = level.ToProto();
             File.WriteAllBytes(filePath, data.ToByteArray());
         }
 
-        private void InitializeNewLevel(string selectedLevel) {
+        private void InitializeNewLevel(string selectedLevel)
+        {
             var initializer = levelInitializers[selectedLevel];
             UseLevel(Activator.CreateInstance(initializer) as GameSetup);
         }
 
-        private void PatchPrefab(string selectedLevel) {
+        private void PatchPrefab(string selectedLevel)
+        {
             var initializer = levelInitializers[selectedLevel];
             var stock = Activator.CreateInstance(initializer) as GameSetup;
             var dict = new Dictionary<string, PrefabRecord>();
 
             var prefabs = stock.entityRecords.Prefabs;
-            foreach (var prefab in prefabs) {
-                if (dict.ContainsKey(prefab.Name)) {
+            foreach (var prefab in prefabs)
+            {
+                if (dict.ContainsKey(prefab.Name))
+                {
                     Console.WriteLine("Error: duplicate prefab name: {0}, patching aborted.", prefab.Name);
                     return;
                 }
                 dict[prefab.Name] = prefab;
             }
 
-            foreach (var entity in level.entityRecords.GenAllEntities()) {
+            foreach (var entity in level.entityRecords.GenAllEntities())
+            {
                 var prefab = entity.prefab;
-                if (!dict.ContainsKey(prefab.Name)) {
+                if (!dict.ContainsKey(prefab.Name))
+                {
                     Console.WriteLine("Error: prefab {0} not found in stock, patching aborted.", prefab.Name);
                     return;
                 }
@@ -349,11 +424,13 @@ namespace controller.Pages {
             level.entityRecords.Prefabs.Clear();
             level.entityRecords.Prefabs.AddRange(stock.entityRecords.Prefabs);
             level.entityRecords.PrefabToIndex.Clear();
-            for (int i = 0; i < level.entityRecords.Prefabs.Count; i++) {
+            for (int i = 0; i < level.entityRecords.Prefabs.Count; i++)
+            {
                 level.entityRecords.PrefabToIndex[level.entityRecords.Prefabs[i]] = i;
             }
 
-            foreach (var entity in level.entityRecords.GenAllEntities()) {
+            foreach (var entity in level.entityRecords.GenAllEntities())
+            {
                 var prefab = entity.prefab;
                 entity.prefab = dict[prefab.Name];
             }

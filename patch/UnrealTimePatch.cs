@@ -6,14 +6,11 @@ namespace SuperchargedPatch
 {
     public class UnrealTimePatch
     {
-        private const bool ENABLE_TIME_PATCH = true;
-
         private static FieldInfo m_m_fDelta = typeof(ClientTime).GetField("m_fDelta", BindingFlags.Static | BindingFlags.NonPublic);
         private static FieldInfo m_m_fLocalTimeLastFrame = typeof(ClientTime).GetField("m_fLocalTimeLastFrame", BindingFlags.Static | BindingFlags.NonPublic);
 
         public static void Update()
         {
-            if (!ENABLE_TIME_PATCH) return;
             Time.captureFramerate = 60;
         }
 
@@ -22,10 +19,7 @@ namespace SuperchargedPatch
         public static class OnTimeSyncReceivedPostfix
         {
             [HarmonyPrefix]
-            public static bool Prefix()
-            {
-                return !ENABLE_TIME_PATCH;
-            }
+            public static bool Prefix() => false;
         }
 
 
@@ -35,7 +29,6 @@ namespace SuperchargedPatch
             [HarmonyPrefix]
             public static bool Prefix(ref float __result)
             {
-                if (!ENABLE_TIME_PATCH) return true;
                 __result = Time.time;
                 return false;
             }
@@ -47,7 +40,6 @@ namespace SuperchargedPatch
             [HarmonyPrefix]
             public static bool Prefix()
             {
-                if (!ENABLE_TIME_PATCH) return true;
                 float _time = Time.time;
                 m_m_fDelta.SetValue(null, _time - (float)m_m_fLocalTimeLastFrame.GetValue(null));
                 m_m_fLocalTimeLastFrame.SetValue(null, _time);
@@ -59,11 +51,7 @@ namespace SuperchargedPatch
         public static class ServerTimeUpdatePatch
         {
             [HarmonyPrefix]
-            public static bool Prefix()
-            {
-                if (!ENABLE_TIME_PATCH) return true;
-                return false;
-            }
+            public static bool Prefix() => false;
         }
 
         [HarmonyPatch(typeof(TimeManager), "Update")]
@@ -73,7 +61,6 @@ namespace SuperchargedPatch
             public static bool Prefix(TimeManager __instance)
             {
                 Helpers.CurrentTimeManager = __instance;
-                if (!ENABLE_TIME_PATCH) return true;
                 return false;
             }
         }

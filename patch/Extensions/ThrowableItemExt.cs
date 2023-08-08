@@ -98,7 +98,7 @@ namespace SuperchargedPatch.Extensions
         {
             self.m_attachment()?.UnregisterAttachChangedCallback(self.m_OnAttachChanged());
             var referral = self.m_pickupReferral();
-            if (referral != null && referral.GetHandlePickupReferree() == self)
+            if (referral != null && ReferenceEquals(referral.GetHandlePickupReferree(), self))
             {
                 referral?.SetHandlePickupReferree(null);
             }
@@ -125,7 +125,7 @@ namespace SuperchargedPatch.Extensions
         public static void OnExitFlightForWarping(this ClientThrowableItem self)
         {
             var referral = self.m_pickupReferral();
-            if (referral != null && referral.GetHandlePickupReferree() == self)
+            if (referral != null && ReferenceEquals(referral.GetHandlePickupReferree(), self))
             {
                 referral?.SetHandlePickupReferree(null);
             }

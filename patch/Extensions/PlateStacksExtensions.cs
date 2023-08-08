@@ -222,12 +222,12 @@ namespace SuperchargedPatch.Extensions
             foreach (var obj in removed)
             {
                 ServerHandlePickupReferral serverHandlePickupReferral = obj.RequestComponent<ServerHandlePickupReferral>();
-                if (serverHandlePickupReferral != null && serverHandlePickupReferral.GetHandlePickupReferree() == self)
+                if (serverHandlePickupReferral != null && ReferenceEquals(serverHandlePickupReferral.GetHandlePickupReferree(), self))
                 {
                     serverHandlePickupReferral.SetHandlePickupReferree(null);
                 }
                 ServerHandlePlacementReferral serverHandlePlacementReferral = obj.RequestComponent<ServerHandlePlacementReferral>();
-                if (serverHandlePlacementReferral != null && serverHandlePlacementReferral.GetHandlePlacementReferree() == self)
+                if (serverHandlePlacementReferral != null && ReferenceEquals(serverHandlePlacementReferral.GetHandlePlacementReferree(), self))
                 {
                     serverHandlePlacementReferral.SetHandlePlacementReferree(null);
                 }
@@ -265,12 +265,12 @@ namespace SuperchargedPatch.Extensions
             foreach (var obj in removed)
             {
                 ClientHandlePickupReferral clientHandlePickupReferral = obj.RequestComponent<ClientHandlePickupReferral>();
-                if (clientHandlePickupReferral != null && clientHandlePickupReferral.GetHandlePickupReferree() == self)
+                if (clientHandlePickupReferral != null && ReferenceEquals(clientHandlePickupReferral.GetHandlePickupReferree(), self))
                 {
                     clientHandlePickupReferral.SetHandlePickupReferree(null);
                 }
                 ClientHandlePlacementReferral clientHandlePlacementReferral = obj.RequestComponent<ClientHandlePlacementReferral>();
-                if (clientHandlePlacementReferral != null && clientHandlePlacementReferral.GetHandlePlacementReferree() == self)
+                if (clientHandlePlacementReferral != null && ReferenceEquals(clientHandlePlacementReferral.GetHandlePlacementReferree(), self))
                 {
                     clientHandlePlacementReferral.SetHandlePlacementReferree(null);
                 }
