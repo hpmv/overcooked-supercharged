@@ -305,6 +305,7 @@ namespace controller.Pages
                 case RealGameState.Paused:
                     return "hourglass_full";
                 case RealGameState.AwaitingResume:
+                case RealGameState.AwaitingPhysicsPhaseShiftAlignment:
                     return "hourglass_top";
                 case RealGameState.Warping:
                     return "restore";

@@ -244,6 +244,7 @@ message SpecificEntityData {
     SpecificEntityData_KitchenFlowController kitchen_flow_controller = 19;
     bool is_cooking_station_turned_on = 20;
     bool is_cooking_station_cooking = 21;
+    EntityPath plate_return_station_stack = 22;
 }
 
 message ChefState {
@@ -333,6 +334,7 @@ message PrefabRecord {
     bool is_choppable = 16;
     bool is_button = 19;
     bool is_attach_station = 20;
+    bool is_plate_return_station = 34;
     bool can_be_attached = 22;
     bool is_chef = 23;
     bool is_cannon = 24;

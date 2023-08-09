@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 
-namespace Hpmv {
+namespace Hpmv
+{
     /// State used to determine inputs to give to the game. Each state listed below is used for the RPC call between that frame
     /// and next frame. As a reminder, the RPC call is made from the Unity side in LateUpdate() of our plugin with the data that
     /// we call "output" (from the perspective of the game, not the controller), and that RPC returns the "input" for the next
@@ -68,43 +69,51 @@ namespace Hpmv {
     ///       - plugin's LateUpdate() outputs data for logical frame 1
     ///       - controller's getNextAsync() advances frame to 1 and computes inputs for frame 2.
     ///     Everything else proceeds normally like the Running state.
-    public enum RealGameState {
+    public enum RealGameState
+    {
         NotInLevel,
         AwaitingStart,
         Running,
         AwaitingPause,
         Paused,
         Warping,
+        AwaitingPhysicsPhaseShiftAlignment,
         AwaitingResume,
         Error,
         ReestablishingConnection,
     }
 
-    public enum RealGameStateRequestKind {
+    public enum RealGameStateRequestKind
+    {
         Pause,
         Resume,
         Warp,
     }
 
-    public class RealGameStateRequest {
+    public class RealGameStateRequest
+    {
         public readonly RealGameStateRequestKind Kind;
         public readonly int FrameToWarpTo;
         public readonly TaskCompletionSource<bool> Completed = new TaskCompletionSource<bool>();
 
-        private RealGameStateRequest(RealGameStateRequestKind kind, int frameToWarpTo) {
+        private RealGameStateRequest(RealGameStateRequestKind kind, int frameToWarpTo)
+        {
             Kind = kind;
             FrameToWarpTo = frameToWarpTo;
         }
 
-        public static RealGameStateRequest Pause() {
+        public static RealGameStateRequest Pause()
+        {
             return new RealGameStateRequest(RealGameStateRequestKind.Pause, 0);
         }
 
-        public static RealGameStateRequest Resume() {
+        public static RealGameStateRequest Resume()
+        {
             return new RealGameStateRequest(RealGameStateRequestKind.Resume, 0);
         }
 
-        public static RealGameStateRequest Warp(int frameToWarpTo) {
+        public static RealGameStateRequest Warp(int frameToWarpTo)
+        {
             return new RealGameStateRequest(RealGameStateRequestKind.Warp, frameToWarpTo);
         }
     }

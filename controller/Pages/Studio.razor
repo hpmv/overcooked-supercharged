@@ -135,6 +135,8 @@
 
             @if (ShowRecordDebug) {
                 <div class="debug-panel">
+                    <pre>Invalid state message: @(level.entityRecords.InvalidStateReason[EditorState.SelectedFrame])</pre>
+                    <pre>Physics phase shift: @(level.entityRecords.PhysicsPhaseShift[EditorState.SelectedFrame])</pre>
                     @foreach (var record in level.entityRecords.FixedEntities)
                     {
                         <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame" AllRecords="level.entityRecords"></EntityRecordRenderer>

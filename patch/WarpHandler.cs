@@ -15,9 +15,9 @@ namespace SuperchargedPatch
     {
         public static StreamWriter writer = new StreamWriter("E:\\old-code-projects\\oc\\supercharged\\warp.log", false);
 
-        private Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
-        private MultiplayerController multiplayerController;
-        private WarpSpec warp;
+        private readonly Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
+        private readonly MultiplayerController multiplayerController;
+        private readonly WarpSpec warp;
 
         private WarpHandler(WarpSpec warp)
         {
@@ -688,14 +688,16 @@ namespace SuperchargedPatch
                     if (skfcb.RoundTimer is ServerRoundTimer srt)
                     {
                         srt.SetRoundTimer((float)thrift.RoundTime);
-                    } else
+                    }
+                    else
                     {
                         Log($"[WARP] Failed to set game time: round timer is not a ServerRoundTimer; actual {skfcb.RoundTimer.GetType().Name}");
                     }
                     if (client.RoundTimer is ClientRoundTimer crt)
                     {
                         crt.SetRoundTimer((float)thrift.RoundTime);
-                    } else
+                    }
+                    else
                     {
                         Log($"[WARP] Failed to set game time: round timer is not a ClientRoundTimer; actual {client.RoundTimer.GetType().Name}");
                     }
@@ -721,7 +723,8 @@ namespace SuperchargedPatch
                     if (roundData is WarpableRoundData wrd && roundInstanceData is WarpableRoundInstanceData wrid)
                     {
                         wrd.Warp(wrid, thrift.NextOrderId);
-                    } else
+                    }
+                    else
                     {
                         Log($"[WARP] Failed to warp KitchenFlowController: round data is not warpable; actual {roundData.GetType().Name} and {roundInstanceData.GetType().Name}");
                     }
@@ -768,6 +771,43 @@ namespace SuperchargedPatch
                     clientOrderController.SetActiveOrders(clientActiveOrders);
                     gui.LayoutWidgets();
 
+                }
+            }
+
+            if (entity.m_GameObject.GetComponent<ServerPlateReturnStation>() is ServerPlateReturnStation prs)
+            {
+                var thrift = entityThrift.PlateReturnStation;
+                if (thrift == null)
+                {
+                    Log($"[WARP] Failed to warp PlateReturnStation {entity.m_Header.m_uEntityID}: no PlateReturnStation specific data");
+                    return;
+                }
+                if (thrift.Stack == null)
+                {
+                    prs.SetStack(null);
+                }
+                else
+                {
+                    var stack = GetEntityByIdOrRef(thrift.Stack);
+                    if (stack == null)
+                    {
+                        Log($"[WARP] Failed to warp PlateReturnStation {entity.m_Header.m_uEntityID}: stack {thrift.Stack} not found");
+                        return;
+                    }
+                    if (stack.m_GameObject.GetComponent<ServerPlateStackBase>() is ServerPlateStackBase spsb)
+                    {
+                        prs.SetStack(spsb);
+                        var attachment = (prs.GetComponent<ServerAttachStation>()?.m_item() as MonoBehaviour)?.gameObject;
+                        if (spsb.gameObject != attachment)
+                        {
+                            Log($"[WARP] Warning: stack {spsb.name} of PlateReturnStation {entity.m_Header.m_uEntityID} is not the same as its attachment {attachment?.name}");
+                        }
+                    }
+                    else
+                    {
+                        Log($"[WARP] Failed to warp PlateReturnStation {entity.m_Header.m_uEntityID}: stack {thrift.Stack} does not have ServerPlateStackBase");
+                        return;
+                    }
                 }
             }
         }

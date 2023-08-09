@@ -44,7 +44,7 @@ namespace SuperchargedPatch.AlteredComponents
                 default:
                     return;
             }
-            Debug.Log($"Overriding button {_id} for player {_player} with entity ID {foundEntityId.Value}");
+            // Debug.Log($"Overriding button {_id} for player {_player} with entity ID {foundEntityId.Value}");
             __result = new TASLogicalButton(foundEntityId.Value, buttonType, __result);
         }
     }
@@ -84,7 +84,7 @@ namespace SuperchargedPatch.AlteredComponents
                 default:
                     return;
             }
-            Debug.Log($"Overriding value {_id} for player {_player} with entity ID {foundEntityId.Value}");
+            // Debug.Log($"Overriding value {_id} for player {_player} with entity ID {foundEntityId.Value}");
             __result = new TASLogicalValue(foundEntityId.Value, valueType, __result);
             return;
         }

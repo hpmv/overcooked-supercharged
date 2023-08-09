@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace Hpmv {
-    class Carnival32FourLevel : GameSetup {
+namespace Hpmv
+{
+    class Carnival32FourLevel : GameSetup
+    {
         public (double x, double y)[][] levelShape = {
             new[]{
                 (10.4, -10.4),
@@ -42,7 +44,8 @@ namespace Hpmv {
             }
         };
 
-        public Carnival32FourLevel() {
+        public Carnival32FourLevel()
+        {
             geometry = new GameMapGeometry(new Vector2(10.8f, -9.6f), new Vector2(1.2f * 15, 1.2f * 8));
             var levelMap = new GameMap(levelShape.Select(arr => arr.Select(p => new Vector2((float)p.x, (float)p.y)).ToArray()).ToArray(), geometry);
             mapByChef[56] = levelMap;
@@ -253,30 +256,31 @@ namespace Hpmv {
             entityRecords.RegisterKnownObject(22, BOARD);
 
             var COUNTER = new PrefabRecord("Counter", "counter") { IsAttachStation = true };
-            foreach (var i in new int[] {18, 32, 33, 34, 35, 23, 24, 25, 26, 27, 28, 29, 30, 31}) {
+            foreach (var i in new int[] { 18, 32, 33, 34, 35, 23, 24, 25, 26, 27, 28, 29, 30, 31 })
+            {
                 entityRecords.RegisterKnownObject(i, COUNTER);
             }
 
             var PLATE = new PrefabRecord("Plate", "plate") { CanContainIngredients = true, CanBeAttached = true };
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(8, PLATE),
-                entityRecords.GetRecordFromPath(new []{30}));
+                entityRecords.GetRecordFromPath(new[] { 30 }));
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(9, PLATE),
-                entityRecords.GetRecordFromPath(new []{29}));
+                entityRecords.GetRecordFromPath(new[] { 29 }));
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(10, PLATE),
-                entityRecords.GetRecordFromPath(new []{34}));
+                entityRecords.GetRecordFromPath(new[] { 34 }));
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(11, PLATE),
-                entityRecords.GetRecordFromPath(new []{33}));
+                entityRecords.GetRecordFromPath(new[] { 33 }));
 
-            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner") { IsAttachStation = true };
+            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner") { IsAttachStation = true, IsPlateReturnStation = true };
             var DIRTY_PLATE_STACK = new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack") { CanBeAttached = true, IsStack = true };
             var DIRTY_PLATE = new PrefabRecord("Dirty Plate", "dirty plate");
             DIRTY_PLATE_STACK.Spawns.Add(DIRTY_PLATE);
             DIRTY_PLATE_SPAWNER.Spawns.Add(DIRTY_PLATE_STACK);
-            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner") { IsAttachStation = true };
+            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner") { IsAttachStation = true, IsPlateReturnStation = true };
             var CLEAN_PLATE_STACK = new PrefabRecord("Clean Plate Stack", "clean-plate-stack") { CanBeAttached = true, IsStack = true };
             CLEAN_PLATE_SPAWNER.Spawns.Add(CLEAN_PLATE_STACK);
             CLEAN_PLATE_STACK.Spawns.Add(PLATE);
@@ -302,7 +306,7 @@ namespace Hpmv {
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(2, PAN),
                 entityRecords.RegisterKnownObject(15, HEAT_STATION));
-            
+
             var FRIER = new PrefabRecord("Frier", "frier") { MaxProgress = 10, CanContainIngredients = true, IsCookingHandler = true, CanBeAttached = true };
             var FRIER_STATION = new PrefabRecord("Frier Station", "frier-station") { IsAttachStation = true, IsCookingStation = true };
             entityRecords.AttachInitialObjectTo(
@@ -331,10 +335,12 @@ namespace Hpmv {
             entityRecords.RegisterKnownObject(60, FLOW_CONTROLLER);
 
             var IGNORE = new PrefabRecord("", "") { Ignore = true };
-            for (var i = 49; i <= 55; i++) {
+            for (var i = 49; i <= 55; i++)
+            {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
-            for (var i = 61; i <= 73; i++) {
+            for (var i = 61; i <= 73; i++)
+            {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
 

@@ -15,15 +15,22 @@ namespace SuperchargedPatch
         {
             patcher = new Harmony("dev.hpmv.overcooked.experimental.supercharged.tas.v1");
             patcher.PatchAll(Assembly.GetExecutingAssembly());
-            foreach (var patched in Harmony.GetAllPatchedMethods()) {
+            foreach (var patched in Harmony.GetAllPatchedMethods())
+            {
                 Console.WriteLine("Patched: " + patched.FullDescription());
             }
             DebugItemOverlay.Awake();
         }
 
+        public void FixedUpdate()
+        {
+            ControllerHandler.FixedUpdate();
+        }
+
         public void Update()
         {
             UnrealTimePatch.Update();
+            ControllerHandler.Update();
         }
 
         public void LateUpdate()

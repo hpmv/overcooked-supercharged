@@ -85,6 +85,8 @@ struct OutputData {
     7: bool nextFramePaused,
     8: i32 frameNumber,
     9: optional string invalidStateReason,
+    10: i32 physicsFramesElapsed,
+    11: i32 framesSinceLastNoPhysicsFrame,
 }
 
 struct EntityIdOrRef {
@@ -202,6 +204,10 @@ struct CookingStationWarpData {
     2: bool isCooking,
 }
 
+struct PlateReturnStationWarpData {
+    1: optional EntityIdOrRef stack,
+}
+
 struct EntityWarpSpec {
     // Either entityId or spawningPath is specified. If the former, the entity
     // already exists in the game; if the latter, the entity is to be created
@@ -241,6 +247,7 @@ struct EntityWarpSpec {
     26: optional WashingStationWarpData washingStation,
     27: optional KitchenControllerWarpData kitchenController,
     28: optional CookingStationWarpData cookingStation,
+    29: optional PlateReturnStationWarpData plateReturnStation,
     // TODO: more entity types
 }
 

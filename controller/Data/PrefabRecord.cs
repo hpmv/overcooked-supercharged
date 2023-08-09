@@ -4,7 +4,8 @@ using System.Numerics;
 
 namespace Hpmv
 {
-    public class PrefabRecord {
+    public class PrefabRecord
+    {
         public string Name { get; set; }
         public string ClassName { get; set; }
         public List<PrefabRecord> Spawns = new List<PrefabRecord>();
@@ -20,6 +21,7 @@ namespace Hpmv
         public bool IsChoppable { get; set; }
         public bool IsButton { get; set; }
         public bool IsAttachStation { get; set; }
+        public bool IsPlateReturnStation { get; set; }
         public bool CanBeAttached { get; set; } // whether the prefab has PhysicalAttachment
         public bool IsChef { get; set; }
         public bool IsCannon { get; set; }
@@ -35,13 +37,16 @@ namespace Hpmv
         public bool Ignore { get; set; }
         public Vector2[] OccupiedGridPoints { get; set; } = new[] { Vector2.Zero };
 
-        public PrefabRecord(string name, string className = "") {
+        public PrefabRecord(string name, string className = "")
+        {
             Name = name;
             ClassName = className;
         }
 
-        public Save.PrefabRecord ToProto(GameEntityRecords records) {
-            var result = new Save.PrefabRecord {
+        public Save.PrefabRecord ToProto(GameEntityRecords records)
+        {
+            var result = new Save.PrefabRecord
+            {
                 Name = Name,
                 ClassName = ClassName,
                 SpawningPath = SpawningPath?.ToProto(),
@@ -56,6 +61,7 @@ namespace Hpmv
                 IsChoppable = IsChoppable,
                 IsButton = IsButton,
                 IsAttachStation = IsAttachStation,
+                IsPlateReturnStation = IsPlateReturnStation,
                 CanBeAttached = CanBeAttached,
                 IsChef = IsChef,
                 IsCannon = IsCannon,
@@ -70,7 +76,8 @@ namespace Hpmv
                 IsStack = IsStack,
                 Ignore = Ignore,
             };
-            foreach (var prefab in Spawns) {
+            foreach (var prefab in Spawns)
+            {
                 result.SpawnsIndices.Add(records.PrefabToIndex[prefab]);
             }
             result.OccupiedGridPoints.AddRange(OccupiedGridPoints.Select(x => x.ToProto()));
@@ -79,7 +86,7 @@ namespace Hpmv
 
         public void CalculateSpawningPathsForSpawnsRecursively()
         {
-            if (SpawningPath == null) {return;}
+            if (SpawningPath == null) { return; }
             for (int i = 0; i < Spawns.Count; i++)
             {
                 Spawns[i].SpawningPath = SpawningPath.Concat(i);
@@ -88,9 +95,12 @@ namespace Hpmv
         }
     }
 
-    public static class PrefabRecordFromProto {
-        public static PrefabRecord FromProto(this Save.PrefabRecord record, LoadContext context) {
-            return new PrefabRecord(record.Name, record.ClassName) {
+    public static class PrefabRecordFromProto
+    {
+        public static PrefabRecord FromProto(this Save.PrefabRecord record, LoadContext context)
+        {
+            return new PrefabRecord(record.Name, record.ClassName)
+            {
                 Spawns = record.SpawnsIndices.Select(s => context.Records.Prefabs[s]).ToList(),
                 SpawningPath = record.SpawningPath?.FromProto(),
                 CanUse = record.CanUse,
@@ -104,6 +114,7 @@ namespace Hpmv
                 IsChoppable = record.IsChoppable,
                 IsButton = record.IsButton,
                 IsAttachStation = record.IsAttachStation,
+                IsPlateReturnStation = record.IsPlateReturnStation,
                 CanBeAttached = record.CanBeAttached,
                 IsChef = record.IsChef,
                 IsCannon = record.IsCannon,
