@@ -73,6 +73,20 @@ namespace Hpmv
 
         public Task<InputData> getNext(OutputData output, CancellationToken cancellationToken = default)
         {
+            try
+            {
+                return Task.FromResult(getNextImpl(output));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception in getNext: {e}");
+                throw;
+            }
+        }
+
+        private InputData getNextImpl(OutputData output)
+        {
+            var startTime = DateTime.Now;
             // We do this step first because this is needed to deserialize further game messages.
             // See FakeEntityRegistry for more information.
             //
@@ -90,6 +104,7 @@ namespace Hpmv
                 }
             }
 
+            var time1 = DateTime.Now;
             // InputData is what we return to the game on the next frame.
             InputData inputs = new InputData();
 
@@ -117,6 +132,7 @@ namespace Hpmv
                 }
             }
 
+            var time2 = DateTime.Now;
             // For both Running and AwaitingPause, the logical game state advanced by one frame
             // so we need to do the same.
             if (State == RealGameState.Running || State == RealGameState.AwaitingPause)
@@ -164,14 +180,29 @@ namespace Hpmv
                 }
             }
 
+            var time3 = DateTime.Now;
+
             // For both Running and AwaitingResume, the *next* frame will need inputs, so compute
             // inputs.
             if (State == RealGameState.Running || State == RealGameState.AwaitingResume)
             {
-                // TODO: this also computes whether current actions have ended. If we pause right
-                // when an action is done, we would not be marking the current action as done
-                // until we resume again. Is that an issue?
-                inputs.Input = simulator.ComputeInputForNextFrame();
+                if (simulator.Frame == 0)
+                {
+                    // Suppress inputs for the first frame, as the game doesn't seem to be able to
+                    // process it yet.
+                    inputs.Input = new Dictionary<int, OneInputData>();
+                    foreach (var chef in setup.entityRecords.Chefs)
+                    {
+                        inputs.Input[chef.Key.path.ids[0]] = new OneInputData();
+                    }
+                }
+                else
+                {
+                    // TODO: this also computes whether current actions have ended. If we pause right
+                    // when an action is done, we would not be marking the current action as done
+                    // until we resume again. Is that an issue?
+                    inputs.Input = simulator.ComputeInputForNextFrame();
+                }
                 inputs.NextFrame = simulator.Frame + 1;
             }
             else
@@ -180,6 +211,7 @@ namespace Hpmv
             }
             inputs.PreventInvalidState = setup.PreventInvalidState;
 
+            var time4 = DateTime.Now;
             if (State == RealGameState.Warping)
             {
                 var entityIdToPathWhenWarping = new Dictionary<int, EntityPath>();
@@ -205,6 +237,8 @@ namespace Hpmv
                 simulator.SetFrameAfterWarping(output.FrameNumber);
             }
 
+
+            var time5 = DateTime.Now;
             // If we advanced logical frame earlier, notify the UI of the new frame. We don't do this
             // earlier because we may have called ComputeInputForNextFrame in the middle and that
             // could affect start and end times of actions that affects UI layout.
@@ -213,6 +247,8 @@ namespace Hpmv
                 OnFrameUpdate?.Invoke();
             }
 
+
+            var time6 = DateTime.Now;
             // Finally, handle user requests to pause, resume, or warp.
             if (currentRequest != null)
             {
@@ -337,10 +373,13 @@ namespace Hpmv
                 }
             }
 
+            var time7 = DateTime.Now;
             OnStateChanged?.Invoke();
+            var endTime = DateTime.Now;
+            // Console.WriteLine($"getNext took {(endTime - startTime).TotalMilliseconds} ms: time1: {(time1 - startTime).TotalMilliseconds} ms, time2: {(time2 - time1).TotalMilliseconds} ms, time3: {(time3 - time2).TotalMilliseconds} ms, time4: {(time4 - time3).TotalMilliseconds} ms, time5: {(time5 - time4).TotalMilliseconds} ms, time6: {(time6 - time5).TotalMilliseconds} ms, time7: {(time7 - time6).TotalMilliseconds} ms, time8: {(endTime - time7).TotalMilliseconds} ms");
 
             FramerateController.WaitTillNextFrame();
-            return Task.FromResult(inputs);
+            return inputs;
         }
 
         public void RequestPause()

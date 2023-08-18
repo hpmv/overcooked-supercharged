@@ -22,12 +22,14 @@ namespace controller.Pages
         private MatIconButton LoadButton;
         private MatIconButton InitializeButton;
         private MatIconButton PatchPrefabButton;
+        private MatIconButton CompareButton;
         private BaseMatMenu LoadMenu;
         private BaseMatMenu InitializeMenu;
         private BaseMatMenu PatchPrefabMenu;
+        private BaseMatMenu CompareMenu;
         private bool SaveDialogIsOpen;
         private RealGameConnector realGameConnector;
-        private GameSetup level = new GameSetup();
+        private GameSetup level = new();
         private bool ShowInputDebug;
         private bool ShowRecordDebug { get; set; }
         private bool ShowMessageStats;
@@ -77,7 +79,7 @@ namespace controller.Pages
             if (firstRender)
             {
                 thisRef = DotNetObjectReference.Create(this);
-                JSRuntime.InvokeVoidAsync("setUpScheduleBackgroundClick", scheduleBackgroundRef, thisRef);
+                _ = JSRuntime.InvokeVoidAsync("setUpScheduleBackgroundClick", scheduleBackgroundRef, thisRef);
             }
         }
 
@@ -205,7 +207,7 @@ namespace controller.Pages
                     }
                     if (realGameConnector.State == RealGameState.Running)
                     {
-                        if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != null)
+                        if (level.entityRecords.InvalidStateReason[level.LastEmpiricalFrame] != "")
                         {
                             realGameConnector.RequestPause();
                         }
@@ -233,12 +235,18 @@ namespace controller.Pages
                             }
                         }
                     }
-                    StateHasChanged();
+                    if (!PauseTimelineLayout)
+                    {
+                        StateHasChanged();
+                    }
                 });
             };
             realGameConnector.OnStateChanged += () =>
             {
-                StateHasChanged();
+                if (!PauseTimelineLayout)
+                {
+                    StateHasChanged();
+                }
             };
             realGameConnector.OnConnectionTerminated += () =>
             {
@@ -281,77 +289,46 @@ namespace controller.Pages
             return realGameConnector != null && realGameConnector.State == RealGameState.Paused;
         }
 
-        private string GetRealGameState()
+        private static string RealGameStateToIcon(RealGameState state)
         {
-            if (realGameConnector == null)
+            return state switch
             {
-                return "Not connected";
-            }
-            return realGameConnector.State.ToString();
+                RealGameState.NotInLevel => "pending",
+                RealGameState.AwaitingStart => "hourglass_empty",
+                RealGameState.Running => "play_arrow",
+                RealGameState.AwaitingPause => "hourglass_bottom",
+                RealGameState.Paused => "hourglass_full",
+                RealGameState.AwaitingResume or RealGameState.AwaitingPhysicsPhaseShiftAlignment => "hourglass_top",
+                RealGameState.Warping => "restore",
+                RealGameState.Error => "error_outline",
+                RealGameState.ReestablishingConnection => "settings_ethernet",
+                _ => "",
+            };
         }
 
-        private string RealGameStateToIcon(RealGameState state)
+        private static string RealGameStateToColor(RealGameState state)
         {
-            switch (state)
+            return state switch
             {
-                case RealGameState.NotInLevel:
-                    return "pending";
-                case RealGameState.AwaitingStart:
-                    return "hourglass_empty";
-                case RealGameState.Running:
-                    return "play_arrow";
-                case RealGameState.AwaitingPause:
-                    return "hourglass_bottom";
-                case RealGameState.Paused:
-                    return "hourglass_full";
-                case RealGameState.AwaitingResume:
-                case RealGameState.AwaitingPhysicsPhaseShiftAlignment:
-                    return "hourglass_top";
-                case RealGameState.Warping:
-                    return "restore";
-                case RealGameState.Error:
-                    return "error_outline";
-                case RealGameState.ReestablishingConnection:
-                    return "settings_ethernet";
-            }
-            return "";
-        }
-
-        private string RealGameStateToColor(RealGameState state)
-        {
-            switch (state)
-            {
-                case RealGameState.NotInLevel:
-                    return "gray";
-                case RealGameState.AwaitingStart:
-                    return "gray";
-                case RealGameState.Running:
-                    return "green";
-                case RealGameState.AwaitingPause:
-                    return "darkyellow";
-                case RealGameState.Paused:
-                    return "green";
-                case RealGameState.AwaitingResume:
-                    return "darkyellow";
-                case RealGameState.Warping:
-                    return "gray";
-                case RealGameState.Error:
-                    return "red";
-                case RealGameState.ReestablishingConnection:
-                    return "gray";
-            }
-            return "";
+                RealGameState.NotInLevel => "gray",
+                RealGameState.AwaitingStart => "gray",
+                RealGameState.Running => "green",
+                RealGameState.AwaitingPause => "darkyellow",
+                RealGameState.Paused => "green",
+                RealGameState.AwaitingResume => "darkyellow",
+                RealGameState.Warping => "gray",
+                RealGameState.Error => "red",
+                RealGameState.ReestablishingConnection => "gray",
+                _ => "",
+            };
         }
 
         private void SimulateInResponseToEditorChange(int frame)
         {
-            if (realGameConnector != null)
-            {
-                realGameConnector.RequestWarpAndResume(frame);
-            }
+            realGameConnector?.RequestWarpAndResume(frame);
         }
 
-        private List<string> availableSaveFiles = new List<string>();
+        private readonly List<string> availableSaveFiles = new List<string>();
         private void RefreshAvailableSaveFiles()
         {
             availableSaveFiles.Clear();
@@ -367,7 +344,7 @@ namespace controller.Pages
 
         private string SaveFileName { get; set; }
 
-        private Dictionary<string, Type> levelInitializers = new Dictionary<string, Type>
+        private readonly Dictionary<string, Type> levelInitializers = new Dictionary<string, Type>
         {
             ["carnival31-four"] = typeof(Carnival31FourLevel),
             ["carnival34-four"] = typeof(Carnival34FourLevel),
@@ -393,6 +370,16 @@ namespace controller.Pages
         {
             var initializer = levelInitializers[selectedLevel];
             UseLevel(Activator.CreateInstance(initializer) as GameSetup);
+        }
+
+        private void CompareLevel(string otherSave)
+        {
+            var data = File.ReadAllBytes(otherSave);
+            var save = new Hpmv.Save.GameSetup();
+            save.MergeFrom(data);
+            var level = save.FromProto();
+
+            level.CompareWith(this.level);
         }
 
         private void PatchPrefab(string selectedLevel)

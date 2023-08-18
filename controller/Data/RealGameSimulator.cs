@@ -567,14 +567,14 @@ namespace Hpmv
             {
                 entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
-                Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");
+                // Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");
             };
 
             Action<GameEntityRecord, uint> retireEntity = (r, entityId) =>
             {
                 entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
-                Console.WriteLine($"Retiring {entityId} ({r.className} {r.displayName})");
+                // Console.WriteLine($"Retiring {entityId} ({r.className} {r.displayName})");
             };
 
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
@@ -623,7 +623,7 @@ namespace Hpmv
 
         public void ApplyInvalidGameState(string reason)
         {
-            if (reason != null)
+            if (reason != "")
             {
                 Console.WriteLine($"Invalid game state: {reason}");
             }
@@ -671,7 +671,7 @@ namespace Hpmv
 
         public void ApplyEntityRegistryUpdateEarly(EntityRegistryData data)
         {
-            Console.WriteLine($"Applying early registry update for {data.EntityId} {string.Join(", ", data.SyncEntityTypes.Select(t => ((EntityType)t).ToString()))}");
+            // Console.WriteLine($"Applying early registry update for {data.EntityId} {string.Join(", ", data.SyncEntityTypes.Select(t => ((EntityType)t).ToString()))}");
             FakeEntityRegistry.entityToTypes[data.EntityId] = data.SyncEntityTypes.Select(t => (EntityType)t).ToList();
         }
 
@@ -680,7 +680,7 @@ namespace Hpmv
             // Console.WriteLine($"Applying late registry update for {data.EntityId}");
             if (!entityIdToRecord.ContainsKey(data.EntityId))
             {
-                Console.WriteLine("Ignoring entity registry update for " + data.EntityId + ": " + data.Name);
+                // Console.WriteLine("Ignoring entity registry update for " + data.EntityId + ": " + data.Name);
                 return;
             }
             if (entityIdToRecord[data.EntityId].displayName == "")
@@ -694,27 +694,27 @@ namespace Hpmv
             {
                 if (!entityIdToPath.ContainsKey(entityId))
                 {
-                    Console.WriteLine($"[WARP] Incorrect spawning capture! Spawned entity {entityId} does not have an entity path attached!");
+                    // Console.WriteLine($"[WARP] Incorrect spawning capture! Spawned entity {entityId} does not have an entity path attached!");
                     return;
                 }
                 var path = entityIdToPath[entityId];
-                Console.WriteLine($"[WARP] Matched spawned entity {entityId} to path {path}");
+                // Console.WriteLine($"[WARP] Matched spawned entity {entityId} to path {path}");
                 var record = setup.entityRecords.GetRecordFromPath(path.ids);
                 entityIdToRecord[entityId] = record;
             };
 
             if (item is DestroyEntityMessage dem)
             {
-                Console.WriteLine($"[WARP] Unmapped destroyed entity {dem.m_Header.m_uEntityID}");
+                // Console.WriteLine($"[WARP] Unmapped destroyed entity {dem.m_Header.m_uEntityID}");
                 entityIdToRecord.Remove((int)dem.m_Header.m_uEntityID);
             }
             else if (item is DestroyEntitiesMessage dems)
             {
-                Console.WriteLine($"[WARP] Unmapped destroyed entity {dems.m_rootId}");
+                // Console.WriteLine($"[WARP] Unmapped destroyed entity {dems.m_rootId}");
                 entityIdToRecord.Remove((int)dems.m_rootId);
                 foreach (var i in dems.m_ids)
                 {
-                    Console.WriteLine($"[WARP] Unmapped destroyed entity {i}");
+                    // Console.WriteLine($"[WARP] Unmapped destroyed entity {i}");
                     entityIdToRecord.Remove((int)i);
                 }
             }
