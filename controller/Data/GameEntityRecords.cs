@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -5,20 +6,19 @@ namespace Hpmv
 {
     public class GameEntityRecords
     {
-        public readonly List<PrefabRecord> Prefabs = new List<PrefabRecord>();
-        public readonly Dictionary<PrefabRecord, int> PrefabToIndex = new Dictionary<PrefabRecord, int>();
-        public readonly List<GameEntityRecord> FixedEntities = new List<GameEntityRecord>();
-        public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new Dictionary<GameEntityRecord, Versioned<ControllerState>>();
-        public readonly Dictionary<int, Vector3> CapturedInitialPositions = new Dictionary<int, Vector3>();
-        // TODO: serialize this. It's not that important though.
-        public readonly Versioned<string> InvalidStateReason = new Versioned<string>(null);
-        public readonly Versioned<int> PhysicsPhaseShift = new Versioned<int>(0);
+        public readonly List<PrefabRecord> Prefabs = new();
+        public readonly Dictionary<PrefabRecord, int> PrefabToIndex = new();
+        public readonly List<GameEntityRecord> FixedEntities = new();
+        public readonly Dictionary<GameEntityRecord, Versioned<ControllerState>> Chefs = new();
+        public readonly Dictionary<int, Vector3> CapturedInitialPositions = new();
+        public Versioned<string> InvalidStateReason = new("");
+        public Versioned<int> PhysicsPhaseShift = new(0);
 
         // Represents whether the game is currently in a critical section, where warping in or out of
         // the critical section is not correctly implemented and should be avoided.
         // It's an integer because multiple sources may enter critical sections, so this is a running total.
         // We're not in a critical section of this value is 0.
-        public Versioned<int> CriticalSectionForWarping = new Versioned<int>(0);
+        public Versioned<int> CriticalSectionForWarping = new(0);
 
         public IEnumerable<GameEntityRecord> GenAllEntities()
         {
@@ -186,6 +186,34 @@ namespace Hpmv
                 result.Controllers[chef.path.ids[0]] = controller.ToProto();
             }
             result.CriticalSectionForWarping = CriticalSectionForWarping.ToProto();
+            result.InvalidStateReason = InvalidStateReason.ToProto();
+            result.PhysicsPhaseShift = PhysicsPhaseShift.ToProto();
+            return result;
+        }
+
+        public bool CompareWith(GameEntityRecords that, int frame)
+        {
+            var result = true;
+            foreach (var entity in GenAllEntities())
+            {
+                if (entity.prefab.Ignore)
+                {
+                    continue;
+                }
+                if (that.GetRecordFromPath(entity.path.ids) is GameEntityRecord otherEntity)
+                {
+                    if (!entity.CompareWith(otherEntity, frame))
+                    {
+                        Console.WriteLine($"Entity {entity.displayName} at path {entity.path} does not match");
+                        result = false;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Entity {entity.displayName} at path {entity.path} does not exist in other records");
+                    result = false;
+                }
+            }
             return result;
         }
     }

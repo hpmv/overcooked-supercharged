@@ -193,6 +193,28 @@ message VersionedDouble {
     double initial_value = 3;
 }
 
+message VersionedString {
+    repeated int32 frame = 1;
+    repeated string data = 2;
+    string initial_value = 3;
+}
+
+message ServerMessage {
+    int32 kind = 1;
+    int32 subkind = 2;
+    bytes data = 3;
+}
+
+message ServerMessages {
+    repeated ServerMessage messages = 1;
+}
+
+message VersionedListOfServerMessages {
+    repeated int32 frame = 1;
+    repeated ServerMessages data = 2;
+    ServerMessages initial_value = 3;
+}
+
 message SavedCollider {
     EntityPath entity = 1;
     int32 collider_index = 2;
@@ -379,6 +401,9 @@ message GameEntityRecords {
     repeated GameEntityRecord all_records = 1;
     map<int32, VersionedControllerState> controllers = 2;
     VersionedInt critical_section_for_warping = 3;
+    VersionedInt physics_phase_shift = 5;
+    VersionedString invalid_state_reason = 6;
+    VersionedListOfServerMessages server_messages = 7;
 }
 
 message GameActionChefList {

@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace Hpmv {
-    public class GameSetup {
+namespace Hpmv
+{
+    public class GameSetup
+    {
         public GameMapGeometry geometry;
         public Dictionary<int, GameMap> mapByChef = new Dictionary<int, GameMap>();
         public GameEntityRecords entityRecords = new GameEntityRecords();
@@ -12,18 +15,22 @@ namespace Hpmv {
         public int LastEmpiricalFrame { get; set; }
         public bool PreventInvalidState { get; set; } = true;
 
-        public void RegisterChef(GameEntityRecord chef) {
+        public void RegisterChef(GameEntityRecord chef)
+        {
             sequences.AddChef(chef);
             inputHistory.FrameInputs[chef] = new Versioned<ActualControllerInput>(default);
         }
 
-        public bool IsValid() {
+        public bool IsValid()
+        {
             return geometry != null;
         }
 
-        public Save.GameSetup ToProto() {
+        public Save.GameSetup ToProto()
+        {
             var result = new Save.GameSetup();
-            foreach (var kv in mapByChef) {
+            foreach (var kv in mapByChef)
+            {
                 result.MapByChef.Add(kv.Key, kv.Value.ToProto());
             }
             result.Geometry = geometry.ToProto();
@@ -33,28 +40,55 @@ namespace Hpmv {
             result.LastEmpiricalFrame = LastEmpiricalFrame;
             return result;
         }
+
+        public void CompareWith(GameSetup that)
+        {
+            var endFrame = Math.Min(this.LastEmpiricalFrame, that.LastEmpiricalFrame);
+            for (var i = 0; i <= endFrame; i++)
+            {
+                if (!this.inputHistory.CompareWith(that.inputHistory, i))
+                {
+                    Console.WriteLine($"Comparison failed at frame {i}");
+                    return;
+                }
+                if (!this.entityRecords.CompareWith(that.entityRecords, i))
+                {
+                    Console.WriteLine($"Comparison failed at frame {i}");
+                    return;
+                }
+            }
+            Console.WriteLine($"Comparison success");
+        }
     }
 
-    public static class GameSetupFromProto {
-        public static GameSetup FromProto(this Save.GameSetup proto) {
+    public static class GameSetupFromProto
+    {
+        public static GameSetup FromProto(this Save.GameSetup proto)
+        {
             var loadContext = new LoadContext();
             loadContext.Load(proto.Records);
             Dictionary<int, GameMap> mapByChef = new Dictionary<int, GameMap>();
             GameMapGeometry geometry;
-            if (proto.Map != null) {
+            if (proto.Map != null)
+            {
                 // compatibility with old format
                 geometry = new GameMapGeometry(proto.Map.TopLeft.FromProto(), new System.Numerics.Vector2());
                 var map = proto.Map.FromProto(geometry);
-                foreach (var chef in proto.Sequences.Chefs) {
+                foreach (var chef in proto.Sequences.Chefs)
+                {
                     mapByChef[chef.Chef.Path[0]] = map;
                 }
-            } else {
+            }
+            else
+            {
                 geometry = proto.Geometry.FromProto();
-                foreach (var map in proto.MapByChef) {
+                foreach (var map in proto.MapByChef)
+                {
                     mapByChef[map.Key] = map.Value.FromProto(proto.Geometry.FromProto());
                 }
             }
-            return new GameSetup {
+            return new GameSetup
+            {
                 entityRecords = loadContext.Records,
                 geometry = geometry,
                 mapByChef = mapByChef,

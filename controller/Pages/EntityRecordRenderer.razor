@@ -3,56 +3,88 @@
 
 <div class="one-record">
     <div class="record-title @(Record.existed[Frame] ? "record-exists" : "record-does-not-exist")">
-        <button @onclick="() => ShowDetails = !ShowDetails">@(ShowDetails ? "-":"+")</button>
+        <button @onclick="() => ShowDetails = !ShowDetails">@(ShowDetails ? "-" : "+")</button>
         @(Record.displayName) [@(Record.path)]
-        @if (Record.spawnOwner[Frame] != -1) {
+        @if (Record.spawnOwner[Frame] != -1)
+        {
             <span> (o: @(Record.spawnOwner[Frame])</span>
         }
         @{
-            if (Record.washingProgress[Frame] > 0) {
+            if (Record.washingProgress[Frame] > 0)
+            {
                 <span> (wp: @(Record.washingProgress[Frame]))</span>
             }
-            if (Record.choppingProgress[Frame] > 0) {
+            if (Record.choppingProgress[Frame] > 0)
+            {
                 <span> (cp: @(Record.choppingProgress[Frame]))</span>
             }
-            if (Record.cookingProgress[Frame] > 0) {
+            if (Record.cookingProgress[Frame] > 0)
+            {
                 <span> (cp: @(Record.cookingProgress[Frame]))</span>
             }
-            if (Record.mixingProgress[Frame] > 0) {
+            if (Record.mixingProgress[Frame] > 0)
+            {
                 <span> (mp: @(Record.mixingProgress[Frame]))</span>
             }
         }
     </div>
-    @if (ShowDetails) {
+    @if (ShowDetails)
+    {
         <div class="record-details">
-<pre>Position: @(Record.position[Frame])
-Velocity: @(Record.velocity[Frame])
-Data: @(ToJson(Record.data[Frame].ToProto()))
-@if (Record.washingProgress[Frame] > 0) {
-@("Washing Progress: " +Record.washingProgress[Frame])
-}
-@if (Record.choppingProgress[Frame] > 0) {
-@("Chopping Progress: " +Record.choppingProgress[Frame])
-}
-@if (Record.cookingProgress[Frame] > 0) {
-@("Cooking Progress: " +Record.cookingProgress[Frame])
-}
-@if (Record.mixingProgress[Frame] > 0) {
-@("Mixing Progress: " +Record.mixingProgress[Frame])
-}
-@if (Record.chefState != null) {
-    @("Chef: " + ToJson(Record.chefState[Frame].ToProto()))
-}
-Spawn Owner: @(Record.spawnOwner[Frame])
-@if (Record.prefab.IsCannon && Record.data[Frame].rawGameEntityData != null) {
-    @("Cannon: " + new CannonModMessage().FromBytes(Record.data[Frame].rawGameEntityData).ToJson())
-}
-@("Prefab: " + ToJson(Record.prefab.ToProto(AllRecords)))
-</pre>
+            <pre>
+                @{
+                    @("Position: " + Record.position[Frame])
+                    @("\n")
+                    @("Velocity:" + Record.velocity[Frame])
+                    @("\n")
+                    @("Rotation:" + Record.rotation[Frame])
+                    @("\n")
+                    @("Angular Velocity:" + Record.angularVelocity[Frame])
+                    @("\n")
+                    @("Data:" + ToJson(Record.data[Frame].ToProto()))
+                }
+                @if (Record.washingProgress[Frame] > 0)
+                {
+                    @("\n")
+                    @("Washing Progress: " + Record.washingProgress[Frame])
+                }
+                @if (Record.choppingProgress[Frame] > 0)
+                {
+                    @("\n")
+                    @("Chopping Progress: " + Record.choppingProgress[Frame])
+                }
+                @if (Record.cookingProgress[Frame] > 0)
+                {
+                    @("\n")
+                    @("Cooking Progress: " + Record.cookingProgress[Frame])
+                }
+                @if (Record.mixingProgress[Frame] > 0)
+                {
+                    @("\n")
+                    @("Mixing Progress: " + Record.mixingProgress[Frame])
+                }
+                @if (Record.chefState != null)
+                {
+                    @("\n")
+                    @("Chef: " + ToJson(Record.chefState[Frame].ToProto()))
+                }
+                @{
+                    @("\n")
+                    @("Spawn Owner:" + Record.spawnOwner[Frame])
+                }
+                @if (Record.prefab.IsCannon && Record.data[Frame].rawGameEntityData != null)
+                {
+                    @("\n")
+                    @("Cannon: " + new CannonModMessage().FromBytes(Record.data[Frame].rawGameEntityData).ToJson())
+                }
+                @("\n")
+                @("Prefab: " + ToJson(Record.prefab.ToProto(AllRecords)))
+                </pre>
         </div>
     }
     <div class="record-children">
-        @foreach (var spawned in Record.spawned) {
+        @foreach (var spawned in Record.spawned)
+        {
             <EntityRecordRenderer Record="@spawned" AllRecords="@AllRecords" Frame="@Frame"></EntityRecordRenderer>
         }
     </div>

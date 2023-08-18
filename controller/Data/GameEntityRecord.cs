@@ -4,9 +4,11 @@ using System.Linq;
 using System.Numerics;
 using Team17.Online.Multiplayer.Messaging;
 
-namespace Hpmv {
+namespace Hpmv
+{
 
-    public class GameEntityRecord {
+    public class GameEntityRecord
+    {
         public EntityPath path;
         public string displayName = "";
         public string className = "";
@@ -28,8 +30,10 @@ namespace Hpmv {
         public Versioned<double> cookingProgress = new Versioned<double>(0);
         public Versioned<double> mixingProgress = new Versioned<double>(0);
 
-        public Save.GameEntityRecord ToProto(GameEntityRecords context) {
-            var result = new Save.GameEntityRecord {
+        public Save.GameEntityRecord ToProto(GameEntityRecords context)
+        {
+            var result = new Save.GameEntityRecord
+            {
                 Path = path.ToProto(),
                 DisplayName = displayName,
                 ClassName = className,
@@ -49,13 +53,15 @@ namespace Hpmv {
                 CookingProgress = cookingProgress.ToProto(),
                 MixingProgress = mixingProgress.ToProto(),
             };
-            foreach (var spawned in this.spawned) {
+            foreach (var spawned in this.spawned)
+            {
                 result.Spawned.Add(spawned.path.ToProto());
             }
             return result;
         }
 
-        public void ReadMutableDataFromProto(Save.GameEntityRecord record, LoadContext context) {
+        public void ReadMutableDataFromProto(Save.GameEntityRecord record, LoadContext context)
+        {
             spawner = record.Spawner.FromProtoRef(context);
             spawned = record.Spawned.Select(s => s.FromProtoRef(context)).ToList();
             nextSpawnId = record.NextSpawnId.FromProto();
@@ -73,7 +79,8 @@ namespace Hpmv {
             mixingProgress = record.MixingProgress.FromProto();
         }
 
-        public void CleanRecordsAfterFrameRecursively(int frame) {
+        public void CleanRecordsAfterFrameRecursively(int frame)
+        {
             // This is hacky... spawn owner does not actually belong to the game, it belongs to the controller.
             // We need to clear the spawn owner at this frame too because during action processing we set the
             // spawn owner for this frame, not the next frame (and that's because another action may begin
@@ -92,34 +99,42 @@ namespace Hpmv {
             choppingProgress.RemoveAllAfter(frame);
             cookingProgress.RemoveAllAfter(frame);
             mixingProgress.RemoveAllAfter(frame);
-            if (chefState != null) {
+            if (chefState != null)
+            {
                 chefState.RemoveAllAfter(frame);
             }
-            foreach (var spawned in spawned) {
+            foreach (var spawned in spawned)
+            {
                 spawned.CleanRecordsAfterFrameRecursively(frame);
             }
         }
 
 
 
-        public override string ToString() {
+        public override string ToString()
+        {
             return displayName;
         }
 
-        public IEnumerable<GameEntityRecord> GenAllEntities() {
+        public IEnumerable<GameEntityRecord> GenAllEntities()
+        {
             yield return this;
-            foreach (var spawn in spawned) {
-                foreach (var record in spawn.GenAllEntities()) {
+            foreach (var spawn in spawned)
+            {
+                foreach (var record in spawn.GenAllEntities())
+                {
                     yield return record;
                 }
             }
         }
 
-        public bool IsChef() {
+        public bool IsChef()
+        {
             return chefState != null;
         }
 
-        public bool IsGridOccupant() {
+        public bool IsGridOccupant()
+        {
             // Heuristic: all initial static objects are grid occupants.
             // Except some cases like ingredient containers.
             return path.ids.Length == 1 && !prefab.CanContainIngredients;
@@ -150,28 +165,85 @@ namespace Hpmv {
         /// storing the "spawnOwner" field on the GameEntityRecord; this is versioned. Then, when
         /// creating action 5, we look up the spawnOwner at that frame, and if there is an owner,
         /// we reference the owning action instead of the GameEntityRecord itself.
-        public IEntityReference ReverseEngineerStableEntityReference(int frame) {
-            if (spawner == null) {
+        public IEntityReference ReverseEngineerStableEntityReference(int frame)
+        {
+            if (spawner == null)
+            {
                 return new LiteralEntityReference(this);
             }
-            if (spawnOwner[frame] == -1) {
+            if (spawnOwner[frame] == -1)
+            {
                 return new LiteralEntityReference(this);
             }
             return new SpawnedEntityReference(spawnOwner[frame]);
         }
 
-        public bool IsInCriticalSectionForWarping(int frame) {
-            if (prefab != null && prefab.IsCannon) {
+        public bool IsInCriticalSectionForWarping(int frame)
+        {
+            if (prefab != null && prefab.IsCannon)
+            {
                 var rawData = data[frame].rawGameEntityData;
-                if (rawData != null) {
+                if (rawData != null)
+                {
                     return new CannonModMessage().FromBytes(rawData).m_state == CannonModMessage.CannonState.Loading;
                 }
             }
             return false;
         }
+
+        public bool CompareWith(GameEntityRecord that, int frame)
+        {
+            if (this.position[frame] != that.position[frame])
+            {
+                Console.WriteLine($"Position mismatch for entity {this.displayName} at frame {frame}: {this.position[frame]} vs {that.position[frame]}");
+                return false;
+            }
+            if (this.rotation[frame] != that.rotation[frame])
+            {
+                Console.WriteLine($"Rotation mismatch for entity {this.displayName} at frame {frame}: {this.rotation[frame]} vs {that.rotation[frame]}");
+                return false;
+            }
+            if (this.velocity[frame] != that.velocity[frame])
+            {
+                Console.WriteLine($"Velocity mismatch for entity {this.displayName} at frame {frame}: {this.velocity[frame]} vs {that.velocity[frame]}");
+                return false;
+            }
+            if (this.angularVelocity[frame] != that.angularVelocity[frame])
+            {
+                Console.WriteLine($"Angular velocity mismatch for entity {this.displayName} at frame {frame}: {this.angularVelocity[frame]} vs {that.angularVelocity[frame]}");
+                return false;
+            }
+            if (this.existed[frame] != that.existed[frame])
+            {
+                Console.WriteLine($"Existed mismatch for entity {this.displayName} at frame {frame}: {this.existed[frame]} vs {that.existed[frame]}");
+                return false;
+            }
+            if (this.washingProgress[frame] != that.washingProgress[frame])
+            {
+                Console.WriteLine($"Washing progress mismatch for entity {this.displayName} at frame {frame}: {this.washingProgress[frame]} vs {that.washingProgress[frame]}");
+                return false;
+            }
+            if (this.choppingProgress[frame] != that.choppingProgress[frame])
+            {
+                Console.WriteLine($"Chopping progress mismatch for entity {this.displayName} at frame {frame}: {this.choppingProgress[frame]} vs {that.choppingProgress[frame]}");
+                return false;
+            }
+            if (this.cookingProgress[frame] != that.cookingProgress[frame])
+            {
+                Console.WriteLine($"Cooking progress mismatch for entity {this.displayName} at frame {frame}: {this.cookingProgress[frame]} vs {that.cookingProgress[frame]}");
+                return false;
+            }
+            if (this.mixingProgress[frame] != that.mixingProgress[frame])
+            {
+                Console.WriteLine($"Mixing progress mismatch for entity {this.displayName} at frame {frame}: {this.mixingProgress[frame]} vs {that.mixingProgress[frame]}");
+                return false;
+            }
+            return true;
+        }
     }
 
-    public struct ChefState {
+    public struct ChefState
+    {
         public GameEntityRecord highlightedForPickup;
         public GameEntityRecord highlightedForUse;
         public GameEntityRecord highlightedForPlacement;
@@ -186,8 +258,10 @@ namespace Hpmv {
         public Vector3 impactVelocity;
         public double leftOverTime;
 
-        public Save.ChefState ToProto() {
-            return new Save.ChefState {
+        public Save.ChefState ToProto()
+        {
+            return new Save.ChefState
+            {
                 HighlightedForPickup = highlightedForPickup?.path?.ToProto(),
                 HighlightedForUse = highlightedForUse?.path?.ToProto(),
                 HighlightedForPlacement = highlightedForPlacement?.path?.ToProto(),
@@ -205,9 +279,12 @@ namespace Hpmv {
         }
     }
 
-    public static class ChefStateFromProto {
-        public static ChefState FromProto(this Save.ChefState state, LoadContext context) {
-            return new ChefState {
+    public static class ChefStateFromProto
+    {
+        public static ChefState FromProto(this Save.ChefState state, LoadContext context)
+        {
+            return new ChefState
+            {
                 highlightedForPickup = state.HighlightedForPickup.FromProtoRef(context),
                 highlightedForUse = state.HighlightedForUse.FromProtoRef(context),
                 highlightedForPlacement = state.HighlightedForPlacement.FromProtoRef(context),

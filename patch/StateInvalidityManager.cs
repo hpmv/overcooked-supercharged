@@ -4,13 +4,13 @@ namespace SuperchargedPatch
 {
     public class StateInvalidityManager
     {
-        public static string InvalidReason { get; set; } = null;
+        public static string InvalidReason { get; set; } = "";
         public static bool PreventInvalidState { get; set; } = false;
         public static bool IsInvalid
         {
             get
             {
-                return InvalidReason != null;
+                return InvalidReason != "";
             }
         }
 
@@ -45,7 +45,6 @@ namespace SuperchargedPatch
         public static void Destroy()
         {
             style = null;
-            InvalidReason = null;
             PreventInvalidState = false;
         }
     }

@@ -1,4 +1,5 @@
-html, body {
+html,
+body {
     margin: 0;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
@@ -147,7 +148,7 @@ html, body {
     background-color: rgba(255, 217, 146, 0.267);
 }
 
-.chef-column-title{
+.chef-column-title {
     font-weight: bold;
     align-self: center;
     height: 50px;
@@ -254,12 +255,15 @@ html, body {
 .one-action-dep-chef-red {
     background-color: red;
 }
+
 .one-action-dep-chef-yellow {
     background-color: rgb(224, 202, 0);
 }
+
 .one-action-dep-chef-green {
     background-color: green;
 }
+
 .one-action-dep-chef-blue {
     background-color: blue;
 }
@@ -385,12 +389,15 @@ html, body {
 .record-vis-interacter-chef-red {
     background-color: red;
 }
+
 .record-vis-interacter-chef-yellow {
     background-color: rgb(224, 202, 0);
 }
+
 .record-vis-interacter-chef-green {
     background-color: green;
 }
+
 .record-vis-interacter-chef-blue {
     background-color: blue;
 }
@@ -502,8 +509,7 @@ html, body {
 .record-vis-type-chef-red::after,
 .record-vis-type-chef-green::after,
 .record-vis-type-chef-yellow::after,
-.record-vis-type-chef-blue::after
-{
+.record-vis-type-chef-blue::after {
     content: "";
     display: block;
     box-sizing: border-box;
@@ -524,12 +530,15 @@ html, body {
 .record-vis-type-chef-red::after {
     border-color: red;
 }
+
 .record-vis-type-chef-yellow::after {
     border-color: rgb(224, 202, 0);
 }
+
 .record-vis-type-chef-green::after {
     border-color: green;
 }
+
 .record-vis-type-chef-blue::after {
     border-color: blue;
 }
@@ -627,69 +636,91 @@ html, body {
 .record-vis-ingredient-16620 {
     background-image: url('../images/egg_Icon-resources.assets-353.png');
 }
+
 .record-vis-ingredient-18448 {
     background-image: url('../images/Flour_Icon-resources.assets-512.png');
 }
+
 .record-vis-ingredient-129618 {
     background-image: url('../images/Strawberry_Icon-resources.assets-217.png');
 }
+
 .record-vis-ingredient-22804 {
     background-image: url('../images/chocolate_Icon-resources.assets-504.png');
 }
+
 .record-vis-ingredient-19670 {
     background-image: url('../images/honeycomb_Icon-resources.assets-248.png');
 }
+
 .record-vis-ingredient-83234 {
     background-image: url('../images/Blueberry_Icon-resources.assets-588.png');
 }
+
 .record-vis-ingredient-109880 {
     background-image: url('../images/Potato_Icon-resources.assets-532.png');
 }
+
 .record-vis-ingredient-17708 {
     background-image: url('../images/Carrot_Icon-resources.assets-312.png');
 }
+
 .record-vis-ingredient-112986 {
     background-image: url('../images/Broccoli_Icon-resources.assets-496.png');
 }
+
 .record-vis-ingredient-54456 {
     background-image: url('../images/BeefJoint_Icon-resources.assets-376.png');
 }
+
 .record-vis-ingredient-32308 {
     background-image: url('../images/Chicken_Icon-resources.assets-235.png');
 }
+
 .record-vis-ingredient-461162 {
     background-image: url('../images/Onion_Icon-resources.assets-488.png');
 }
+
 .record-vis-ingredient-284626 {
     background-image: url('../images/Sausage_Icon-resources.assets-286.png');
 }
+
 .record-vis-ingredient-262914 {
     background-image: url('../images/Bun_Icon-resources.assets-533.png');
 }
+
 .record-vis-ingredient-421028 {
     background-image: url('../images/Chicken_Icon-resources.assets-235.png');
 }
+
 .record-vis-ingredient-12958 {
     background-image: url('../images/Meat_Icon-resources.assets-375.png');
 }
+
 .record-vis-ingredient-16088 {
     background-image: url('../images/Bun_Icon-resources.assets-533.png');
 }
+
 .record-vis-ingredient-419988 {
     background-image: url('../images/Potato_Icon-resources.assets-532.png');
 }
+
 .record-vis-ingredient-442282 {
     background-image: url('../images/Onion_Icon-resources.assets-488.png');
 }
+
 .record-vis-ingredient-509482 {
     background-image: url('../images/Cheese_Icon-resources.assets-314.png');
 }
+
 .record-vis-ingredient-430608 {
     background-image: url('../images/Drink01_Icon.png');
 }
+
 .record-vis-ingredient-430622 {
     background-image: url('../images/Drink02_Icon.png');
 }
+
 .record-vis-ingredient-430630 {
     background-image: url('../images/Drink03_Icon.png');
 }
@@ -706,6 +737,7 @@ html, body {
     justify-content: center;
     align-items: center;
 }
+
 .record-vis-plate-respawn-timer {
     width: 16px;
     height: 16px;
@@ -720,8 +752,8 @@ html, body {
 }
 
 .input-axis-vis {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border: 1px solid gray;
     border-radius: 50%;
     position: relative;
@@ -729,12 +761,23 @@ html, body {
 
 .input-axis-dot {
     position: absolute;
-    width: 3px;
-    height: 3px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background-color: black;
-    margin-left: -1.5px;
-    margin-top: -1.5px;
+    margin-left: -3px;
+    margin-top: -3px;
+}
+
+.input-axis-numbers {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-left: 22px;
+}
+
+.input-axis-number {
+    font-size: 10px;
 }
 
 .input-button-vis {
@@ -760,6 +803,7 @@ html, body {
     margin: 0;
     margin-left: 20px;
 }
+
 .input-button-vis-just-released {
     border: 3px solid gray;
     margin: 0;
@@ -843,12 +887,15 @@ html, body {
 .action-editor-dep-chef-red {
     background-color: red;
 }
+
 .action-editor-dep-chef-yellow {
     background-color: rgb(224, 202, 0);
 }
+
 .action-editor-dep-chef-green {
     background-color: green;
 }
+
 .action-editor-dep-chef-blue {
     background-color: blue;
 }
@@ -1052,6 +1099,7 @@ html, body {
 .mdc-menu-surface--animating-closed {
     opacity: 1;
 }
+
 .mdc-menu-surface--animating-open {
     opacity: 1;
     transform: initial;

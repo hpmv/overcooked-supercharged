@@ -86,6 +86,10 @@ namespace SuperchargedPatch
                     rotation = container.transform.rotation;
                     velocity = container.velocity;
                     angularVelocity = container.angularVelocity;
+                } else if (t.m_GameObject.GetComponent<Rigidbody>() is Rigidbody rb)
+                {
+                    velocity = rb.velocity;
+                    angularVelocity = rb.angularVelocity;
                 }
                 EntityPathReference entityPathReference = null;
                 if (t.m_GameObject.GetComponent<EntityPathReferenceMarker>() is EntityPathReferenceMarker marker)

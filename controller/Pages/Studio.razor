@@ -3,19 +3,18 @@
 
 <div class="main-container">
     <div class="toolbar">
-        <MatIconButton
-            Icon="folder_open"
+        <MatIconButton Icon="folder_open"
             OnClick="(e) => {RefreshAvailableSaveFiles(); LoadMenu.OpenAsync(LoadButton.Ref);}"
-            Disabled=@(realGameConnector != null)
-            @ref="LoadButton"/>
+            Disabled=@(realGameConnector != null) @ref="LoadButton" />
         <MatMenu @ref="LoadMenu">
             <MatList>
-                @foreach (var file in availableSaveFiles) {
+                @foreach (var file in availableSaveFiles)
+                {
                     <MatListItem OnClick="(e) => LoadLevel(file)">@(file)</MatListItem>
                 }
             </MatList>
         </MatMenu>
-        <MatIconButton Icon="save" Disabled=@(!level.IsValid()) OnClick="(e) => SaveDialogIsOpen = true"/>
+        <MatIconButton Icon="save" Disabled=@(!level.IsValid()) OnClick="(e) => SaveDialogIsOpen = true" />
         <MatDialog IsOpen="SaveDialogIsOpen">
             <MatDialogTitle>Save</MatDialogTitle>
             <MatDialogContent>
@@ -26,105 +25,111 @@
                 <MatButton OnClick="(e) => {SaveLevel(); SaveDialogIsOpen = false;}">Save</MatButton>
             </MatDialogActions>
         </MatDialog>
-        <MatIconButton
-            Icon="note_add"
-            OnClick="(e) => InitializeMenu.OpenAsync(InitializeButton.Ref)"
-            Disabled=@(realGameConnector != null)
-            @ref="InitializeButton"/>
+        <MatIconButton Icon="note_add" OnClick="(e) => InitializeMenu.OpenAsync(InitializeButton.Ref)"
+            Disabled=@(realGameConnector != null) @ref="InitializeButton" />
         <MatMenu @ref="InitializeMenu">
             <MatList>
-                @foreach (var (init, type) in levelInitializers) {
+                @foreach (var (init, type) in levelInitializers)
+                {
                     <MatListItem OnClick="(e) => InitializeNewLevel(init)">@init</MatListItem>
                 }
             </MatList>
         </MatMenu>
-        <MatIconButton
-            Icon="build"
-            Disabled=@(!level.IsValid() || realGameConnector != null)
-            OnClick="(e) => PatchPrefabMenu.OpenAsync(PatchPrefabButton.Ref)"
-            @ref="PatchPrefabButton"/>
+        <MatIconButton Icon="build" Disabled=@(!level.IsValid() || realGameConnector != null)
+            OnClick="(e) => PatchPrefabMenu.OpenAsync(PatchPrefabButton.Ref)" @ref="PatchPrefabButton" />
         <MatMenu @ref="PatchPrefabMenu">
             <MatList>
-                @foreach (var (init, type) in levelInitializers) {
+                @foreach (var (init, type) in levelInitializers)
+                {
                     <MatListItem OnClick="(e) => PatchPrefab(init)">@init</MatListItem>
                 }
             </MatList>
         </MatMenu>
+        <MatIconButton Icon="compare_arrows" Disabled=@(!level.IsValid() || realGameConnector != null)
+            OnClick="(e) => CompareMenu.OpenAsync(CompareButton.Ref)" @ref="CompareButton" />
+        <MatMenu @ref="CompareMenu">
+            <MatList>
+                @foreach (var file in availableSaveFiles)
+                {
+                    <MatListItem OnClick="(e) => CompareLevel(file)">@(file)</MatListItem>
+                }
+            </MatList>
+        </MatMenu>
         <div class="toolbar-divider"></div>
-        <MatIconButton
-            Icon="sports_esports"
-            OnClick="(e) => ShowInputDebug = !ShowInputDebug"
+        <MatIconButton Icon="sports_esports" OnClick="(e) => ShowInputDebug = !ShowInputDebug"
             class="@(ShowInputDebug ? "debug-button-on" : "")" />
-        <MatIconButton
-            Icon="pest_control"
-            OnClick="(e) => ShowRecordDebug = !ShowRecordDebug"
+        <MatIconButton Icon="pest_control" OnClick="(e) => ShowRecordDebug = !ShowRecordDebug"
             class="@(ShowRecordDebug ? "debug-button-on" : "")" />
-        <MatIconButton
-            Icon="health_and_safety"
-            OnClick="(e) => level.PreventInvalidState = !level.PreventInvalidState"
+        <MatIconButton Icon="health_and_safety" OnClick="(e) => level.PreventInvalidState = !level.PreventInvalidState"
             class="@(level.PreventInvalidState ? "debug-button-on" : "")" />
-        <MatIconButton
-            Icon="speaker_notes"
-            OnClick="(e) => ShowMessageStats = !ShowMessageStats"
+        <MatIconButton Icon="speaker_notes" OnClick="(e) => ShowMessageStats = !ShowMessageStats"
             class="@(ShowMessageStats ? "debug-button-on" : "")" />
-        <MatIconButton
-            Icon="motion_photos_paused"
-            OnClick="(e) => PauseTimelineLayout = !PauseTimelineLayout"
+        <MatIconButton Icon="motion_photos_paused" OnClick="(e) => PauseTimelineLayout = !PauseTimelineLayout"
             class="@(PauseTimelineLayout ? "debug-button-on" : "")" />
         <div class="toolbar-divider"></div>
-        @if (realGameConnector == null) {
+        @if (realGameConnector == null)
+        {
             <MatIconButton Icon="link" Disabled=@(!level.IsValid()) OnClick="(e) => StartRealSimulation()" />
-        } else {
-            <MatIconButton Icon="link_off" OnClick="(e) => StopRealSimulation()" />
-            <MatIcon
-                Icon="@(RealGameStateToIcon(realGameConnector.State))"
-                title="@(realGameConnector.State.ToString())"
-                style="@("color: " + RealGameStateToColor(realGameConnector.State))"
-                class="toolbar-status-icon" />
         }
-        @if (IsSimulationRunning()) {
+        else
+        {
+            <MatIconButton Icon="link_off" OnClick="(e) => StopRealSimulation()" />
+            <MatIcon Icon="@(RealGameStateToIcon(realGameConnector.State))" title="@(realGameConnector.State.ToString())"
+                style="@("color: " + RealGameStateToColor(realGameConnector.State))" class="toolbar-status-icon" />
+        }
+        @if (IsSimulationRunning())
+        {
             <MatIconButton Icon="pause" OnClick="(e) => PauseRealSimulation()" />
-        } else {
+        }
+        else
+        {
             <MatIconButton Icon="play_arrow" Disabled=@(!IsSimulationPaused()) OnClick="(e) => ResumeRealSimulation()" />
         }
         <div class="toolbar-divider"></div>
         <div class="toolbar-text toolbar-text-frame">@(EditorState.SelectedFrame)</div>
-        <MatIconButton
-            Icon="arrow_back_ios"
+        <MatIconButton Icon="arrow_back_ios"
             OnClick="() => NavigateToFrame(Math.Max(0, EditorState.SelectedFrame - 1), true)"
-            Disabled="EditorState.SelectedFrame <= 0"/>
-        <MatIconButton
-            Icon="arrow_forward_ios"
+            Disabled="EditorState.SelectedFrame <= 0" />
+        <MatIconButton Icon="arrow_forward_ios"
             OnClick="() => NavigateToFrame(Math.Min(EditorState.SelectedFrame + 1, level.LastEmpiricalFrame), true)"
-            Disabled="EditorState.SelectedFrame >= level.LastEmpiricalFrame"/>
-        @if (realGameConnector != null) {
+            Disabled="EditorState.SelectedFrame >= level.LastEmpiricalFrame" />
+        @if (realGameConnector != null)
+        {
             <div class="toolbar-divider"></div>
-            <FramerateControllerEditor FramerateController="realGameConnector.FramerateController"/>
+            <FramerateControllerEditor FramerateController="realGameConnector.FramerateController" />
         }
     </div>
     <div class="main-content">
         <div class="left-side-content">
-            <EntityRecordVisualizer
-                Level="level"
-                EditorState="EditorState"
-                OnActionAdded="SimulateInResponseToEditorChange"
-                CanEdit="CanEdit">
+            <EntityRecordVisualizer Level="level" EditorState="EditorState"
+                OnActionAdded="SimulateInResponseToEditorChange" CanEdit="CanEdit">
             </EntityRecordVisualizer>
 
-            @if (ShowInputDebug) {
+            @if (ShowInputDebug)
+            {
                 var frame = EditorState.SelectedFrame;
                 <div class="debug-panel">
-                    @foreach (var (oneChef, _) in level.entityRecords.Chefs) {
+                    @foreach (var (oneChef, _) in level.entityRecords.Chefs)
+                    {
                         var state = oneChef.chefState[frame];
                         var input = level.inputHistory.FrameInputs[oneChef][frame + 1];
                         var controller = level.entityRecords.Chefs[oneChef][frame];
-                        <div>@(oneChef.displayName): Pickup: @(state.highlightedForPickup?.path), Use: @(state.highlightedForUse?.path), Dash timer: @(state.dashTimer)</div>
+                        <div>@(oneChef.displayName): Pickup: @(state.highlightedForPickup?.path), Use:
+                            @(state.highlightedForUse?.path))</div>
                         <div class="chef-input-vis">
                             <div class="input-axis-vis">
-                                <div class="input-axis-dot" style="left: @((input.axes.X + 1) * 20)px; top: @((input.axes.Y + 1) * 20)px"></div>
+                                <div class="input-axis-dot"
+                                    style="left: @((input.axes.X + 1) * 20)px; top: @((input.axes.Y + 1) * 20)px"></div>
                             </div>
-                            @foreach (var (title, button) in new[]{("P", input.primary), ("S", input.secondary), ("D", input.dash)}) {
-                                <div class="input-button-vis @(button.isDown ? "input-button-vis-down" : "") @(button.justPressed ? "input-button-vis-just-pressed" : "") @(button.justReleased ? "input-button-vis-just-released" : "")">
+                            <div class="input-axis-numbers">
+                                <div class="input-axis-number">@(input.axes.X)</div>
+                                <div class="input-axis-number">@(input.axes.Y)</div>
+                            </div>
+                            @foreach (var (title, button) in new[]{("P", input.primary), ("S", input.secondary), ("D",
+                    input.dash)})
+                            {
+                                <div
+                                    class="input-button-vis @(button.isDown ? "input-button-vis-down" : "") @(button.justPressed ? "input-button-vis-just-pressed" : "") @(button.justReleased ? "input-button-vis-just-released" : "")">
                                     @(title)
                                 </div>
                             }
@@ -133,20 +138,24 @@
                 </div>
             }
 
-            @if (ShowRecordDebug) {
+            @if (ShowRecordDebug)
+            {
                 <div class="debug-panel">
                     <pre>Invalid state message: @(level.entityRecords.InvalidStateReason[EditorState.SelectedFrame])</pre>
                     <pre>Physics phase shift: @(level.entityRecords.PhysicsPhaseShift[EditorState.SelectedFrame])</pre>
                     @foreach (var record in level.entityRecords.FixedEntities)
                     {
-                        <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame" AllRecords="level.entityRecords"></EntityRecordRenderer>
+                        <EntityRecordRenderer Record="@record" Frame="EditorState.SelectedFrame"
+                            AllRecords="level.entityRecords"></EntityRecordRenderer>
                     }
                 </div>
             }
 
-            @if (ShowMessageStats && realGameConnector != null) {
+            @if (ShowMessageStats && realGameConnector != null)
+            {
                 <div class="debug-panel">
-                    @foreach (var stats in realGameConnector.simulator.Stats.messageTypeStats) {
+                    @foreach (var stats in realGameConnector.simulator.Stats.messageTypeStats)
+                    {
                         <div>@stats.Key: @stats.Value</div>
                     }
                 </div>
@@ -160,9 +169,12 @@
                 }
                 <div class="schedule-background" @ref="scheduleBackgroundRef"
                     style="min-height: @(TimelineLayout.OffsetFromFrame(level.LastEmpiricalFrame + 1) + 400)px">
-                    @foreach (var rift in TimelineLayout.Rifts) {
+                    @foreach (var rift in TimelineLayout.Rifts)
+                    {
                         var selectionClass = "";
-                        if (rift.frame == EditorState.SelectedFrame && EditorState.SelectedFrame != level.LastEmpiricalFrame) {
+                        if (rift.frame == EditorState.SelectedFrame && EditorState.SelectedFrame !=
+                        level.LastEmpiricalFrame)
+                        {
                             selectionClass = "timeline-rift-selected";
                             hideTimelineSelectionLine = true;
                         }
@@ -170,7 +182,8 @@
                             style="margin-top: @(rift.margin)px; height: @(rift.height)px">
                         </div>
                     }
-                    @foreach (var criticalSection in TimelineLayout.CriticalSections) {
+                    @foreach (var criticalSection in TimelineLayout.CriticalSections)
+                    {
                         <div class="timeline-critical-section"
                             style="top: @(criticalSection.offset)px; height: @(criticalSection.height)px">
                         </div>
@@ -179,7 +192,8 @@
                 <div class="timeline-line-container">
                     <div class="timeline-line-empirical-boundary"
                         style="top: @(TimelineLayout.OffsetFromFrame(level.LastEmpiricalFrame))px"></div>
-                    @if (!hideTimelineSelectionLine) {
+                    @if (!hideTimelineSelectionLine)
+                    {
                         <div class="timeline-line"
                             style="top: @(TimelineLayout.OffsetFromFrame(EditorState.SelectedFrame))px"></div>
                     }
@@ -188,7 +202,8 @@
                     @{
                         var sequences = level.sequences;
                     }
-                    @for (int i = 0; i < sequences.Actions.Count; i++) {
+                    @for (int i = 0; i < sequences.Actions.Count; i++)
+                    {
                         var iCopy = i;
                         var actions = sequences.Actions[i];
                         var lastFrame = 0;
@@ -200,23 +215,30 @@
                                     var indexCopy = index;
                                     var node = actions[index];
                                     string stateClass = "";
-                                    if (node.Predictions.StartFrame != null && node.Predictions.EndFrame == null) {
+                                    if (node.Predictions.StartFrame != null && node.Predictions.EndFrame == null)
+                                    {
                                         stateClass = "active-action";
-                                    } else if (node.Predictions.StartFrame == null) {
+                                    }
+                                    else if (node.Predictions.StartFrame == null)
+                                    {
                                         stateClass = "unstarted-action";
                                     }
                                     string selectedClass;
-                                    if (EditorState.SelectedActionIndex == (i, index)) {
+                                    if (EditorState.SelectedActionIndex == (i, index))
+                                    {
                                         selectedClass = "one-action-selected";
-                                    } else {
+                                    }
+                                    else
+                                    {
                                         selectedClass = "";
                                     }
                                     string typeClass = "one-action-type-" + node.Action.GetType().Name;
                                     <div class="one-action @(stateClass) @(selectedClass) @(typeClass)"
                                         style="margin-top: @(node.Predictions.LayoutTopMargin)px; height: @(node.Predictions.LayoutHeight)px; overflow: hidden"
-                                        @onclick="() => HandleSelectAction(iCopy, indexCopy, node.Predictions.StartFrame ?? 0)">
+                                    @onclick="() => HandleSelectAction(iCopy, indexCopy, node.Predictions.StartFrame ?? 0)">
                                         <div class="one-action-text">[@(node.Id)] @(node.Action.Describe())</div>
-                                        @foreach (var dep in node.Deps) {
+                                        @foreach (var dep in node.Deps)
+                                        {
                                             var depNode = sequences.NodeById[dep];
                                             <div class="one-action-dep one-action-dep-@(depNode.Action.Chef.className)">
                                                 @(dep)
@@ -225,11 +247,15 @@
                                     </div>
                                     lastFrame = Math.Max(lastFrame, node.Predictions.EndFrame ?? 0);
                                 }
-                                @if (EditorState.SelectedActionIndex == (i, actions.Count)) {
+                                @if (EditorState.SelectedActionIndex == (i, actions.Count))
+                                {
                                     <div class="action-insertion-prompt-selected">(Inserting here...)</div>
-                                } else {
+                                }
+                                else
+                                {
                                     <div class="action-insertion-prompt"
-                                        @onclick="() => HandleSelectAction(iCopy, actions.Count, lastFrame)">Click to insert here</div>
+                                    @onclick="() => HandleSelectAction(iCopy, actions.Count, lastFrame)">Click to insert
+                                        here</div>
                                 }
                             </div>
                         </div>
@@ -238,15 +264,13 @@
             </div>
 
             <div class="action-editor-panel">
-                @if (EditorState.SelectedActionIndex != null) {
+                @if (EditorState.SelectedActionIndex != null)
+                {
                     var (chef, index) = EditorState.SelectedActionIndex.Value;
-                    if (index < sequences.Actions[chef].Count) {
-                        <ActionEditor
-                            Selector="nodeSelector"
-                            Sequences="sequences"
-                            Node="sequences.Actions[chef][index]"
-                            DependenciesChanged="OnDependenciesChanged"
-                            CanEdit="CanEdit" />
+                    if (index < sequences.Actions[chef].Count)
+                    {
+                        <ActionEditor Selector="nodeSelector" Sequences="sequences" Node="sequences.Actions[chef][index]"
+                            DependenciesChanged="OnDependenciesChanged" CanEdit="CanEdit" />
                         <MatIconButton Icon="delete" OnClick="HandleDeleteAction" />
                     }
                 }

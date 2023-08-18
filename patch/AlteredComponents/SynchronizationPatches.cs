@@ -125,4 +125,113 @@ namespace SuperchargedPatch.AlteredComponents
             }
         }
     }
+
+    // Patch the following to ensure that automatic synchronization happens on every
+    // frame, which is needed to ensure determinism.
+    [HarmonyPatch(typeof(ServerSynchronisationScheduler), "Update")]
+    public static class PatchServerSynchronisationSchedulerUpdate
+    {
+        [HarmonyPrefix]
+        public static bool Prefix()
+        {
+            return !Helpers.IsPaused();
+        }
+    }
+
+    [HarmonyPatch(typeof(ServerSynchronisationScheduler), "SynchroniseList")]
+    public static class PatchServerSynchronisationSchedulerSynchroniseList
+    {
+        [HarmonyPrefix]
+        public static void Prefix(ref float fFrameDelay)
+        {
+            fFrameDelay = 0f;
+        }
+    }
+
+    [HarmonyPatch(typeof(ServerWorldObjectSynchroniser), "GetServerUpdate")]
+    public static class PatchServerWorldObjectSynchroniserGetServerUpdate
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(ref Serialisable __result)
+        {
+            // Don't need to ever synchronize physics for local game.
+            // Doing so makes the game undeterministic since it's not predictable
+            // when exactly we sync. It's dependent on time.
+            __result = null;
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(ClientKitchenLoader), "CheckStarted")]
+    public static class PatchClientKitchenLoaderCheckStarted
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(ref bool __result)
+        {
+            // The above makes CheckStarted return false since the
+            // ClientWorldObjectSynchroniser never receives any message.
+            // We don't need this check so just return true.
+            __result = true;
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(MeshLerper), "Update")]
+    public static class PatchMeshLerperUpdate
+    {
+        [HarmonyPrefix]
+        public static bool Prefix()
+        {
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(ClientWorldObjectSynchroniser), "ApplyServerUpdate")]
+    public static class PatchClientWorldObjectSynchroniserApplyServerUpdate
+    {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            Console.WriteLine("WARNING: ClientWorldObjectSynchroniser.ApplyServerUpdate called!");
+        }
+    }
+
+    [HarmonyPatch(typeof(ClientWorldObjectSynchroniser), "ApplyServerEvent")]
+    public static class PatchClientWorldObjectSynchroniserApplyServerEvent
+    {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            Console.WriteLine("WARNING: ClientWorldObjectSynchroniser.ApplyServerEvent called!");
+        }
+    }
+
+    [HarmonyPatch(typeof(ClientChefSynchroniser), "HandleMessage")]
+    public static class PatchClientChefSynchroniserHandleMessage
+    {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            Console.WriteLine("WARNING: ClientChefSynchroniser.HandleMessage called!");
+        }
+    }
+
+    [HarmonyPatch(typeof(MeshLerper), "SetServerPosition")]
+    public static class PatchMeshLerperSetServerPosition
+    {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            Console.WriteLine("WARNING: MeshLerper.SetServerPosition called!");
+        }
+    }
+
+    [HarmonyPatch(typeof(BasicLerp), "ReceiveServerEvent")]
+    public static class PatchBasicLerpReceiveServerEvent {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            Console.WriteLine("WARNING: BasicLerp.ReceiveServerEvent called!");
+        }
+    }
 }
