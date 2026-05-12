@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -11,53 +12,147 @@ namespace Hpmv {
         private Thread requestThread;
         private bool stopRequested = false;
         public void Start() {
+            Console.WriteLine("InjectorServer.Start called");
             tcpThread = new Thread(() => {
-                StartTcpListener();
+                Console.WriteLine("Injector tcp connector thread starting");
+                StartTcpConnector();
             });
             requestThread = new Thread(() => {
+                Console.WriteLine("Injector request thread starting");
                 RunRequestLoop();
             });
             tcpThread.Start();
             requestThread.Start();
+            Console.WriteLine("InjectorServer threads started");
         }
 
         public void Destroy()
         {
+            Console.WriteLine("InjectorServer.Destroy called");
             UnityEngine.Debug.Log("Destroying injector server");
             stopRequested = true;
-            listener?.Stop();  // interrupts AcceptTcpClient if it's running
+            tcpClient?.Close();
+            tcpThread.Interrupt();
             requestThread.Interrupt();  // interrupts dequeue timeout
             requestThread.Join();
             tcpThread.Join();
             UnityEngine.Debug.Log("Destroyed injector server");
         }
 
-        private void StartTcpListener() {
+        private void StartTcpConnector() {
+            DateTime nextFailureLog = DateTime.MinValue;
             while (!stopRequested)
             {
+                TcpClient existingClient;
+                lock (sync)
+                {
+                    existingClient = this.tcpClient;
+                }
+                if (existingClient != null)
+                {
+                    if (IsClientConnected(existingClient))
+                    {
+                        SleepConnector(TimeSpan.FromMilliseconds(250));
+                        continue;
+                    }
+
+                    Console.WriteLine("Injector controller connection is closed; reconnecting");
+                    lock (sync)
+                    {
+                        if (this.tcpClient == existingClient)
+                        {
+                            this.client = null;
+                            this.tcpClient = null;
+                        }
+                    }
+                    existingClient.Close();
+                }
+
                 try
                 {
-                    listener = new TcpListener(IPAddress.Loopback, 14455);
-                    listener.Start();
-
-                    while (!stopRequested)
-                    {
-                        UseClient(listener.AcceptTcpClient());
-                    }
+                    var client = ConnectToController();
+                    UseClient(client);
                 }
                 catch (Exception e) {
-                    UnityEngine.Debug.LogException(e);
-                    Thread.Sleep(100);
-                }
-                finally
-                {
-                    listener?.Stop();
-                    tcpClient?.Close();
+                    if (DateTime.Now >= nextFailureLog)
+                    {
+                        Console.WriteLine("Injector connect failed: " + e.Message);
+                        nextFailureLog = DateTime.Now.AddSeconds(5);
+                    }
+                    SleepConnector(TimeSpan.FromMilliseconds(500));
                 }
             }
         }
 
+        private TcpClient ConnectToController()
+        {
+            Exception lastException = null;
+            foreach (var address in GetControllerAddresses())
+            {
+                try
+                {
+                    Console.WriteLine("Attempting to connect injector to controller on " + address + ":14455");
+                    var client = new TcpClient(AddressFamily.InterNetwork);
+                    client.NoDelay = true;
+                    client.Connect(address, 14455);
+                    Console.WriteLine("Injector connected to controller at " + address + ":14455 from " + client.Client.LocalEndPoint);
+                    return client;
+                }
+                catch (Exception e)
+                {
+                    lastException = e;
+                }
+            }
+            throw lastException ?? new SocketException();
+        }
+
+        private IEnumerable<IPAddress> GetControllerAddresses()
+        {
+            yield return IPAddress.Loopback;
+
+            IPAddress[] hostAddresses;
+            try
+            {
+                hostAddresses = Dns.GetHostAddresses(Dns.GetHostName());
+            }
+            catch
+            {
+                yield break;
+            }
+
+            foreach (var address in hostAddresses)
+            {
+                if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
+                {
+                    continue;
+                }
+                yield return address;
+            }
+        }
+
+        private void SleepConnector(TimeSpan delay) {
+            try {
+                Thread.Sleep(delay);
+            }
+            catch (ThreadInterruptedException) {
+            }
+        }
+
+        private bool IsClientConnected(TcpClient client)
+        {
+            try
+            {
+                var socket = client.Client;
+                return !(socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void UseClient(TcpClient client) {
+            Console.WriteLine("Injector using controller connection");
             client.NoDelay = true;
             TTransport transport = new TStreamTransport(client.GetStream(), client.GetStream());
             TProtocol protocol = new TBinaryProtocol(transport);
@@ -86,9 +181,15 @@ namespace Hpmv {
                     if (delta.TotalMilliseconds > 10) {
                         //Console.WriteLine("Time taken to wait for output: " + delta);
                     }
+                } catch (TimeoutException) {
+                    continue;
+                } catch (ThreadInterruptedException) {
+                    if (!stopRequested)
+                    {
+                        continue;
+                    }
+                    break;
                 } catch (Exception) {
-                    this.tcpClient?.Close();
-                    this.client = null;
                     continue;
                 }
                 Interceptor.Client client = null;
@@ -116,6 +217,7 @@ namespace Hpmv {
                     Console.WriteLine(e.Message + "\n" + e.StackTrace);
                     input = new InputData();
                     lock(sync) {
+                        tcpClient?.Close();
                         this.client = null;
                         this.tcpClient = null;
                     }
@@ -160,7 +262,6 @@ namespace Hpmv {
         private InputData currentInput = new InputData();
         private object sync = new object();
 
-        private TcpListener listener;
         private Interceptor.Client client;
         private TcpClient tcpClient;
     }
