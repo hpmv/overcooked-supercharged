@@ -49,6 +49,15 @@
 > Evidence:
 > `artifacts/framework-migration/story11-logical-world-rest-c7bnr2-clean-r1/settled-plate57-neutral-f1500-r1/summary.json`.
 >
+> Non-adjacent retained-history coverage passes too.  From live f2102, the
+> framework rewound directly to the older pending-rest checkpoint f1198 and
+> replayed its 302 observed frames to f1500.  Baseline and endpoint comparisons
+> had no changed entities and exact native physics, food, round state and
+> clocks.  Animator semantic replay completed, the verified 302-frame branch
+> prefix was committed without game-state mutation, and the abandoned
+> 602-frame future was discarded.  Evidence:
+> `artifacts/framework-migration/story11-logical-world-rest-c7bnr2-clean-r1/nonadjacent-f2102-to1198-r1/summary.json`.
+>
 > Live summary:
 > `artifacts/framework-migration/story11-logical-world-rest-c7bnr2-clean-r1/returned-plate57-settle-neutral-f1198-r2/summary.json`,
 > SHA-256
@@ -63,7 +72,7 @@
 > `3BF06396EF25431F83ACFD072CCC8C0E59780E15676DEB2E976E00AE44941FF0`.
 > The direct core/transpiler/rest-timing harness passes 131 assertions and the
 > external WorldSync module/compiled-IL harness passes 185 checks.  The same
-> game PID 51196 and host PID 42372 are healthy and paused at f2102; revalidate
+> game PID 51196 and host PID 42372 are healthy and paused at f1500; revalidate
 > their saved identities before control.  This closes the exercised pending
 > and settled rest-deadline cells, not complete Story 1-1 rewind parity.  Search remains
 > disabled; continue expanding the checkpoint/continuation matrix.
