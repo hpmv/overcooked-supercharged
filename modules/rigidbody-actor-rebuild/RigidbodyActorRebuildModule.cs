@@ -26,7 +26,10 @@ namespace SuperchargedPatch.Authoring.Modules
         // chef actor/contact set while restoring the incoming chef/address map.
         private const int AutomaticCanonicalCycles=5;
         private const int MaximumContactManagers=4096;
+        private const int MaximumManifolds=4096;
         private const int MaximumCheckpointSidecars=20000;
+        private const uint LargeManifoldPoolKind=0;
+        private const uint SphereManifoldPoolKind=1;
 
         [StructLayout(LayoutKind.Sequential, Pack=8)]
         private struct NativeReceipt
@@ -42,6 +45,18 @@ namespace SuperchargedPatch.Authoring.Modules
             public UIntPtr Context,FreeArray;
             public uint FreeCount,OrderHashBefore,OrderHashAfter;
             [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] Top;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack=8)]
+        private struct NativeManifoldPoolReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,Context,Pool;
+            public uint PoolKind;
+            public UIntPtr FreeHeadBefore,FreeHeadAfter;
+            public uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,TraversedCount,OrderHashBefore,OrderHashAfter;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopBefore;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopAfter;
         }
 
         [StructLayout(LayoutKind.Sequential, Pack=8)]
@@ -61,6 +76,10 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr context,IntPtr snapshot,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactPoolRestoreSnapshot(
             UIntPtr context,UIntPtr expectedFreeArray,IntPtr snapshot,uint count,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeManifoldPoolCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr context,uint poolKind,IntPtr snapshot,uint capacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeManifoldPoolRestoreSnapshot(
+            UIntPtr unityBase,UIntPtr context,uint poolKind,UIntPtr expectedPool,IntPtr snapshot,uint count,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Unicode)] private static extern IntPtr LoadLibrary(string path);
@@ -104,11 +123,18 @@ namespace SuperchargedPatch.Authoring.Modules
             internal TransformDispatchEntryState[] Entries;
         }
 
+        private sealed class ManifoldPoolState
+        {
+            internal uint PoolKind,Pool,OrderHash;
+            internal uint[] Order;
+        }
+
         private sealed class CheckpointSidecar
         {
             internal int Frame;
             internal uint Context,FreeArray,OrderHash;
             internal uint[] ContactPoolOrder;
+            internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal TransformDispatchState TransformDispatch;
             internal object CoreSnapshot;
         }
@@ -124,6 +150,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeActorShapes actorShapes;
         private NativeContactPoolCaptureSnapshot captureContactPoolSnapshot;
         private NativeContactPoolRestoreSnapshot restoreContactPoolSnapshot;
+        private NativeManifoldPoolCaptureSnapshot captureManifoldPoolSnapshot;
+        private NativeManifoldPoolRestoreSnapshot restoreManifoldPoolSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
         private uint unityPlayerBase;
         private uint contactManagerContext,contextObservations;
@@ -135,9 +163,10 @@ namespace SuperchargedPatch.Authoring.Modules
         private object pendingCoreSnapshot;
         private object coreRoundIdentity;
         private int sceneMetadataGeneration=-1;
-        private long rebuilds,contactPoolCaptures,contactPoolRestores;
+        private long rebuilds,contactPoolCaptures,contactPoolRestores,manifoldPoolCaptures,manifoldPoolRestores;
         private long sceneOwnedResets,contextSnapshotInvalidations;
         private readonly List<object> contactPoolReceipts=new List<object>();
+        private readonly List<object> manifoldPoolReceipts=new List<object>();
         private readonly Dictionary<int,CheckpointSidecar> checkpointSidecars=new Dictionary<int,CheckpointSidecar>();
         private CheckpointSidecar warpTargetSidecar;
         private long transformDispatchCaptures,transformDispatchRestores;
@@ -200,10 +229,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 actorShapes=Export<NativeActorShapes>("oc2_rigidbody_actor_shapes");
                 captureContactPoolSnapshot=Export<NativeContactPoolCaptureSnapshot>("oc2_contact_manager_pool_capture_snapshot");
                 restoreContactPoolSnapshot=Export<NativeContactPoolRestoreSnapshot>("oc2_contact_manager_pool_restore_snapshot");
+                captureManifoldPoolSnapshot=Export<NativeManifoldPoolCaptureSnapshot>("oc2_manifold_pool_capture_snapshot");
+                restoreManifoldPoolSnapshot=Export<NativeManifoldPoolRestoreSnapshot>("oc2_manifold_pool_restore_snapshot");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
-                if(apiVersion()!=6)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(apiVersion()!=7)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
                 observeContactManagerContext=observeContext;automaticContactPoolRestore=autoPoolRestore;
                 automaticTransformDispatchRestore=autoDispatchRestore;sceneMetadataGeneration=NativeSceneMetadata.Refreshes;
@@ -293,7 +324,7 @@ namespace SuperchargedPatch.Authoring.Modules
             object core=CoreCheckpointSnapshot(module.warpTargetFrame);
             if(!module.warpTargetRestoreEligible||core==null||
                 !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,core))
-                throw new InvalidOperationException("No exact contact-pool/Transform-dispatch sidecar exists for output frame "+module.warpTargetFrame+".");
+                throw new InvalidOperationException("No exact physics-pool/Transform-dispatch sidecar exists for output frame "+module.warpTargetFrame+".");
         }
 
         public static void AfterRestoreComplete(NativeKitchenCheckpoint.RestorePlan __instance)
@@ -302,7 +333,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(module==null||!module.automaticContactPoolRestore)return;
             if(__instance==null||module.warpTargetSidecar==null||
                 !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,RestorePlanSnapshot(__instance)))
-                throw new InvalidOperationException("Completed native restore plan differs from the selected contact-pool sidecar.");
+                throw new InvalidOperationException("Completed native restore plan differs from the selected physics-pool sidecar.");
             module.automaticRestorePending=module.warpTargetRestoreEligible;
             module.PruneCheckpointSidecarsAfter(module.warpTargetFrame);
         }
@@ -340,7 +371,7 @@ namespace SuperchargedPatch.Authoring.Modules
             ObserveCoreRoundIdentity();
             if(pendingContactPoolAction!=0)throw new InvalidOperationException("A contact-pool action is already pending.");
             if(action==2&&checkpointSidecars.Count==0)
-                throw new InvalidOperationException("No contact-manager free-list snapshot has been captured.");
+                throw new InvalidOperationException("No physics-pool snapshot has been captured.");
             if(action==1)
             {
                 pendingContactPoolFrame=CurrentCheckpointFrame();
@@ -370,9 +401,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 selected=automaticAction?warpTargetSidecar:LatestCheckpointSidecar();
                 if(selected==null||selected.Context==0||selected.Context!=contactManagerContext)
                     throw new InvalidOperationException("Contact-pool restore snapshot does not belong to the current observed context.");
+                ValidateManifoldPoolState(selected.LargeManifoldPool,LargeManifoldPoolKind,"large");
+                ValidateManifoldPoolState(selected.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
             }
-            if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null)
-                throw new InvalidOperationException("Native caller-owned contact-pool helper is not active.");
+            if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null||
+                captureManifoldPoolSnapshot==null||restoreManifoldPoolSnapshot==null)
+                throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
             int size=Marshal.SizeOf(typeof(NativeContactPoolReceipt));
@@ -407,18 +441,22 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=6||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
+            RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
             {
                 uint orderHash=ContactPoolOrderHash(capturedOrder);
                 if(orderHash!=receipt.OrderHashBefore||receipt.OrderHashAfter!=receipt.OrderHashBefore)
                     throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
+                ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
+                ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=automaticTransformDispatchRestore
                     ?RunTransformDispatchAction(1,null):null;
                 var captured=new CheckpointSidecar {Frame=actionFrame,
                     Context=contactManagerContext,FreeArray=receipt.FreeArray.ToUInt32(),
                     OrderHash=orderHash,ContactPoolOrder=capturedOrder,
+                    LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 StoreCheckpointSidecar(captured);
                 pendingContactPoolFrame=-1;pendingCoreSnapshot=null;contactPoolCaptures++;
@@ -428,17 +466,113 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(receipt.FreeArray.ToUInt32()!=selected.FreeArray||receipt.FreeCount!=(uint)capacity||
                     receipt.OrderHashAfter!=selected.OrderHash)
                     throw new InvalidOperationException("Native contact-pool restore receipt differs from the selected checkpoint sidecar.");
+                // Restore the pools in their native allocation dependency order:
+                // contact managers own pair caches which point at manifolds.
+                RunManifoldPoolAction(2,LargeManifoldPoolKind,selected.LargeManifoldPool,actionFrame);
+                RunManifoldPoolAction(2,SphereManifoldPoolKind,selected.SphereManifoldPool,actionFrame);
                 if(automaticTransformDispatchRestore)RunTransformDispatchAction(2,selected.TransformDispatch);
                 contactPoolRestores++;
                 if(automaticAction){warpTargetSidecar=null;warpTargetRestoreEligible=false;}
             }
+        }
+
+        private void RecordContactPoolReceipt(int action,int frame,NativeContactPoolReceipt receipt)
+        {
             object[] top=(receipt.Top??new UIntPtr[0]).Select(Hex).Cast<object>().ToArray();
             var value=new Dictionary<string,object>{{"action",action==1?"capture":"restore"},
+                {"apiVersion",receipt.ApiVersion},{"structSize",receipt.StructSize},
+                {"result",receipt.Result},{"lastError",receipt.LastError},
                 {"context",Hex(receipt.Context)},{"freeArray",Hex(receipt.FreeArray)},
-                {"frame",actionFrame},
-                {"freeCount",receipt.FreeCount},{"orderHashBefore","0x"+receipt.OrderHashBefore.ToString("X8")},
+                {"frame",frame},{"freeCount",receipt.FreeCount},
+                {"orderHashBefore","0x"+receipt.OrderHashBefore.ToString("X8")},
                 {"orderHashAfter","0x"+receipt.OrderHashAfter.ToString("X8")},{"top",top}};
             contactPoolReceipts.Add(value);if(contactPoolReceipts.Count>16)contactPoolReceipts.RemoveAt(0);
+        }
+
+        private ManifoldPoolState RunManifoldPoolAction(int action,uint poolKind,ManifoldPoolState snapshot,int frame)
+        {
+            string poolName=poolKind==LargeManifoldPoolKind?"large":
+                poolKind==SphereManifoldPoolKind?"sphere":null;
+            if(poolName==null)throw new InvalidOperationException("Unsupported manifold-pool kind "+poolKind+".");
+            if(action==2)ValidateManifoldPoolState(snapshot,poolKind,poolName);
+            int size=Marshal.SizeOf(typeof(NativeManifoldPoolReceipt));
+            int count=action==1?MaximumManifolds:snapshot.Order.Length;
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr snapshotBuffer=Marshal.AllocHGlobal(Math.Max(1,count)*IntPtr.Size);
+            NativeManifoldPoolReceipt receipt=new NativeManifoldPoolReceipt();
+            uint[] capturedOrder=null;
+            int ok=0;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                if(action==2)
+                    for(int i=0;i<count;i++)Marshal.WriteInt32(snapshotBuffer,i*IntPtr.Size,
+                        unchecked((int)snapshot.Order[i]));
+                ok=action==1
+                    ?captureManifoldPoolSnapshot(new UIntPtr(unityPlayerBase),new UIntPtr(contactManagerContext),
+                        poolKind,snapshotBuffer,(uint)count,receiptBuffer)
+                    :restoreManifoldPoolSnapshot(new UIntPtr(unityPlayerBase),new UIntPtr(contactManagerContext),
+                        poolKind,new UIntPtr(snapshot.Pool),snapshotBuffer,(uint)count,receiptBuffer);
+                receipt=(NativeManifoldPoolReceipt)Marshal.PtrToStructure(receiptBuffer,typeof(NativeManifoldPoolReceipt));
+                if(action==1&&ok!=0&&receipt.Result==1)
+                {
+                    if(receipt.TraversedCount>MaximumManifolds)
+                        throw new InvalidOperationException("Native "+poolName+" manifold-pool capture returned an invalid count.");
+                    capturedOrder=new uint[receipt.TraversedCount];
+                    for(int i=0;i<capturedOrder.Length;i++)capturedOrder[i]=
+                        unchecked((uint)Marshal.ReadInt32(snapshotBuffer,i*IntPtr.Size));
+                }
+            }
+            finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);}
+
+            RecordManifoldPoolReceipt(action,frame,poolName,receipt);
+            if(ok==0||receipt.Result!=1)
+                throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
+                    receipt.Result+", Win32/error="+receipt.LastError+".");
+            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
+                receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
+                throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
+
+            if(action==1)
+            {
+                uint orderHash=ContactPoolOrderHash(capturedOrder);
+                uint freeHead=capturedOrder.Length==0?0u:capturedOrder[0];
+                if(receipt.FreeHeadBefore.ToUInt32()!=freeHead||receipt.FreeHeadAfter.ToUInt32()!=freeHead||
+                    orderHash!=receipt.OrderHashBefore||
+                    receipt.OrderHashAfter!=receipt.OrderHashBefore)
+                    throw new InvalidOperationException("Managed "+poolName+" manifold-pool snapshot differs from the native capture receipt.");
+                manifoldPoolCaptures++;
+                return new ManifoldPoolState {PoolKind=poolKind,Pool=receipt.Pool.ToUInt32(),
+                    OrderHash=orderHash,Order=capturedOrder};
+            }
+
+            uint expectedHead=snapshot.Order.Length==0?0u:snapshot.Order[0];
+            if(receipt.Pool.ToUInt32()!=snapshot.Pool||receipt.FreeHeadAfter.ToUInt32()!=expectedHead||
+                receipt.TraversedCount!=(uint)snapshot.Order.Length||receipt.OrderHashAfter!=snapshot.OrderHash)
+                throw new InvalidOperationException("Native "+poolName+" manifold-pool restore receipt differs from the selected checkpoint sidecar.");
+            manifoldPoolRestores++;
+            return snapshot;
+        }
+
+        private void RecordManifoldPoolReceipt(int action,int frame,string poolName,NativeManifoldPoolReceipt receipt)
+        {
+            object[] topBefore=(receipt.TopBefore??new UIntPtr[0]).Select(Hex).Cast<object>().ToArray();
+            object[] topAfter=(receipt.TopAfter??new UIntPtr[0]).Select(Hex).Cast<object>().ToArray();
+            var value=new Dictionary<string,object>{{"action",action==1?"capture":"restore"},
+                {"poolKind",receipt.PoolKind},{"poolName",poolName},{"frame",frame},
+                {"apiVersion",receipt.ApiVersion},{"structSize",receipt.StructSize},
+                {"result",receipt.Result},{"lastError",receipt.LastError},
+                {"unityBase",Hex(receipt.UnityBase)},{"context",Hex(receipt.Context)},
+                {"pool",Hex(receipt.Pool)},{"freeHeadBefore",Hex(receipt.FreeHeadBefore)},
+                {"freeHeadAfter",Hex(receipt.FreeHeadAfter)},{"elementSize",receipt.ElementSize},
+                {"elementsPerSlab",receipt.ElementsPerSlab},{"used",receipt.Used},
+                {"unreleased",receipt.Unreleased},{"slabSize",receipt.SlabSize},
+                {"traversedCount",receipt.TraversedCount},
+                {"orderHashBefore","0x"+receipt.OrderHashBefore.ToString("X8")},
+                {"orderHashAfter","0x"+receipt.OrderHashAfter.ToString("X8")},
+                {"topBefore",topBefore},{"topAfter",topAfter}};
+            manifoldPoolReceipts.Add(value);if(manifoldPoolReceipts.Count>32)manifoldPoolReceipts.RemoveAt(0);
         }
 
         private TransformDispatchState RunTransformDispatchAction(int action,TransformDispatchState snapshot)
@@ -595,7 +729,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=6||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -687,6 +821,25 @@ namespace SuperchargedPatch.Authoring.Modules
             return hash;
         }
 
+        private static void ValidateManifoldPoolState(ManifoldPoolState value,uint poolKind,string poolName)
+        {
+            if(value==null||value.PoolKind!=poolKind||value.Pool==0||value.Order==null||
+                value.Order.Length>MaximumManifolds||value.OrderHash!=ContactPoolOrderHash(value.Order))
+                throw new InvalidOperationException("The "+poolName+" manifold-pool checkpoint sidecar is incomplete.");
+            if(value.Order.Any(pointer=>pointer==0)||value.Order.Distinct().Count()!=value.Order.Length)
+                throw new InvalidOperationException("The "+poolName+" manifold-pool checkpoint contains a null or duplicate free element.");
+        }
+
+        private static object DescribeManifoldPoolState(ManifoldPoolState value)
+        {
+            if(value==null)return null;
+            object[] top=value.Order.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            return new Dictionary<string,object>{{"poolKind",value.PoolKind},
+                {"pool","0x"+value.Pool.ToString("X8")},{"freeCount",value.Order.Length},
+                {"freeHead",value.Order.Length==0?"0x00000000":"0x"+value.Order[0].ToString("X8")},
+                {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
+        }
+
         private CheckpointSidecar LatestCheckpointSidecar()
         {
             return checkpointSidecars.Count==0?null:checkpointSidecars[checkpointSidecars.Keys.Max()];
@@ -698,6 +851,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.Context==0||value.FreeArray==0||value.ContactPoolOrder==null||
                 value.ContactPoolOrder.Length<1||value.ContactPoolOrder.Length>MaximumContactManagers)
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar is incomplete.");
+            ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
+            ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar no longer owns the retained core snapshot.");
             CheckpointSidecar previous;
@@ -707,13 +862,22 @@ namespace SuperchargedPatch.Authoring.Modules
                     previous.Context==value.Context&&previous.FreeArray==value.FreeArray&&
                     previous.OrderHash==value.OrderHash&&
                     previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
+                    SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
+                    SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch);
-                if(!same)throw new InvalidOperationException("A differing contact-pool/Transform-dispatch sidecar already owns output frame "+value.Frame+".");
+                if(!same)throw new InvalidOperationException("A differing physics-pool/Transform-dispatch sidecar already owns output frame "+value.Frame+".");
                 return;
             }
             if(checkpointSidecars.Count>=MaximumCheckpointSidecars)
-                throw new InvalidOperationException("Contact-pool checkpoint sidecar history reached its fail-closed capacity.");
+                throw new InvalidOperationException("Physics-pool checkpoint sidecar history reached its fail-closed capacity.");
             checkpointSidecars.Add(value.Frame,value);
+        }
+
+        private static bool SameManifoldPoolSnapshot(ManifoldPoolState left,ManifoldPoolState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.PoolKind==right.PoolKind&&left.Pool==right.Pool&&left.OrderHash==right.OrderHash&&
+                left.Order!=null&&right.Order!=null&&left.Order.SequenceEqual(right.Order);
         }
 
         private static bool SameTransformDispatchSnapshot(TransformDispatchState left,TransformDispatchState right)
@@ -743,6 +907,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"freeArray",found?"0x"+value.FreeArray.ToString("X8"):null},
                 {"freeCount",found?value.ContactPoolOrder.Length:0},
                 {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
+                {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
+                {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null}};
         }
 
@@ -779,6 +945,9 @@ namespace SuperchargedPatch.Authoring.Modules
                     var failed=native.FirstOrDefault(value=>value.Result!=1);
                     throw new InvalidOperationException("Native actor rebuild failed: result="+failed.Result+", Win32/error="+failed.LastError+".");
                 }
+                if(native.Any(value=>value.ApiVersion!=7||value.StructSize!=(uint)receiptSize||
+                    value.UnityBase.ToUInt32()!=unityPlayerBase))
+                    throw new InvalidOperationException("Native actor rebuild receipt contract differs.");
             }
             finally{Marshal.FreeHGlobal(receiptBuffer);Marshal.FreeHGlobal(pointerBuffer);}
 
@@ -895,7 +1064,8 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:7},
+                {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
                 {"observeContactManagerContext",observeContactManagerContext},{"contextObserverInstalled",contextObserverInstalled},
@@ -906,6 +1076,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactPoolSnapshotFrame",lastFrame},{"contactPoolSnapshotContext",latest==null?null:"0x"+latest.Context.ToString("X8")},
                 {"contactPoolSnapshotCount",checkpointSidecars.Count},{"contactPoolSnapshotFirstFrame",firstFrame},
                 {"contactPoolSnapshotLastFrame",lastFrame},
+                {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
+                {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
+                {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
+                {"sphereManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.SphereManifoldPool)},
                 {"pendingContactPoolAction",pendingContactPoolAction==0?"none":pendingContactPoolAction==1?"capture":"restore"},
                 {"automaticContactPoolRestore",automaticContactPoolRestore},{"automaticRestorePending",automaticRestorePending},
                 {"automaticTransformDispatchRestore",automaticTransformDispatchRestore},
@@ -916,7 +1090,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"warpInProgress",warpInProgress},{"warpTargetFrame",warpTargetFrame},{"warpTargetRestoreEligible",warpTargetRestoreEligible},
                 {"contactPoolCaptures",contactPoolCaptures},{"contactPoolRestores",contactPoolRestores},
                 {"contactPoolReceipts",contactPoolReceipts.ToArray()},
-                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager free-list order and TransformChangeDispatch state for each exact core checkpoint object. A successful rewind prunes only future sidecars; the next replay unpause restores the selected target's identical free membership and ordered Transform queue. Forward game data, score and input are not rewritten."}};
+                {"manifoldPoolCaptures",manifoldPoolCaptures},{"manifoldPoolRestores",manifoldPoolRestores},
+                {"manifoldPoolReceipts",manifoldPoolReceipts.ToArray()},
+                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager, large-manifold and sphere-manifold free-list orders plus TransformChangeDispatch state for each exact core checkpoint object. A successful rewind prunes only future sidecars; the next replay unpause restores the selected target's identical pool memberships and orders before restoring the ordered Transform queue. Forward game data, score and input are not rewritten."}};
             if(result!=null)value.Add("result",result);return value;
         }
 
@@ -933,6 +1109,7 @@ namespace SuperchargedPatch.Authoring.Modules
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
+            captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
             if(library!=IntPtr.Zero){FreeLibrary(library);library=IntPtr.Zero;}
             if(ReferenceEquals(active,this))active=null;

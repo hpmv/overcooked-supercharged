@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts'))
@@ -94,6 +95,34 @@ class FrameParityTests(unittest.TestCase):
             rows=fixture();mutate(rows)
             with self.assertRaises(parity.TraceError):evaluate(rows)
 
+    def test_truncated_registry_prefix_requires_explicit_opt_out(self):
+        rows=fixture()
+        prefix=copy.deepcopy(rows[0]);prefix['output']['FrameNumber']=9
+        prefix['input']['NextFrame']=9;prefix['input']['Input']=None
+        rows[0]['output']['EntityRegistry']=[]
+        rows[4]['output']['EntityRegistry']=[]
+        rows.insert(0,prefix)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'trace.jsonl';write(path,rows)
+            full=parity.selected_epochs(path,{0,1},10,12)
+            self.assertTrue(parity.compare(full[0],full[1],10,12)['passed'])
+            with self.assertRaisesRegex(parity.TraceError,'actual live registry'):
+                parity.selected_epochs(path,{0,1},10,12,after_line=2)
+            epochs=parity.selected_epochs(path,{0,1},10,12,after_line=2,require_registry_membership=False)
+            self.assertTrue(parity.compare(epochs[0],epochs[1],10,12)['passed'])
+
+    def test_truncated_registry_cli_requires_positive_crop_boundary(self):
+        rows=fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'trace.jsonl';out=Path(directory)/'report.json';write(path,rows)
+            argv=['compare_framework_frames.py','--trace',str(path),'--start','10','--end','12',
+                  '--allow-truncated-registry-prefix','--out',str(out)]
+            with mock.patch.object(sys,'argv',argv):
+                self.assertEqual(parity.main(),1)
+            report=json.loads(out.read_text(encoding='utf8'))
+            self.assertFalse(report['passed'])
+            self.assertIn('positive --after-line',report['error'])
+
     def test_paused_brotli_and_gzip_preserve_exact_receipts(self):
         import brotli
         paused=copy.deepcopy(fixture()[3]);paused['input']['Warp']=None
@@ -120,6 +149,8 @@ class FrameParityTests(unittest.TestCase):
 
     def test_actual_native_m_frames_find_earlier_pose_and_event_divergence(self):
         path=ROOT/'artifacts/framework-migration/native-m/exchange.jsonl'
+        if not path.exists():path=ROOT.parent/'artifacts/framework-migration/native-m/exchange.jsonl'
+        if not path.exists():self.skipTest('closed native M trace fixture is not present')
         epochs=parity.selected_epochs(path,{0,1},181,301)
         result=parity.compare(epochs[0],epochs[1],181,301)
         self.assertFalse(result['passed']);self.assertTrue(result['boundaryEqual'])

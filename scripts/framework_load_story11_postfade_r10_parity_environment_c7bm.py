@@ -15,7 +15,7 @@ loader.STACK = (
     ("physics-sync-after-restore", "PhysicsSyncAfterRestore-r13-core-c7bm", {}),
     ("rigidbody-motion-target", "RigidbodyMotionTarget-r1-core-c7bm", {}),
     ("chef-movement-history-checkpoint", "ChefMovementHistoryCheckpoint-r3-core-c7bm", {}),
-    ("rigidbody-actor-rebuild", "RigidbodyActorRebuild-r13y-core-c7bm", "actor"),
+    ("rigidbody-actor-rebuild", "RigidbodyActorRebuild-r13z-manifold-pool-history-core-c7bm", "actor"),
     ("resume-phase", "ResumePhase-r1bc-core-c7bm", {}),
     ("chef-animator-checkpoint", "ChefAnimatorCheckpoint-r53b-core-c7bm", "animator"),
     ("body-restore", "BodyRestore-r32-recreated-native-shape-state-rebind-core-c7bm", "body"),
@@ -24,8 +24,8 @@ loader.STACK = (
 
 loader.NATIVE = {
     "actor": (
-        Path("artifacts/native-rigidbody-rebuild-r12-multiframe-sidecars-testbuild1/Oc2NativeRigidbodyRebuild.dll"),
-        "E28EA2D8EE26FD3D7E363334A6C9E90D7F9BCE0CD999CFD1F73D51A199FCA25E",
+        Path("artifacts/native-rigidbody-rebuild-v7-ninja/Oc2NativeRigidbodyRebuild.dll"),
+        "2E6284C6380B0085853C2240D09044EE266FC7D8415442E731B529C38910A35D",
     ),
     "animator": (
         Path("artifacts/native-animator-checkpoint-r17d-mixed-zero-weight-children-build/Oc2NativeAnimatorCheckpoint.r17d.dll"),

@@ -141,7 +141,7 @@ def message_info(message, registry):
     return result
 
 
-def selected_epochs(path, epochs, start, end, after_line=0):
+def selected_epochs(path, epochs, start, end, after_line=0, require_registry_membership=True):
     if not 0 <= start < end or end - start > 36000 or any(e < 0 for e in epochs):
         raise TraceError("Use nonnegative epochs and a 1..36000 frame interval")
     selected = {e: {"epoch": e, "frames": {}, "inputs": {}, "boundary": None} for e in epochs}
@@ -226,7 +226,7 @@ def selected_epochs(path, epochs, start, end, after_line=0):
         required = {"Pos", "Rotation", "Velocity", "AngularVelocity"}
         if any(not required.issubset(p) for p in value["boundary"]["physics"].values()) or not value["boundary"]["physics"]:
             raise TraceError("Boundary lacks complete native physical observations")
-        if set(value["boundary"]["physics"]) != set(value["boundary"]["registeredIds"]):
+        if require_registry_membership and set(value["boundary"]["physics"]) != set(value["boundary"]["registeredIds"]):
             raise TraceError("Boundary physical observation inventory differs from the actual live registry")
     return selected
 
@@ -271,6 +271,10 @@ def main():
     parser.add_argument("--end", type=int, required=True)
     parser.add_argument("--after-line", type=int, default=0,
                         help="Ignore physical trace rows before this one-based line; epoch numbering restarts at zero.")
+    parser.add_argument("--allow-truncated-registry-prefix", action="store_true",
+                        help=("Compare native body/chef/input/message frames after --after-line even when the cropped "
+                              "window no longer contains the registry rows needed for a boundary membership proof. "
+                              "The default strict registry proof is unchanged."))
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     result = {"passed": False, "classification": "offline exact native advancing-frame trace comparison", "trace": str(args.trace.resolve())}
@@ -280,9 +284,13 @@ def main():
         before = args.trace.stat()
         if args.after_line < 0:
             raise TraceError("Use a nonnegative trace start line")
-        epochs = selected_epochs(args.trace, {args.original_epoch,args.replay_epoch}, args.start,args.end,args.after_line)
+        if args.allow_truncated_registry_prefix and args.after_line <= 0:
+            raise TraceError("A truncated registry prefix requires a positive --after-line boundary")
+        epochs = selected_epochs(args.trace, {args.original_epoch,args.replay_epoch}, args.start,args.end,
+                                  args.after_line, not args.allow_truncated_registry_prefix)
         result.update(compare(epochs[args.original_epoch],epochs[args.replay_epoch],args.start,args.end))
         result["traceStartLine"] = args.after_line
+        result["registryBoundaryMembershipChecked"] = not args.allow_truncated_registry_prefix
         with args.trace.open("rb") as stream:
             result["traceSha256"] = hashlib.file_digest(stream,"sha256").hexdigest()
         after = args.trace.stat()

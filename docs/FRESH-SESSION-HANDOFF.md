@@ -1,5 +1,63 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-13, PhysX manifold-pool history / API7):**
+> the genuine returned-plate dash-drop that previously diverged on its first
+> ground contact now has exact endpoint and every-frame rewind parity.  The
+> missing state was PhysX 3.3.3's intrusive large-manifold free-list order.
+> RigidbodyActorRebuild r13z captures the complete large- and sphere-manifold
+> pool orders beside each exact core checkpoint and restores them after the
+> contact-manager free stack and before TransformChangeDispatch.  The native
+> API7 implementation validates the exact UnityPlayer revision, pool identity,
+> list membership/count/uniqueness and writable links before mutation, then
+> verifies the restored head and every link.  Sphere-manifold history is also
+> supported but was empty in this proof.  This is paused authoring state only;
+> ordinary forward game execution, `ServerWorldObjectSynchroniser`, Animator
+> attachment motion, and plate-throw physics are unchanged.
+>
+> A fresh game/controller was rebuilt from Story 1-1 frame 1.  The established
+> f1 -> f444 setup, f444 -> f1047 delivery, f1047 -> f1090 returned-stack
+> pickup, and f1090 -> f1122 held-dash continuation all passed exact
+> rewind/replay before the target test.  The real f1122 -> f1198 input has 74
+> payload plus two release frames and recording SHA
+> `74dcee7f662d0f2bceb6655e259ba5724573c7c5653ed4ab9aaca4fe179e1cb2`.
+> Its summary is
+> `artifacts/framework-migration/story11-manifold-pool-r13z-clean-r2/returned-plate57-genuine-dash-drop-f1122-r1/summary.json`,
+> SHA-256
+> `EF38341568EA86F0EF81A145800544916B0AB14F0EB2001F32834E45E8C9AE4D`.
+> At f1122 the large pool contained 32 free manifolds.  Original execution
+> changed its order hash from saved `0x84E3F565` to `0x063950A5`; rewind
+> restored it exactly to `0x84E3F565`.  The sphere pool was empty with hash
+> `0x811C9DC5` on both sides.
+>
+> The stronger offline comparison covers every advancing frame in
+> `(1122,1198]`: native physics, all four chefs, phase counters, exact input,
+> raw messages, and decoded native/auxiliary message sequences are all equal.
+> Report:
+> `framework/artifacts/story11-manifold-pool-r13z-live-r1/per-frame-parity-r4.json`,
+> SHA-256
+> `E40E2B1C166DD20F3B316DFEFD009D45E8513751FB4588F777A77DF2F52F4EA1`;
+> closed trace SHA-256
+> `40551CC4E55540F7D7F75ED3B705BC01DD96EC0C445EA51F87800EDC45B9B6B9`.
+> The trace was cropped after line 3854 solely to avoid an older bulk-destroy
+> message whose registry decoder is not implemented; the cropped proof still
+> requires complete checkpoint bodies/chefs and exact per-frame body, chef,
+> input, phase, and message equality.  It waives only registry-membership
+> reconstruction from rows preceding the crop.
+>
+> Native DLL:
+> `artifacts/native-rigidbody-rebuild-v7-ninja/Oc2NativeRigidbodyRebuild.dll`,
+> SHA-256
+> `2E6284C6380B0085853C2240D09044EE266FC7D8415442E731B529C38910A35D`.
+> Managed r13z DLL:
+> `framework-run/modules/RigidbodyActorRebuild-r13z-manifold-pool-history-core-c7bm/RigidbodyActorRebuild.r13z-manifold-pool-history-core-c7bm.dll`,
+> SHA-256
+> `7275B04E5BF578519052EFC174EEF3A08DB580D02A92FF846FDDE5C09EFA49D2`.
+> Native caller-owned-history harness and all comparer tests pass.  The healthy
+> process is paused at f1198: game PID 67872 / start ticks
+> 639248829021662289; Story11 host PID 82160 / start ticks
+> 639248835076944530.  Revalidate identities before control.  Search remains
+> disabled; continue expanding rewind parity beyond this exercised throw.
+
 > **Active rewind result (2026-09-13, controller v12q7 / retired plate-return
 > stack reference):** the post-pickup returned-plate continuation that
 > previously failed rewind preflight now passes exact restore and replay.  The

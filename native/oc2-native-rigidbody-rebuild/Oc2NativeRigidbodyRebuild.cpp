@@ -92,6 +92,29 @@ struct ContactContextObserverReceipt {
     uint32_t installed;
 };
 
+struct ManifoldPoolReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t context;
+    uintptr_t pool;
+    uint32_t poolKind;
+    uintptr_t freeHeadBefore;
+    uintptr_t freeHeadAfter;
+    uint32_t elementSize;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t slabSize;
+    uint32_t traversedCount;
+    uint32_t orderHashBefore;
+    uint32_t orderHashAfter;
+    uintptr_t topBefore[16];
+    uintptr_t topAfter[16];
+};
+
 struct RigidPose {
     float position[3];
     float rotation[4];
@@ -188,6 +211,9 @@ struct KinematicTargetReceipt {
 };
 #pragma pack(pop)
 
+static_assert(sizeof(ManifoldPoolReceipt) == 200,
+    "Unexpected Win32 manifold-pool receipt ABI");
+
 enum RebuildResult : uint32_t {
     RebuildOk = 1,
     RebuildBadArgument = 2,
@@ -226,6 +252,28 @@ enum ContactContextObserverResult : uint32_t {
     ContactContextObserverAllocationFailed = 6,
     ContactContextObserverProtectFailed = 7,
     ContactContextObserverPatchChanged = 8
+};
+
+enum ManifoldPoolResult : uint32_t {
+    ManifoldPoolOk = 1,
+    ManifoldPoolBadArgument = 2,
+    ManifoldPoolRevisionMismatch = 3,
+    ManifoldPoolInvalidKind = 4,
+    ManifoldPoolUnreadableContext = 5,
+    ManifoldPoolUnreadablePool = 6,
+    ManifoldPoolInvalidMetadata = 7,
+    ManifoldPoolInvalidCount = 8,
+    ManifoldPoolInvalidNode = 9,
+    ManifoldPoolDuplicateNode = 10,
+    ManifoldPoolCapacityTooSmall = 11,
+    ManifoldPoolBufferNotWritable = 12,
+    ManifoldPoolBufferUnreadable = 13,
+    ManifoldPoolIdentityChanged = 14,
+    ManifoldPoolCountChanged = 15,
+    ManifoldPoolMembershipChanged = 16,
+    ManifoldPoolHeadNotWritable = 17,
+    ManifoldPoolNodeNotWritable = 18,
+    ManifoldPoolWriteVerificationFailed = 19
 };
 
 enum SetGlobalPoseResult : uint32_t {
@@ -279,13 +327,20 @@ enum KinematicTargetResult : uint32_t {
     KinematicTargetNonfinite = 7
 };
 
-static const uint32_t kApiVersion = 6;
+static const uint32_t kApiVersion = 7;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
+static const uint32_t kMaximumManifolds = 4096;
 static const uint32_t kCleanupRva = 0x481ED0;
 static const uint32_t kCreateRva = 0x482510;
 static const uint32_t kGetShapesRva = 0xA10740;
 static const uint32_t kCreateContactManagerRva = 0xA69E80;
+static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
+static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
+static const uint32_t kLargeManifoldPoolSlabRva = 0xA69BEA;
+static const uint32_t kSphereManifoldPoolSlabRva = 0xA69CCA;
+static const uint32_t kLargeManifoldCallsiteRva = 0xA69F15;
+static const uint32_t kSphereManifoldCallsiteRva = 0xA69F32;
 static const uint32_t kNpSetGlobalPoseRva = 0xA143D0;
 static const uint32_t kNpGetKinematicTargetRva = 0xA12530;
 static const uint32_t kNpSetCMassLocalPoseInternalRva = 0xA13E90;
@@ -302,6 +357,43 @@ static const uint8_t kCleanupBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x74,0x53,0x8B,
 static const uint8_t kCreateBytes[] = {0x55,0x8B,0xEC,0x81,0xEC,0x90,0x00,0x00,0x00,0x53,0x8B,0xD9};
 static const uint8_t kGetShapesBytes[] = {0x55,0x8B,0xEC,0x83,0xC1,0x14,0x5D,0xE9};
 static const uint8_t kCreateContactManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
+// These exact UnityPlayer 2017.4.8f1 Win32 instructions prove both the
+// PxsContext member offsets and the intrusive Ps::Pool bookkeeping layout.
+// In particular, allocate() pops mFreeElement at +0x124 while updating used
+// and unreleased at +0x118/+0x11c. The slow paths prove elementsPerSlab at
+// +0x114 and the concrete 0xf0/0x60 element strides.
+static const uint8_t kLargeManifoldPoolBytes[] = {
+    0x56,0x8B,0xF1,0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x05,
+    0xE8,0xAF,0x00,0x00,0x00,0x8B,0x86,0x24,0x01,0x00,0x00,0x8B,
+    0x08,0xFF,0x86,0x18,0x01,0x00,0x00,0xFF,0x8E,0x1C,0x01,0x00,
+    0x00,0x89,0x8E,0x24,0x01,0x00,0x00,0x5E,0xC3
+};
+static const uint8_t kSphereManifoldPoolBytes[] = {
+    0x56,0x8B,0xF1,0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x05,
+    0xE8,0x5F,0x01,0x00,0x00,0x8B,0x86,0x24,0x01,0x00,0x00,0x8B,
+    0x08,0xFF,0x86,0x18,0x01,0x00,0x00,0xFF,0x8E,0x1C,0x01,0x00,
+    0x00,0x89,0x8E,0x24,0x01,0x00,0x00,0x5E,0xC3
+};
+static const uint8_t kLargeManifoldPoolSlabBytes[] = {
+    0x69,0x8E,0x14,0x01,0x00,0x00,0xF0,0x00,0x00,0x00,0x81,0xC1,
+    0x10,0xFF,0xFF,0xFF,0x03,0xCF,0x3B,0xCF,0x72,0x1E,0x8B,0x86,
+    0x24,0x01,0x00,0x00,0x89,0x01,0xFF,0x86,0x1C,0x01,0x00,0x00,
+    0x89,0x8E,0x24,0x01,0x00,0x00,0x81,0xE9,0xF0,0x00,0x00,0x00,
+    0x3B,0xCF,0x73,0xE2
+};
+static const uint8_t kSphereManifoldPoolSlabBytes[] = {
+    0x8B,0x86,0x14,0x01,0x00,0x00,0x8D,0x0C,0x40,0xC1,0xE1,0x05,
+    0x83,0xC1,0xA0,0x03,0xCF,0x3B,0xCF,0x72,0x1C,0x90,0x8B,0x86,
+    0x24,0x01,0x00,0x00,0x89,0x01,0xFF,0x86,0x1C,0x01,0x00,0x00,
+    0x89,0x8E,0x24,0x01,0x00,0x00,0x83,0xE9,0x60,0x3B,0xCF,0x73,
+    0xE5
+};
+static const uint8_t kLargeManifoldCallsiteBytes[] = {
+    0x8D,0x8B,0xE4,0x02,0x00,0x00,0xE8,0x70,0xFB,0xFF,0xFF
+};
+static const uint8_t kSphereManifoldCallsiteBytes[] = {
+    0x8D,0x8B,0x0C,0x04,0x00,0x00,0xE8,0x83,0xFB,0xFF,0xFF
+};
 static const uint8_t kNpSetGlobalPoseBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44};
 static const uint8_t kNpGetKinematicTargetBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44,0xF7,0x81,0x1C,0x01,0x00,0x00,0x00,0x10,0x00,0x00};
 static const uint8_t kNpSetCMassLocalPoseInternalBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x48,0x53,0x8B,0xD9};
@@ -360,6 +452,15 @@ static int FailContactPool(ContactPoolReceipt* receipt, ContactPoolResult result
 
 static int FailContactContextObserver(ContactContextObserverReceipt* receipt,
     ContactContextObserverResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailManifoldPool(ManifoldPoolReceipt* receipt,
+    ManifoldPoolResult result, uint32_t error) {
     if (receipt) {
         receipt->result = result;
         receipt->lastError = error;
@@ -462,6 +563,16 @@ static void InitializeContactContextObserverReceipt(ContactContextObserverReceip
     receipt->observedContext = static_cast<uintptr_t>(g_observedContactManagerContext);
     receipt->observations = static_cast<uint32_t>(g_contactManagerContextObservations);
     receipt->installed = g_contactManagerContextObserverInstalled ? 1u : 0u;
+}
+
+static void InitializeManifoldPoolReceipt(ManifoldPoolReceipt* receipt,
+    uintptr_t unityBase, uintptr_t context, uint32_t poolKind) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(ManifoldPoolReceipt);
+    receipt->unityBase = unityBase;
+    receipt->context = context;
+    receipt->poolKind = poolKind;
 }
 
 static void __cdecl ObserveContactManagerContext(uintptr_t context) {
@@ -762,6 +873,248 @@ static int RestoreContactPoolSnapshot(uintptr_t context,
         return FailContactPool(receipt, ContactPoolWriteVerificationFailed,
             ERROR_WRITE_FAULT);
     receipt->result = ContactPoolOk;
+    return 1;
+}
+
+struct ManifoldPoolLayout {
+    uint32_t contextOffset;
+    uint32_t elementSize;
+};
+
+static bool ReadManifoldPoolLayout(uint32_t poolKind,
+    ManifoldPoolLayout& layout) {
+    if (poolKind == 0) {
+        layout.contextOffset = 0x2E4;
+        layout.elementSize = 0xF0;
+        return true;
+    }
+    if (poolKind == 1) {
+        layout.contextOffset = 0x40C;
+        layout.elementSize = 0x60;
+        return true;
+    }
+    return false;
+}
+
+static bool ManifoldPoolRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* largeAllocator = reinterpret_cast<const void*>(
+        unityBase + kLargeManifoldPoolRva);
+    const void* sphereAllocator = reinterpret_cast<const void*>(
+        unityBase + kSphereManifoldPoolRva);
+    const void* largeSlab = reinterpret_cast<const void*>(
+        unityBase + kLargeManifoldPoolSlabRva);
+    const void* sphereSlab = reinterpret_cast<const void*>(
+        unityBase + kSphereManifoldPoolSlabRva);
+    const void* largeCallsite = reinterpret_cast<const void*>(
+        unityBase + kLargeManifoldCallsiteRva);
+    const void* sphereCallsite = reinterpret_cast<const void*>(
+        unityBase + kSphereManifoldCallsiteRva);
+    return Readable(largeAllocator, sizeof(kLargeManifoldPoolBytes)) &&
+        EqualBytes(largeAllocator, kLargeManifoldPoolBytes,
+            sizeof(kLargeManifoldPoolBytes)) &&
+        Readable(sphereAllocator, sizeof(kSphereManifoldPoolBytes)) &&
+        EqualBytes(sphereAllocator, kSphereManifoldPoolBytes,
+            sizeof(kSphereManifoldPoolBytes)) &&
+        Readable(largeSlab, sizeof(kLargeManifoldPoolSlabBytes)) &&
+        EqualBytes(largeSlab, kLargeManifoldPoolSlabBytes,
+            sizeof(kLargeManifoldPoolSlabBytes)) &&
+        Readable(sphereSlab, sizeof(kSphereManifoldPoolSlabBytes)) &&
+        EqualBytes(sphereSlab, kSphereManifoldPoolSlabBytes,
+            sizeof(kSphereManifoldPoolSlabBytes)) &&
+        Readable(largeCallsite, sizeof(kLargeManifoldCallsiteBytes)) &&
+        EqualBytes(largeCallsite, kLargeManifoldCallsiteBytes,
+            sizeof(kLargeManifoldCallsiteBytes)) &&
+        Readable(sphereCallsite, sizeof(kSphereManifoldCallsiteBytes)) &&
+        EqualBytes(sphereCallsite, kSphereManifoldCallsiteBytes,
+            sizeof(kSphereManifoldCallsiteBytes));
+}
+
+static void RecordManifoldPoolOrder(ManifoldPoolReceipt* receipt,
+    const uintptr_t* order, uint32_t count, bool after) {
+    const uint32_t hash = OrderHash(order, count);
+    if (after) {
+        receipt->orderHashAfter = hash;
+        for (uint32_t i = 0; i < 16; ++i)
+            receipt->topAfter[i] = i < count ? order[i] : 0;
+    } else {
+        receipt->orderHashBefore = hash;
+        for (uint32_t i = 0; i < 16; ++i)
+            receipt->topBefore[i] = i < count ? order[i] : 0;
+    }
+}
+
+static bool ReadManifoldPool(uintptr_t context, uint32_t poolKind,
+    uintptr_t* order, uint32_t& count, ManifoldPoolReceipt* receipt) {
+    ManifoldPoolLayout layout = {};
+    if (!ReadManifoldPoolLayout(poolKind, layout))
+        return FailManifoldPool(receipt, ManifoldPoolInvalidKind,
+            ERROR_INVALID_PARAMETER) != 0;
+    if (!context)
+        return FailManifoldPool(receipt, ManifoldPoolBadArgument,
+            ERROR_INVALID_PARAMETER) != 0;
+    if (!Readable(reinterpret_cast<const void*>(context), sizeof(uintptr_t)))
+        return FailManifoldPool(receipt, ManifoldPoolUnreadableContext,
+            ERROR_NOACCESS) != 0;
+
+    const uintptr_t pool = context + layout.contextOffset;
+    receipt->pool = pool;
+    receipt->elementSize = layout.elementSize;
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x114), 0x14))
+        return FailManifoldPool(receipt, ManifoldPoolUnreadablePool,
+            ERROR_NOACCESS) != 0;
+
+    receipt->elementsPerSlab = *reinterpret_cast<const uint32_t*>(pool + 0x114);
+    receipt->used = *reinterpret_cast<const uint32_t*>(pool + 0x118);
+    receipt->unreleased = *reinterpret_cast<const uint32_t*>(pool + 0x11C);
+    receipt->slabSize = *reinterpret_cast<const uint32_t*>(pool + 0x120);
+    receipt->freeHeadBefore = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    receipt->freeHeadAfter = receipt->freeHeadBefore;
+
+    const uint64_t expectedSlabSize = static_cast<uint64_t>(
+        receipt->elementsPerSlab) * layout.elementSize;
+    if (!receipt->elementsPerSlab || expectedSlabSize > UINT32_MAX ||
+        receipt->slabSize != static_cast<uint32_t>(expectedSlabSize))
+        return FailManifoldPool(receipt, ManifoldPoolInvalidMetadata,
+            ERROR_INVALID_DATA) != 0;
+
+    count = 0;
+    uintptr_t current = receipt->freeHeadBefore;
+    while (current) {
+        if (count >= kMaximumManifolds)
+            return FailManifoldPool(receipt, ManifoldPoolInvalidCount,
+                ERROR_INSUFFICIENT_BUFFER) != 0;
+        if (!Readable(reinterpret_cast<const void*>(current), sizeof(uintptr_t)))
+            return FailManifoldPool(receipt, ManifoldPoolInvalidNode,
+                ERROR_NOACCESS) != 0;
+        for (uint32_t i = 0; i < count; ++i)
+            if (order[i] == current)
+                return FailManifoldPool(receipt, ManifoldPoolDuplicateNode,
+                    ERROR_DUP_NAME) != 0;
+        order[count++] = current;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    receipt->traversedCount = count;
+    return true;
+}
+
+static int CaptureManifoldPoolSnapshot(uintptr_t unityBase,
+    uintptr_t context, uint32_t poolKind, uintptr_t* snapshot,
+    uint32_t capacity, ManifoldPoolReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeManifoldPoolReceipt(receipt, unityBase, context, poolKind);
+    if (!ManifoldPoolRevisionMatches(unityBase))
+        return FailManifoldPool(receipt, ManifoldPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+
+    uintptr_t order[kMaximumManifolds] = {};
+    uint32_t count = 0;
+    if (!ReadManifoldPool(context, poolKind, order, count, receipt)) return 0;
+    if (capacity < count)
+        return FailManifoldPool(receipt, ManifoldPoolCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER);
+    if (count && !snapshot)
+        return FailManifoldPool(receipt, ManifoldPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (count && !Writable(snapshot, count * sizeof(uintptr_t)))
+        return FailManifoldPool(receipt, ManifoldPoolBufferNotWritable,
+            ERROR_NOACCESS);
+
+    if (count) CopyWords(snapshot, order, count);
+    RecordManifoldPoolOrder(receipt, order, count, false);
+    RecordManifoldPoolOrder(receipt, order, count, true);
+    receipt->result = ManifoldPoolOk;
+    return 1;
+}
+
+static int RestoreManifoldPoolSnapshot(uintptr_t unityBase,
+    uintptr_t context, uint32_t poolKind, uintptr_t expectedPool,
+    const uintptr_t* snapshot, uint32_t snapshotCount,
+    ManifoldPoolReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeManifoldPoolReceipt(receipt, unityBase, context, poolKind);
+    if (snapshotCount > kMaximumManifolds || (snapshotCount && !snapshot))
+        return FailManifoldPool(receipt, ManifoldPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (snapshotCount &&
+        !Readable(snapshot, snapshotCount * sizeof(uintptr_t)))
+        return FailManifoldPool(receipt, ManifoldPoolBufferUnreadable,
+            ERROR_NOACCESS);
+    if (!ManifoldPoolRevisionMatches(unityBase))
+        return FailManifoldPool(receipt, ManifoldPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+
+    uintptr_t liveOrder[kMaximumManifolds] = {};
+    uint32_t liveCount = 0;
+    if (!ReadManifoldPool(context, poolKind, liveOrder, liveCount, receipt))
+        return 0;
+    RecordManifoldPoolOrder(receipt, liveOrder, liveCount, false);
+    if (!expectedPool || receipt->pool != expectedPool)
+        return FailManifoldPool(receipt, ManifoldPoolIdentityChanged,
+            ERROR_INVALID_STATE);
+    if (liveCount != snapshotCount)
+        return FailManifoldPool(receipt, ManifoldPoolCountChanged,
+            ERROR_INVALID_STATE);
+
+    for (uint32_t i = 0; i < snapshotCount; ++i) {
+        if (!snapshot[i] ||
+            !Readable(reinterpret_cast<const void*>(snapshot[i]),
+                sizeof(uintptr_t)))
+            return FailManifoldPool(receipt, ManifoldPoolInvalidNode,
+                ERROR_NOACCESS);
+        for (uint32_t j = 0; j < i; ++j)
+            if (snapshot[j] == snapshot[i])
+                return FailManifoldPool(receipt, ManifoldPoolDuplicateNode,
+                    ERROR_DUP_NAME);
+    }
+    for (uint32_t i = 0; i < liveCount; ++i) {
+        bool found = false;
+        for (uint32_t j = 0; j < snapshotCount; ++j)
+            if (liveOrder[i] == snapshot[j]) { found = true; break; }
+        if (!found)
+            return FailManifoldPool(receipt, ManifoldPoolMembershipChanged,
+                ERROR_INVALID_STATE);
+    }
+
+    if (!Writable(reinterpret_cast<void*>(receipt->pool + 0x124),
+        sizeof(uintptr_t)))
+        return FailManifoldPool(receipt, ManifoldPoolHeadNotWritable,
+            ERROR_NOACCESS);
+    for (uint32_t i = 0; i < snapshotCount; ++i)
+        if (!Writable(reinterpret_cast<void*>(snapshot[i]), sizeof(uintptr_t)))
+            return FailManifoldPool(receipt, ManifoldPoolNodeNotWritable,
+                ERROR_NOACCESS);
+
+    for (uint32_t i = 0; i < snapshotCount; ++i)
+        *reinterpret_cast<uintptr_t*>(snapshot[i]) =
+            i + 1 < snapshotCount ? snapshot[i + 1] : 0;
+    *reinterpret_cast<uintptr_t*>(receipt->pool + 0x124) =
+        snapshotCount ? snapshot[0] : 0;
+    MemoryBarrier();
+
+    receipt->freeHeadAfter = *reinterpret_cast<const uintptr_t*>(
+        receipt->pool + 0x124);
+    uintptr_t current = receipt->freeHeadAfter;
+    for (uint32_t i = 0; i < snapshotCount; ++i) {
+        if (current != snapshot[i] ||
+            !Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t)))
+            return FailManifoldPool(receipt,
+                ManifoldPoolWriteVerificationFailed, ERROR_WRITE_FAULT);
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (current)
+        return FailManifoldPool(receipt, ManifoldPoolWriteVerificationFailed,
+            ERROR_WRITE_FAULT);
+    if (!Readable(reinterpret_cast<const void*>(receipt->pool + 0x114), 0x10) ||
+        *reinterpret_cast<const uint32_t*>(receipt->pool + 0x114) != receipt->elementsPerSlab ||
+        *reinterpret_cast<const uint32_t*>(receipt->pool + 0x118) != receipt->used ||
+        *reinterpret_cast<const uint32_t*>(receipt->pool + 0x11C) != receipt->unreleased ||
+        *reinterpret_cast<const uint32_t*>(receipt->pool + 0x120) != receipt->slabSize)
+        return FailManifoldPool(receipt, ManifoldPoolWriteVerificationFailed,
+            ERROR_WRITE_FAULT);
+    RecordManifoldPoolOrder(receipt, snapshot, snapshotCount, true);
+    receipt->result = ManifoldPoolOk;
     return 1;
 }
 
@@ -1364,6 +1717,21 @@ extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_pool_restore_sn
     uint32_t count, ContactPoolReceipt* receipt) {
     return RestoreContactPoolSnapshot(context, expectedFreeArray, snapshot,
         count, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_manifold_pool_capture_snapshot(
+    uintptr_t unityBase, uintptr_t context, uint32_t poolKind,
+    uintptr_t* snapshot, uint32_t capacity, ManifoldPoolReceipt* receipt) {
+    return CaptureManifoldPoolSnapshot(unityBase, context, poolKind, snapshot,
+        capacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_manifold_pool_restore_snapshot(
+    uintptr_t unityBase, uintptr_t context, uint32_t poolKind,
+    uintptr_t expectedPool, const uintptr_t* snapshot, uint32_t count,
+    ManifoldPoolReceipt* receipt) {
+    return RestoreManifoldPoolSnapshot(unityBase, context, poolKind,
+        expectedPool, snapshot, count, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(

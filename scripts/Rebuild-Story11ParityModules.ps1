@@ -19,7 +19,7 @@ $tasModules = @(
     @{ Name='PhysicsSyncAfterRestore'; Source='physics-sync-after-restore'; Revision="r13-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.PhysicsSyncAfterRestoreModule' },
     @{ Name='RigidbodyMotionTarget'; Source='rigidbody-motion-target'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyMotionTargetModule' },
     @{ Name='ChefMovementHistoryCheckpoint'; Source='chef-movement-history-checkpoint'; Revision="r3-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefMovementHistoryCheckpointModule' },
-    @{ Name='RigidbodyActorRebuild'; Source='rigidbody-actor-rebuild'; Revision="r13y-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule' },
+    @{ Name='RigidbodyActorRebuild'; Source='rigidbody-actor-rebuild'; Revision="r13z-manifold-pool-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule' },
     @{ Name='ResumePhase'; Source='resume-phase'; Revision="r1bc-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ResumePhaseModule' },
     @{ Name='ChefAnimatorCheckpoint'; Source='chef-animator-checkpoint'; Revision="r53b-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule' },
     @{ Name='BodyRestore'; Source='body-restore'; Revision="r32-recreated-native-shape-state-rebind-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },

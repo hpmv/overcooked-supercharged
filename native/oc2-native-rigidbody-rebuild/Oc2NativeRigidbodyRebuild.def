@@ -13,6 +13,8 @@ EXPORTS
     oc2_contact_manager_pool_restore
     oc2_contact_manager_pool_capture_snapshot
     oc2_contact_manager_pool_restore_snapshot
+    oc2_manifold_pool_capture_snapshot
+    oc2_manifold_pool_restore_snapshot
     oc2_contact_manager_context_observer_install
     oc2_contact_manager_context_observer_status
     oc2_contact_manager_context_observer_uninstall
