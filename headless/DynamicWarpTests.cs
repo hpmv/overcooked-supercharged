@@ -54,7 +54,8 @@ public static class DynamicWarpTests
             var plate = new GameEntityRecord { path = new() { ids = new[] { 34, 0, 0 } }, prefab = stack.prefab.Spawns[0], spawner = stack,
                 existed = new(false), position = new(Vector3.Zero) };
             plate.existed.ChangeTo(true, 866); stack.spawned.Add(plate); live[57] = plate;
-            var stationData = station.data.Last(); stationData.plateReturnStationStack = stack; station.data.ChangeTo(stationData, 866);
+            var stationData = station.data.Last(); stationData.attachment = stack;
+            stationData.plateReturnStationStack = stack; station.data.ChangeTo(stationData, 866);
             var stackData = stack.data.Last(); stackData.stackContents = new() { plate }; stack.data.ChangeTo(stackData, 866);
             audit.Observe(new[] {
                 new EntityRegistryData { EntityId = 55, Name = "CleanPlateStack", Pos = new(), Components = new() { "PhysicalAttachment", "CleanPlateStack", "Stack", "BoxCollider" },
@@ -96,6 +97,52 @@ public static class DynamicWarpTests
         var returnStationWarp = returnedWarp.Entities.Single(entity => entity.__isset.entityId && entity.EntityId == 34);
         Check(returnStationWarp.PlateReturnStation?.Stack?.__isset.entityId == true && returnStationWarp.PlateReturnStation.Stack.EntityId == 55,
             "plate-return station retains its explicit returned-stack reference");
+        var retiredStack = ReturnedPlateFixture();
+        var retiredStackSimulator = new RealGameSimulator {
+            setup = retiredStack.setup,
+            entityIdToRecord = retiredStack.live
+        };
+        retiredStackSimulator.SetFrameAfterWarping(867);
+        var stackTaken = new EntityEventMessage();
+        stackTaken.Initialise(new() { m_uEntityID = 34 }, 0, new AttachStationMessage { m_item = -1 });
+        retiredStackSimulator.ApplyGameUpdate(stackTaken);
+        Check(retiredStack.station.data[867].attachment is null &&
+              retiredStack.station.data[867].plateReturnStationStack is null,
+            "taking the returned stack mirrors ServerPlateReturnStation.OnItemRemoved and clears both station references");
+        Check(ReferenceEquals(retiredStack.station.data[866].attachment, retiredStack.stack) &&
+              ReferenceEquals(retiredStack.station.data[866].plateReturnStationStack, retiredStack.stack),
+            "taking the returned stack preserves the exact earlier station history for backward rewind");
+        retiredStackSimulator.ApplyGameUpdate(new DestroyEntitiesMessage { m_rootId = 55 });
+        Check(retiredStack.station.data[867].plateReturnStationStack is null,
+            "destroyed returned stack cannot revive the cleared plate-return station reference");
+        var retiredStackWarp = WarpCalculator.CalculateWarp(retiredStack.live, retiredStack.setup.entityRecords, 867, 867);
+        Check(retiredStackWarp.Entities.Single(entity => entity.__isset.entityId && entity.EntityId == 34)
+                .PlateReturnStation?.Stack is null,
+            "rewind after returned-stack retirement emits an explicit null station stack instead of a dangling path");
+        var legacyStaleStack = ReturnedPlateFixture();
+        legacyStaleStack.stack.existed.ChangeTo(false, 867); legacyStaleStack.live.Remove(55);
+        Check(WarpCalculator.CalculateWarp(legacyStaleStack.live, legacyStaleStack.setup.entityRecords, 867, 867)
+                .Entities.Single(entity => entity.__isset.entityId && entity.EntityId == 34)
+                .PlateReturnStation?.Stack is null,
+            "legacy stale station history cannot serialize a target-absent returned stack path");
+        var directStackRetirement = ReturnedPlateFixture();
+        var directStackSimulator = new RealGameSimulator {
+            setup = directStackRetirement.setup,
+            entityIdToRecord = directStackRetirement.live
+        };
+        directStackSimulator.SetFrameAfterWarping(867);
+        directStackSimulator.ApplyGameUpdate(new DestroyEntitiesMessage { m_rootId = 55 });
+        Check(directStackRetirement.station.data[867].plateReturnStationStack is null,
+            "direct returned-stack retirement clears its exact station pointer without a preceding station message");
+        var unrelatedRetirement = ReturnedPlateFixture();
+        var unrelatedRetirementSimulator = new RealGameSimulator {
+            setup = unrelatedRetirement.setup,
+            entityIdToRecord = unrelatedRetirement.live
+        };
+        unrelatedRetirementSimulator.SetFrameAfterWarping(867);
+        unrelatedRetirementSimulator.ApplyGameUpdate(new DestroyEntitiesMessage { m_rootId = 57 });
+        Check(ReferenceEquals(unrelatedRetirement.station.data[867].plateReturnStationStack, unrelatedRetirement.stack),
+            "unrelated retirement does not clear a live returned-stack station pointer");
         var missingStackAnnotation = ReturnedPlateFixture(); missingStackAnnotation.stack.prefab.IsStack = false;
         Check(WarpCalculator.CalculateWarp(missingStackAnnotation.live, missingStackAnnotation.setup.entityRecords, 866, 866)
                 .Entities.Single(entity => entity.__isset.entityId && entity.EntityId == 55).Stack is null,

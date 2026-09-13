@@ -317,7 +317,18 @@ namespace Hpmv
                 }
                 else if (payload is AttachStationMessage asm)
                 {
-                    specificData.attachment = asm.m_item <= 0 ? null : entityIdToRecord[asm.m_item];
+                    var removed = specificData.attachment;
+                    var attached = asm.m_item <= 0 ? null : entityIdToRecord[asm.m_item];
+                    specificData.attachment = attached;
+                    // ServerAttachStation.OnItemTaken invokes the plate-return
+                    // station's OnItemRemoved hook.  That hook clears m_stack
+                    // when the removed attachment is the active returned stack.
+                    if (entityRecord.prefab.IsPlateReturnStation &&
+                        ReferenceEquals(specificData.plateReturnStationStack, removed) &&
+                        !ReferenceEquals(removed, attached))
+                    {
+                        specificData.plateReturnStationStack = null;
+                    }
                 }
                 else if (payload is IngredientContainerMessage icm)
                 {
@@ -605,9 +616,24 @@ namespace Hpmv
                 }
             };
 
+            Action<GameEntityRecord> clearDestroyedPlateReturnStationStack = retired =>
+            {
+                // The ordinary station-removal event clears this first.  Keep a
+                // fail-safe for direct/incomplete retirement streams: a record
+                // that no longer exists cannot remain a bindable station stack.
+                foreach (var station in setup.entityRecords.GenAllEntities().Where(e => e.prefab.IsPlateReturnStation))
+                {
+                    var data = station.data.Last();
+                    if (!ReferenceEquals(data.plateReturnStationStack, retired)) continue;
+                    data.plateReturnStationStack = null;
+                    station.data.ChangeTo(data, frame);
+                }
+            };
+
             Action<GameEntityRecord, uint> destroyEntity = (r, entityId) =>
             {
                 clearDestroyedWorkstationItem(r);
+                clearDestroyedPlateReturnStationStack(r);
                 entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
                 // Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");

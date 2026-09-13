@@ -344,7 +344,13 @@ namespace Hpmv
                 {
                     spec.PlateReturnStation = new PlateReturnStationWarpData
                     {
-                        Stack = data.plateReturnStationStack == null ? null : getEntityIdOrRef(data.plateReturnStationStack),
+                        // Historical/imported traces may predate the simulator's
+                        // OnItemRemoved lifecycle fix.  A stack that does not
+                        // exist at the target frame is native-null and must not
+                        // become an unbindable logical-path reference.
+                        Stack = data.plateReturnStationStack == null ||
+                                !data.plateReturnStationStack.existed[desiredFrame]
+                            ? null : getEntityIdOrRef(data.plateReturnStationStack),
                     };
                 }
 

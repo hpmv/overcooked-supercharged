@@ -1,5 +1,50 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-13, controller v12q7 / retired plate-return
+> stack reference):** the post-pickup returned-plate continuation that
+> previously failed rewind preflight now passes exact restore and replay.  The
+> controller had retained station 34's `plateReturnStationStack -> [34,0]`
+> after pickup destroyed returned stack owner 55/body 56 and moved child plate
+> 57/body 58 to chef 44.  Native `ServerPlateReturnStation.OnItemRemoved`
+> clears the corresponding `m_stack`; the controller now mirrors that exact
+> lifecycle when processing the attachment-removal message, has an exact-record
+> destruction fail-safe, and serializes old/imported target-absent stale stack
+> history as null.  Strict native dangling-reference rejection is unchanged.
+> The change affects controller observation/reconstruction only, not forward
+> game execution, `ServerWorldObjectSynchroniser`, held-item animation, or
+> plate-throw physics.
+>
+> Offline gates for the frozen v12q7 artifact pass DynamicWarp 53, full
+> Headless 367, Story11 89, and Status 32 checks.  The exact f444 -> f1047
+> delivery was first re-established with recording SHA
+> `c91fe72f0376f51e3b826761c86b2550b6d97302ebaf13bad61230eae3eb5141`;
+> summary SHA-256
+> `22ED2ED66C664B1311FD784691D513E8CE1805A9512A9B57D9B807A6FFAE4183`.
+> The exact f1047 -> f1090 returned-stack pickup then passed with recording SHA
+> `345305c60fc756953d3427710f517606eba5f9ed5c95c224484e2aa533aaed08`;
+> summary SHA-256
+> `119624BB1F2C634513F1CEFF7DD8BCC83F84CB31F374C05F166D880DCBFC0BF3`.
+> Finally, the formerly failing f1090 -> f1122 continuation passed exact
+> entities, native round/food/physics/clocks, contact-manager free-stack,
+> TransformChangeDispatch, and input replay.  Its recording SHA is
+> `deeacfb089af4f918ba356b0a67a2d21aa184caa4ddb14367e1310e196a448d6`;
+> evidence is
+> `artifacts/framework-migration/story11-postreturn-pickup-r13k-v12q7-live-r2/returned-plate57-dash-drop-west-f1090-r3/summary.json`,
+> SHA-256
+> `2D622C88878BC85A68CB0878D376D9F2ADD1320132172B76F59F35DA27BB743C`.
+> This input dashed while the plate remained held; it is a held-dash parity
+> proof, not a genuine plate throw.
+>
+> Frozen host v12q7 is
+> `artifacts/framework-headless-host-v12q7-station-stack-lifecycle/Headless.dll`,
+> SHA-256
+> `8042E2D716B3DF0C38A415BD7FBCA8A6DEB5A503D7E901B450B08F5B25769368`.
+> The healthy process remains paused/fenced at f1122: game PID 30980 / start
+> ticks 639248775946932891, Story11 host PID 76388 / start ticks
+> 639248777971150961.  Revalidate both identities before control.  Search
+> remains disabled.  Next adjust fixed pickup/drop timing to exercise a genuine
+> returned-plate dash-drop/plate-throw, then continue broader rewind parity.
+
 > **Active rewind result (2026-09-12, returned-stack pickup / WorldSync
 > r13k):** rewinding across destruction of the first returned
 > `CleanPlateStack` now passes exact checkpoint restoration and fixed-input

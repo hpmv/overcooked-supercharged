@@ -296,6 +296,9 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--warmup', type=int, default=30,
                         help='Neutral frames before the checkpoint; use 0 when already at the intended boundary.')
+    parser.add_argument('--settle-timeout', type=float, default=20,
+                        help=('Maximum seconds to wait for each fixed-input or replay request to reach its paused '
+                              'release boundary. Increase this for long probes while the game is minimized.'))
     parser.add_argument('--frames', type=int, default=8)
     parser.add_argument('--x', type=float, default=-1)
     parser.add_argument('--y', type=float, default=0)
@@ -361,6 +364,8 @@ def main():
         parser.error('Use1..36000 payload frames; two release frames are additional.')
     if not 0 <= args.warmup <= 36000:
         parser.error('Use0..36000 neutral warmup frames.')
+    if not 1 <= args.settle_timeout <= 600:
+        parser.error('Use a settle timeout from 1 to 600 seconds.')
     args.out.mkdir(parents=True, exist_ok=False)
     evidence_key = hashlib.sha256(str(args.out.resolve()).encode('utf-8')).hexdigest()[:16]
     bridge = host = None
@@ -379,7 +384,7 @@ def main():
         return result
 
     def settled(label):
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + args.settle_timeout
         while True:
             s = host.call({'command': 'status'})
             if s['errors'] or s['state'] == 'Error':
