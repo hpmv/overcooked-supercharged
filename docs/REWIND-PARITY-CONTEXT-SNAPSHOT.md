@@ -1,10 +1,42 @@
-# Rewind parity: current context snapshot — 2026-09-12
+# Rewind parity: current context snapshot — 2026-09-13
 
 This is the short, causal overview of the current Story 1-1 rewind work. Read
 this first after a context reset. For native addresses, trace sequence numbers,
 module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
+
+## Latest result — far cross-delivery rewind passes under BodyRestore r33
+
+The retained-history rewind from settled returned-plate frame 1500 directly
+back across delivery to frame 444 now restores and replays the 603-frame first
+delivery exactly.  The previous preflight failure was not a changed shape
+identity: entity 44's persistent chef capsule retained the same `PxShape`, but
+its native actor-local pose changed after the chef moved later in the route.
+BodyRestore r32 incorrectly treated the old pose/geometry as invariants that
+had to match before restoration.
+
+r33 still requires exact surviving `PxShape` identity, actor order, geometry
+type, managed role mapping, and exactly two authorized recreated plate box
+shapes.  It carries checkpoint pose/geometry for all rows into the existing
+native write-and-readback helper.  The successful live receipt reports two
+recreated rows, one differing surviving pose at row 0, zero surviving geometry
+differences, and no poison/failure.  This path runs only during rewind; forward
+physics and plate throwing are unchanged.
+
+The clean no-search reconstruction re-proved every cell from Story 1-1 frame 1
+through f1500.  The decisive f1500 -> f444 -> f1047 result has exact entities,
+native physics, food, round state, logical clocks, input, contact/manifold pool
+history, TransformChangeDispatch, and Animator semantics, with zero actor
+rebuilds.  Evidence is
+`artifacts/framework-migration/story11-surviving-shape-r33-live-r2/nonadjacent-f1500-to444-r1/summary.json`
+(SHA-256 `85C952A86964FAEBCCE617BEC8355F9663A9C8AC2A1DB6088692E2FABC915354`)
+and sibling `module-status.json` (SHA-256
+`0055848A16BB05AD30F708968132579FB978259E6A585EB47CAC603E77D96FF6`).
+The exact tested r33 DLL is
+`114E1995226031045603FF601E56A2E643B7197EBFDCD524A5A7FEE15CC1D41D`.
+Search remains disabled; continue expanding the lifecycle matrix from this
+healthy f1047 boundary.
 
 ## Latest result — branch commit and reverse attachment topology pass
 

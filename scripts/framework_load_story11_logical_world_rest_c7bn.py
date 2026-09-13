@@ -18,7 +18,7 @@ loader.STACK = (
     ("rigidbody-actor-rebuild", "RigidbodyActorRebuild-r13z-manifold-pool-history-core-c7bnr1", "actor"),
     ("resume-phase", "ResumePhase-r1bc-core-c7bnr1", {}),
     ("chef-animator-checkpoint", "ChefAnimatorCheckpoint-r53b-core-c7bnr1", "animator"),
-    ("body-restore", "BodyRestore-r32-recreated-native-shape-state-rebind-core-c7bnr1", "body"),
+    ("body-restore", "BodyRestore-r33-surviving-shape-state-rebind-core-c7bnr5", "body"),
     ("delivery-fade-checkpoint", "DeliveryFadeCheckpoint-r10k-persistent-backward-history-core-c7bnr1", {}),
 )
 

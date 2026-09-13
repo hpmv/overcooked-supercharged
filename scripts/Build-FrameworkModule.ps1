@@ -9,11 +9,15 @@ param(
 $ErrorActionPreference='Stop'
 if($Revision -notmatch '^[a-zA-Z0-9_-]+$' -or $Name -notmatch '^[a-zA-Z][a-zA-Z0-9_]*$') { throw 'Use a simple unique revision and module name.' }
 if($Define -and $Define -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*(;[a-zA-Z_][a-zA-Z0-9_]*)*$') { throw 'Invalid compiler symbols.' }
-$tasRoot=Split-Path -Parent $PSScriptRoot
+$tasScriptParent=Split-Path -Parent $PSScriptRoot
+if(Test-Path -LiteralPath (Join-Path $tasScriptParent '.git')) {$tasRepositoryRoot=$tasScriptParent}
+elseif(Test-Path -LiteralPath (Join-Path $tasScriptParent 'framework/.git')) {$tasRepositoryRoot=Join-Path $tasScriptParent 'framework'}
+else {throw 'Cannot locate the Supercharged repository root from the scripts directory.'}
+$tasWorkspaceRoot=Split-Path -Parent $tasRepositoryRoot
 $tasCore=(Resolve-Path -LiteralPath $CoreBuild).Path
 $tasSource=(Resolve-Path -LiteralPath $SourceDirectory).Path
-$tasManaged=Join-Path $tasRoot 'runtime/Overcooked2_Data/Managed'
-$tasOutput=Join-Path $tasRoot "framework-run/modules/$Name-$Revision"
+$tasManaged=Join-Path $tasWorkspaceRoot 'runtime/Overcooked2_Data/Managed'
+$tasOutput=Join-Path $tasWorkspaceRoot "framework-run/modules/$Name-$Revision"
 if(Test-Path -LiteralPath $tasOutput) { throw 'Revision output already exists; choose a new revision.' }
 $tasCoreDll=Join-Path $tasCore 'SuperchargedPatch.dll'
 if(-not (Test-Path -LiteralPath $tasCoreDll)) {throw 'Frozen core DLL missing.'}
@@ -27,7 +31,7 @@ $tasArguments=@($tasCsc,'/nologo','/noconfig','/nostdlib+','/target:library','/l
 if($Define) {$tasArguments+='/define:'+$Define}
 foreach($tasName in @('mscorlib.dll','System.dll','System.Core.dll','Assembly-CSharp.dll','Assembly-CSharp-firstpass.dll')) {$tasArguments+='/reference:'+(Join-Path $tasManaged $tasName)}
 foreach($tasAssembly in @(Get-ChildItem -LiteralPath $tasManaged -Filter 'UnityEngine*.dll')) {$tasArguments+='/reference:'+$tasAssembly.FullName}
-foreach($tasDependency in @((Join-Path $tasCore 'Thrift.dll'),(Join-Path $tasRoot 'runtime/BepInEx/core/0Harmony.dll'))) {$tasArguments+='/reference:'+$tasDependency}
+foreach($tasDependency in @((Join-Path $tasCore 'Thrift.dll'),(Join-Path $tasWorkspaceRoot 'runtime/BepInEx/core/0Harmony.dll'))) {$tasArguments+='/reference:'+$tasDependency}
 $tasArguments+=@($tasSources | ForEach-Object {$_.FullName})
 & dotnet @tasArguments
 if($LASTEXITCODE -ne 0) {throw 'Authoring module compilation failed; output retained.'}

@@ -37,7 +37,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeSetMassFrame nativeSetMassFrame;
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private bool disposed;
-        public string Name {get{return "body-native-auto-reset-v32-recreated-native-shape-state-rebind";}}
+        public string Name {get{return "body-native-auto-reset-v33-surviving-shape-state-rebind";}}
         public int ApiVersion {get{return 1;}}
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]

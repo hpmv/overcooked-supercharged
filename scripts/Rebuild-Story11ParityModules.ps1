@@ -6,7 +6,11 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($CoreTag -notmatch '^[a-zA-Z0-9_-]+$') { throw 'Use a simple unique core tag.' }
 
-$tasRoot = Split-Path -Parent $PSScriptRoot
+$tasScriptParent = Split-Path -Parent $PSScriptRoot
+if (Test-Path -LiteralPath (Join-Path $tasScriptParent '.git')) { $tasRepositoryRoot = $tasScriptParent }
+elseif (Test-Path -LiteralPath (Join-Path $tasScriptParent 'framework/.git')) { $tasRepositoryRoot = Join-Path $tasScriptParent 'framework' }
+else { throw 'Cannot locate the Supercharged repository root from the scripts directory.' }
+$tasWorkspaceRoot = Split-Path -Parent $tasRepositoryRoot
 $tasBuilder = Join-Path $PSScriptRoot 'Build-FrameworkModule.ps1'
 $tasModules = @(
     @{ Name='LevelSession'; Source='level-session'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.LevelSessionModule' },
@@ -22,21 +26,21 @@ $tasModules = @(
     @{ Name='RigidbodyActorRebuild'; Source='rigidbody-actor-rebuild'; Revision="r13z-manifold-pool-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule' },
     @{ Name='ResumePhase'; Source='resume-phase'; Revision="r1bc-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ResumePhaseModule' },
     @{ Name='ChefAnimatorCheckpoint'; Source='chef-animator-checkpoint'; Revision="r53b-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule' },
-    @{ Name='BodyRestore'; Source='body-restore'; Revision="r32-recreated-native-shape-state-rebind-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },
+    @{ Name='BodyRestore'; Source='body-restore'; Revision="r33-surviving-shape-state-rebind-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },
     @{ Name='DeliveryFadeCheckpoint'; Source='delivery-fade-checkpoint'; Revision="r10k-persistent-backward-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.DeliveryFadeCheckpointModule' }
 )
 
 foreach ($tasModule in $tasModules) {
     & $tasBuilder `
         -CoreBuild $CoreBuild `
-        -SourceDirectory (Join-Path $tasRoot ('framework/modules/' + $tasModule.Source)) `
+        -SourceDirectory (Join-Path $tasRepositoryRoot ('modules/' + $tasModule.Source)) `
         -Revision $tasModule.Revision `
         -EntryType $tasModule.Entry `
         -Name $tasModule.Name
 }
 
 $tasModules | ForEach-Object {
-    $tasDirectory = Join-Path $tasRoot ('framework-run/modules/' + $_.Name + '-' + $_.Revision)
+    $tasDirectory = Join-Path $tasWorkspaceRoot ('framework-run/modules/' + $_.Name + '-' + $_.Revision)
     $tasManifest = Get-Content -LiteralPath (Join-Path $tasDirectory 'manifest.json') -Raw | ConvertFrom-Json
     [pscustomobject]@{
         directory = $tasDirectory

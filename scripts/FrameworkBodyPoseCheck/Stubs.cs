@@ -7,7 +7,7 @@ namespace UnityEngine {
  }
  public class Component:Object{public GameObject gameObject;public Transform transform=>gameObject.transform;}
  public class GameObject:Object {
-  public readonly Transform transform;public Rigidbody body;public Component objectContainer;public bool activeSelf=true;public int layer;
+  public readonly Transform transform;public Rigidbody body;public Component objectContainer;public bool activeSelf=true;public int layer;public string name="GameObject";
   public bool activeInHierarchy=>activeSelf&&(transform.parent==null||transform.parent.gameObject.activeInHierarchy);
   public List<Collider> colliders=new();public static List<GameObject> All=new();
   public GameObject(){transform=new Transform{gameObject=this};All.Add(this);}
@@ -21,6 +21,7 @@ namespace UnityEngine {
  public class Transform:Component {
   Vector3 local;Quaternion orient;
   public Transform parent;public Vector3 position;public Quaternion rotation;public Vector3 localScale=new(1,1,1);
+  public int GetSiblingIndex()=>0;
   public Vector3 localPosition {get=>local;set{Events.Rows.Add("transform-position");local=value;position=value;}}
   public Quaternion localRotation {get=>orient;set{Events.Rows.Add("transform-rotation");orient=value;rotation=value;}}
  }

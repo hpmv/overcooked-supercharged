@@ -1,5 +1,53 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-13, surviving PxShape state rebind):**
+> the non-adjacent f1500 -> f444 rewind that previously failed before replay
+> now restores and replays the complete 603-frame first-delivery continuation
+> to f1047 exactly.  The failure was entity 44's persistent Player 1 capsule:
+> its `PxShape` identity survived, but its native actor-local pose legitimately
+> changed while the chef moved in the abandoned future.  BodyRestore r32
+> incorrectly required the surviving row's current pose and geometry to
+> already equal the f444 checkpoint before the native restore ran.
+>
+> BodyRestore r33 keeps the strict surviving `PxShape` identity, actor row
+> order, geometry type, managed Collider-role bijection, and exactly two
+> authorized recreated plate BoxCollider rows.  It now carries checkpointed
+> pose and geometry targets for every actor row, including survivors, into the
+> existing native restore helper.  That helper writes and verifies every row
+> before simulation resumes.  This is rewind-only snapshot bookkeeping;
+> ordinary forward gameplay, Animator attachment motion, and plate-throw
+> physics are unchanged.  No native C++ change was required.
+>
+> A clean c7bn process rebuilt the established no-search route from Story 1-1
+> frame 1 through f444, delivery f1047, returned-stack pickup f1090, held dash
+> f1122, genuine dash-drop f1198, and neutral rest f1500.  Every prerequisite
+> cell passed exact rewind/replay.  The decisive direct f1500 -> f444 restore
+> recreated initial plate owner/body 2/47, discarded the returned-plate
+> future, and replayed to f1047 with no changed entities and exact native
+> physics, food, round state, logical clocks, input recording, contact-manager
+> and manifold pools, TransformChangeDispatch, and Animator semantics.  Actor
+> rebuild count remained zero.
+>
+> The r33 receipt proves the expected changed survivor rather than merely
+> bypassing it: entity 44 had three actor rows, two recreated rows, and exactly
+> one differing surviving pose at actor index 0; surviving geometry differences
+> were zero and the rebind was verified without poison/failure.  Primary
+> evidence:
+> `artifacts/framework-migration/story11-surviving-shape-r33-live-r2/nonadjacent-f1500-to444-r1/summary.json`,
+> SHA-256
+> `85C952A86964FAEBCCE617BEC8355F9663A9C8AC2A1DB6088692E2FABC915354`,
+> and sibling `module-status.json`, SHA-256
+> `0055848A16BB05AD30F708968132579FB978259E6A585EB47CAC603E77D96FF6`.
+> r33 DLL SHA-256 is
+> `114E1995226031045603FF601E56A2E643B7197EBFDCD524A5A7FEE15CC1D41D`;
+> its manifest's seven source hashes all match the current repository files.
+> The focused native-shape role test passes 13 checks and the synthetic body
+> contract passes 216.  The healthy game PID 65312 / UTC start ticks
+> 639249222117919950 and Story11 host PID 37752 / UTC start ticks
+> 639249224351800543 are paused and input-fenced at f1047.  Revalidate both
+> identities before control.  Search remains disabled; complete Story 1-1
+> rewind parity is still broader than this exercised lifecycle.
+
 > **Active rewind result (2026-09-13, logical WorldObject rest clock):**
 > the frame-1198 pending returned-plate rest deadline that previously could
 > not even begin replay now passes an exact 300-frame neutral

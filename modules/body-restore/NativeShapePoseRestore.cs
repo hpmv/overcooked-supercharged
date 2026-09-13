@@ -278,6 +278,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 var poses=(NativeRigidPose[])currentNative.Poses.Clone();
                 var geometries=(NativeShapeGeometry[])currentNative.Geometries.Clone();
                 int differingPoseRows=0,differingGeometryRows=0,recreatedRows=0;
+                int differingSurvivingPoseRows=0,differingSurvivingGeometryRows=0;
+                var differingSurvivingPoseIndices=new List<int>();
+                var differingSurvivingGeometryIndices=new List<int>();
                 for(int i=0;i<geometries.Length;i++)
                 {
                     if(historicalNative.Geometries[i].Type!=currentNative.Geometries[i].Type)
@@ -291,13 +294,24 @@ namespace SuperchargedPatch.Authoring.Modules
                         recreatedRows++;
                         if(!SameBits(historicalNative.Poses[i],currentNative.Poses[i]))differingPoseRows++;
                         if(!SameBits(historicalNative.Geometries[i],currentNative.Geometries[i]))differingGeometryRows++;
-                        poses[i]=historicalNative.Poses[i];
-                        geometries[i]=historicalNative.Geometries[i];
                     }
-                    else if(!historicalNative.Shapes[i].Equals(currentNative.Shapes[i])
-                        ||!SameBits(historicalNative.Poses[i],currentNative.Poses[i])
-                        ||!SameBits(historicalNative.Geometries[i],currentNative.Geometries[i]))
-                        throw new InvalidOperationException("Native shape geometry surviving actor row differs at index "+i+".");
+                    else
+                    {
+                        if(!historicalNative.Shapes[i].Equals(currentNative.Shapes[i]))
+                            throw new InvalidOperationException("Native shape geometry surviving actor identity differs at index "+i+".");
+                        if(!SameBits(historicalNative.Poses[i],currentNative.Poses[i]))
+                        {differingSurvivingPoseRows++;differingSurvivingPoseIndices.Add(i);}
+                        if(!SameBits(historicalNative.Geometries[i],currentNative.Geometries[i]))
+                        {differingSurvivingGeometryRows++;differingSurvivingGeometryIndices.Add(i);}
+                    }
+                    // The current PxShape identities are retained, while the
+                    // complete checkpointed native state is carried across the
+                    // managed Collider reincarnation.  Surviving shapes may
+                    // legitimately have changed during the abandoned future;
+                    // RestoreNativeShapePoses writes and verifies these targets
+                    // for every actor row before simulation resumes.
+                    poses[i]=historicalNative.Poses[i];
+                    geometries[i]=historicalNative.Geometries[i];
                 }
                 if(recreatedRows!=2)
                     throw new InvalidOperationException("Native shape geometry actor plan does not contain exactly two recreated rows.");
@@ -309,6 +323,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 receipt["entityId"]=result.EntityId;receipt["recreatedRows"]=recreatedRows;
                 receipt["differingPoseRows"]=differingPoseRows;
                 receipt["differingGeometryRows"]=differingGeometryRows;
+                receipt["differingSurvivingPoseRows"]=differingSurvivingPoseRows;
+                receipt["differingSurvivingGeometryRows"]=differingSurvivingGeometryRows;
+                receipt["differingSurvivingPoseIndices"]=differingSurvivingPoseIndices.ToArray();
+                receipt["differingSurvivingGeometryIndices"]=differingSurvivingGeometryIndices.ToArray();
                 receipt["historicalShapes"]=Array.ConvertAll(historicalNative.Shapes,NativeHex);
                 receipt["currentShapes"]=Array.ConvertAll(currentNative.Shapes,NativeHex);
                 receipt["historicalColliderReferenceHashes"]=Array.ConvertAll(pendingRecreatedShapes.ToArray(),
