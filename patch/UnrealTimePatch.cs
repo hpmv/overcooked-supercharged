@@ -82,6 +82,41 @@ namespace SuperchargedPatch
                 }
             }
         }
+        [HarmonyPatch]
+        public static class WorldObjectRestClock
+        {
+            public static MethodBase TargetMethod()
+            {
+                var method = AccessTools.Method(typeof(Team17.Online.Multiplayer.Messaging.ServerWorldObjectSynchroniser),
+                    "GetServerUpdate", System.Type.EmptyTypes);
+                if (method == null || method.DeclaringType != typeof(Team17.Online.Multiplayer.Messaging.ServerWorldObjectSynchroniser)
+                    || method.ReturnType != typeof(Team17.Online.Multiplayer.Messaging.Serialisable))
+                    throw new System.InvalidOperationException("ServerWorldObjectSynchroniser.GetServerUpdate contract differs.");
+                return method;
+            }
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                var values = new List<CodeInstruction>(instructions);
+                var original = AccessTools.PropertyGetter(typeof(Time), "time");
+                var replacement = AccessTools.Method(typeof(UnrealTimePatch), "LogicalRealtime");
+                int replaced = 0;
+                foreach (var instruction in values)
+                {
+                    if ((instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt)
+                        && Equals(instruction.operand, original))
+                    {
+                        instruction.opcode = OpCodes.Call;
+                        instruction.operand = replacement;
+                        replaced++;
+                    }
+                }
+                // Both reads must share one epoch: the active-send timestamp and
+                // the later strict rest-deadline comparison.
+                if (original == null || replacement == null || replaced != 2)
+                    throw new System.InvalidOperationException("Expected exactly two WorldObject Time.time reads; found " + replaced + ".");
+                return values;
+            }
+        }
         [HarmonyPatch(typeof(TimeManager), "Update")]
         public static class RememberNativeTimeManager
         {

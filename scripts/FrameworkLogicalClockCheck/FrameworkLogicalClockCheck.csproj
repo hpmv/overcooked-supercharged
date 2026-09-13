@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="AuthoringClockState.cs" />
-    <Compile Include="../../framework/patch/AuthoringClockState.cs" Link="AuthoringClockState.cs" />
+    <Compile Include="../../patch/AuthoringClockState.cs" Link="AuthoringClockState.cs" />
+    <Compile Include="../../patch/UnrealTimePatch.cs" Link="UnrealTimePatch.cs" />
   </ItemGroup>
 </Project>

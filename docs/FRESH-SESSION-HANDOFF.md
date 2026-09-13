@@ -1,5 +1,64 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-13, logical WorldObject rest clock):**
+> the frame-1198 pending returned-plate rest deadline that previously could
+> not even begin replay now passes an exact 300-frame neutral
+> original/rewind/replay cell.  The failure was not another physics-history
+> divergence.  `ServerWorldObjectSynchroniser.GetServerUpdate` used
+> `UnityEngine.Time.time` both to stamp an active send and to evaluate the
+> later strict `current > last + 1f` rest deadline.  Unity time continues to
+> grow while authoring is paused, whereas the TAS logical clock is frozen and
+> checkpointed.  Reconstructing the old residual at a much larger Unity-time
+> epoch eventually became mathematically impossible because of float ULP
+> spacing.
+>
+> Core c7bn replaces exactly the two declared parameterless
+> `GetServerUpdate` `Time.time` reads with
+> `UnrealTimePatch.LogicalRealtime`; startup rejects any installed method with
+> a different number of reads.  The native strict comparison, reliable-rest
+> event, payload, scheduler and client handlers are unchanged.  WorldSyncCache
+> r13n now restores `m_LastUnreliableActiveSend` bit-for-bit and performs only
+> read-only resume validation; it contains no inverse/rebase arithmetic and no
+> resume-time reflected cache write.  Logical-clock validation runs before
+> dynamic scheduler/body restoration and missing post-rewind boundary
+> evidence fails closed.
+>
+> The clean process was rebuilt from Story 1-1 frame 1 and replayed without
+> search through the established exact route: f1 -> f444, f444 -> f1047
+> delivery, f1047 -> f1090 returned-stack pickup, f1090 -> f1122 held dash,
+> and f1122 -> f1198 genuine dash-drop.  Every checkpointed cell passed exact
+> entities, native round/food/physics/clocks, contact-manager/manifold pool
+> history and TransformChangeDispatch restoration.  At f1198 plate 57 was
+> loose/dynamic with `sentReliable=false`, `parentChanged=true`, timestamp
+> `74.3`, and pending logical residual `0.433334351`.  The authoring pause had
+> already separated the clocks to logical `74.86667` versus Unity time
+> `860.4167`.  Nevertheless, original and replay both reached f1500 with the
+> same recording SHA
+> `840c789b05f3e22f9fe82127b45f8746acfed538f1ad8f2e6299ea9f4ffb9ef7`,
+> no changed entity IDs, and exact native physics, food, round state and
+> logical clocks.  The rewind incremented `authoringClockRestores` 4 -> 5;
+> both endpoints had logical time `79.9`, while their unrelated Unity times
+> were `865.9501` and `872.0667`.
+>
+> Live summary:
+> `artifacts/framework-migration/story11-logical-world-rest-c7bnr2-clean-r1/returned-plate57-settle-neutral-f1198-r2/summary.json`,
+> SHA-256
+> `2FCFACF710A1A70CE538FCDE1890286F28511AB265CB7ABA96F46F86D8BC4FE3`.
+> Core DLL:
+> `artifacts/framework-build-c7bn-logical-world-rest/SuperchargedPatch.dll`,
+> SHA-256
+> `6E94D454663FECA6917EDAC70197BB4A963059F9905378648E4DD1D9EC179F12`.
+> Managed module:
+> `framework-run/modules/WorldSyncCache-r13n-logical-rest-clock-core-c7bnr2/WorldSyncCache.r13n-logical-rest-clock-core-c7bnr2.dll`,
+> SHA-256
+> `3BF06396EF25431F83ACFD072CCC8C0E59780E15676DEB2E976E00AE44941FF0`.
+> The direct core/transpiler/rest-timing harness passes 131 assertions and the
+> external WorldSync module/compiled-IL harness passes 185 checks.  The same
+> game PID 51196 and host PID 42372 are healthy and paused at f1500; revalidate
+> their saved identities before control.  This closes the exercised pending
+> rest-deadline cell, not complete Story 1-1 rewind parity.  Search remains
+> disabled; continue expanding the checkpoint/continuation matrix.
+
 > **Active rewind result (2026-09-13, PhysX manifold-pool history / API7):**
 > the genuine returned-plate dash-drop that previously diverged on its first
 > ground contact now has exact endpoint and every-frame rewind parity.  The

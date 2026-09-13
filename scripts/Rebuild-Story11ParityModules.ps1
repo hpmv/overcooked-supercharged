@@ -13,7 +13,7 @@ $tasModules = @(
     @{ Name='ScriptedRound'; Source='scripted-round'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ScriptedRoundModule' },
     @{ Name='RegistryObserver'; Source='registry-observer'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RegistryObserverModule' },
     @{ Name='Inspection'; Source='inspection'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.InspectionModule' },
-    @{ Name='WorldSyncCache'; Source='world-sync-cache'; Revision="r13d-live-fixed-membership-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule' },
+    @{ Name='WorldSyncCache'; Source='world-sync-cache'; Revision="r13n-logical-rest-clock-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule' },
     @{ Name='LocalSyncBypass'; Source='local-sync-bypass'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.LocalSyncBypassModule' },
     @{ Name='ChefPausePose'; Source='chef-pause-pose'; Revision="r4-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefPausePoseModule' },
     @{ Name='PhysicsSyncAfterRestore'; Source='physics-sync-after-restore'; Revision="r13-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.PhysicsSyncAfterRestoreModule' },
@@ -23,7 +23,7 @@ $tasModules = @(
     @{ Name='ResumePhase'; Source='resume-phase'; Revision="r1bc-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ResumePhaseModule' },
     @{ Name='ChefAnimatorCheckpoint'; Source='chef-animator-checkpoint'; Revision="r53b-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule' },
     @{ Name='BodyRestore'; Source='body-restore'; Revision="r32-recreated-native-shape-state-rebind-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },
-    @{ Name='DeliveryFadeCheckpoint'; Source='delivery-fade-checkpoint'; Revision="r10h-future-return-tree-transaction-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.DeliveryFadeCheckpointModule' }
+    @{ Name='DeliveryFadeCheckpoint'; Source='delivery-fade-checkpoint'; Revision="r10k-persistent-backward-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.DeliveryFadeCheckpointModule' }
 )
 
 foreach ($tasModule in $tasModules) {

@@ -577,9 +577,28 @@ def main():
             request = json.loads(args.segments.read_text(encoding='utf-8-sig'))
         elif args.frame_capture:
             captured_input = json.loads(args.frame_capture.read_text(encoding='utf-8-sig'))
-            rows = captured_input.get('inputs', [])
-            if captured_input.get('validation') != 'exact-four-pad-frame-coverage' or len(rows) < 3 or \
-                    any(row.get('nextFrame') != rows[0].get('nextFrame') + index for index, row in enumerate(rows)):
+            if captured_input.get('validation') == 'exact-four-pad-frame-coverage':
+                rows = captured_input.get('inputs', [])
+                contiguous = len(rows) >= 3 and not any(
+                    row.get('nextFrame') != rows[0].get('nextFrame') + index
+                    for index, row in enumerate(rows))
+                capture_format = 'exact-four-pad-frame-coverage'
+            elif captured_input.get('version') == 1 and \
+                    captured_input.get('kind') == 'supercharged-logical-input-recording':
+                frames = captured_input.get('frames', [])
+                contiguous = len(frames) >= 3 and \
+                    captured_input.get('releaseFrames') == 2 and \
+                    captured_input.get('payloadFrames') == len(frames) - 2 and not any(
+                        row.get('ordinal') != index or not isinstance(row.get('inputs'), dict)
+                        for index, row in enumerate(frames))
+                rows = [{'nextFrame': index, 'inputs': row.get('inputs')}
+                        for index, row in enumerate(frames)]
+                capture_format = 'supercharged-logical-input-recording'
+            else:
+                rows = []
+                contiguous = False
+                capture_format = None
+            if not contiguous:
                 raise RuntimeError('Frame capture is not an exact contiguous four-pad recording')
             def neutral(row):
                 return all(value['Pad']['X'] == 0 and value['Pad']['Y'] == 0 and
@@ -612,6 +631,7 @@ def main():
             summary['frameCapture'] = {
                 'path': str(args.frame_capture.resolve()),
                 'sha256': hashlib.sha256(args.frame_capture.read_bytes()).hexdigest(),
+                'format': capture_format,
                 'sourceFramesIncludingRelease': len(rows),
                 'capturedPayloadFrames': len(payload),
                 'appendedNeutralFrames': args.frame_capture_neutral_tail,

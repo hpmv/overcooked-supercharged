@@ -26,15 +26,15 @@ namespace SuperchargedPatch.Authoring.Modules
             internal Quaternion LocalRotation;
             internal object[] Values;
             internal NativeClientWorldSnapshot Client;
-            internal float CaptureUnityTime, DeadlineOffset, RestoredLastUnreliableSend;
-            internal bool TranslateRestDeadline, Restored;
+            internal float CaptureLogicalTime, RestResidual;
+            internal bool PendingRest, Restored;
         }
         private sealed class Saved
         {
             internal int Frame;
             internal object Snapshot;
             internal Item[] Items;
-            internal float UnityTime;
+            internal float LogicalTime;
             internal string Unsupported;
             internal NativeSchedulerSnapshot Scheduler;
         }
@@ -49,20 +49,21 @@ namespace SuperchargedPatch.Authoring.Modules
         private Harmony harmony;
         private readonly Dictionary<int, Saved> saved = new Dictionary<int, Saved>();
         private object round;
-        private FieldInfo historyField, roundField, initialField, fixedAttachmentsField, planSnapshot, transformField, messageField;
+        private FieldInfo historyField, roundField, initialField, fixedAttachmentsField, snapshotLogicalTime, planSnapshot, transformField, messageField;
         private FieldInfo[] cacheFields;
         private MethodInfo capture, prepare, complete, restoreFailure, resume, dynamicSpawn, lateUpdate;
-        private Saved pendingResumeRebase;
         private Saved pendingDynamicRestore;
-        private Saved resumeRebaseTarget;
         private Saved pendingPausedDynamicTransforms;
-        private bool resumeRebaseInFlight;
-        private int referenceResumeRebases,warpResumeRebases,pausedDynamicTransformCorrections;
+        private Saved pendingResumeValidation;
+        private Saved resumeValidationTarget;
+        private bool resumeValidationInFlight;
+        private int referenceResumeValidations, warpResumeValidations;
+        private int pausedDynamicTransformCorrections;
         private int captures, restores, rejected, dynamicRestores, survivingDynamicRestores, lastFrame = -1;
         private bool disposed;
         private string lastError;
         private object lastRestore;
-        public string Name { get { return "native-world-sync-cache-v16-returned-stack-recreation"; } }
+        public string Name { get { return "native-world-sync-cache-v17-logical-rest-clock"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation, Dictionary<string, object> args)
@@ -77,15 +78,15 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"name",Name},{"apiVersion",1},{"active",ReferenceEquals(active,this)},
                 {"frames",saved.Count},{"captures",captures},{"restores",restores},{"rejected",rejected},
                 {"lastFrame",lastFrame},{"lastError",lastError},{"lastRestore",lastRestore},
-                {"pendingResumeRebase",pendingResumeRebase==null?null:(object)pendingResumeRebase.Frame},
-                {"resumeRebaseInFlight",resumeRebaseInFlight},{"referenceResumeRebases",referenceResumeRebases},
-                {"warpResumeRebases",warpResumeRebases},
+                {"pendingResumeValidation",pendingResumeValidation==null?null:(object)pendingResumeValidation.Frame},
+                {"resumeValidationInFlight",resumeValidationInFlight},{"referenceResumeValidations",referenceResumeValidations},
+                {"warpResumeValidations",warpResumeValidations},
                 {"dynamicRestores",dynamicRestores},{"survivingDynamicRestores",survivingDynamicRestores},
                 {"pendingDynamicRestore",pendingDynamicRestore==null?null:(object)pendingDynamicRestore.Frame},
                 {"pendingPausedDynamicTransforms",pendingPausedDynamicTransforms==null?null:(object)pendingPausedDynamicTransforms.Frame},
                 {"pausedDynamicTransformCorrections",pausedDynamicTransformCorrections},
                 {"latest",Describe(latest)},
-                {"scope","Initial fixed and admitted dynamic PhysicalAttachment WorldObject caches, relative pending-rest deadlines, and exact scheduler cadence/order/urgent/free-ID state. Every admitted settled dynamic PhysicalAttachment checkpoints its client/server parent caches, empty attachment-container Rigidbody/Transform poses, and exact logical owner pose/prediction flags. Attached items require a surviving registered station/chef parent. Loose items require the exact surviving owner/container incarnation and physical-container parenting; detached cross-incarnation recreation remains unsupported. After rewind only, the exact dynamic container Transform is retained across frozen authoring maintenance while Rigidbody pose/motion/settings remain unchanged. An attached one-step replacement may instead be recreated and rebound under its historical owner/body IDs by a transactional rewind-only allocator reservation. All other missing, ambiguous or changed memberships fail closed. Native Update, delays, event emission and clocks unchanged."}
+                {"scope","Initial fixed and admitted dynamic PhysicalAttachment WorldObject caches, exact logical-clock rest timestamps, and exact scheduler cadence/order/urgent/free-ID state. The core substitutes its checkpointed logical clock for both native GetServerUpdate Time.time reads; the strict deadline test, payload, event emission, client handling and all poses remain native. Every admitted settled dynamic PhysicalAttachment checkpoints its client/server parent caches, empty attachment-container Rigidbody/Transform poses, and exact logical owner pose/prediction flags. Attached items require a surviving registered station/chef parent. Loose items require the exact surviving owner/container incarnation and physical-container parenting; detached cross-incarnation recreation remains unsupported. After rewind only, the exact dynamic container Transform is retained across frozen authoring maintenance while Rigidbody pose/motion/settings remain unchanged. An attached one-step replacement may instead be recreated and rebound under its historical owner/body IDs by a transactional rewind-only allocator reservation. All other missing, ambiguous or changed memberships fail closed."}
             };
         }
         private void Activate()
@@ -99,6 +100,7 @@ namespace SuperchargedPatch.Authoring.Modules
             initialField = typeof(NativeSceneMetadata).GetField("InitialPhysicalAttachmentIds", stat);
             var snapshotType=typeof(NativeKitchenCheckpoint).GetNestedType("Snapshot",BindingFlags.NonPublic);
             fixedAttachmentsField=snapshotType==null?null:snapshotType.GetField("FixedAttachmentPoses",inst);
+            snapshotLogicalTime=snapshotType==null?null:snapshotType.GetField("LogicalRealtime",inst);
             planSnapshot = typeof(NativeKitchenCheckpoint.RestorePlan).GetField("snapshot", inst);
             capture = AccessTools.Method(typeof(NativeKitchenCheckpoint), "CaptureFrame", new[] { typeof(int) });
             prepare = AccessTools.Method(typeof(NativeKitchenCheckpoint), "Prepare", new[] { typeof(WarpSpec) });
@@ -117,6 +119,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if (historyField == null || !typeof(IDictionary).IsAssignableFrom(historyField.FieldType) || roundField == null
                 || initialField == null || initialField.FieldType != typeof(HashSet<int>) || planSnapshot == null
                 || fixedAttachmentsField==null||fixedAttachmentsField.FieldType!=typeof(NativeAttachmentPoseCheckpoint.Snapshot[])
+                || snapshotLogicalTime==null||snapshotLogicalTime.FieldType!=typeof(float)
                 || capture == null || prepare == null || complete == null || restoreFailure == null || resume == null || resume.ReturnType!=typeof(void)
                 || dynamicSpawn==null||dynamicSpawn.ReturnType!=typeof(void)||lateUpdate==null||lateUpdate.ReturnType!=typeof(void)
                 || transformField == null || transformField.FieldType != typeof(Transform)
@@ -170,7 +173,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private void Capture(int frame,object priorSnapshot)
         {
             object identity = roundField.GetValue(null);
-            if (!ReferenceEquals(identity,round)) { saved.Clear(); pendingResumeRebase=null; pendingDynamicRestore=null; pendingPausedDynamicTransforms=null; resumeRebaseTarget=null; resumeRebaseInFlight=false; round=identity; lastFrame=-1; }
+            if (!ReferenceEquals(identity,round)) { saved.Clear(); pendingDynamicRestore=null; pendingPausedDynamicTransforms=null; pendingResumeValidation=null; resumeValidationTarget=null; resumeValidationInFlight=false; round=identity; lastFrame=-1; }
             var history = (IDictionary)historyField.GetValue(null);
             object native = history[frame];
             if (native == null) return; // Core rejected/has not captured this boundary.
@@ -180,9 +183,11 @@ namespace SuperchargedPatch.Authoring.Modules
             // historical cache cannot be inferred from a later paused poll.
             if(ReferenceEquals(priorSnapshot,native))return;
             if (saved.Count >= 20000) { lastError="World-sync capture bound reached."; return; }
-            var value = new Saved {Frame=frame, Snapshot=native, UnityTime=Time.time};
+            var value = new Saved {Frame=frame, Snapshot=native, LogicalTime=UnrealTimePatch.CaptureLogicalRealtime()};
             try
             {
+                if(Bits((float)snapshotLogicalTime.GetValue(native))!=Bits(value.LogicalTime))
+                    throw new InvalidOperationException("Core and WorldObject logical checkpoint clocks differ.");
                 var initialIds = (HashSet<int>)initialField.GetValue(null);
                 if (initialIds.Count == 0) throw new InvalidOperationException("No observed initial attachment set.");
                 var fixedRows=fixedAttachmentsField.GetValue(native) as NativeAttachmentPoseCheckpoint.Snapshot[];
@@ -194,13 +199,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.Scheduler=NativeSchedulerSnapshot.Capture(new HashSet<int>(ids));
                 var dynamicIds=new HashSet<int>(value.Scheduler.DynamicOwnerIds);
                 value.Items = ids.Concat(dynamicIds).Distinct().OrderBy(i=>i)
-                    .Select(id=>CaptureItem(id,value.UnityTime,dynamicIds.Contains(id))).ToArray();
+                    .Select(id=>CaptureItem(id,value.LogicalTime,dynamicIds.Contains(id))).ToArray();
                 foreach (var item in value.Items) RequireSupported(item);
             }
             catch (Exception error) { value.Unsupported=error.Message; }
             saved[frame]=value; lastFrame=frame; captures++;
         }
-        private Item CaptureItem(int id,float captureUnityTime,bool dynamic=false)
+        private Item CaptureItem(int id,float captureLogicalTime,bool dynamic=false)
         {
             var entry=EntitySerialisationRegistry.GetEntry((uint)id);
             if (entry == null || entry.m_GameObject == null) throw new InvalidOperationException("Missing attachment " + id);
@@ -217,7 +222,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 Transform=transform,Parent=transform.parent,ParentId=transform.parent==null?0:transform.parent.GetInstanceID(),
                 OriginalMessage=message,Message=copy,LocalPosition=transform.localPosition,LocalRotation=transform.localRotation,
                 Client=new NativeClientWorldSnapshot(id,obj),
-                Values=cacheFields.Select(f=>f.GetValue(sync)).ToArray(),CaptureUnityTime=captureUnityTime };
+                Values=cacheFields.Select(f=>f.GetValue(sync)).ToArray(),CaptureLogicalTime=captureLogicalTime };
             if(dynamic)
             {
                 var physical=obj.GetComponent<PhysicalAttachment>();
@@ -240,8 +245,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     item.LooseDynamic=true;
                 }
             }
-            item.TranslateRestDeadline=!(bool)item.Values[2];
-            if(item.TranslateRestDeadline)item.DeadlineOffset=(((float)item.Values[1]+1f)-captureUnityTime);
+            item.PendingRest=!(bool)item.Values[2];
+            if(item.PendingRest)item.RestResidual=(((float)item.Values[1]+1f)-captureLogicalTime);
             return item;
         }
         private static void RequireSupported(Item item)
@@ -259,13 +264,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 || !Finite(item.Message.LocalPosition) || !Finite(item.Message.LocalRotation)
                 || !Finite(item.LocalPosition) || !Finite(item.LocalRotation))
                 throw new InvalidOperationException("Invalid WorldObject cache at entity " + item.Id);
-            if(item.TranslateRestDeadline&&(!Finite(item.DeadlineOffset)||item.DeadlineOffset>1.0001f))
+            if(item.PendingRest&&(!Finite(item.RestResidual)||item.RestResidual>1.0001f||item.RestResidual<-.1001f))
                 throw new InvalidOperationException("Invalid pending WorldObject rest deadline at entity " + item.Id);
         }
         public static void BeforePrepare(WarpSpec __0)
         {
             if (active == null) return;
-            active.pendingResumeRebase=null;
             active.pendingDynamicRestore=null;
             try { var target=active.ValidateTarget(__0); if(target.Scheduler.DynamicPending)active.pendingDynamicRestore=target; }
             catch(Exception error) { active.rejected++; active.lastError=error.Message; throw; }
@@ -333,8 +337,8 @@ namespace SuperchargedPatch.Authoring.Modules
             return new Item {Id=target.Id,Dynamic=target.Dynamic,LooseDynamic=target.LooseDynamic,Object=obj,ObjectId=obj.GetInstanceID(),Sync=sync,SyncId=sync.GetInstanceID(),
                 Transform=transform,Parent=target.Parent,ParentId=target.ParentId,OriginalMessage=message,Message=target.Message,
                 LocalPosition=target.LocalPosition,LocalRotation=target.LocalRotation,Values=(object[])target.Values.Clone(),
-                Client=target.Client.Rebind(obj),CaptureUnityTime=target.CaptureUnityTime,DeadlineOffset=target.DeadlineOffset,
-                RestoredLastUnreliableSend=target.RestoredLastUnreliableSend,TranslateRestDeadline=target.TranslateRestDeadline,
+                Client=target.Client.Rebind(obj),CaptureLogicalTime=target.CaptureLogicalTime,RestResidual=target.RestResidual,
+                PendingRest=target.PendingRest,
                 Restored=target.Restored};
         }
         public static void AfterComplete(NativeKitchenCheckpoint.RestorePlan __instance)
@@ -347,6 +351,9 @@ namespace SuperchargedPatch.Authoring.Modules
             object native=planSnapshot.GetValue(plan);
             var target=saved.Values.SingleOrDefault(s=>ReferenceEquals(s.Snapshot,native));
             if (target == null || target.Unsupported != null) throw new InvalidOperationException("Completed warp has no supported exact WorldObject cache.");
+            float restoreLogicalTime=UnrealTimePatch.CaptureLogicalRealtime();
+            if(Bits(restoreLogicalTime)!=Bits(target.LogicalTime))
+                throw new InvalidOperationException("Restored WorldObject logical clock differs from checkpoint.");
             // Fixed identities must still validate before the first dynamic
             // body/pose write. Dynamic owner pose is then restored by the
             // scheduler sidecar and a recreated incarnation is rebound before
@@ -373,8 +380,7 @@ namespace SuperchargedPatch.Authoring.Modules
             foreach(var item in target.Items)ValidateIdentity(item,true);
             target.Scheduler.Validate();
             var clientsBefore=target.Items.Select(i=>i.Client.DescribeCurrent()).ToArray();
-            float restoreUnityTime=Time.time;
-            var restoredValues=target.Items.Select(item=>RestoredValues(item,restoreUnityTime)).ToArray();
+            var restoredValues=target.Items.Select(item=>(object[])item.Values.Clone()).ToArray();
             foreach(var item in target.Items)
             {
                 item.OriginalMessage.Copy(item.Message);
@@ -385,10 +391,8 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             foreach(var item in target.Items)
             {
-                var observed=CaptureItem(item.Id,restoreUnityTime,item.Dynamic);
-                var expected=(object[])item.Values.Clone();
-                if(item.TranslateRestDeadline)expected[1]=item.RestoredLastUnreliableSend;
-                if(!SameMessage(observed.Message,item.Message) || !observed.Values.SequenceEqual(expected))
+                var observed=CaptureItem(item.Id,restoreLogicalTime,item.Dynamic);
+                if(!SameMessage(observed.Message,item.Message) || !observed.Values.SequenceEqual(item.Values))
                     throw new InvalidOperationException("WorldObject cache restore verification failed: " + item.Id);
             }
             target.Scheduler.Restore();
@@ -397,11 +401,11 @@ namespace SuperchargedPatch.Authoring.Modules
             pendingDynamicRestore=null;
             foreach(int frame in saved.Keys.Where(f=>f>target.Frame).ToArray()) saved.Remove(frame);
             lastFrame=target.Frame; restores++; lastError=null;
-            pendingResumeRebase=target.Items.Any(i=>i.TranslateRestDeadline)?target:null;
+            pendingResumeValidation=target;
             lastRestore=new Dictionary<string,object>{{"frame",target.Frame},{"count",target.Items.Length},{"verified",true},
                 {"clientsBefore",clientsBefore},{"clientsAfter",target.Items.Select(i=>i.Client.DescribeCurrent()).ToArray()},
-                {"capturedUnityTime",target.UnityTime},{"restoreUnityTime",restoreUnityTime},{"currentUnityTime",Time.time},
-                {"translatedRestDeadlines",target.Items.Count(i=>i.TranslateRestDeadline)},{"items",Describe(target)}};
+                {"capturedLogicalTime",target.LogicalTime},{"restoreLogicalTime",restoreLogicalTime},
+                {"exactRestTimestamps",target.Items.Count(i=>i.PendingRest)},{"items",Describe(target)}};
         }
         private static void RebindItemParent(Item item,EntitySerialisationEntry replacementParent,
             Transform replacementTransform)
@@ -421,20 +425,9 @@ namespace SuperchargedPatch.Authoring.Modules
             for(var value=child;value!=null;value=value.parent)if(ReferenceEquals(value,parent))return true;
             return false;
         }
-        private static object[] RestoredValues(Item item,float restoreUnityTime)
-        {
-            var restored=(object[])item.Values.Clone();
-            if(!item.TranslateRestDeadline)return restored;
-            float translated=(restoreUnityTime+item.DeadlineOffset)-1f;
-            float observedOffset=(translated+1f)-restoreUnityTime;
-            if(!Finite(translated)||Bits(observedOffset)!=Bits(item.DeadlineOffset))
-                throw new InvalidOperationException("Pending WorldObject rest deadline cannot be rebased bit-exactly: "+item.Id);
-            item.RestoredLastUnreliableSend=translated;restored[1]=translated;
-            return restored;
-        }
         public static void AfterRestoreFailure()
         {
-            var module=active;if(module!=null){if(module.pendingDynamicRestore!=null)module.pendingDynamicRestore.Scheduler.AbortDynamicRestore();module.pendingDynamicRestore=null;module.pendingPausedDynamicTransforms=null;module.pendingResumeRebase=null;module.resumeRebaseTarget=null;module.resumeRebaseInFlight=false;}
+            var module=active;if(module!=null){if(module.pendingDynamicRestore!=null)module.pendingDynamicRestore.Scheduler.AbortDynamicRestore();module.pendingDynamicRestore=null;module.pendingPausedDynamicTransforms=null;module.pendingResumeValidation=null;module.resumeValidationTarget=null;module.resumeValidationInFlight=false;}
         }
         public static void BeforeTasLateUpdate()
         {
@@ -464,46 +457,44 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             var module=active;if(module==null)return;
             if(!PlainAuthoringResume(Hpmv.Injector.Server.CurrentInput))return;
-            var target=module.pendingResumeRebase??module.CurrentBoundaryForReferenceResume();
-            if(target==null||!target.Items.Any(item=>item.TranslateRestDeadline))return;
-            if(module.resumeRebaseInFlight)throw new InvalidOperationException("A WorldObject resume deadline rebase is already in flight.");
+            var current=module.CurrentBoundaryForReferenceResume();
+            var target=module.pendingResumeValidation??current;
+            if(target==null)return;
+            if(module.resumeValidationInFlight)
+                throw new InvalidOperationException("A WorldObject resume validation is already in flight.");
+            if(module.pendingResumeValidation!=null&&!ReferenceEquals(current,module.pendingResumeValidation))
+                throw new InvalidOperationException("Restored WorldObject target is not the exact current resume boundary.");
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main))
-                throw new InvalidOperationException("WorldObject deadline rebase requires the retained authoring pause.");
-            float now=Time.time;
+                throw new InvalidOperationException("WorldObject resume validation requires the retained authoring pause.");
+            float now=UnrealTimePatch.CaptureLogicalRealtime();
+            if(Bits(now)!=Bits(target.LogicalTime))
+                throw new InvalidOperationException("WorldObject logical clock changed during authoring pause.");
             target.Scheduler.VerifyRestored();
-            var values=target.Items.Select(item=>RestoredValues(item,now)).ToArray();
-            for(int itemIndex=0;itemIndex<target.Items.Length;itemIndex++)
+            foreach(var item in target.Items)
             {
-                var item=target.Items[itemIndex];module.ValidateIdentity(item,true);ValidateCurrentRestored(item,true);
+                module.ValidateIdentity(item,true);ValidateCurrentRestored(item,true);
                 for(int i=0;i<module.cacheFields.Length;i++)
-                    if(i!=1&&!System.Object.Equals(module.cacheFields[i].GetValue(item.Sync),item.Values[i]))
+                    if(!System.Object.Equals(module.cacheFields[i].GetValue(item.Sync),item.Values[i]))
                         throw new InvalidOperationException("WorldObject cache changed during authoring pause: "+item.Id);
             }
-            for(int itemIndex=0;itemIndex<target.Items.Length;itemIndex++)
-            {
-                var item=target.Items[itemIndex];
-                if(!item.TranslateRestDeadline)continue;
-                module.cacheFields[1].SetValue(item.Sync,values[itemIndex][1]);
-                if(Bits((float)module.cacheFields[1].GetValue(item.Sync))!=Bits((float)values[itemIndex][1]))
-                    throw new InvalidOperationException("WorldObject resume deadline write differs: "+item.Id);
-            }
-            module.resumeRebaseTarget=target;module.resumeRebaseInFlight=true;
+            module.resumeValidationTarget=target;module.resumeValidationInFlight=true;
         }
         public static void AfterAuthoringResume()
         {
-            var module=active;if(module==null||!module.resumeRebaseInFlight)return;
+            var module=active;if(module==null||!module.resumeValidationInFlight)return;
             if(TimeManager.IsPaused(TimeManager.PauseLayer.Main))
-                throw new InvalidOperationException("WorldObject resume deadline was rebased but main pause did not release.");
-            if(ReferenceEquals(module.pendingResumeRebase,module.resumeRebaseTarget)){module.pendingResumeRebase=null;module.warpResumeRebases++;}
-            else module.referenceResumeRebases++;
+                throw new InvalidOperationException("WorldObject resume validation passed but main pause did not release.");
+            if(ReferenceEquals(module.pendingResumeValidation,module.resumeValidationTarget))
+            {module.pendingResumeValidation=null;module.warpResumeValidations++;}
+            else module.referenceResumeValidations++;
             module.pendingPausedDynamicTransforms=null;
-            module.resumeRebaseTarget=null;module.resumeRebaseInFlight=false;
+            module.resumeValidationTarget=null;module.resumeValidationInFlight=false;
         }
         public static Exception FinalizeAuthoringResume(Exception __exception)
         {
             var module=active;
-            if(module!=null&&__exception!=null&&module.resumeRebaseInFlight)
-            {module.resumeRebaseTarget=null;module.resumeRebaseInFlight=false;}
+            if(module!=null&&__exception!=null&&module.resumeValidationInFlight)
+            {module.resumeValidationTarget=null;module.resumeValidationInFlight=false;}
             return __exception;
         }
         private Saved CurrentBoundaryForReferenceResume()
@@ -530,14 +521,14 @@ namespace SuperchargedPatch.Authoring.Modules
         private static object Describe(Saved s)
         {
             if(s==null)return null;
-            return new Dictionary<string,object>{{"frame",s.Frame},{"unsupported",s.Unsupported},{"capturedUnityTime",s.UnityTime},{"scheduler",s.Scheduler==null?null:s.Scheduler.Describe()},
+            return new Dictionary<string,object>{{"frame",s.Frame},{"unsupported",s.Unsupported},{"capturedLogicalTime",s.LogicalTime},{"scheduler",s.Scheduler==null?null:s.Scheduler.Describe()},
                 {"items",s.Items==null?null:s.Items.Select(i=>(object)new Dictionary<string,object>{
                     {"id",i.Id},{"dynamic",i.Dynamic},{"looseDynamic",i.LooseDynamic},{"objectId",i.ObjectId},{"syncId",i.SyncId},{"parentInstanceId",i.ParentId},
                     {"messageParent",i.Message.ParentEntityID},{"sentReliable",i.Values[2]},
                     {"lastUnreliableSend",i.Values[1]},{"active",i.Values[5]},{"parentChanged",i.Values[7]},
-                    {"restDeadlineMode",i.TranslateRestDeadline?"relative-pending":"completed-absolute-irrelevant"},
-                    {"deadlineOffset",i.TranslateRestDeadline?(object)i.DeadlineOffset:null},
-                    {"restoredLastUnreliableSend",i.Restored?(object)i.RestoredLastUnreliableSend:null}
+                    {"restDeadlineMode",i.PendingRest?"logical-clock-pending":"completed-timestamp-irrelevant"},
+                    {"restResidual",i.PendingRest?(object)i.RestResidual:null},
+                    {"timestampRestoredExact",i.Restored}
                     ,{"client",i.Client.Describe()}
                 }).ToArray()}};
         }
@@ -548,7 +539,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private static bool Exact(Vector3 a,Vector3 b) { return a.x==b.x&&a.y==b.y&&a.z==b.z; }
         private static bool Exact(Quaternion a,Quaternion b) { return a.x==b.x&&a.y==b.y&&a.z==b.z&&a.w==b.w; }
         private static int Bits(float value) { return BitConverter.ToInt32(BitConverter.GetBytes(value),0); }
-        private void Deactivate() { if(harmony!=null)harmony.UnpatchSelf(); harmony=null; if(ReferenceEquals(active,this))active=null; pendingResumeRebase=null; if(pendingDynamicRestore!=null)pendingDynamicRestore.Scheduler.AbortDynamicRestore();pendingDynamicRestore=null; pendingPausedDynamicTransforms=null; resumeRebaseTarget=null; resumeRebaseInFlight=false; saved.Clear(); }
+        private void Deactivate() { if(harmony!=null)harmony.UnpatchSelf(); harmony=null; if(ReferenceEquals(active,this))active=null; if(pendingDynamicRestore!=null)pendingDynamicRestore.Scheduler.AbortDynamicRestore();pendingDynamicRestore=null; pendingPausedDynamicTransforms=null; pendingResumeValidation=null; resumeValidationTarget=null; resumeValidationInFlight=false; saved.Clear(); }
         public void Dispose() { if(disposed)return; Deactivate(); disposed=true; }
     }
 }

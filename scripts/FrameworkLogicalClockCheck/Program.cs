@@ -1,6 +1,10 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Reflection.Emit;
+using HarmonyLib;
 using SuperchargedPatch;
+using Team17.Online.Multiplayer.Messaging;
+using UnityEngine;
 
 int checks = 0;
 void Check(bool value, string reason) { if (!value) throw new Exception(reason); checks++; }
@@ -14,6 +18,26 @@ void Reject(Action action, string reason)
 int Bits(float x) => BitConverter.SingleToInt32Bits(x);
 string Hash(IEnumerable<float> values) => Convert.ToHexString(SHA256.HashData(values.SelectMany(BitConverter.GetBytes).ToArray())).ToLowerInvariant();
 const float step = 1f / 60f;
+
+var nativeWorldUpdate = typeof(ServerWorldObjectSynchroniser).GetMethod("GetServerUpdate", Type.EmptyTypes)!;
+Check(ReferenceEquals(UnrealTimePatch.WorldObjectRestClock.TargetMethod(), nativeWorldUpdate), "WorldObject rest-clock patch resolves the exact declared parameterless method.");
+var timeGetter = AccessTools.PropertyGetter(typeof(Time), "time");
+var logicalGetter = AccessTools.Method(typeof(UnrealTimePatch), "LogicalRealtime");
+var firstTime = new CodeInstruction(OpCodes.Call, timeGetter); firstTime.labels.Add(7); firstTime.blocks.Add(11);
+var secondTime = new CodeInstruction(OpCodes.Callvirt, timeGetter); secondTime.labels.Add(13);
+var returnInstruction = new CodeInstruction(OpCodes.Ret);
+var patchedWorldUpdate = UnrealTimePatch.WorldObjectRestClock.Transpiler(new[] { firstTime, secondTime, returnInstruction }).ToArray();
+Check(ReferenceEquals(patchedWorldUpdate[0], firstTime) && ReferenceEquals(patchedWorldUpdate[1], secondTime)
+    && firstTime.opcode == OpCodes.Call && secondTime.opcode == OpCodes.Call
+    && ReferenceEquals(firstTime.operand, logicalGetter) && ReferenceEquals(secondTime.operand, logicalGetter),
+    "WorldObject transpiler replaces both clock reads in place with the logical source.");
+Check(firstTime.labels.SequenceEqual(new[] { 7 }) && firstTime.blocks.SequenceEqual(new[] { 11 }) && secondTime.labels.SequenceEqual(new[] { 13 }),
+    "WorldObject transpiler preserves branch labels and exception-block metadata.");
+Reject(() => UnrealTimePatch.WorldObjectRestClock.Transpiler(new[] { new CodeInstruction(OpCodes.Call, timeGetter) }).ToArray(),
+    "WorldObject transpiler rejects a one-read native method body.");
+Reject(() => UnrealTimePatch.WorldObjectRestClock.Transpiler(new[] {
+    new CodeInstruction(OpCodes.Call, timeGetter), new CodeInstruction(OpCodes.Call, timeGetter), new CodeInstruction(OpCodes.Call, timeGetter) }).ToArray(),
+    "WorldObject transpiler rejects a three-read native method body.");
 
 var clock = new AuthoringClockState(10, 24.75f, step, false);
 Check(clock.EligibleTicks == 0 && Bits(clock.Value) == Bits(24.75f), "Seeding an observed frame must not add time.");
@@ -121,6 +145,61 @@ Check(strict.Events.Count == 0, "Exactly equal native sync deadline must not be 
 strict.Update(BitConverter.Int32BitsToSingle(Bits(1f) + 1), 2);
 Check(strict.Events.Count == 1, "The next representable source value triggers the unmodified strict native threshold.");
 
+// Model the two GetServerUpdate Time.time reads now routed to the same exact
+// source: active frames stamp last-send; inactive frames use the native strict
+// one-second test. Repeated rewind and arbitrary pause-poll counts must not
+// change either the timestamp bits or the first reliable-rest event.
+var worldClock = new AuthoringClockState(0, 1145.8834f, step, false);
+var worldObjects = new[] { new WorldObjectRestModel(), new WorldObjectRestModel() };
+long worldFrame = 0;
+for (int i = 0; i < 4; i++)
+{
+    float source = worldClock.ObserveFrame(++worldFrame);
+    foreach (var item in worldObjects) item.Update(source, worldFrame, true);
+}
+// Give the second object a distinct, exact pending phase.
+worldObjects[1].SetLastSend(BitConverter.Int32BitsToSingle(Bits(worldObjects[1].LastSend) - 3));
+for (int i = 0; i < 18; i++)
+{
+    float source = worldClock.ObserveFrame(++worldFrame);
+    foreach (var item in worldObjects) item.Update(source, worldFrame, false);
+}
+var worldClockCheckpoint = worldClock.CaptureCheckpoint();
+var worldSnapshots = worldObjects.Select(x => x.Snapshot()).ToArray();
+var expectedWorldEvents = new List<(int Item, long Frame, int LastBits, int SourceBits)>();
+for (int i = 0; i < 80; i++)
+{
+    float source = worldClock.ObserveFrame(++worldFrame);
+    for (int item = 0; item < worldObjects.Length; item++)
+        if (worldObjects[item].Update(source, i + 1, false))
+            expectedWorldEvents.Add((item, i + 1, Bits(worldObjects[item].LastSend), Bits(source)));
+}
+Check(expectedWorldEvents.Count == 2, "Both pending WorldObjects emit one modeled reliable-rest event.");
+foreach (int polls in new[] { 1, 7, 1000 })
+{
+    worldClock.SetAuthoringPaused(worldFrame, true);
+    worldClock.ObserveFrame(++worldFrame);
+    worldClock.RestoreCheckpoint(worldClockCheckpoint, worldFrame);
+    for (int item = 0; item < worldObjects.Length; item++) worldObjects[item].Restore(worldSnapshots[item]);
+    for (int p = 0; p < polls; p++) worldClock.ObserveFrame(++worldFrame);
+    worldClock.SetAuthoringPaused(worldFrame, false);
+    var replayEvents = new List<(int Item, long Frame, int LastBits, int SourceBits)>();
+    for (int i = 0; i < 80; i++)
+    {
+        float source = worldClock.ObserveFrame(++worldFrame);
+        for (int item = 0; item < worldObjects.Length; item++)
+            if (worldObjects[item].Update(source, i + 1, false))
+                replayEvents.Add((item, i + 1, Bits(worldObjects[item].LastSend), Bits(source)));
+    }
+    Check(replayEvents.SequenceEqual(expectedWorldEvents), "WorldObject rest event frame/source/timestamp is invariant to " + polls + " paused polls.");
+    Check(worldObjects.Select(x => Bits(x.LastSend)).SequenceEqual(worldSnapshots.Select(x => x.LastBits)),
+        "Reliable-rest completion leaves each restored last-send timestamp exact after " + polls + " paused polls.");
+}
+var strictWorld = new WorldObjectRestModel();
+strictWorld.SetLastSend(10f);
+Check(!strictWorld.Update(11f, 1, false), "WorldObject rest deadline preserves strict > at exact equality.");
+Check(strictWorld.Update(BitConverter.Int32BitsToSingle(Bits(11f) + 1), 2, false), "WorldObject rest deadline fires one ULP above equality.");
+
 // Demonstrate the old float-only restore losing phase; the new helper must not
 // use that re-anchoring even when its immediate restored float is identical.
 var rounding = new AuthoringClockState(0, 27.95f, step, false);
@@ -196,4 +275,20 @@ sealed class NativeClockModel
         localTimeLastFrame = source;
     }
     public int[] Snapshot() => new[] { serverTime, lastTime, nextSyncTime, localRunningTime, localTimeLastFrame, delta }.Select(BitConverter.SingleToInt32Bits).ToArray();
+}
+
+sealed class WorldObjectRestModel
+{
+    public readonly record struct State(int LastBits, bool Sent);
+    public float LastSend { get; private set; }
+    bool sent = true;
+    public void SetLastSend(float value) { LastSend = value; sent = false; }
+    public bool Update(float logicalSource, long frame, bool active)
+    {
+        if (active) { LastSend = logicalSource; sent = false; return false; }
+        if (!sent && logicalSource > LastSend + 1f) { sent = true; return true; }
+        return false;
+    }
+    public State Snapshot() => new(BitConverter.SingleToInt32Bits(LastSend), sent);
+    public void Restore(State state) { LastSend = BitConverter.Int32BitsToSingle(state.LastBits); sent = state.Sent; }
 }

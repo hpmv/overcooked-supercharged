@@ -104,7 +104,7 @@ namespace Team17.Online.Multiplayer.Messaging {
   protected bool m_bSleepAllowed=true;private bool m_bActive;private bool m_bSyncPositions=true;
   private bool m_bParentChanged=true;protected bool m_bPaused;
   public void Setup(){m_Transform=transform;m_CachedParentTransform=transform.parent;m_ServerData.HasParent=true;m_ServerData.ParentEntityID=41;m_ServerData.HasPositions=true;m_ServerData.LocalRotation=transform.localRotation;m_bSentReliableRestPosition=true;m_bStartedSynchronising=true;m_bParentChanged=false;}
-  public bool RestEventDue()=>m_bSleepAllowed&&!m_bSentReliableRestPosition&&UnityEngine.Time.time>m_LastUnreliableActiveSend+1f;
+  public bool RestEventDue()=>m_bSleepAllowed&&!m_bSentReliableRestPosition&&SuperchargedPatch.UnrealTimePatch.LogicalRealtime()>m_LastUnreliableActiveSend+1f;
   public void ResumePositionsWitness(){m_bSyncPositions=true;m_bSentReliableRestPosition=false;m_LastUnreliableActiveSend=0;m_CachedParentTransform=transform.parent;m_bParentChanged=true;}
  }
  public class Header {public uint m_uEntityID;}
@@ -129,6 +129,11 @@ namespace Team17.Online.Multiplayer.Messaging {
  }
 }
 namespace SuperchargedPatch {
+ public static class UnrealTimePatch {
+  public static float LogicalTime=100;
+  public static float LogicalRealtime()=>LogicalTime;
+  public static float CaptureLogicalRealtime()=>LogicalTime;
+ }
  public class EntityPathReferenceMarker:UnityEngine.Component{}
  public static class Helpers {public static void Resume(){TimeManager.paused=false;}}
  public sealed class TASPatcher {public void LateUpdate(){}}
@@ -137,9 +142,9 @@ namespace SuperchargedPatch {
  public static class NativeAttachmentPoseCheckpoint {public sealed class Snapshot {public int EntityId {get;internal set;}}}
  public static class NativeKitchenCheckpoint {
   private static readonly Dictionary<int,Snapshot> history=new();private static object roundIdentity=new();
-  internal class Snapshot {internal int frame;internal NativeAttachmentPoseCheckpoint.Snapshot[] FixedAttachmentPoses;}
+  internal class Snapshot {internal int frame;internal float LogicalRealtime;internal NativeAttachmentPoseCheckpoint.Snapshot[] FixedAttachmentPoses;}
   public static void Reset(){history.Clear();roundIdentity=new();}
-  public static void CaptureFrame(int frame){if(!history.ContainsKey(frame))history.Add(frame,new(){frame=frame,
+  public static void CaptureFrame(int frame){if(!history.ContainsKey(frame))history.Add(frame,new(){frame=frame,LogicalRealtime=UnrealTimePatch.CaptureLogicalRealtime(),
    FixedAttachmentPoses=NativeSceneMetadata.InitialPhysicalAttachmentIds
     .Where(id=>Team17.Online.Multiplayer.Messaging.EntitySerialisationRegistry.GetEntry((uint)id)!=null)
     .OrderBy(id=>id).Select(id=>new NativeAttachmentPoseCheckpoint.Snapshot{EntityId=id}).ToArray()});}

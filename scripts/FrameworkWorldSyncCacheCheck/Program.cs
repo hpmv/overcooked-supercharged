@@ -32,7 +32,7 @@ Dictionary<string,object> Status(WorldSyncCacheModule m)=>(Dictionary<string,obj
  EntitySerialisationRegistry.entries.Add(12,entry);NativeSceneMetadata.InitialPhysicalAttachmentIds.Add(12);
  var parentEntry=new EntitySerialisationEntry{m_GameObject=parent};parentEntry.m_Header.m_uEntityID=41;EntitySerialisationRegistry.entries.Add(41,parentEntry);
  ControllerHandler.MultiplayerController=new();DebugManager.Instance.fast=true;EntitySerialisationRegistry.HasUrgentOutgoingUpdates=false;
- UnityEngine.Time.time=100;
+ UnityEngine.Time.time=100;UnrealTimePatch.LogicalTime=100;TimeManager.paused=true;Hpmv.Injector.Server.CurrentInput=null;
  var scheduler=Get(ControllerHandler.MultiplayerController,"m_ServerSync");((FastList<EntitySerialisationEntry>)Get(scheduler,"m_EntitiesList"))._items.Add(entry);
  if(preexisting)NativeKitchenCheckpoint.CaptureFrame(161);
  var m=new WorldSyncCacheModule();m.Invoke("activate",new());return(m,sync,parent);
@@ -168,40 +168,78 @@ ReturnedStackRecreation(2);
  s.transform.parent=p.transform;s.ResumePositionsWitness();Check(s.RestEventDue(),"Native attachment reset reproduces replay-only reliable rest packet");
  Restore(161);Check(!s.RestEventDue(),"Restored actual reliable-rest cache does not re-emit that packet");
  Check(ReferenceEquals(original,Get(s,"m_ServerData")),"Restore retains original native mutable message object");
- Check((float)Get(s,"m_LastUnreliableActiveSend")==0&&UnityEngine.Time.time==100,"Captured timestamp restored with no Unity time mutation");
+ Check((float)Get(s,"m_LastUnreliableActiveSend")==0&&UnityEngine.Time.time==100&&UnrealTimePatch.LogicalTime==100,"Captured timestamp restored with no clock mutation");
  Check((int)Status(m)["restores"]==1,"Restore receipt records successful exact cache verification");
  m.Dispose();
 }
 foreach(var mutation in new[]{"pending-parent"}){
  var(m,s,p)=Setup();
- Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
+ UnrealTimePatch.LogicalTime=1146.4834f;
+ Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",1145.95007f);Set(s,"m_bParentChanged",true);
  Capture(161);Prepare(161);
+ var liveResidual=(((float)Get(s,"m_LastUnreliableActiveSend")+1f)-UnrealTimePatch.LogicalTime);
+ Check(BitConverter.SingleToInt32Bits(liveResidual)==unchecked((int)0x3EEEF000),"Fixture retains the actual f1198 pending-rest residual bits");
  Set(s,"m_bSentReliableRestPosition",true);Set(s,"m_bActive",false);Set(s,"m_bParentChanged",false);
- UnityEngine.Time.time=110;Restore(161);
- Check((float)Get(s,"m_LastUnreliableActiveSend")==109.25f&&UnityEngine.Time.time==110,
-  "Pending rest deadline is translated without changing Unity time: "+mutation);
+ UnityEngine.Time.time=33250.82f;Restore(161);
+ Check(BitConverter.SingleToInt32Bits((float)Get(s,"m_LastUnreliableActiveSend"))==BitConverter.SingleToInt32Bits(1145.95007f)
+  &&UnityEngine.Time.time==33250.82f&&UnrealTimePatch.LogicalTime==1146.4834f,
+  "Pending rest timestamp restores exactly despite a huge unrelated Unity time: "+mutation);
  Check(!(bool)Get(s,"m_bSentReliableRestPosition")
   &&!(bool)Get(s,"m_bActive")&&(bool)Get(s,"m_bParentChanged"),
   "Pending/active WorldObject flags restore exactly: "+mutation);
- Check(!s.RestEventDue(),"Translated rest event remains not-due at captured relative time: "+mutation);
- UnityEngine.Time.time=110.3f;Check(s.RestEventDue(),"Translated rest event becomes due after the original residual: "+mutation);
- UnityEngine.Time.time=120;PlainResumeInput();WorldSyncCacheModule.BeforeAuthoringResume();
- Check((float)Get(s,"m_LastUnreliableActiveSend")==119.25f
-  &&BitConverter.SingleToInt32Bits((((float)Get(s,"m_LastUnreliableActiveSend")+1f)-UnityEngine.Time.time))==BitConverter.SingleToInt32Bits(.25f),
-  "Paused dwell is discarded and the exact pending-rest residual is rebased immediately before resume");
+ Check(!s.RestEventDue(),"Rest event remains not-due at the captured logical time: "+mutation);
+ float strictThreshold=(float)Get(s,"m_LastUnreliableActiveSend")+1f;
+ UnrealTimePatch.LogicalTime=strictThreshold;Check(!s.RestEventDue(),"Exact rest deadline retains the native strict greater-than test: "+mutation);
+ UnrealTimePatch.LogicalTime=BitConverter.Int32BitsToSingle(BitConverter.SingleToInt32Bits(strictThreshold)+1);
+ Check(s.RestEventDue(),"The next logical-clock ULP triggers the native rest event: "+mutation);
+ UnrealTimePatch.LogicalTime=1146.4834f;PlainResumeInput();WorldSyncCacheModule.BeforeAuthoringResume();
+ Check(BitConverter.SingleToInt32Bits((float)Get(s,"m_LastUnreliableActiveSend"))==BitConverter.SingleToInt32Bits(1145.95007f),
+  "Read-only resume validation never rewrites the pending timestamp");
  Helpers.Resume();WorldSyncCacheModule.AfterAuthoringResume();
- Check(Status(m)["pendingResumeRebase"]==null,"Successful main-pause release consumes one pending deadline rebase");
+ Check(Status(m)["pendingResumeValidation"]==null&&Status(m)["pendingPausedDynamicTransforms"]==null,
+  "Successful resume consumes the exact restored validation target and dynamic-maintenance state");
  TimeManager.paused=true;
  m.Dispose();
 }
 {
  var(m,s,p)=Setup();Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
- Capture(161);UnityEngine.Time.time=120;PlainResumeInput();WorldSyncCacheModule.BeforeAuthoringResume();
- Check((float)Get(s,"m_LastUnreliableActiveSend")==119.25f,"Reference branch excludes authoring-pause dwell from pending rest deadline");
+ Capture(161);UnityEngine.Time.time=33250.82f;PlainResumeInput();WorldSyncCacheModule.BeforeAuthoringResume();
+ Check((float)Get(s,"m_LastUnreliableActiveSend")==99.25f,"Reference branch ignores arbitrary authoring-pause Unity-time dwell without a write");
  Helpers.Resume();WorldSyncCacheModule.AfterAuthoringResume();
- Check((int)Status(m)["referenceResumeRebases"]==1&&Status(m)["pendingResumeRebase"]==null,
-  "Current exact boundary receives one reference-side rebase without a prior warp");
+ Check((int)Status(m)["referenceResumeValidations"]==1,"Reference resume receives one read-only exact-boundary validation");
  TimeManager.paused=true;m.Dispose();
+}
+{
+ var(m,s,p)=Setup();Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
+ Capture(161);Prepare(161);Set(s,"m_LastUnreliableActiveSend",88f);UnrealTimePatch.LogicalTime=101;
+ Reject(()=>Restore(161),"Logical-clock mismatch rejects restore before any WorldObject cache write");
+ Check((float)Get(s,"m_LastUnreliableActiveSend")==88f,"Rejected logical-clock mismatch leaves the live cache untouched");
+ m.Dispose();
+}
+{
+ var(m,s,p)=Setup();Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
+ Capture(161);Prepare(161);Restore(161);Hpmv.Injector.Server.CurrentFrameData.FrameNumber=162;PlainResumeInput();
+ Reject(()=>WorldSyncCacheModule.BeforeAuthoringResume(),"Post-rewind resume rejects when its exact restored boundary cannot be resolved");
+ Check((int)Status(m)["pendingResumeValidation"]==161,"Rejected boundary lookup retains the required restored resume target");
+ Hpmv.Injector.Server.CurrentFrameData.FrameNumber=161;WorldSyncCacheModule.BeforeAuthoringResume();Helpers.Resume();WorldSyncCacheModule.AfterAuthoringResume();
+ Check(Status(m)["pendingResumeValidation"]==null&&(int)Status(m)["warpResumeValidations"]==1,
+  "Exact post-rewind boundary validation clears only after successful main-pause release");
+ TimeManager.paused=true;m.Dispose();
+}
+{
+ var(m,s,p)=Setup();Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
+ Capture(161);Set(s,"m_LastUnreliableActiveSend",88f);PlainResumeInput();
+ Reject(()=>WorldSyncCacheModule.BeforeAuthoringResume(),"Read-only resume validation rejects a cache mutation during authoring pause");
+ Check((float)Get(s,"m_LastUnreliableActiveSend")==88f,"Rejected resume validation performs no compensating timestamp write");
+ m.Dispose();
+}
+{
+ var(m,s,p)=Setup();Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",33249.8f);Set(s,"m_bParentChanged",true);
+ Capture(161);Reject(()=>Prepare(161),"A future pending timestamp from a different clock epoch fails closed");m.Dispose();
+}
+{
+ var(m,s,p)=Setup();UnrealTimePatch.LogicalTime=33250.8f;Set(s,"m_bSentReliableRestPosition",false);Set(s,"m_LastUnreliableActiveSend",99.25f);Set(s,"m_bParentChanged",true);
+ Capture(161);Reject(()=>Prepare(161),"A past pending timestamp from a different clock epoch fails closed");m.Dispose();
 }
 foreach(var mutation in new[]{"sleep","started","paused","nan","message","inconsistent","active","pending-no-parent","pending-no-sync"}){
  var(m,s,p)=Setup();
@@ -620,7 +658,7 @@ foreach(var mutation in new[]{"owner","list","membership","componentOrder","mode
  Set(sched,"m_fNextUpdate",futureResidual);Restore(161);
  Check(FirstAfter((float)Get(sched,"m_fNextUpdate"))==26,"Actual module restoration recovers original native recurrence without new clock or delay");m.Dispose();
 }
-var corePath="artifacts/framework-build-c7bm-target-absent-fixed-residue/SuperchargedPatch.dll";
+var corePath="artifacts/framework-build-c7bn-logical-world-rest/SuperchargedPatch.dll";
 using var native=AssemblyDefinition.ReadAssembly(nativePath);
 var type=native.MainModule.Types.Single(t=>t.FullName=="Team17.Online.Multiplayer.Messaging.ServerWorldObjectSynchroniser");
 var methodNames=new[]{"GetServerUpdate","PopulateMessage","ResumePositions","RefreshParent"};
@@ -655,6 +693,20 @@ var kitchen=core.MainModule.Types.Single(t=>t.Name=="NativeKitchenCheckpoint");
 Check(kitchen.Fields.Any(f=>f.Name=="history")&&kitchen.Fields.Any(f=>f.Name=="roundIdentity"),"Frozen X has snapshot history plus actual round identity");
 var plan=kitchen.NestedTypes.Single(t=>t.Name=="RestorePlan");
 Check(plan.Fields.Any(f=>f.Name=="snapshot")&&plan.Methods.Any(m=>m.Name=="Complete"),"Frozen X completed plan retains the exact selected snapshot reference");
+var unreal=core.MainModule.Types.Single(t=>t.Name=="UnrealTimePatch");
+var restClockPatch=unreal.NestedTypes.Single(t=>t.Name=="WorldObjectRestClock");
+var restTarget=restClockPatch.Methods.Single(m=>m.Name=="TargetMethod");
+var restTranspiler=restClockPatch.Methods.Single(m=>m.Name=="Transpiler");
+var restTargetStrings=restTarget.Body.Instructions.Select(i=>i.Operand).OfType<string>().ToArray();
+var restTranspilerStrings=restTranspiler.Body.Instructions.Select(i=>i.Operand).OfType<string>().ToArray();
+Check(restClockPatch.CustomAttributes.Any(a=>a.AttributeType.Name=="HarmonyPatch")
+ &&restTargetStrings.Contains("GetServerUpdate")
+ &&Calls(restTarget).Any(c=>c.Contains("HarmonyLib.AccessTools::Method")),
+ "Core installs a fail-closed patch on the declared parameterless WorldObject update method");
+Check(restTranspilerStrings.Contains("time")&&restTranspilerStrings.Contains("LogicalRealtime")
+ &&restTranspiler.Body.Instructions.Any(i=>i.OpCode.Code==Code.Ldc_I4_2)
+ &&Calls(restTranspiler).Any(c=>c.Contains("System.InvalidOperationException::.ctor")),
+ "Core transpiler requires and replaces exactly both native Time.time reads with the checkpointed logical clock");
 var warp=core.MainModule.Types.Single(t=>t.Name=="WarpHandler").Methods.Single(m=>m.Name=="HandleWarpRequestIfAny");
 var warpCalls=Calls(warp);
 Check(Array.FindIndex(warpCalls,s=>s.Contains("RestorePlan::Complete"))<Array.FindIndex(warpCalls,s=>s.Contains("ClearCacheAfterWarp")),"External Complete postfix executes before acknowledgement frame/cache reset");
@@ -665,13 +717,22 @@ var originalMessages=packet.GetProperty("originalRaw").EnumerateArray().Select(x
 var replay=packet.GetProperty("replayRaw").EnumerateArray().Select(x=>x.GetRawText()).ToArray();
 Check(originalMessages.SequenceEqual(replay.Skip(1)),"Remaining actual native and auxiliary messages retain identical order");
 Check(packet.GetProperty("replayRaw")[0].GetProperty("Message").GetString()=="AwIUwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+AAAAA=","Pinned extra native WorldObject packet identifies exact plate12/source41 pose");
-var modulePath="framework-run/modules/WorldSyncCache-r13k-stack-canonical-order-core-c7bm/WorldSyncCache.r13k-stack-canonical-order-core-c7bm.dll";
+var modulePath="framework-run/modules/WorldSyncCache-r13n-logical-rest-clock-core-c7bnr2/WorldSyncCache.r13n-logical-rest-clock-core-c7bnr2.dll";
 using var compiledModule=AssemblyDefinition.ReadAssembly(modulePath);
 var moduleType=compiledModule.MainModule.Types.Single(t=>t.Name=="WorldSyncCacheModule");
 Check(moduleType.Methods.Single(m=>m.Name=="BeforeCaptureFrame").Parameters.Select(p=>(p.Name,p.ParameterType.FullName)).SequenceEqual(new[]{("__0","System.Int32"),("__state","System.Object&")})
  &&moduleType.Methods.Single(m=>m.Name=="AfterCaptureFrame").Parameters.Select(p=>(p.Name,p.ParameterType.FullName)).SequenceEqual(new[]{("__0","System.Int32"),("__state","System.Object")}),"Compiled CLR2 paired Harmony capture state contract is exact");
 var moduleCalls=moduleType.Methods.Where(m=>m.HasBody).SelectMany(Calls).ToArray();
- Check(moduleCalls.Count(c=>c.Contains("HarmonyLib.Harmony::Patch("))==7&&!moduleCalls.Any(c=>c.Contains("UnityEngine.Time::set_")||c.Contains("SendServerEvent")||c.Contains("ServerWorldObjectSynchroniser::GetServerUpdate")),"Compiled module installs only checkpoint/failure/dynamic-spawn/resume/paused-LateUpdate lifecycle hooks, delegates container body restore through reflection, and never writes time or invokes/suppresses native event generation");
+var restoreCalls=Calls(moduleType.Methods.Single(m=>m.Name=="Restore"));
+Check(Array.FindIndex(restoreCalls,c=>c.Contains("UnrealTimePatch::CaptureLogicalRealtime"))
+ <Array.FindIndex(restoreCalls,c=>c.Contains("NativeSchedulerSnapshot::RestoreDynamicAfterCore")),
+ "Logical-clock postcondition is checked before any dynamic scheduler/body restoration");
+Check(!Calls(moduleType.Methods.Single(m=>m.Name=="BeforeAuthoringResume")).Any(c=>c.Contains("FieldInfo::SetValue")),
+ "Resume validation is read-only and contains no reflected WorldObject cache write");
+Check(moduleCalls.Count(c=>c.Contains("HarmonyLib.Harmony::Patch("))==7
+ &&moduleCalls.Any(c=>c.Contains("UnrealTimePatch::CaptureLogicalRealtime"))
+ &&!moduleCalls.Any(c=>c.Contains("UnityEngine.Time::get_time")||c.Contains("UnityEngine.Time::set_")||c.Contains("SendServerEvent")||c.Contains("ServerWorldObjectSynchroniser::GetServerUpdate")),
+ "Compiled module installs only checkpoint/failure/dynamic-spawn/read-only-resume/paused-LateUpdate hooks, restores exact cache bits, and never reads/writes Unity time or invokes/suppresses native event generation");
 var livePath="artifacts/framework-migration/native-x-v11b/world-sync-r1a-status.json";
 var live=JsonDocument.Parse(File.ReadAllText(livePath)).RootElement.GetProperty("result").GetProperty("result").GetProperty("latest");
 Check(live.GetProperty("unsupported").ValueKind==JsonValueKind.Null&&live.GetProperty("items").GetArrayLength()==13
@@ -683,7 +744,7 @@ var report=new{passed=true,count=checks.Count,checks,nativeAssemblySha256=Hash(n
  nativeMethods=methods.Select(m=>new{m.FullName,il=m.Body.Instructions.Select(i=>new{offset=i.Offset,opcode=i.OpCode.Name,operand=i.Operand?.ToString()})}),
  schedulerMethods=schedulerType.Methods.Where(m=>new[]{"Update","SynchroniseList","SynchroniseEntity","SynchroniseForRecipient"}.Contains(m.Name)).Select(m=>new{m.FullName,il=m.Body.Instructions.Select(i=>new{offset=i.Offset,opcode=i.OpCode.Name,operand=i.Operand?.ToString()})}),
  scope="Actual external module logic with managed native/Harmony stubs; installed native and frozen-X IL verified. No game calls. Native cache values and strict replay still require root-owned experiment."};
-File.WriteAllText("artifacts/framework-world-sync-cache-r13k-core-c7bm-tests.json",JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true})+"\n");
+File.WriteAllText("artifacts/framework-world-sync-cache-r13n-core-c7bn-tests.json",JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true})+"\n");
 Console.WriteLine("PASS "+checks.Count+" WorldSync cache checks");
 
 namespace SuperchargedPatch

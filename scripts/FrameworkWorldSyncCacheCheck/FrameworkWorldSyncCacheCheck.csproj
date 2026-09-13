@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><UseAppHost>false</UseAppHost><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
  <ItemGroup>
-  <Compile Include="../../framework/modules/world-sync-cache/WorldSyncCacheModule.cs" Link="WorldSyncCacheModule.cs" />
-  <Compile Include="../../framework/modules/world-sync-cache/NativeSchedulerSnapshot.cs" Link="NativeSchedulerSnapshot.cs" />
-  <Compile Include="../../framework/modules/world-sync-cache/NativeClientWorldSnapshot.cs" Link="NativeClientWorldSnapshot.cs" />
-  <Compile Include="../../framework/patch/Authoring/IAuthoringModule.cs" Link="IAuthoringModule.cs" />
-  <Reference Include="Mono.Cecil"><HintPath>../../runtime/BepInEx/core/Mono.Cecil.dll</HintPath></Reference>
+  <Compile Include="../../modules/world-sync-cache/WorldSyncCacheModule.cs" Link="WorldSyncCacheModule.cs" />
+  <Compile Include="../../modules/world-sync-cache/NativeSchedulerSnapshot.cs" Link="NativeSchedulerSnapshot.cs" />
+  <Compile Include="../../modules/world-sync-cache/NativeClientWorldSnapshot.cs" Link="NativeClientWorldSnapshot.cs" />
+  <Compile Include="../../patch/Authoring/IAuthoringModule.cs" Link="IAuthoringModule.cs" />
+  <Reference Include="Mono.Cecil"><HintPath>../../../runtime/BepInEx/core/Mono.Cecil.dll</HintPath></Reference>
  </ItemGroup>
 </Project>
