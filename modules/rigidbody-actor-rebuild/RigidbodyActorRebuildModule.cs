@@ -1,0 +1,1011 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using HarmonyLib;
+using SuperchargedPatch.Authoring;
+using SuperchargedPatch.Bridge;
+using Team17.Online.Multiplayer.Messaging;
+using UnityEngine;
+
+namespace SuperchargedPatch.Authoring.Modules
+{
+    // Rebuilds a Rigidbody's PxRigidDynamic through Unity's own active-state
+    // Create(false) -> Create(true) replacement path, then re-registers its
+    // capsule on the new active actor. Automatic mode is restricted to local
+    // chefs during the checkpoint restore's internal main-physics unfreeze.
+    public sealed class RigidbodyActorRebuildModule : IAuthoringModule
+    {
+        // Four active chef actors plus Unity's one replacement allocation form
+        // the observed five-address cycle. Rebuilding five times removes every
+        // chef actor/contact set while restoring the incoming chef/address map.
+        private const int AutomaticCanonicalCycles=5;
+        private const int MaximumContactManagers=4096;
+        private const int MaximumCheckpointSidecars=20000;
+
+        [StructLayout(LayoutKind.Sequential, Pack=8)]
+        private struct NativeReceipt
+        {
+            public uint ApiVersion, StructSize, Result, LastError;
+            public UIntPtr UnityBase, Rigidbody, ActorBefore, ActorAfterInactiveCreate, ActorAfterActiveCreate;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack=8)]
+        private struct NativeContactPoolReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr Context,FreeArray;
+            public uint FreeCount,OrderHashBefore,OrderHashAfter;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] Top;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack=8)]
+        private struct NativeContextObserverReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,ObservedContext;
+            public uint Observations,Installed;
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate uint NativeApiVersion();
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeRebuildBatch(
+            UIntPtr unityBase, IntPtr rigidbodies, uint count, IntPtr receipts);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeActorShapes(
+            UIntPtr unityBase,UIntPtr actor,IntPtr shapes,uint capacity,out uint count,out uint error);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactPoolCaptureSnapshot(
+            UIntPtr context,IntPtr snapshot,uint capacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactPoolRestoreSnapshot(
+            UIntPtr context,UIntPtr expectedFreeArray,IntPtr snapshot,uint count,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
+            UIntPtr unityBase,IntPtr receipt);
+        [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Unicode)] private static extern IntPtr LoadLibrary(string path);
+        [DllImport("kernel32",SetLastError=true)] private static extern bool FreeLibrary(IntPtr module);
+        [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Ansi)] private static extern IntPtr GetProcAddress(IntPtr module,string name);
+        [DllImport("kernel32",SetLastError=true)] private static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32",SetLastError=true)] private static extern bool ReadProcessMemory(
+            IntPtr process,IntPtr address,[Out] byte[] buffer,UIntPtr size,out UIntPtr bytesRead);
+        [DllImport("kernel32",SetLastError=true)] private static extern bool WriteProcessMemory(
+            IntPtr process,IntPtr address,byte[] buffer,UIntPtr size,out UIntPtr bytesWritten);
+
+        private sealed class BodyState
+        {
+            internal Vector3 Position,Velocity,AngularVelocity;
+            internal Quaternion Rotation;
+            internal float Mass,Drag,AngularDrag,SleepThreshold,MaxAngularVelocity;
+            internal bool Kinematic,Gravity,DetectCollisions,Sleeping;
+            internal RigidbodyConstraints Constraints;
+            internal RigidbodyInterpolation Interpolation;
+            internal CollisionDetectionMode CollisionDetection;
+            internal int SolverIterations,SolverVelocityIterations;
+        }
+
+        private sealed class CapsuleState
+        {
+            internal int InstanceId,MaterialId,Direction;
+            internal Rigidbody Attached;
+            internal Vector3 Center;
+            internal float Radius,Height,ContactOffset;
+            internal bool Enabled,Trigger;
+        }
+
+        private sealed class TransformDispatchEntryState
+        {
+            internal uint Hierarchy,MaskLow,MaskHigh;
+        }
+
+        private sealed class TransformDispatchState
+        {
+            internal uint Dispatch,Array,Capacity,Count,GlobalMaskLow,GlobalMaskHigh;
+            internal TransformDispatchEntryState[] Entries;
+        }
+
+        private sealed class CheckpointSidecar
+        {
+            internal int Frame;
+            internal uint Context,FreeArray,OrderHash;
+            internal uint[] ContactPoolOrder;
+            internal TransformDispatchState TransformDispatch;
+            internal object CoreSnapshot;
+        }
+
+        private static RigidbodyActorRebuildModule active;
+        private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
+        private readonly FieldInfo groundColliderField=typeof(GroundCast).GetField("m_groundCollider",BindingFlags.Instance|BindingFlags.NonPublic);
+        private readonly List<object> receipts=new List<object>();
+        private Harmony harmony;
+        private IntPtr library;
+        private NativeApiVersion apiVersion;
+        private NativeRebuildBatch rebuildBatch;
+        private NativeActorShapes actorShapes;
+        private NativeContactPoolCaptureSnapshot captureContactPoolSnapshot;
+        private NativeContactPoolRestoreSnapshot restoreContactPoolSnapshot;
+        private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
+        private uint unityPlayerBase;
+        private uint contactManagerContext,contextObservations;
+        private string nativePath,nativeSha256,failure;
+        private bool automatic,automaticGroundCollider,observeContactManagerContext,contextObserverInstalled;
+        private bool automaticContactPoolRestore,automaticTransformDispatchRestore,automaticRestorePending,warpInProgress,warpTargetRestoreEligible,disposed;
+        private int pendingContactPoolAction;
+        private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
+        private object pendingCoreSnapshot;
+        private object coreRoundIdentity;
+        private int sceneMetadataGeneration=-1;
+        private long rebuilds,contactPoolCaptures,contactPoolRestores;
+        private long sceneOwnedResets,contextSnapshotInvalidations;
+        private readonly List<object> contactPoolReceipts=new List<object>();
+        private readonly Dictionary<int,CheckpointSidecar> checkpointSidecars=new Dictionary<int,CheckpointSidecar>();
+        private CheckpointSidecar warpTargetSidecar;
+        private long transformDispatchCaptures,transformDispatchRestores;
+        private readonly List<object> transformDispatchReceipts=new List<object>();
+        private object lastContextObserverReceipt,lastSceneOwnedReset;
+
+        public string Name { get { return "authoring-rigidbody-actor-rebuild-v1"; } }
+        public int ApiVersion { get { return 1; } }
+
+        public object Invoke(string operation,Dictionary<string,object> args)
+        {
+            if(disposed)throw new ObjectDisposedException("RigidbodyActorRebuildModule");
+            if(args==null)args=new Dictionary<string,object>();
+            object result=null;
+            if(operation=="activate")Activate(args);
+            else if(operation=="rebuild")result=RebuildOne(args);
+            else if(operation=="capture-contact-pool-next")result=ArmContactPoolAction(args,1);
+            else if(operation=="restore-contact-pool-next")result=ArmContactPoolAction(args,2);
+            else if(operation=="cancel-contact-pool-next")result=CancelContactPoolAction(args);
+            else if(operation=="checkpoint-status")result=CheckpointStatus(args);
+            else if(operation=="deactivate")Deactivate();
+            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, status or deactivate.");
+            else RequireNoArgs(args);
+            return Status(operation,result);
+        }
+
+        private void Activate(Dictionary<string,object> args)
+        {
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Actor-rebuild activation requires the authoring pause fence.");
+            if(library!=IntPtr.Zero)return;
+            if(active!=null)throw new InvalidOperationException("Another actor-rebuild module is active.");
+            string path=Path.GetFullPath(String(args,"nativePath"));
+            string expected=String(args,"sha256").ToUpperInvariant();
+            bool auto=args.ContainsKey("automaticChefs")&&Convert.ToBoolean(args["automaticChefs"]);
+            bool autoGround=args.ContainsKey("automaticGroundCollider")&&Convert.ToBoolean(args["automaticGroundCollider"]);
+            bool observeContext=args.ContainsKey("observeContactManagerContext")&&Convert.ToBoolean(args["observeContactManagerContext"]);
+            bool autoPoolRestore=args.ContainsKey("automaticContactPoolRestore")&&Convert.ToBoolean(args["automaticContactPoolRestore"]);
+            bool autoDispatchRestore=args.ContainsKey("automaticTransformDispatchRestore")&&Convert.ToBoolean(args["automaticTransformDispatchRestore"]);
+            uint context=args.ContainsKey("contactManagerContext")?Pointer(args,"contactManagerContext"):0;
+            if(autoPoolRestore&&!observeContext&&context==0)
+                throw new InvalidOperationException("Automatic contact-pool restore requires context observation or an explicit context.");
+            if(autoDispatchRestore&&!autoPoolRestore)
+                throw new InvalidOperationException("Transform-dispatch restore currently requires the paired contact-pool checkpoint action.");
+            if(!File.Exists(path))throw new FileNotFoundException("Native actor-rebuild DLL missing.",path);
+            string actual=Hash(path);
+            if(actual!=expected)throw new InvalidOperationException("Native actor-rebuild DLL hash mismatch: "+actual);
+            if(IntPtr.Size!=4||cachedPtr==null)throw new InvalidOperationException("Actor rebuild requires the x86 Unity object ABI.");
+            ProcessModule unity=null;
+            foreach(ProcessModule module in Process.GetCurrentProcess().Modules)
+                if(string.Equals(module.ModuleName,"UnityPlayer.dll",StringComparison.OrdinalIgnoreCase)){unity=module;break;}
+            if(unity==null)throw new InvalidOperationException("UnityPlayer.dll is not loaded.");
+            unityPlayerBase=unchecked((uint)unity.BaseAddress.ToInt32());
+            library=LoadLibrary(path);
+            if(library==IntPtr.Zero)throw new InvalidOperationException("LoadLibrary failed: "+Marshal.GetLastWin32Error());
+            try
+            {
+                apiVersion=Export<NativeApiVersion>("oc2_rigidbody_rebuild_api_version");
+                rebuildBatch=Export<NativeRebuildBatch>("oc2_rigidbody_rebuild_batch");
+                actorShapes=Export<NativeActorShapes>("oc2_rigidbody_actor_shapes");
+                captureContactPoolSnapshot=Export<NativeContactPoolCaptureSnapshot>("oc2_contact_manager_pool_capture_snapshot");
+                restoreContactPoolSnapshot=Export<NativeContactPoolRestoreSnapshot>("oc2_contact_manager_pool_restore_snapshot");
+                installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
+                statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
+                uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
+                if(apiVersion()!=6)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
+                observeContactManagerContext=observeContext;automaticContactPoolRestore=autoPoolRestore;
+                automaticTransformDispatchRestore=autoDispatchRestore;sceneMetadataGeneration=NativeSceneMetadata.Refreshes;
+                contactManagerContext=context;coreRoundIdentity=CoreRoundIdentity();active=this;
+                if(observeContactManagerContext)
+                {
+                    RunContextObserver(installContextObserver,"install");
+                    contextObserverInstalled=true;
+                    RefreshObservedContactManagerContext();
+                }
+                if(auto||autoPoolRestore||autoDispatchRestore)InstallAutomaticHook();
+            }
+            catch{Deactivate();throw;}
+        }
+
+        private void InstallAutomaticHook()
+        {
+            var setPaused=AccessTools.DeclaredMethod(typeof(TimeManager),"SetPaused",
+                new[]{typeof(TimeManager.PauseLayer),typeof(bool),typeof(object)});
+            if(setPaused==null||setPaused.ReturnType!=typeof(void))
+                throw new InvalidOperationException("Installed native pause contract differs.");
+            harmony=new Harmony("supercharged.authoring.rigidbody-actor-rebuild."+GetType().Assembly.GetName().Name);
+            harmony.Patch(setPaused,
+                postfix:new HarmonyMethod(GetType().GetMethod("AfterSetPaused",BindingFlags.Public|BindingFlags.Static)));
+            if(automaticContactPoolRestore)
+            {
+                var prepare=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint),"Prepare",new[]{typeof(Hpmv.WarpSpec)});
+                var complete=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint.RestorePlan),"Complete",Type.EmptyTypes);
+                var failureMethod=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint),"RecordRestoreFailure",
+                    new[]{typeof(int),typeof(Exception),typeof(bool)});
+                if(prepare==null||complete==null||failureMethod==null)
+                    throw new InvalidOperationException("Installed native checkpoint lifecycle contract differs.");
+                harmony.Patch(prepare,prefix:new HarmonyMethod(GetType().GetMethod("BeforePrepare",BindingFlags.Public|BindingFlags.Static)));
+                harmony.Patch(complete,postfix:new HarmonyMethod(GetType().GetMethod("AfterRestoreComplete",BindingFlags.Public|BindingFlags.Static)));
+                harmony.Patch(failureMethod,postfix:new HarmonyMethod(GetType().GetMethod("AfterRestoreFailure",BindingFlags.Public|BindingFlags.Static)));
+            }
+        }
+
+        public static void AfterSetPaused(TimeManager.PauseLayer __0,bool __1)
+        {
+            var module=active;
+            if(module==null||__0!=TimeManager.PauseLayer.Main)return;
+            module.ObserveSceneGeneration();
+            module.ObserveCoreRoundIdentity();
+            if((!module.automatic&&!module.automaticContactPoolRestore)||!NativeSessionBridge.KitchenReady)return;
+            if(__1)
+            {
+                if(module.warpInProgress)module.warpInProgress=false;
+                return;
+            }
+            if(TimeManager.IsPaused(TimeManager.PauseLayer.Main))return;
+            try
+            {
+                if(module.automatic&&module.warpInProgress)
+                {
+                    var bodies=UnityEngine.Object.FindObjectsOfType<ServerChefSynchroniser>()
+                        .Select(value=>value.GetComponent<Rigidbody>()).Where(IsLocalChef)
+                        .OrderBy(value=>PathOf(value.transform),StringComparer.Ordinal).ToArray();
+                    if(bodies.Length!=4||bodies.Select(value=>value.GetInstanceID()).Distinct().Count()!=4)
+                        throw new InvalidOperationException("Automatic actor rebuild requires exactly four distinct local chefs.");
+                    for(int cycle=1;cycle<=AutomaticCanonicalCycles;cycle++)
+                        module.RebuildBodies(bodies,"main-unpause-cycle-"+cycle);
+                    if(module.automaticGroundCollider)module.RebuildSharedGroundCollider(bodies);
+                }
+                int contactPoolAction=module.pendingContactPoolAction;
+                bool automaticContactPoolAction=false;
+                module.pendingContactPoolAction=0;
+                if(contactPoolAction==0&&module.automaticContactPoolRestore&&module.automaticRestorePending&&!module.warpInProgress)
+                {
+                    contactPoolAction=2;automaticContactPoolAction=true;module.automaticRestorePending=false;
+                }
+                if(contactPoolAction!=0)module.RunContactPoolAction(contactPoolAction,automaticContactPoolAction);
+                module.failure=null;
+            }
+            catch(Exception error){module.failure=error.Message;throw;}
+        }
+
+        public static void BeforePrepare(Hpmv.WarpSpec __0)
+        {
+            var module=active;
+            if(module==null||!module.automaticContactPoolRestore)return;
+            module.ObserveCoreRoundIdentity();
+            module.warpInProgress=true;
+            module.warpTargetFrame=__0==null?-1:__0.Frame;
+            module.warpTargetRestoreEligible=module.checkpointSidecars.TryGetValue(
+                module.warpTargetFrame,out module.warpTargetSidecar);
+            object core=CoreCheckpointSnapshot(module.warpTargetFrame);
+            if(!module.warpTargetRestoreEligible||core==null||
+                !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,core))
+                throw new InvalidOperationException("No exact contact-pool/Transform-dispatch sidecar exists for output frame "+module.warpTargetFrame+".");
+        }
+
+        public static void AfterRestoreComplete(NativeKitchenCheckpoint.RestorePlan __instance)
+        {
+            var module=active;
+            if(module==null||!module.automaticContactPoolRestore)return;
+            if(__instance==null||module.warpTargetSidecar==null||
+                !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,RestorePlanSnapshot(__instance)))
+                throw new InvalidOperationException("Completed native restore plan differs from the selected contact-pool sidecar.");
+            module.automaticRestorePending=module.warpTargetRestoreEligible;
+            module.PruneCheckpointSidecarsAfter(module.warpTargetFrame);
+        }
+
+        public static void AfterRestoreFailure()
+        {
+            var module=active;
+            if(module==null||!module.automaticContactPoolRestore)return;
+            module.automaticRestorePending=false;module.warpTargetRestoreEligible=false;
+            module.warpTargetSidecar=null;
+        }
+
+        private object RebuildOne(Dictionary<string,object> args)
+        {
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("One-shot actor rebuild requires the authoring pause fence.");
+            if(args.Count!=1||!args.ContainsKey("bodyInstanceId"))throw new ArgumentException("rebuild requires only bodyInstanceId.");
+            int id=Convert.ToInt32(args["bodyInstanceId"]);
+            var body=UnityEngine.Object.FindObjectsOfType<Rigidbody>().FirstOrDefault(value=>value.GetInstanceID()==id);
+            if(body==null)throw new InvalidOperationException("Requested Rigidbody is not live.");
+            return RebuildBodies(new[]{body},"one-shot")[0];
+        }
+
+        private object ArmContactPoolAction(Dictionary<string,object> args,int action)
+        {
+            RequireNoArgs(args);
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Contact-pool action requires the authoring pause fence.");
+            if(!ReferenceEquals(active,this)||contactManagerContext==0)
+            {
+                RefreshObservedContactManagerContext();
+                if(!ReferenceEquals(active,this)||contactManagerContext==0)
+                    throw new InvalidOperationException("Contact-pool action requires an active module and an observed or explicit context.");
+            }
+            ObserveCoreRoundIdentity();
+            if(pendingContactPoolAction!=0)throw new InvalidOperationException("A contact-pool action is already pending.");
+            if(action==2&&checkpointSidecars.Count==0)
+                throw new InvalidOperationException("No contact-manager free-list snapshot has been captured.");
+            if(action==1)
+            {
+                pendingContactPoolFrame=CurrentCheckpointFrame();
+                if(pendingContactPoolFrame<0)throw new InvalidOperationException("No native checkpoint frame exists for contact-pool capture.");
+                pendingCoreSnapshot=CoreCheckpointSnapshot(pendingContactPoolFrame);
+                if(pendingCoreSnapshot==null)
+                    throw new InvalidOperationException("The native checkpoint frame has no retained core snapshot.");
+            }
+            pendingContactPoolAction=action;
+            CheckpointSidecar latest=LatestCheckpointSidecar();
+            return new Dictionary<string,object>{{"pending",action==1?"capture":"restore"},
+                {"context","0x"+contactManagerContext.ToString("X8")},{"frame",action==1?(object)pendingContactPoolFrame:latest.Frame}};
+        }
+
+        private object CancelContactPoolAction(Dictionary<string,object> args)
+        {
+            RequireNoArgs(args);int prior=pendingContactPoolAction;pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            return new Dictionary<string,object>{{"cancelled",prior==0?"none":prior==1?"capture":"restore"}};
+        }
+
+        private void RunContactPoolAction(int action,bool automaticAction)
+        {
+            RefreshObservedContactManagerContext();
+            CheckpointSidecar selected=null;
+            if(action==2)
+            {
+                selected=automaticAction?warpTargetSidecar:LatestCheckpointSidecar();
+                if(selected==null||selected.Context==0||selected.Context!=contactManagerContext)
+                    throw new InvalidOperationException("Contact-pool restore snapshot does not belong to the current observed context.");
+            }
+            if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null)
+                throw new InvalidOperationException("Native caller-owned contact-pool helper is not active.");
+            int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
+            object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
+            int size=Marshal.SizeOf(typeof(NativeContactPoolReceipt));
+            int capacity=action==1?MaximumContactManagers:selected.ContactPoolOrder.Length;
+            if(capacity<1||capacity>MaximumContactManagers)
+                throw new InvalidOperationException("Contact-pool snapshot count is outside the supported range.");
+            IntPtr buffer=Marshal.AllocHGlobal(size);
+            IntPtr snapshotBuffer=Marshal.AllocHGlobal(capacity*IntPtr.Size);
+            NativeContactPoolReceipt receipt;
+            uint[] capturedOrder=null;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                if(action==2)
+                    for(int i=0;i<capacity;i++)Marshal.WriteInt32(snapshotBuffer,i*IntPtr.Size,
+                        unchecked((int)selected.ContactPoolOrder[i]));
+                int ok=action==1
+                    ?captureContactPoolSnapshot(new UIntPtr(contactManagerContext),snapshotBuffer,
+                        (uint)capacity,buffer)
+                    :restoreContactPoolSnapshot(new UIntPtr(contactManagerContext),
+                        new UIntPtr(selected.FreeArray),snapshotBuffer,(uint)capacity,buffer);
+                receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(buffer,typeof(NativeContactPoolReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native contact-pool action failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(action==1)
+                {
+                    if(receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
+                        throw new InvalidOperationException("Native contact-pool capture returned an invalid count.");
+                    capturedOrder=new uint[receipt.FreeCount];
+                    for(int i=0;i<capturedOrder.Length;i++)capturedOrder[i]=
+                        unchecked((uint)Marshal.ReadInt32(snapshotBuffer,i*IntPtr.Size));
+                }
+            }
+            finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
+            if(receipt.ApiVersion!=6||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+                throw new InvalidOperationException("Native contact-pool receipt contract differs.");
+            if(action==1)
+            {
+                uint orderHash=ContactPoolOrderHash(capturedOrder);
+                if(orderHash!=receipt.OrderHashBefore||receipt.OrderHashAfter!=receipt.OrderHashBefore)
+                    throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
+                TransformDispatchState dispatch=automaticTransformDispatchRestore
+                    ?RunTransformDispatchAction(1,null):null;
+                var captured=new CheckpointSidecar {Frame=actionFrame,
+                    Context=contactManagerContext,FreeArray=receipt.FreeArray.ToUInt32(),
+                    OrderHash=orderHash,ContactPoolOrder=capturedOrder,
+                    TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
+                StoreCheckpointSidecar(captured);
+                pendingContactPoolFrame=-1;pendingCoreSnapshot=null;contactPoolCaptures++;
+            }
+            else
+            {
+                if(receipt.FreeArray.ToUInt32()!=selected.FreeArray||receipt.FreeCount!=(uint)capacity||
+                    receipt.OrderHashAfter!=selected.OrderHash)
+                    throw new InvalidOperationException("Native contact-pool restore receipt differs from the selected checkpoint sidecar.");
+                if(automaticTransformDispatchRestore)RunTransformDispatchAction(2,selected.TransformDispatch);
+                contactPoolRestores++;
+                if(automaticAction){warpTargetSidecar=null;warpTargetRestoreEligible=false;}
+            }
+            object[] top=(receipt.Top??new UIntPtr[0]).Select(Hex).Cast<object>().ToArray();
+            var value=new Dictionary<string,object>{{"action",action==1?"capture":"restore"},
+                {"context",Hex(receipt.Context)},{"freeArray",Hex(receipt.FreeArray)},
+                {"frame",actionFrame},
+                {"freeCount",receipt.FreeCount},{"orderHashBefore","0x"+receipt.OrderHashBefore.ToString("X8")},
+                {"orderHashAfter","0x"+receipt.OrderHashAfter.ToString("X8")},{"top",top}};
+            contactPoolReceipts.Add(value);if(contactPoolReceipts.Count>16)contactPoolReceipts.RemoveAt(0);
+        }
+
+        private TransformDispatchState RunTransformDispatchAction(int action,TransformDispatchState snapshot)
+        {
+            TransformDispatchState before=ReadTransformDispatchState();
+            TransformDispatchState after=before;
+            if(action==1)
+            {
+                transformDispatchCaptures++;
+                snapshot=before;
+            }
+            else
+            {
+                if(snapshot==null)
+                    throw new InvalidOperationException("No transform-dispatch snapshot has been captured.");
+                if(before.Dispatch!=snapshot.Dispatch)
+                    throw new InvalidOperationException("Transform-dispatch object changed since capture.");
+                if(before.Capacity<snapshot.Count||before.Array==0)
+                    throw new InvalidOperationException("Current transform-dispatch array cannot hold the captured queue.");
+                if(snapshot.Entries==null||snapshot.Count!=(uint)snapshot.Entries.Length)
+                    throw new InvalidOperationException("Transform-dispatch checkpoint count is inconsistent.");
+
+                var snapshotPointers=new HashSet<uint>(snapshot.Entries.Select(item=>item.Hierarchy));
+                if(snapshotPointers.Count!=snapshot.Entries.Length||snapshotPointers.Contains(0u))
+                    throw new InvalidOperationException("Transform-dispatch checkpoint contains a null or duplicate hierarchy.");
+                // Check every saved hierarchy before the first write. An older
+                // checkpoint may name a hierarchy that has since been retired;
+                // such a target must fail without partially changing the queue.
+                foreach(TransformDispatchEntryState entry in snapshot.Entries)
+                {
+                    ReadWord(entry.Hierarchy+0x1Cu);
+                    ReadWord(entry.Hierarchy+0x20u);
+                    ReadWord(entry.Hierarchy+0x24u);
+                }
+                foreach(TransformDispatchEntryState entry in before.Entries)
+                {
+                    WriteWord(entry.Hierarchy+0x1Cu,0xFFFFFFFFu);
+                    if(!snapshotPointers.Contains(entry.Hierarchy))
+                    {
+                        WriteWord(entry.Hierarchy+0x20u,0u);
+                        WriteWord(entry.Hierarchy+0x24u,0u);
+                    }
+                }
+                for(int i=0;i<snapshot.Entries.Length;i++)
+                {
+                    TransformDispatchEntryState entry=snapshot.Entries[i];
+                    WriteWord(entry.Hierarchy+0x20u,entry.MaskLow);
+                    WriteWord(entry.Hierarchy+0x24u,entry.MaskHigh);
+                    WriteWord(entry.Hierarchy+0x1Cu,(uint)i);
+                    WriteWord(before.Array+(uint)(i*4),entry.Hierarchy);
+                }
+                for(uint i=snapshot.Count;i<before.Count;i++)
+                    WriteWord(before.Array+i*4u,0u);
+                WriteWord(before.Dispatch+0x10u,snapshot.Count);
+                WriteWord(before.Dispatch+0x00u,snapshot.GlobalMaskLow);
+                WriteWord(before.Dispatch+0x04u,snapshot.GlobalMaskHigh);
+                after=ReadTransformDispatchState();
+                if(!SameTransformDispatchState(snapshot,after))
+                    throw new InvalidOperationException("Transform-dispatch restore readback differs from the checkpoint snapshot.");
+                transformDispatchRestores++;
+            }
+            var value=new Dictionary<string,object> {
+                {"action",action==1?"capture":"restore"},
+                {"before",DescribeTransformDispatchState(before)},
+                {"after",DescribeTransformDispatchState(after)}
+            };
+            transformDispatchReceipts.Add(value);
+            if(transformDispatchReceipts.Count>16)transformDispatchReceipts.RemoveAt(0);
+            return snapshot;
+        }
+
+        private TransformDispatchState ReadTransformDispatchState()
+        {
+            uint[] expectedHandles={10u,11u,12u,13u};
+            uint[] handleRvas={0xFA2E34u,0xFA2E38u,0xFA2E3Cu,0xFA2E40u};
+            for(int i=0;i<handleRvas.Length;i++)
+                if(ReadWord(unityPlayerBase+handleRvas[i])!=expectedHandles[i])
+                    throw new InvalidOperationException("Unity physics transform handle contract differs at RVA 0x"+handleRvas[i].ToString("X8")+".");
+            uint dispatch=ReadWord(unityPlayerBase+0xFF0D28u);
+            if(dispatch==0)throw new InvalidOperationException("Unity transform-dispatch object is unavailable.");
+            var state=new TransformDispatchState {
+                Dispatch=dispatch,
+                GlobalMaskLow=ReadWord(dispatch+0x00u),GlobalMaskHigh=ReadWord(dispatch+0x04u),
+                Array=ReadWord(dispatch+0x08u),Capacity=ReadWord(dispatch+0x0Cu),Count=ReadWord(dispatch+0x10u)
+            };
+            if(state.Count>state.Capacity||state.Capacity>4096u||(state.Count!=0&&state.Array==0))
+                throw new InvalidOperationException("Unity transform-dispatch queue bounds are invalid.");
+            var entries=new TransformDispatchEntryState[state.Count];
+            var seen=new HashSet<uint>();
+            for(uint i=0;i<state.Count;i++)
+            {
+                uint hierarchy=ReadWord(state.Array+i*4u);
+                if(hierarchy==0||!seen.Add(hierarchy))
+                    throw new InvalidOperationException("Unity transform-dispatch queue contains a null or duplicate hierarchy.");
+                uint queueIndex=ReadWord(hierarchy+0x1Cu);
+                if(queueIndex!=i)
+                    throw new InvalidOperationException("Unity transform hierarchy queue index differs from its ordered slot.");
+                entries[i]=new TransformDispatchEntryState {
+                    Hierarchy=hierarchy,MaskLow=ReadWord(hierarchy+0x20u),MaskHigh=ReadWord(hierarchy+0x24u)
+                };
+            }
+            state.Entries=entries;
+            return state;
+        }
+
+        private static bool SameTransformDispatchState(TransformDispatchState left,TransformDispatchState right)
+        {
+            if(left.Dispatch!=right.Dispatch||left.Count!=right.Count||
+                left.GlobalMaskLow!=right.GlobalMaskLow||left.GlobalMaskHigh!=right.GlobalMaskHigh||
+                left.Entries.Length!=right.Entries.Length)return false;
+            for(int i=0;i<left.Entries.Length;i++)
+                if(left.Entries[i].Hierarchy!=right.Entries[i].Hierarchy||
+                    left.Entries[i].MaskLow!=right.Entries[i].MaskLow||
+                    left.Entries[i].MaskHigh!=right.Entries[i].MaskHigh)return false;
+            return true;
+        }
+
+        private static object DescribeTransformDispatchState(TransformDispatchState state)
+        {
+            uint hash=2166136261u;
+            var entries=new object[state.Entries.Length];
+            for(int i=0;i<state.Entries.Length;i++)
+            {
+                TransformDispatchEntryState entry=state.Entries[i];
+                foreach(uint word in new[]{entry.Hierarchy,entry.MaskLow,entry.MaskHigh})
+                {
+                    hash^=word;hash*=16777619u;
+                }
+                entries[i]=new Dictionary<string,object> {
+                    {"index",i},{"hierarchy","0x"+entry.Hierarchy.ToString("X8")},
+                    {"maskLow","0x"+entry.MaskLow.ToString("X8")},{"maskHigh","0x"+entry.MaskHigh.ToString("X8")}
+                };
+            }
+            return new Dictionary<string,object> {
+                {"dispatch","0x"+state.Dispatch.ToString("X8")},{"array","0x"+state.Array.ToString("X8")},
+                {"capacity",state.Capacity},{"count",state.Count},
+                {"globalMaskLow","0x"+state.GlobalMaskLow.ToString("X8")},
+                {"globalMaskHigh","0x"+state.GlobalMaskHigh.ToString("X8")},
+                {"orderedStateHash","0x"+hash.ToString("X8")},{"entries",entries}
+            };
+        }
+
+        private NativeContextObserverReceipt RunContextObserver(NativeContextObserverAction callback,string action)
+        {
+            if(callback==null)throw new InvalidOperationException("Native context observer export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeContextObserverReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeContextObserverReceipt receipt;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                int ok=callback(new UIntPtr(unityPlayerBase),buffer);
+                receipt=(NativeContextObserverReceipt)Marshal.PtrToStructure(buffer,typeof(NativeContextObserverReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            if(receipt.ApiVersion!=6||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+                throw new InvalidOperationException("Native context observer receipt contract differs.");
+            lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
+                {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
+            contextObservations=receipt.Observations;
+            return receipt;
+        }
+
+        private void RefreshObservedContactManagerContext()
+        {
+            if(!contextObserverInstalled)return;
+            var receipt=RunContextObserver(statusContextObserver,"status");
+            uint observed=receipt.ObservedContext.ToUInt32();
+            if(observed==0)return;
+            if(observed!=contactManagerContext)
+            {
+                contactManagerContext=observed;
+                if(checkpointSidecars.Count!=0&&checkpointSidecars.Values.Any(value=>value.Context!=observed))
+                {
+                    contextSnapshotInvalidations++;
+                    ResetSceneOwnedCheckpointState("contact-manager-context-changed",false);
+                }
+            }
+        }
+
+        private void ObserveSceneGeneration()
+        {
+            int current=NativeSceneMetadata.Refreshes;
+            if(sceneMetadataGeneration==current)return;
+            int previous=sceneMetadataGeneration;
+            sceneMetadataGeneration=current;
+            ResetSceneOwnedCheckpointState("native-scene-metadata-generation-changed",true);
+            lastSceneOwnedReset=new Dictionary<string,object>{{"reason","native-scene-metadata-generation-changed"},
+                {"previousGeneration",previous},{"currentGeneration",current}};
+        }
+
+        private void ObserveCoreRoundIdentity()
+        {
+            object current=CoreRoundIdentity();
+            if(ReferenceEquals(current,coreRoundIdentity))return;
+            coreRoundIdentity=current;
+            ResetSceneOwnedCheckpointState("native-kitchen-round-identity-changed",true);
+        }
+
+        private void ResetSceneOwnedCheckpointState(string reason,bool clearFailure)
+        {
+            pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
+            warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
+            if(clearFailure)failure=null;
+            sceneOwnedResets++;
+            lastSceneOwnedReset=new Dictionary<string,object>{{"reason",reason},
+                {"generation",sceneMetadataGeneration},{"clearedFailure",clearFailure}};
+        }
+
+        private static int CurrentCheckpointFrame()
+        {
+            var field=typeof(NativeKitchenCheckpoint).GetField("lastFrame",BindingFlags.Static|BindingFlags.NonPublic);
+            if(field==null||field.FieldType!=typeof(int))throw new InvalidOperationException("Installed native checkpoint frame contract differs.");
+            return (int)field.GetValue(null);
+        }
+
+        private static object CoreCheckpointSnapshot(int frame)
+        {
+            var field=typeof(NativeKitchenCheckpoint).GetField("history",BindingFlags.Static|BindingFlags.NonPublic);
+            var values=field==null?null:field.GetValue(null) as IDictionary;
+            if(values==null)throw new InvalidOperationException("Installed native checkpoint history contract differs.");
+            return frame>=0&&values.Contains(frame)?values[frame]:null;
+        }
+
+        private static object CoreRoundIdentity()
+        {
+            var field=typeof(NativeKitchenCheckpoint).GetField("roundIdentity",BindingFlags.Static|BindingFlags.NonPublic);
+            if(field==null)throw new InvalidOperationException("Installed native checkpoint round-identity contract differs.");
+            return field.GetValue(null);
+        }
+
+        private static object RestorePlanSnapshot(NativeKitchenCheckpoint.RestorePlan plan)
+        {
+            var field=typeof(NativeKitchenCheckpoint.RestorePlan).GetField("snapshot",BindingFlags.Instance|BindingFlags.NonPublic);
+            if(field==null)throw new InvalidOperationException("Installed native restore-plan contract differs.");
+            return field.GetValue(plan);
+        }
+
+        private static uint ContactPoolOrderHash(uint[] values)
+        {
+            if(values==null)throw new ArgumentNullException("values");
+            uint hash=2166136261u;
+            foreach(uint value in values){hash^=value;hash*=16777619u;}
+            return hash;
+        }
+
+        private CheckpointSidecar LatestCheckpointSidecar()
+        {
+            return checkpointSidecars.Count==0?null:checkpointSidecars[checkpointSidecars.Keys.Max()];
+        }
+
+        private void StoreCheckpointSidecar(CheckpointSidecar value)
+        {
+            if(value==null||value.Frame<0||value.CoreSnapshot==null||
+                value.Context==0||value.FreeArray==0||value.ContactPoolOrder==null||
+                value.ContactPoolOrder.Length<1||value.ContactPoolOrder.Length>MaximumContactManagers)
+                throw new InvalidOperationException("Contact-pool checkpoint sidecar is incomplete.");
+            if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
+                throw new InvalidOperationException("Contact-pool checkpoint sidecar no longer owns the retained core snapshot.");
+            CheckpointSidecar previous;
+            if(checkpointSidecars.TryGetValue(value.Frame,out previous))
+            {
+                bool same=ReferenceEquals(previous.CoreSnapshot,value.CoreSnapshot)&&
+                    previous.Context==value.Context&&previous.FreeArray==value.FreeArray&&
+                    previous.OrderHash==value.OrderHash&&
+                    previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
+                    SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch);
+                if(!same)throw new InvalidOperationException("A differing contact-pool/Transform-dispatch sidecar already owns output frame "+value.Frame+".");
+                return;
+            }
+            if(checkpointSidecars.Count>=MaximumCheckpointSidecars)
+                throw new InvalidOperationException("Contact-pool checkpoint sidecar history reached its fail-closed capacity.");
+            checkpointSidecars.Add(value.Frame,value);
+        }
+
+        private static bool SameTransformDispatchSnapshot(TransformDispatchState left,TransformDispatchState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.Array==right.Array&&left.Capacity==right.Capacity&&SameTransformDispatchState(left,right);
+        }
+
+        private void PruneCheckpointSidecarsAfter(int frame)
+        {
+            foreach(int key in checkpointSidecars.Keys.Where(value=>value>frame).ToArray())
+                checkpointSidecars.Remove(key);
+        }
+
+        private object CheckpointStatus(Dictionary<string,object> args)
+        {
+            if(args.Count!=1||!args.ContainsKey("frame"))
+                throw new ArgumentException("checkpoint-status requires exactly frame.");
+            int frame=Convert.ToInt32(args["frame"]);
+            CheckpointSidecar value;
+            bool found=checkpointSidecars.TryGetValue(frame,out value);
+            object core=CoreCheckpointSnapshot(frame);
+            return new Dictionary<string,object>{{"frame",frame},{"captured",found},
+                {"coreSnapshotPresent",core!=null},
+                {"coreSnapshotMatches",found&&ReferenceEquals(value.CoreSnapshot,core)},
+                {"context",found?"0x"+value.Context.ToString("X8"):null},
+                {"freeArray",found?"0x"+value.FreeArray.ToString("X8"):null},
+                {"freeCount",found?value.ContactPoolOrder.Length:0},
+                {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
+                {"transformDispatchCaptured",found&&value.TransformDispatch!=null}};
+        }
+
+        private object[] RebuildBodies(Rigidbody[] bodies,string reason)
+        {
+            if(library==IntPtr.Zero||rebuildBatch==null)throw new InvalidOperationException("Native actor-rebuild helper is not active.");
+            if(bodies==null||bodies.Length<1||bodies.Length>4||bodies.Any(value=>value==null)||bodies.Distinct().Count()!=bodies.Length)
+                throw new InvalidOperationException("Actor rebuild batch requires one to four distinct live bodies.");
+            var before=bodies.Select(Capture).ToArray();
+            var capsuleComponents=bodies.Select(body=>body.GetComponents<CapsuleCollider>()).ToArray();
+            var capsules=new CapsuleState[bodies.Length][];
+            var pointers=new IntPtr[bodies.Length];
+            for(int i=0;i<bodies.Length;i++)
+            {
+                if(capsuleComponents[i].Length!=1||!capsuleComponents[i][0].enabled||capsuleComponents[i][0].attachedRigidbody!=bodies[i])
+                    throw new InvalidOperationException("Actor rebuild requires one enabled capsule attached to every target Rigidbody.");
+                capsules[i]=capsuleComponents[i].Select(Capture).ToArray();
+                pointers[i]=(IntPtr)cachedPtr.GetValue(bodies[i]);
+                if(pointers[i]==IntPtr.Zero)throw new InvalidOperationException("Rigidbody has no cached native pointer.");
+            }
+
+            int receiptSize=Marshal.SizeOf(typeof(NativeReceipt));
+            IntPtr pointerBuffer=Marshal.AllocHGlobal(IntPtr.Size*bodies.Length);
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize*bodies.Length);
+            var native=new NativeReceipt[bodies.Length];
+            try
+            {
+                for(int i=0;i<bodies.Length;i++)Marshal.WriteIntPtr(pointerBuffer,i*IntPtr.Size,pointers[i]);
+                int ok=rebuildBatch(new UIntPtr(unityPlayerBase),pointerBuffer,(uint)bodies.Length,receiptBuffer);
+                for(int i=0;i<bodies.Length;i++)native[i]=(NativeReceipt)Marshal.PtrToStructure(
+                    new IntPtr(receiptBuffer.ToInt64()+i*receiptSize),typeof(NativeReceipt));
+                if(ok==0||native.Any(value=>value.Result!=1))
+                {
+                    var failed=native.FirstOrDefault(value=>value.Result!=1);
+                    throw new InvalidOperationException("Native actor rebuild failed: result="+failed.Result+", Win32/error="+failed.LastError+".");
+                }
+            }
+            finally{Marshal.FreeHGlobal(receiptBuffer);Marshal.FreeHGlobal(pointerBuffer);}
+
+            // The batch has now removed the complete target set and reinserted
+            // it in deterministic path order. Re-register capsules only after
+            // every new active actor exists.
+            foreach(var group in capsuleComponents)foreach(var collider in group){collider.enabled=false;collider.enabled=true;}
+
+            // Cleanup/Create intentionally discards the old actor. Reapply only
+            // the pose and motion values that live solely on that actor; all
+            // serialized Rigidbody/Collider properties must survive natively.
+            for(int i=0;i<bodies.Length;i++)
+            {
+                bodies[i].position=before[i].Position;bodies[i].rotation=before[i].Rotation;
+                bodies[i].velocity=before[i].Velocity;bodies[i].angularVelocity=before[i].AngularVelocity;
+                if(before[i].Sleeping)bodies[i].Sleep();else bodies[i].WakeUp();
+            }
+            var output=new object[bodies.Length];
+            for(int i=0;i<bodies.Length;i++)
+            {
+                var body=bodies[i];var after=Capture(body);Verify(before[i],after);
+                var afterCapsules=body.GetComponents<CapsuleCollider>().Select(Capture).ToArray();
+                if(capsules[i].Length!=afterCapsules.Length)throw new InvalidOperationException("Actor rebuild changed capsule membership.");
+                for(int j=0;j<capsules[i].Length;j++)Verify(capsules[i][j],afterCapsules[j]);
+                rebuilds++;
+                var receipt=new Dictionary<string,object>{
+                    {"rebuild",rebuilds},{"batchSize",bodies.Length},{"batchIndex",i},{"reason",reason},
+                    {"bodyInstanceId",body.GetInstanceID()},{"path",PathOf(body.transform)},{"localChef",IsLocalChef(body)},
+                    {"nativeRigidbody",Hex(native[i].Rigidbody)},{"actorBefore",Hex(native[i].ActorBefore)},
+                    {"actorAfterInactiveCreate",Hex(native[i].ActorAfterInactiveCreate)},
+                    {"actorAfterActiveCreate",Hex(native[i].ActorAfterActiveCreate)},
+                    {"position",Point(after.Position)},{"velocity",Point(after.Velocity)},
+                    {"kinematic",after.Kinematic},{"sleeping",after.Sleeping},{"capsules",afterCapsules.Length}
+                };
+                // The last automatic cycle is the exact state handed back to
+                // Unity before PhysicsManager::Simulate. Retain bounded,
+                // read-only native bytes so original/replay simulation inputs
+                // can be compared without changing the rebuild algorithm.
+                if(reason=="main-unpause-cycle-5")
+                {
+                    receipt.Add("preSimRigidbodyMemory",MemorySnapshot(native[i].Rigidbody,128));
+                    receipt.Add("preSimActorMemory",MemorySnapshot(native[i].ActorAfterActiveCreate,256));
+                    receipt.Add("preSimShapes",ShapeSnapshots(native[i].ActorAfterActiveCreate));
+                }
+                receipts.Add(receipt);if(receipts.Count>64)receipts.RemoveAt(0);output[i]=receipt;
+            }
+            return output;
+        }
+
+        private void RebuildSharedGroundCollider(Rigidbody[] bodies)
+        {
+            if(groundColliderField==null)throw new InvalidOperationException("Installed GroundCast collider field differs.");
+            var grounds=bodies.Select(body=>body.GetComponent<GroundCast>()).Select(value=>
+                value==null?null:groundColliderField.GetValue(value) as Collider).Where(value=>value!=null).Distinct().ToArray();
+            if(grounds.Length!=1||!(grounds[0] is BoxCollider))
+                throw new InvalidOperationException("Automatic ground rebuild requires one shared BoxCollider.");
+            Collider ground=grounds[0];int instanceId=ground.GetInstanceID();string path=PathOf(ground.transform);
+            bool enabled=ground.enabled,trigger=ground.isTrigger;float offset=ground.contactOffset;
+            int materialId=ground.sharedMaterial==null?0:ground.sharedMaterial.GetInstanceID();
+            Rigidbody attached=ground.attachedRigidbody;
+            if(!enabled||trigger||attached!=null)throw new InvalidOperationException("Shared ground collider contract differs.");
+            ground.enabled=false;ground.enabled=true;
+            if(ground.GetInstanceID()!=instanceId||PathOf(ground.transform)!=path||ground.enabled!=enabled||
+                ground.isTrigger!=trigger||ground.contactOffset!=offset||ground.attachedRigidbody!=attached||
+                (ground.sharedMaterial==null?0:ground.sharedMaterial.GetInstanceID())!=materialId)
+                throw new InvalidOperationException("Ground rebuild changed an exposed Collider field.");
+            receipts.Add(new Dictionary<string,object>{{"rebuild",++rebuilds},{"reason","main-unpause-shared-ground"},
+                {"colliderInstanceId",instanceId},{"path",path},{"contactOffset",offset},{"materialInstanceId",materialId}});
+            if(receipts.Count>64)receipts.RemoveAt(0);
+        }
+
+        private static BodyState Capture(Rigidbody body)
+        {
+            return new BodyState{Position=body.position,Rotation=body.rotation,Velocity=body.velocity,
+                AngularVelocity=body.angularVelocity,Mass=body.mass,Drag=body.drag,AngularDrag=body.angularDrag,
+                SleepThreshold=body.sleepThreshold,MaxAngularVelocity=body.maxAngularVelocity,
+                Kinematic=body.isKinematic,Gravity=body.useGravity,DetectCollisions=body.detectCollisions,
+                Sleeping=body.IsSleeping(),Constraints=body.constraints,Interpolation=body.interpolation,
+                CollisionDetection=body.collisionDetectionMode,SolverIterations=body.solverIterations,
+                SolverVelocityIterations=body.solverVelocityIterations};
+        }
+
+        private static CapsuleState Capture(CapsuleCollider value)
+        {
+            return new CapsuleState{InstanceId=value.GetInstanceID(),MaterialId=value.sharedMaterial==null?0:value.sharedMaterial.GetInstanceID(),
+                Direction=value.direction,Attached=value.attachedRigidbody,Center=value.center,Radius=value.radius,Height=value.height,
+                ContactOffset=value.contactOffset,Enabled=value.enabled,Trigger=value.isTrigger};
+        }
+
+        private static void Verify(BodyState a,BodyState b)
+        {
+            if(a.Position!=b.Position||a.Rotation!=b.Rotation||a.Velocity!=b.Velocity||a.AngularVelocity!=b.AngularVelocity||
+                a.Mass!=b.Mass||a.Drag!=b.Drag||a.AngularDrag!=b.AngularDrag||a.SleepThreshold!=b.SleepThreshold||
+                a.MaxAngularVelocity!=b.MaxAngularVelocity||a.Kinematic!=b.Kinematic||a.Gravity!=b.Gravity||
+                a.DetectCollisions!=b.DetectCollisions||a.Sleeping!=b.Sleeping||a.Constraints!=b.Constraints||
+                a.Interpolation!=b.Interpolation||a.CollisionDetection!=b.CollisionDetection||
+                a.SolverIterations!=b.SolverIterations||a.SolverVelocityIterations!=b.SolverVelocityIterations)
+                throw new InvalidOperationException("Actor rebuild changed an exposed Rigidbody field.");
+        }
+
+        private static void Verify(CapsuleState a,CapsuleState b)
+        {
+            if(a.InstanceId!=b.InstanceId||a.MaterialId!=b.MaterialId||a.Direction!=b.Direction||a.Attached!=b.Attached||a.Center!=b.Center||
+                a.Radius!=b.Radius||a.Height!=b.Height||a.ContactOffset!=b.ContactOffset||a.Enabled!=b.Enabled||a.Trigger!=b.Trigger)
+                throw new InvalidOperationException("Actor rebuild changed an exposed CapsuleCollider field.");
+        }
+
+        private object Status(string operation,object result)
+        {
+            if(ReferenceEquals(active,this))try{ObserveCoreRoundIdentity();}catch(Exception error){failure=error.Message;}
+            if(contextObserverInstalled)try{RefreshObservedContactManagerContext();}catch(Exception error){failure=error.Message;}
+            CheckpointSidecar latest=LatestCheckpointSidecar();
+            int firstFrame=checkpointSidecars.Count==0?-1:checkpointSidecars.Keys.Min();
+            int lastFrame=latest==null?-1:latest.Frame;
+            var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
+                {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
+                {"nativeSha256",nativeSha256},{"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
+                {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
+                {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
+                {"observeContactManagerContext",observeContactManagerContext},{"contextObserverInstalled",contextObserverInstalled},
+                {"contextObservations",contextObservations},{"lastContextObserverReceipt",lastContextObserverReceipt},
+                {"sceneMetadataGeneration",sceneMetadataGeneration},{"sceneOwnedResets",sceneOwnedResets},
+                {"contextSnapshotInvalidations",contextSnapshotInvalidations},{"lastSceneOwnedReset",lastSceneOwnedReset},
+                {"contactPoolSnapshotCaptured",latest!=null},
+                {"contactPoolSnapshotFrame",lastFrame},{"contactPoolSnapshotContext",latest==null?null:"0x"+latest.Context.ToString("X8")},
+                {"contactPoolSnapshotCount",checkpointSidecars.Count},{"contactPoolSnapshotFirstFrame",firstFrame},
+                {"contactPoolSnapshotLastFrame",lastFrame},
+                {"pendingContactPoolAction",pendingContactPoolAction==0?"none":pendingContactPoolAction==1?"capture":"restore"},
+                {"automaticContactPoolRestore",automaticContactPoolRestore},{"automaticRestorePending",automaticRestorePending},
+                {"automaticTransformDispatchRestore",automaticTransformDispatchRestore},
+                {"transformDispatchSnapshotCaptured",latest!=null&&latest.TransformDispatch!=null},
+                {"transformDispatchSnapshotFrame",latest==null||latest.TransformDispatch==null?-1:lastFrame},
+                {"transformDispatchCaptures",transformDispatchCaptures},{"transformDispatchRestores",transformDispatchRestores},
+                {"transformDispatchReceipts",transformDispatchReceipts.ToArray()},
+                {"warpInProgress",warpInProgress},{"warpTargetFrame",warpTargetFrame},{"warpTargetRestoreEligible",warpTargetRestoreEligible},
+                {"contactPoolCaptures",contactPoolCaptures},{"contactPoolRestores",contactPoolRestores},
+                {"contactPoolReceipts",contactPoolReceipts.ToArray()},
+                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager free-list order and TransformChangeDispatch state for each exact core checkpoint object. A successful rewind prunes only future sidecars; the next replay unpause restores the selected target's identical free membership and ordered Transform queue. Forward game data, score and input are not rewritten."}};
+            if(result!=null)value.Add("result",result);return value;
+        }
+
+        private void Deactivate()
+        {
+            if(contextObserverInstalled)
+            {
+                RunContextObserver(uninstallContextObserver,"uninstall");contextObserverInstalled=false;
+            }
+            if(harmony!=null)harmony.UnpatchSelf();harmony=null;automatic=false;automaticGroundCollider=false;
+            observeContactManagerContext=false;automaticContactPoolRestore=false;automaticTransformDispatchRestore=false;automaticRestorePending=false;
+            warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
+            pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
+            coreRoundIdentity=null;sceneMetadataGeneration=-1;
+            apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
+            installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
+            if(library!=IntPtr.Zero){FreeLibrary(library);library=IntPtr.Zero;}
+            if(ReferenceEquals(active,this))active=null;
+        }
+
+        private T Export<T>(string name) where T:class
+        {
+            IntPtr pointer=GetProcAddress(library,name);if(pointer==IntPtr.Zero)throw new MissingMethodException("Native export missing: "+name);
+            return (T)(object)Marshal.GetDelegateForFunctionPointer(pointer,typeof(T));
+        }
+
+        public void Dispose(){if(disposed)return;Deactivate();disposed=true;}
+        private static bool IsLocalChef(Rigidbody body){return body!=null&&body.GetComponent<ServerChefSynchroniser>()!=null&&body.GetComponent<ClientOnTheServerChefSynchroniser>()!=null;}
+        private static void RequireNoArgs(Dictionary<string,object> args){if(args.Count!=0)throw new ArgumentException("Operation takes no arguments.");}
+        private static string String(Dictionary<string,object> args,string key){if(!args.ContainsKey(key)||args[key]==null)throw new ArgumentException("Missing "+key);return Convert.ToString(args[key]);}
+        private static uint Pointer(Dictionary<string,object> args,string key)
+        {
+            string value=String(args,key).Trim();
+            if(value.StartsWith("0x",StringComparison.OrdinalIgnoreCase))value=value.Substring(2);
+            uint result;if(!UInt32.TryParse(value,System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,out result)||result==0)
+                throw new ArgumentException("Invalid nonzero x86 pointer "+key+".");
+            return result;
+        }
+        private static string Hash(string path){using(var sha=SHA256.Create())using(var stream=File.OpenRead(path))return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","");}
+        private static uint ReadWord(uint address)
+        {
+            byte[] bytes=new byte[4];UIntPtr read=UIntPtr.Zero;
+            if(address==0||!ReadProcessMemory(GetCurrentProcess(),new IntPtr(unchecked((int)address)),
+                    bytes,new UIntPtr(4u),out read)||read.ToUInt32()!=4u)
+                throw new InvalidOperationException("Native read failed at 0x"+address.ToString("X8")+", Win32/error="+Marshal.GetLastWin32Error()+".");
+            return BitConverter.ToUInt32(bytes,0);
+        }
+        private static void WriteWord(uint address,uint value)
+        {
+            byte[] bytes=BitConverter.GetBytes(value);UIntPtr written=UIntPtr.Zero;
+            if(address==0||!WriteProcessMemory(GetCurrentProcess(),new IntPtr(unchecked((int)address)),
+                    bytes,new UIntPtr(4u),out written)||written.ToUInt32()!=4u)
+                throw new InvalidOperationException("Native write failed at 0x"+address.ToString("X8")+", Win32/error="+Marshal.GetLastWin32Error()+".");
+        }
+        private static object MemorySnapshot(UIntPtr address,int length)
+        {
+            var bytes=new byte[length];UIntPtr read=UIntPtr.Zero;
+            bool ok=address!=UIntPtr.Zero&&ReadProcessMemory(GetCurrentProcess(),
+                new IntPtr(unchecked((int)address.ToUInt32())),bytes,new UIntPtr((uint)length),out read)&&
+                read.ToUInt32()==(uint)length;
+            if(!ok)return new Dictionary<string,object>{{"ok",false},{"address",Hex(address)},
+                {"length",length},{"bytesRead",read.ToUInt32()},{"lastError",Marshal.GetLastWin32Error()}};
+            string sha;
+            using(var algorithm=SHA256.Create())sha=BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-","");
+            return new Dictionary<string,object>{{"ok",true},{"address",Hex(address)},
+                {"length",length},{"sha256",sha},{"hex",BitConverter.ToString(bytes).Replace("-","")}};
+        }
+        private object[] ShapeSnapshots(UIntPtr actor)
+        {
+            const int capacity=8;IntPtr buffer=Marshal.AllocHGlobal(IntPtr.Size*capacity);
+            try
+            {
+                uint count,error;
+                if(actorShapes(new UIntPtr(unityPlayerBase),actor,buffer,capacity,out count,out error)==0)
+                    return new object[]{new Dictionary<string,object>{{"ok",false},{"error",error},{"actor",Hex(actor)}}};
+                var result=new object[(int)count];
+                for(int i=0;i<count;i++)
+                {
+                    var shape=new UIntPtr(unchecked((uint)Marshal.ReadIntPtr(buffer,i*IntPtr.Size).ToInt32()));
+                    result[i]=MemorySnapshot(shape,256);
+                }
+                return result;
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+        }
+        private static string Hex(UIntPtr value){return "0x"+value.ToUInt32().ToString("X8");}
+        private static object[] Point(Vector3 value){return new object[]{value.x,value.y,value.z};}
+        private static string PathOf(Transform value){string path=value.name;while(value.parent!=null){value=value.parent;path=value.name+"/"+path;}return path;}
+    }
+}

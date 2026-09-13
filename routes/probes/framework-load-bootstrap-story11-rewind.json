@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"load","seed":0}},
+  {"target":"bridge","request":{"command":"status"},"until":{"path":"bridge.loadComplete","equals":true},"timeoutSeconds":150},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":20}
+]

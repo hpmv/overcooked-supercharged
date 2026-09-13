@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"deactivate","args":{}}}
+]

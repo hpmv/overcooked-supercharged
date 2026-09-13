@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../controller/Data/**/*.cs" LinkBase="Framework/Data" />
+    <Compile Include="../controller/Connector.cs" Link="Framework/Connector.cs" />
+    <Compile Include="../controller/Overcooked/**/*.cs" LinkBase="Framework/Overcooked" />
+    <Compile Include="../controller/Utils.cs" Link="Framework/Utils.cs" />
+    <PackageReference Include="Clipper2" Version="1.2.2" />
+    <PackageReference Include="Dijkstra.NET" Version="1.2.1" />
+    <PackageReference Include="Google.Protobuf" Version="3.25.8" />
+    <PackageReference Include="Grpc.Tools" Version="2.72.0" PrivateAssets="All" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="ApacheThrift" Version="0.18.1" />
+    <Protobuf Include="../controller/Data/save.proto" Link="save.proto" />
+    <EmbeddedResource Include="Reference/Carnival34NativeReference.json" />
+    <EmbeddedResource Include="Reference/Story11NativeReference.json" />
+    <EmbeddedResource Include="Reference/Story11NativeRegistryFixture.json" />
+    <EmbeddedResource Include="Reference/Story11FreshChefPhaseFixture.json" />
+    <EmbeddedResource Include="Reference/NativeDInitialRegistryFixture.json" />
+    <EmbeddedResource Include="Reference/NativeDStartFramesFixture.json" />
+    <EmbeddedResource Include="Reference/NativeGInitialWorldFixture.json" />
+  </ItemGroup>
+  <Target Name="GenerateThrift" BeforeTargets="BeforeCompile" Inputs="../common/game.thrift" Outputs="Generated/Hpmv/Interceptor.cs">
+    <MakeDir Directories="Generated" />
+    <Exec Command="&quot;$(MSBuildProjectDirectory)/../controller/thrift-0.18.1.exe&quot; -gen netstd -out &quot;$(MSBuildProjectDirectory)/Generated&quot; &quot;$(MSBuildProjectDirectory)/../common/game.thrift&quot;" />
+  </Target>
+  <Target Name="IncludeGeneratedThrift" BeforeTargets="CoreCompile" DependsOnTargets="GenerateThrift">
+    <ItemGroup><Compile Remove="Generated/**/*.cs" /><Compile Include="Generated/**/*.cs" /></ItemGroup>
+  </Target>
+</Project>

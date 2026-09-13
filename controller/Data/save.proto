@@ -63,6 +63,7 @@ message InteractAction {
     bool expect_spawn = 5;
     bool disallow_dash = 6;
     bool disallow_overshoot = 7;
+    bool require_observed_transfer = 8;
 }
 
 message PickupClosestAction {
@@ -267,6 +268,8 @@ message SpecificEntityData {
     bool is_cooking_station_turned_on = 20;
     bool is_cooking_station_cooking = 21;
     EntityPath plate_return_station_stack = 22;
+    bytes raw_native_cannon_aux = 23;
+    bytes raw_plate_lifecycle = 24;
 }
 
 message ChefState {
@@ -327,6 +330,7 @@ message ControllerState {
     Vector2 axes_acceleration = 8;
     bool axes_down = 9;
     double axes_cooldown = 10;
+    bool dash_button_down = 11;
 }
 
 message VersionedControllerState {

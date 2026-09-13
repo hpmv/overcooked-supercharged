@@ -1,4 +1,4 @@
-﻿using Hpmv;
+using Hpmv;
 using OrderController;
 using SuperchargedPatch.AlteredComponents;
 using SuperchargedPatch.Extensions;
@@ -13,16 +13,23 @@ namespace SuperchargedPatch
 {
     public class WarpHandler
     {
-        public static StreamWriter writer = new StreamWriter("E:\\old-code-projects\\oc\\supercharged\\warp.log", false);
+        public static StreamWriter writer = new StreamWriter(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("OC2SC_ROOT") ?? BepInEx.Paths.GameRootPath, "warp.log"), false);
 
         private readonly Dictionary<EntityPathReference, EntitySerialisationEntry> entityPathReferenceToEntry = new Dictionary<EntityPathReference, EntitySerialisationEntry>();
         private readonly MultiplayerController multiplayerController;
         private readonly WarpSpec warp;
+        private readonly NativeKitchenCheckpoint.RestorePlan kitchenCheckpoint;
+        private readonly NativeDynamicWarpPlan dynamicPlan;
 
-        private WarpHandler(WarpSpec warp)
+        private WarpHandler(WarpSpec warp, NativeKitchenCheckpoint.RestorePlan checkpoint)
         {
             multiplayerController = GameObject.FindObjectOfType<MultiplayerController>();
             this.warp = warp;
+            kitchenCheckpoint = checkpoint;
+            dynamicPlan = NativeDynamicWarpPlan.Prepare(warp, entityPathReferenceToEntry,
+                FlushAllPendingBatchedMessages,checkpoint.ResolveMissingFixedEntityOwnerPath,
+                checkpoint.ResolveLatentInitialAttachmentFactory,checkpoint.IgnoreAbsentFixedEntity);
         }
 
         private EntitySerialisationEntry GetEntityByIdOrRef(EntityIdOrRef idOrRef)
@@ -39,6 +46,8 @@ namespace SuperchargedPatch
         {
             writer.WriteLine(s);
             writer.Flush();
+            if (s.StartsWith("[WARP] Error", StringComparison.Ordinal) || s.StartsWith("[WARP] Failed", StringComparison.Ordinal))
+                throw new InvalidOperationException(s);
         }
 
         public static void Destroy()
@@ -53,47 +62,80 @@ namespace SuperchargedPatch
             {
                 return;
             }
-            if (!Helpers.IsPaused())
+            int requestedFrame = input.Warp.Frame;
+            bool mutationStarted = false;
+            NativeKitchenCheckpoint.BeginRestoreAttempt();
+            NativeBodyPoseCheckpoint.BeginStageObservations(requestedFrame);
+            NativeKitchenCheckpoint.RestorePlan checkpoint=null;
+            try
             {
-                Log("[WARP] Warning: Not warping because the game is not paused!");
-                return;
+                Log($"[WARP] Begin warping to frame {requestedFrame}");
+                // All observed-frame/incarnation/component checks precede time,
+                // object, attachment or score mutations.
+                checkpoint = NativeKitchenCheckpoint.Prepare(input.Warp);
+                var warpHandler = new WarpHandler(input.Warp, checkpoint);
+                checkpoint.ObserveBodyStage("before-resume");
+                mutationStarted = true;
+                Helpers.Resume();
+                checkpoint.ObserveBodyStage("after-resume");
+                checkpoint.RestoreClocks();
+                warpHandler.Warp();
+                checkpoint.Complete();
+                ActiveStateCollector.ClearCacheAfterWarp(requestedFrame);
+                Log($"[WARP] Finished warping to frame {requestedFrame}");
             }
-
-            Log($"[WARP] Begin warping to frame {input.Warp.Frame}");
-
-            // Resume the time manager before warping, because at the end we need to pause again to save the velocities.
-            Helpers.Resume();
-
-            var warpHandler = new WarpHandler(input.Warp);
-            warpHandler.Warp();
-
-            // Pause the TimeManager again, to capture the velocities.
-            Helpers.Pause();
-            ActiveStateCollector.ClearCacheAfterWarp(input.Warp.Frame);
-            Log($"[WARP] Finished warping to frame {input.Warp.Frame}");
+            catch (Exception error)
+            {
+                NativeKitchenCheckpoint.RecordRestoreFailure(requestedFrame, error, mutationStarted);
+                StateInvalidityManager.InvalidReason = "AUTHORING_WARP_FAILED: " + error.Message;
+                Console.WriteLine("[WARP] Rejected frame " + requestedFrame + ": " + error);
+                writer.WriteLine("[WARP] Rejected frame " + requestedFrame + ": " + error);
+                writer.Flush();
+            }
+            finally
+            {
+                // Consume this directive once so LateUpdate can commit the explicit
+                // failure response instead of retrying forever or acknowledging a
+                // frame tag without native restoration.
+                input.Warp = null;
+                input.__isset.warp = false;
+                input.RequestResume = false;
+                input.RequestPause = false;
+                if(checkpoint!=null)checkpoint.ObserveBodyStage("before-final-pause");
+                Helpers.Pause();
+                if(checkpoint!=null)checkpoint.ObserveBodyStage("after-final-pause");
+            }
         }
 
         private void Warp()
         {
             SpawnNewEntities();
+            kitchenCheckpoint.ObserveBodyStage("after-native-spawn");
 
             // Remove stuff first, before adding stuff later. Attachments for example need to be free before
             // it's attached to something else.
             ForEachEntity(WarpRemovals);
+            kitchenCheckpoint.ObserveBodyStage("after-native-removals-before-flush");
 
             // Flush messages here, so that interaction messages are propagated.
             FlushAllPendingBatchedMessages();
+            kitchenCheckpoint.ObserveBodyStage("after-native-removals-flush");
 
             // Handle attachment changes.
             ForEachEntity(WarpAttachments);
+            kitchenCheckpoint.ObserveBodyStage("after-native-attachments-before-flush");
 
             // Flush messages here, so that attachment messages are propagated.
             FlushAllPendingBatchedMessages();
+            kitchenCheckpoint.ObserveBodyStage("after-native-attachments-flush");
 
             // Handle specific component warping.
             ForEachEntity(WarpSpecificComponents);
+            kitchenCheckpoint.ObserveBodyStage("after-native-component-restore");
 
             // Handle position setting and chef warping.
+            // Native ground/interaction queries below read Transform directly.
+            kitchenCheckpoint.RestoreFixedBodyPoses();
             ForEachEntity(WarpChefAndPositions);
 
             // Flush messages again to propagate chef interactions.
@@ -102,21 +144,10 @@ namespace SuperchargedPatch
             // Finally deal with anything that depends on chef interaction propagation.
             ForEachEntity(WarpAfterChefInteractionPropagation);
 
-            // Delete things at the end. This is because we might have needed to properly cleanup things,
-            // like removing something from a workstation when it's deleted.
-            foreach (var entityId in warp.EntitiesToDelete)
-            {
-                var entity = EntitySerialisationRegistry.GetEntry((uint)entityId);
-                if (entity == null)
-                {
-                    Log($"[WARP] Error destroying entity ID {entityId}, entity does not exist!");
-                    continue;
-                }
-                NetworkUtils.DestroyObject(entity.m_GameObject);
-                Log($"[WARP] Destroyed entity {entityId}");
-            }
-
-            // Flush one last time.
+            // Existing target attachments have now released deleted objects.
+            // The plan verifies native unregister receipts for objects and their
+            // physical containers, without rewriting the native ID allocator.
+            dynamicPlan.DeleteAndVerify();
             FlushAllPendingBatchedMessages();
 
             StateInvalidityManager.InvalidReason = warp.InvalidStateReason;
@@ -128,96 +159,9 @@ namespace SuperchargedPatch
         }
         private void SpawnNewEntities()
         {
-            for (int i = 0; i < warp.Entities.Count; i++)
-            {
-                var entityThrift = warp.Entities[i];
-                EntitySerialisationEntry entity;
-                if (entityThrift.__isset.entityId)
-                {
-                    entity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.EntityId);
-                    if (entity == null)
-                    {
-                        Log($"[WARP] Error warping existing entity {entityThrift.EntityId}: no such entity with this ID!");
-                        continue;
-                    }
-                }
-                else if (entityThrift.SpawningPath.Count > 0)
-                {
-                    var spawningPathStr = string.Join(", ", entityThrift.SpawningPath.Select(p => "" + p).ToArray());
-                    if (entityThrift.SpawningPath.Count == 1)
-                    {
-                        Log($"[WARP] Error spawning new entity for warping: Spawning path {spawningPathStr} is empty!");
-                        continue;
-                    }
-                    var spawnerEntity = EntitySerialisationRegistry.GetEntry((uint)entityThrift.SpawningPath[0]);
-                    if (spawnerEntity == null)
-                    {
-                        Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: Spawner entity ID does not exist!");
-                        continue;
-                    }
-                    var success = true;
-                    for (var j = 1; j < entityThrift.SpawningPath.Count; j++)
-                    {
-                        var spawnableIndex = entityThrift.SpawningPath[j];
-                        var spawnableEntities = spawnerEntity.m_GameObject.GetComponent<SpawnableEntityCollection>();
-                        if (spawnableEntities == null)
-                        {
-                            Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: The {j}th spawner does not have a SpawnableEntityCollection!");
-                            success = false;
-                            break;
-                        }
-                        var prefab = spawnableEntities.GetSpawnableEntityByIndex(spawnableIndex);
-                        if (prefab == null)
-                        {
-                            Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: The {j}th spawn's index is out of bounds!");
-                            success = false;
-                            break;
-                        }
-                        var spawned = NetworkUtils.ServerSpawnPrefab(spawnerEntity.m_GameObject, prefab);
-                        if (spawned.GetComponent<ServerPhysicalAttachment>() is ServerPhysicalAttachment spa)
-                        {
-                            // This is needed to ensure that when we first spawn it, it is properly contained in its
-                            // Rigidbody container, i.e. a valid detached state. Otherwise, it is not in a valid
-                            // state - it could be detached but not in a Rigidbody container.
-                            spa.ManualEnable();
-                        }
-                        var spawnedEntry = EntitySerialisationRegistry.GetEntry(spawned);
-                        Log($"[WARP] Spawned entity {spawnedEntry.m_Header.m_uEntityID} along path {spawningPathStr}");
-                        if (spawnedEntry == null)
-                        {
-                            Log($"[WARP] Error spawning new entity {spawningPathStr} for warping: Failed to get the EntitySerialisationRegistry after the {j}th spawn!");
-                            success = false;
-                            break;
-                        }
-                        if (j > 1)
-                        {
-                            Log($"[WARP] Destroying intermediate entity {spawnerEntity.m_Header.m_uEntityID}");
-                            NetworkUtils.DestroyObject(spawnerEntity.m_GameObject);
-                        }
-                        spawnerEntity = spawnedEntry;
-                    }
-                    if (!success)
-                    {
-                        continue;
-                    }
-                    entity = spawnerEntity;
-                }
-                else
-                {
-                    Log($"[WARP] Error warping entity (warp spec index {i}): neither entityId nor spawningPath was specified!");
-                    continue;
-                }
-
-                if (entityThrift.__isset.entityPathReference)
-                {
-                    var entityPathReference = entityThrift.EntityPathReference.FromThrift();
-                    entityPathReferenceToEntry[entityPathReference] = entity;
-                    var marker = entity.m_GameObject.GetComponent<EntityPathReferenceMarker>() ??
-                        entity.m_GameObject.AddComponent<EntityPathReferenceMarker>();
-                    marker.EntityPath = entityPathReference;
-                    Log($"[WARP] Set entity path reference of {entity.m_Header.m_uEntityID} to {entityPathReference}");
-                }
-            }
+            dynamicPlan.Spawn();
+            kitchenCheckpoint.RebindRecreatedInitialAttachments(entityPathReferenceToEntry);
+            dynamicPlan.BindRecreatedInitialAttachments();
         }
 
         private void ForEachEntity(Action<EntitySerialisationEntry, EntityWarpSpec> action)
@@ -362,19 +306,16 @@ namespace SuperchargedPatch
 
         private void WarpSpecificComponents(EntitySerialisationEntry entity, EntityWarpSpec entityThrift)
         {
-            if (entity.m_GameObject.GetComponent<ServerCannonMod>() is ServerCannonMod cannon)
+            if (entity.m_GameObject.GetComponent<ServerCannon>() != null)
             {
                 if (entityThrift.Cannon == null)
                 {
                     Log($"[WARP] Failed to warp cannon {entity.m_Header.m_uEntityID}: no cannon specific warp data");
                     return;
                 }
-                CannonModMessage message = new CannonModMessage();
-                if (entityThrift.Cannon.ModData != null)
-                {
-                    message.Deserialise(new BitStream.BitStreamReader(entityThrift.Cannon.ModData));
-                }
-                cannon.Warp(message);
+                // Cannon.ModData is native event history, not a restorable FSM.
+                // Prepare already checked current+target native inactivity; exact
+                // process-local native fields are restored by checkpoint.Complete.
             }
 
             if (entity.m_GameObject.GetComponent<ServerWorkableItem>() is ServerWorkableItem wi)
@@ -428,13 +369,13 @@ namespace SuperchargedPatch
                     var colliderEntity = GetEntityByIdOrRef(collider.Entity);
                     if (colliderEntity == null)
                     {
-                        Log($"[WARP] Warning: failed to find collider entity {collider.Entity}");
+                        Log($"[WARP] Error: failed to find collider entity {collider.Entity}");
                         continue;  // inner loop.
                     }
                     var colliders = colliderEntity.m_GameObject.GetComponents<Collider>();
-                    if (collider.ColliderIndex >= colliders.Length)
+                    if (collider.ColliderIndex < 0 || collider.ColliderIndex >= colliders.Length)
                     {
-                        Log($"[WARP] Warning: collider entity {collider.Entity} does not have collider index {collider.ColliderIndex}");
+                        Log($"[WARP] Error: collider entity {collider.Entity} does not have collider index {collider.ColliderIndex}");
                         continue;  // inner loop
                     }
                     newColliders.Add(colliders[collider.ColliderIndex]);
@@ -646,132 +587,50 @@ namespace SuperchargedPatch
 
             if (entity.m_GameObject.GetComponent<ServerKitchenFlowControllerBase>() is ServerKitchenFlowControllerBase skfcb)
             {
+                kitchenCheckpoint.RestoreFlow(skfcb);
+                var thrift = kitchenCheckpoint.KitchenData;
+                var clientOrderController = skfcb.GetComponent<ClientKitchenFlowControllerBase>().GetMonitorForTeam(TeamID.One).OrdersController;
+                var gui = clientOrderController.GetGUI();
+                var activeWidgets = gui.GetActiveWidgets();
+                var dyingWidgets = gui.GetDyingWidgets();
+                var occupiedTable = gui.GetOccupiedTables();
+                foreach (var widget in activeWidgets)
                 {
-                    var thrift = entityThrift.PlateReturnController;
-                    if (thrift == null)
-                    {
-                        Log($"[WARP] Failed to warp KitchenFlowController: no KitchenFlowController specific data");
-                        return;
-                    }
-                    var ptr = skfcb.GetPlateReturnController().m_platesToReturn();
-                    ptr.Clear();
-                    if (thrift.Plates != null)
-                    {
-                        foreach (var plate in thrift.Plates)
-                        {
-                            var returnStation = EntitySerialisationRegistry.GetEntry((uint)plate.ReturnStationEntityId)?.m_GameObject?.GetComponent<ServerPlateReturnStation>();
-                            if (returnStation == null)
-                            {
-                                Log($"[WARP] Failed to warp KitchenFlowController: plate return station {plate.ReturnStationEntityId} does not exist");
-                                continue;
-                            }
-                            ptr.Add(PlateReturnController_PlatesPendingReturnExt.Create(
-                                returnStation, (float)plate.Timer, returnStation.GetPlatingStep()
-                                ));
-                        }
-                    }
+                    GameObject.Destroy(widget.m_widget.gameObject);
                 }
-
+                foreach (var widget in dyingWidgets)
                 {
-                    var client = skfcb.GetComponent<ClientKitchenFlowControllerBase>();
-                    if (client == null)
-                    {
-                        Log($"[WARP] Failed to warp KitchenFlowController: no ClientKitchenFlowControllerBase");
-                        return;
-                    }
-                    var thrift = entityThrift.KitchenController;
-                    if (thrift == null)
-                    {
-                        Log($"[WARP] Failed to warp KitchenFlowController: no KitchenFlowController specific data");
-                        return;
-                    }
-                    if (skfcb.RoundTimer is ServerRoundTimer srt)
-                    {
-                        srt.SetRoundTimer((float)thrift.RoundTime);
-                    }
-                    else
-                    {
-                        Log($"[WARP] Failed to set game time: round timer is not a ServerRoundTimer; actual {skfcb.RoundTimer.GetType().Name}");
-                    }
-                    if (client.RoundTimer is ClientRoundTimer crt)
-                    {
-                        crt.SetRoundTimer((float)thrift.RoundTime);
-                    }
-                    else
-                    {
-                        Log($"[WARP] Failed to set game time: round timer is not a ClientRoundTimer; actual {client.RoundTimer.GetType().Name}");
-                    }
-
-                    var score = new TeamMonitor.TeamScoreStats().FromBytes(thrift.TeamScore);
-                    var serverTeamMonitor = skfcb.GetMonitorForTeam(TeamID.One);
-                    serverTeamMonitor.SetScore(score);
-                    var clientTeamMonitor = client.GetMonitorForTeam(TeamID.One);
-                    clientTeamMonitor.SetScore(score);
-                    client.GetDataStore().Write(new DataStore.Id("score.team"), new TeamScore
-                    {
-                        m_team = TeamID.One,
-                        m_score = score,
-                    });
-
-                    var serverOrderController = serverTeamMonitor.OrdersController;
-                    serverOrderController.SetNextOrderID((uint)(thrift.NextOrderId + 1));
-                    serverOrderController.SetTimerUntilOrder(serverOrderController.GetNextTimeBetweenOrders() - (float)thrift.TimeSinceLastOrder);
-                    serverOrderController.SetComboIndex(thrift.LastComboIndex);
-                    serverOrderController.SetActiveOrders(thrift.ActiveOrders.Select(o => new OrderController.ServerOrderData().FromBytes(o)).ToList());
-                    var roundData = serverOrderController.GetRoundData();
-                    var roundInstanceData = serverOrderController.GetRoundInstanceData();
-                    if (roundData is WarpableRoundData wrd && roundInstanceData is WarpableRoundInstanceData wrid)
-                    {
-                        wrd.Warp(wrid, thrift.NextOrderId);
-                    }
-                    else
-                    {
-                        Log($"[WARP] Failed to warp KitchenFlowController: round data is not warpable; actual {roundData.GetType().Name} and {roundInstanceData.GetType().Name}");
-                    }
-
-                    var clientOrderController = clientTeamMonitor.OrdersController;
-                    var gui = clientOrderController.GetGUI();
-                    var activeWidgets = gui.GetActiveWidgets();
-                    var dyingWidgets = gui.GetDyingWidgets();
-                    var occupiedTable = gui.GetOccupiedTables();
-                    foreach (var widget in activeWidgets)
-                    {
-                        GameObject.Destroy(widget.m_widget.gameObject);
-                    }
-                    foreach (var widget in dyingWidgets)
-                    {
-                        GameObject.Destroy(widget.m_widget.gameObject);
-                    }
-                    for (int i = 0; i < occupiedTable.Length; i++)
-                    {
-                        occupiedTable[i] = false;
-                    }
-                    activeWidgets.Clear();
-                    dyingWidgets.Clear();
-
-                    var clientActiveOrders = new List<ClientOrderControllerBase_ActiveOrderExt>();
-                    var j = 0;
-                    foreach (var order in thrift.ActiveOrders)
-                    {
-                        var serverOrderData = new ServerOrderData().FromBytes(order);
-                        var widget = GameUtils.InstantiateUIController(gui.GetRecipeWidgetPrefab().gameObject, gui.transform as RectTransform);
-                        var recipeWidgetUIController = widget.GetComponent<RecipeWidgetUIController>();
-                        recipeWidgetUIController.SetRecipeTree(serverOrderData.RecipeListEntry.m_order.m_orderGuiDescription);
-                        recipeWidgetUIController.SetTableNumber(j);
-                        occupiedTable[j] = true;
-                        recipeWidgetUIController.RefreshSubElements();
-                        recipeWidgetUIController.GetTopWidgetTile().SetProgress(serverOrderData.Remaining / serverOrderData.Lifetime);
-                        recipeWidgetUIController.GetAnimator().Play("Nothing", 1, 0);  // TODO: check
-                        var recipeWidgetData = new RecipeFlowGUI.RecipeWidgetData(recipeWidgetUIController, 0f, gui.GetNextIndex(), serverOrderData.Lifetime, (_) => { });
-                        gui.SetNextIndex(gui.GetNextIndex() + 1);
-                        activeWidgets.Add(recipeWidgetData);
-                        clientActiveOrders.Add(new ClientOrderControllerBase_ActiveOrderExt(serverOrderData.ID, serverOrderData.RecipeListEntry, new RecipeFlowGUI.ElementToken(recipeWidgetData)));
-                        j++;
-                    }
-                    clientOrderController.SetActiveOrders(clientActiveOrders);
-                    gui.LayoutWidgets();
-
+                    GameObject.Destroy(widget.m_widget.gameObject);
                 }
+                for (int i = 0; i < occupiedTable.Length; i++)
+                {
+                    occupiedTable[i] = false;
+                }
+                activeWidgets.Clear();
+                dyingWidgets.Clear();
+
+                var clientActiveOrders = new List<ClientOrderControllerBase_ActiveOrderExt>();
+                var j = 0;
+                foreach (var order in thrift.ActiveOrders)
+                {
+                    var serverOrderData = new ServerOrderData().FromBytes(order);
+                    var widget = GameUtils.InstantiateUIController(gui.GetRecipeWidgetPrefab().gameObject, gui.transform as RectTransform);
+                    var recipeWidgetUIController = widget.GetComponent<RecipeWidgetUIController>();
+                    recipeWidgetUIController.SetRecipeTree(serverOrderData.RecipeListEntry.m_order.m_orderGuiDescription);
+                    recipeWidgetUIController.SetTableNumber(j);
+                    occupiedTable[j] = true;
+                    recipeWidgetUIController.RefreshSubElements();
+                    recipeWidgetUIController.GetTopWidgetTile().SetProgress(serverOrderData.Remaining / serverOrderData.Lifetime);
+                    recipeWidgetUIController.GetAnimator().Play("Nothing", 1, 0);  // TODO: check
+                    var recipeWidgetData = new RecipeFlowGUI.RecipeWidgetData(recipeWidgetUIController, 0f, gui.GetNextIndex(), serverOrderData.Lifetime, (_) => { });
+                    gui.SetNextIndex(gui.GetNextIndex() + 1);
+                    activeWidgets.Add(recipeWidgetData);
+                    clientActiveOrders.Add(new ClientOrderControllerBase_ActiveOrderExt(serverOrderData.ID, serverOrderData.RecipeListEntry, new RecipeFlowGUI.ElementToken(recipeWidgetData)));
+                    j++;
+                }
+                clientOrderController.SetActiveOrders(clientActiveOrders);
+                gui.LayoutWidgets();
+                kitchenCheckpoint.RestoreClientPresentation();
             }
 
             if (entity.m_GameObject.GetComponent<ServerPlateReturnStation>() is ServerPlateReturnStation prs)
@@ -818,11 +677,11 @@ namespace SuperchargedPatch
             {
                 if (entityThrift.__isset.position)
                 {
-                    container.transform.position = entityThrift.Position.FromThrift();
+                    container.position = entityThrift.Position.FromThrift();
                 }
                 if (entityThrift.__isset.rotation)
                 {
-                    container.transform.rotation = entityThrift.Rotation.FromThrift();
+                    container.rotation = entityThrift.Rotation.FromThrift();
                 }
                 if (entityThrift.__isset.velocity)
                 {
@@ -870,20 +729,17 @@ namespace SuperchargedPatch
                 cpci.set_m_impactVelocity(chef.ImpactVelocity.FromThrift());
                 cpci.set_m_LeftOverTime((float)chef.LeftOverTime);
 
-                // Don't suppressUse. This flag is for players who hold the use button and then enter some
-                // session interaction (such as cannon or terminal); we don't want the use button to still
-                // be considered pressed when exiting from them. We don't take advantage of this for TAS,
-                // so just set it to false.
-                cpci.GetComponent<PlayerControls>().ControlScheme.SetUseSuppressed(false);
+                // Native use suppression and the ClientTime-based pickup cooldown
+                // are restored exactly by the process-local chef checkpoint.
 
                 var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
                 if (entityThrift.__isset.position)
                 {
-                    rigidbody.transform.position = entityThrift.Position.FromThrift();
+                    rigidbody.position = entityThrift.Position.FromThrift();
                 }
                 if (entityThrift.__isset.rotation)
                 {
-                    rigidbody.transform.rotation = entityThrift.Rotation.FromThrift();
+                    rigidbody.rotation = entityThrift.Rotation.FromThrift();
                 }
                 if (entityThrift.__isset.velocity)
                 {
@@ -895,6 +751,15 @@ namespace SuperchargedPatch
                 }
 
                 entity.m_GameObject.GetComponent<GroundCast>().ForceUpdateNow();
+            }
+            else if(entity.m_GameObject.GetComponent<Rigidbody>() is Rigidbody nativeBody)
+            {
+                // Body-only scene proxies (including unused attachment
+                // containers) have native state even while their item is held.
+                if(entityThrift.__isset.position)nativeBody.position=entityThrift.Position.FromThrift();
+                if(entityThrift.__isset.rotation)nativeBody.rotation=entityThrift.Rotation.FromThrift();
+                if(entityThrift.__isset.velocity)nativeBody.velocity=entityThrift.Velocity.FromThrift();
+                if(entityThrift.__isset.angularVelocity)nativeBody.angularVelocity=entityThrift.AngularVelocity.FromThrift();
             }
         }
 

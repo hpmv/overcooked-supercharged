@@ -10,50 +10,23 @@ using Team17.Online.Multiplayer.Messaging;
 
 namespace SuperchargedPatch
 {
-    [HarmonyPatch(typeof(SerialisationRegistry<EntityType>), "RegisterMessageType")]
-    public static class PatchSerialisationRegistry
-    {
-        public static void Prefix(EntityType type, ref Serialisable message)
-        {
-            switch (type)
-            {
-                case EntityType.Cannon:
-                    message = new CannonModMessage();
-                    break;
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(EntitySerialisationRegistry), "AddSynchronisedType", new[] {typeof(Type), typeof(SynchroniserConfig)} )]
-    public static class PatchEntitySerialisationRegistry
-    {
-        public static void Prefix(Type gameType, ref SynchroniserConfig config)
-        {
-            if (gameType == typeof(Cannon))
-            {
-                config = new SynchroniserConfig(InstancesPerGameObject.Single, typeof(ServerCannonMod), typeof(ClientCannonMod));
-            } else if (gameType == typeof(CannonCosmeticDecisions))
-            {
-                config = new SynchroniserConfig(InstancesPerGameObject.Single, typeof(ServerCannonCosmeticDecisionsMod), typeof(ClientCannonCosmeticDecisionsMod));
-            } else if (gameType == typeof(CannonSessionInteractable))
-            {
-                config = new SynchroniserConfig(InstancesPerGameObject.Single, typeof(ServerCannonSessionInteractableMod), typeof(ClientCannonSessionInteractableMod));
-            } else if (gameType == typeof(CannonPlayerHandler))
-            {
-                config = new SynchroniserConfig(InstancesPerGameObject.Single, typeof(ServerCannonPlayerHandlerMod), typeof(ClientCannonPlayerHandlerMod));
-            }
-        }
-    }
+    // Native cannon synchronizer registrations and the native CannonMessage codec
+    // execute unchanged. Authoring observations use a separate auxiliary channel.
 
     public static class AuxMessageSender
     {
         public static void SendAuxMessage(this ServerSynchroniserBase self, AuxMessageBase message)
         {
+            SendAuxMessage(self.GetEntityId(), message);
+        }
+
+        public static void SendAuxMessage(uint entityId, AuxMessageBase message)
+        {
             var entityEventMessage = new EntityAuxMessage()
             {
                 m_entityHeader = new EntityMessageHeader
                 {
-                    m_uEntityID = self.GetEntityId()
+                    m_uEntityID = entityId
                 },
                 m_auxEntityType = message.GetAuxEntityType(),
                 m_payload = message,
@@ -88,11 +61,15 @@ namespace SuperchargedPatch
     {
         public static void SendMessageToRetireEntity(this ServerSynchroniserBase self)
         {
+            SendMessageToRetireEntity(self.GetEntityId());
+        }
+        public static void SendMessageToRetireEntity(uint entityId)
+        {
             var entityRetirementMessage = new EntityRetirementMessage()
             {
                 m_entityHeader = new EntityMessageHeader
                 {
-                    m_uEntityID = self.GetEntityId()
+                    m_uEntityID = entityId
                 },
             };
             var serialized = new FastList<byte>();

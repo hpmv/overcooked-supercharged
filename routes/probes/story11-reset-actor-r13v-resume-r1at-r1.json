@@ -1,0 +1,76 @@
+[
+  {
+    "target": "bridge",
+    "request": { "command": "pause" }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "rigidbody-actor-rebuild",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\RigidbodyActorRebuild-r13v-reset-instance\\RigidbodyActorRebuild.r13v-reset-instance.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule",
+      "sha256": "BD967C7AB23CE3617CDE76855B79FF957D116F264D3732871F4DD5733A9C7E73",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "rigidbody-actor-rebuild",
+      "operation": "activate",
+      "args": {
+        "nativePath": "M:\\projects\\game-test-2\\artifacts\\native-rigidbody-rebuild-r6b-context-auto-build\\Oc2NativeRigidbodyRebuild.r6b.dll",
+        "sha256": "E8522017323090709415FCEFCBCEA9F1668275DF5E02715E9EF3DBBDF1CFD933",
+        "automaticChefs": false,
+        "automaticGroundCollider": false,
+        "observeContactManagerContext": true,
+        "automaticContactPoolRestore": true,
+        "automaticTransformDispatchRestore": true
+      }
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "resume-phase",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1at-reset-after-contact-pool-failure\\ResumePhase.r1at-reset-after-contact-pool-failure.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.ResumePhaseModule",
+      "sha256": "8C6B18F509AEC1FBDF4321B02AF0F2A94E69BBEC680452EF4D765AC6522EC0A1",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "resume-phase",
+      "operation": "activate",
+      "args": {}
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "rigidbody-actor-rebuild",
+      "operation": "status",
+      "args": {}
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "resume-phase",
+      "operation": "status",
+      "args": {}
+    }
+  },
+  {
+    "target": "controller",
+    "request": { "command": "status" }
+  }
+]

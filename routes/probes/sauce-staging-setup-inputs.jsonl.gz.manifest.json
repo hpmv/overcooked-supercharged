@@ -1,0 +1,40 @@
+{
+  "format": "oc2-input-movie-manifest",
+  "version": 1,
+  "source": "M:\\projects\\game-test-2\\artifacts\\sauce-staging-a-setup.jsonl.gz",
+  "sourceFileSha256": "a4226da32f48e74eed524f9285f32873e24bc600e67e016fd440cd92d8d66380",
+  "sourceSizeBytes": 4936019,
+  "sourceHeaders": [
+    {
+      "kind": "header",
+      "format": "overcooked-tas-trace",
+      "version": 1,
+      "createdUtc": "2026-09-07T15:40:21.3551135Z",
+      "mode": "plan",
+      "controllerVersion": "1.0.0.0"
+    }
+  ],
+  "originalCanonicalRequestsSha256": "657e20daa8f016b153a115a8ef03a0770e9bacacfd39387f614bfae8df715609",
+  "output": "M:\\projects\\game-test-2\\routes\\probes\\sauce-staging-setup-inputs.jsonl.gz",
+  "outputFileSha256": "ddfb43ff1d2379f5edab03355e73e0d9023f22fb529dae2b559a38f73ecc81ca",
+  "outputCanonicalRequestsSha256": "657e20daa8f016b153a115a8ef03a0770e9bacacfd39387f614bfae8df715609",
+  "originalRequests": 87,
+  "outputRequests": 87,
+  "totalSteppedFrames": 86,
+  "commands": {
+    "inspect": 1,
+    "step": 86
+  },
+  "skippedMetadata": {
+    "header": 1,
+    "event": 28
+  },
+  "starts": [],
+  "requestBoundariesPreserved": true,
+  "allInputsAndOtherRequestFieldsPreserved": true,
+  "expansionRequested": false,
+  "expandedBoundaries": [],
+  "expansionAudit": null,
+  "hashEncoding": "Source/outputFile are exact file bytes; canonical requests are sorted-key compact UTF-8 JSON with LF, before compression",
+  "replayNote": "Input-only movie: execute record --script MOVIE --out TRACE, or replay --file MOVIE --no-compare. It contains no expected responses."
+}

@@ -1,0 +1,1076 @@
+{
+  "source": "artifacts\\framework-migration\\native-d\\exchange.jsonl",
+  "sourceSha256": "3cbe58ac4947bbdb2012953af3a0f460523e6485e986eb798ed8db8acf19f7e1",
+  "frames": [
+    {
+      "lineOneBased": 2130,
+      "lineSha256": "323dab7f304577545584e0c69b32cb1603fb451c3820517999ac0ef1ffb0c718",
+      "output": {
+        "Chefs": {
+          "103": {
+            "HighlightedForPickup": 41,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 41,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "104": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "105": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "106": {
+            "HighlightedForPickup": 40,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 40,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          }
+        },
+        "Items": {},
+        "ServerMessages": [
+          {
+            "Type": 8,
+            "Message": "gGcAA6jCkAAGgACnjGkAAGkAEwjKkBDQAOAA2gDsAAagAbeM6QENAA4ADaAOwAA=",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 11,
+            "Message": "SAA=",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AKxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AOxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "APRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "ASxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AWxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AaxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AbRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AexAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AixAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AmxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          }
+        ],
+        "EntityRegistry": [],
+        "LastFramePaused": false,
+        "NextFramePaused": false,
+        "FrameNumber": 0,
+        "InvalidStateReason": "",
+        "PhysicsFramesElapsed": 1,
+        "FramesSinceLastNoPhysicsFrame": 4,
+        "__isset": {
+          "chefs": true,
+          "items": true,
+          "serverMessages": true,
+          "entityRegistry": true,
+          "lastFramePaused": true,
+          "nextFramePaused": true,
+          "frameNumber": true,
+          "invalidStateReason": true,
+          "physicsFramesElapsed": true,
+          "framesSinceLastNoPhysicsFrame": true
+        }
+      }
+    },
+    {
+      "lineOneBased": 2131,
+      "lineSha256": "d1e4321898936d294dd0b7ffcb225d29d66e804d43cc0bed05849ea39f8997be",
+      "output": {
+        "Chefs": {
+          "103": {
+            "HighlightedForPickup": 41,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 41,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "104": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "105": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "106": {
+            "HighlightedForPickup": 40,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 40,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          }
+        },
+        "Items": {},
+        "ServerMessages": [
+          {
+            "Type": 8,
+            "Message": "gGcAA6lCkAAGgACnlGkAAGkAEwlKkBDQAOAA2gDsAAagAbeU6QENAA4ADaAOwAA=",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "GsEAQACayQPEMIAABDCAAAA=",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 43,
+            "Message": "GsCAAAACiGIACAYEYAAJzIMAAAAACIACK+kIAAIWMRBAAQDAjAABOZBgAAAAARAARX0hAAJrEhAABCxiGIACAYEYAAJzIMAAAAACIACK+kIABNYkYAAIYQMAAAAACgwAAAAAYgAAkCAgAAgdggAAsihEEABAMCMAAE5kGAAAAABEABFfSMAAE9GGAAAAABEABwlqEAAELGIYgAIBgRgAAnMgwAAAAAIgAIr6RgAAnowwAAAAAIgAOEtREEABAMCMAAE5kGAAAAABEABFfSMAAE9GGAAAAABEABwlqEAAmsSMAAEMIGAAAAABQYAAAAAMQAASBAQAAQOwQAB+lIhCAAgGBGAACcyDAAAAAAiAAivpEQQAEAwIwAATmQYAAAAAEQAEV9IwAAT0YYAAAAAEQAHCWoQAAQsYAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AKxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AOxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "APRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "ASxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AWxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AaxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AbRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AexAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AixAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AmxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          }
+        ],
+        "EntityRegistry": [],
+        "LastFramePaused": false,
+        "NextFramePaused": false,
+        "FrameNumber": 0,
+        "InvalidStateReason": "",
+        "PhysicsFramesElapsed": 1,
+        "FramesSinceLastNoPhysicsFrame": 5,
+        "__isset": {
+          "chefs": true,
+          "items": true,
+          "serverMessages": true,
+          "entityRegistry": true,
+          "lastFramePaused": true,
+          "nextFramePaused": true,
+          "frameNumber": true,
+          "invalidStateReason": true,
+          "physicsFramesElapsed": true,
+          "framesSinceLastNoPhysicsFrame": true
+        }
+      }
+    },
+    {
+      "lineOneBased": 2132,
+      "lineSha256": "1757dea85bafa79df951fde7ff660c60b74e710fabebb0d97f7a1e8a9f158d6d",
+      "output": {
+        "Chefs": {
+          "103": {
+            "HighlightedForPickup": 41,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 41,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "104": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "105": {
+            "HighlightedForPickup": -1,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": -1,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          },
+          "106": {
+            "HighlightedForPickup": 40,
+            "HighlightedForUse": -1,
+            "HighlightedForPlacement": 40,
+            "DashTimer": -3.4028234663852886e+38,
+            "InteractingEntity": -1,
+            "LastVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "AimingThrow": false,
+            "MovementInputSuppressed": false,
+            "LastMoveInputDirection": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "ImpactStartTime": 3.4028234663852886e+38,
+            "ImpactTimer": -3.4028234663852886e+38,
+            "ImpactVelocity": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0,
+              "__isset": {
+                "x": true,
+                "y": true,
+                "z": true
+              }
+            },
+            "LeftOverTime": 0,
+            "__isset": {
+              "highlightedForPickup": true,
+              "highlightedForUse": true,
+              "highlightedForPlacement": true,
+              "dashTimer": true,
+              "interactingEntity": true,
+              "lastVelocity": true,
+              "aimingThrow": true,
+              "movementInputSuppressed": true,
+              "lastMoveInputDirection": true,
+              "impactStartTime": true,
+              "impactTimer": true,
+              "impactVelocity": true,
+              "leftOverTime": true
+            }
+          }
+        },
+        "Items": {},
+        "ServerMessages": [
+          {
+            "Type": 4,
+            "Message": "GsEAgAB61QUEMIAABDCAAAA=",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 43,
+            "Message": "GsCAAAACiGIACAYEYAAJzIMAAAAACIACK+kIAAIWMRBAAQDAjAABOZBgAAAAARAARX0hAAJrEhAABCxiGIACAYEYAAJzIMAAAAACIACK+kIABNYkYAAIYQMAAAAACgwAAAAAYgAAkCAgAAgdggAAsihEEABAMCMAAE5kGAAAAABEABFfSMAAE9GGAAAAABEABwlqEAAELGIYgAIBgRgAAnMgwAAAAAIgAIr6RgAAnowwAAAAAIgAOEtREEABAMCMAAE5kGAAAAABEABFfSMAAE9GGAAAAABEABwlqEAAmsSMAAEMIGAAAAABQYAAAAAMQAASBAQAAQOwQAB+lIhCAAgGBGAACcyDAAAAAAiAAivpEQQAEAwIwAATmQYAAAAAEQAEV9IwAAT0YYAAAAAEQAHCWoQAAQsYAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AKxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AOxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "APRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "ASxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AWxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AaxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AbRAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AexAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AixAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          },
+          {
+            "Type": 4,
+            "Message": "AmxAAAAAAA==",
+            "__isset": {
+              "type": true,
+              "message": true
+            }
+          }
+        ],
+        "EntityRegistry": [],
+        "LastFramePaused": true,
+        "NextFramePaused": true,
+        "FrameNumber": 0,
+        "InvalidStateReason": "",
+        "PhysicsFramesElapsed": 0,
+        "FramesSinceLastNoPhysicsFrame": 0,
+        "__isset": {
+          "chefs": true,
+          "items": true,
+          "serverMessages": true,
+          "entityRegistry": true,
+          "lastFramePaused": true,
+          "nextFramePaused": true,
+          "frameNumber": true,
+          "invalidStateReason": true,
+          "physicsFramesElapsed": false,
+          "framesSinceLastNoPhysicsFrame": true
+        }
+      }
+    }
+  ]
+}

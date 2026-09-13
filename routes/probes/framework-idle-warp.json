@@ -1,0 +1,22 @@
+[
+  {"target":"controller","request":{"command":"inspect"}},
+  {"target":"bridge","request":{"command":"load","seed":0}},
+  {"target":"bridge","request":{"command":"status"},"until":{"path":"bridge.loadComplete","equals":true},"timeoutSeconds":150},
+  {"target":"controller","request":{"command":"inspect"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":10},
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"step","frames":180}},
+  {"target":"controller","request":{"command":"inspect"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"checkpoint","path":"idle-180.pb"}},
+  {"target":"bridge","request":{"command":"status"}},
+  {"target":"controller","request":{"command":"step","frames":120}},
+  {"target":"controller","request":{"command":"inspect"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"inspect","full":true}},
+  {"target":"bridge","request":{"command":"status"}},
+  {"target":"controller","request":{"command":"warp","frame":180,"development":true}},
+  {"target":"controller","request":{"command":"inspect"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"step","frames":120}},
+  {"target":"controller","request":{"command":"inspect"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"inspect","full":true}},
+  {"target":"bridge","request":{"command":"status"}},
+  {"target":"bridge","request":{"command":"pause"}}
+]

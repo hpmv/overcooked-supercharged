@@ -1,0 +1,26 @@
+{
+  "description": "Walk near the upper portal return position, inside the measured floor, then board and fire the left cannon. The old horizontal projection still intersects an ingredient crate. Regresses that blocked projection without position restoration.",
+  "timeoutFrames": 1200,
+  "jobs": [
+    {
+      "id": "aim-left", "player": 2, "dependencies": [], "resources": ["left-cannon"],
+      "actions": [{"type": "aim-cannon", "cannon": "left", "timeoutFrames": 360}]
+    },
+    {
+      "id": "walk-to-portal-return-point", "player": 2, "dependencies": ["aim-left"],
+      "resources": ["upper-left-floor"],
+      "actions": [{"type": "navigate", "target": {"x": 12, "z": -11.55}, "tolerance": 0.06, "timeoutFrames": 360}]
+    },
+    {
+      "id": "board-through-clear-side-lane", "player": 2, "dependencies": ["walk-to-portal-return-point"],
+      "resources": ["left-cannon"],
+      "actions": [{"type": "board-cannon", "cannon": "left", "timeoutFrames": 360}]
+    },
+    {
+      "id": "fire-observed-passenger", "player": 0, "dependencies": ["board-through-clear-side-lane"],
+      "resources": ["left-cannon", "left-fire-button", "lower-right-landing"],
+      "actions": [{"type": "fire-cannon", "cannon": "left", "passengerPlayer": 2,
+                   "destinationRegion": "lower-right", "timeoutFrames": 360}]
+    }
+  ]
+}

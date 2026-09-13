@@ -1,0 +1,6 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"native-physics-trace","path":"M:\\projects\\game-test-2\\framework-run\\modules\\NativePhysicsTrace-r8ad-physics-unfreeze\\NativePhysicsTrace.r8ad-physics-unfreeze.dll","type":"SuperchargedPatch.Authoring.Modules.NativePhysicsTraceModule","sha256":"E21C08444B5BC2ACF762396A473E6617084023144E90A3CD08247E52CB43C831","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-physics-trace-r20-transition-lifecycle-build6\\Oc2NativePhysicsTrace.r20.dll","sha256":"DA1C470819FE4017468C3D104F8CBD254D713BFA63BCEC5AD0E2ABAEA2BC1171","mask":45}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"clear","args":{}}}
+]

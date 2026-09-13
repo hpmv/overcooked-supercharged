@@ -1,0 +1,4 @@
+{"phases":[
+ {"actions":[{"type":"take","player":1,"station":"drying"},{"type":"place","player":3,"station":"counter:dlc08_countertop_01_standard_circus@25.20,-20.40"},{"type":"take","player":2,"station":"Frankfurter"}]},
+ {"actions":[{"type":"place","player":1,"station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40"},{"type":"navigate","player":2,"target":{"x":13.6,"z":-12.2}}]}
+]}

@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":42}}},
+  {"target":"controller","request":{"command":"status"}}
+]

@@ -1,0 +1,44 @@
+{
+  "description": "Native preparation-order experiment: start a hotdog on an actual plate, consume cooked sausage at its original pot, apply mustard before adding the separately cooked onion, and stage the final native meal. This tests legal recipe assembly order; no high-score or scheduling benefit is claimed.",
+  "timeoutFrames": 2400,
+  "jobs": [
+    {"id":"PH01-sausage", "player":2, "dependencies":[], "resources":["near-pot","pantry-source"],
+     "actions":[
+       {"type":"take","station":"Frankfurter"},
+       {"type":"navigate","target":{"x":13.6,"z":-12.2}},
+       {"type":"throw","station":"pot:dlc08_utensil_pot_01@16.80,-10.80"}
+     ]},
+    {"id":"PH02-onion", "player":2, "dependencies":["PH01-sausage"], "resources":["onion-board"],
+     "actions":[
+       {"type":"take","station":"Onion"},
+       {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"},
+       {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"}
+     ]},
+    {"id":"PH03-bun", "player":2, "dependencies":["PH02-onion"], "resources":["bun-board"],
+     "actions":[
+       {"type":"take","station":"HotdogBun"},
+       {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"},
+       {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}
+     ]},
+    {"id":"PH04-heat-onion", "player":0, "dependencies":["PH02-onion"], "resources":["onion-board","near-pan"],
+     "actions":[
+       {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"},
+       {"type":"place","station":"pan:dlc08_utensil_frying_pan@16.80,-21.60"}
+     ]},
+    {"id":"PH05-plated-native-assembly", "player":0, "dependencies":["PH03-bun","PH04-heat-onion"],
+     "resources":["initial-plate","bun-board","near-pot","near-pan","mustard","output"],
+     "actions":[
+       {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60"},
+       {"type":"combine","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","expectedIngredientIds":[262914]},
+       {"type":"navigate","station":"pot:dlc08_utensil_pot_01@16.80,-10.80"},
+       {"type":"cook","station":"pot:dlc08_utensil_pot_01@16.80,-10.80"},
+       {"type":"combine","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","expectedIngredientIds":[262914,284626]},
+       {"type":"apply","station":"condiment","expectedIngredientId":17094},
+       {"type":"navigate","station":"pan:dlc08_utensil_frying_pan@16.80,-21.60"},
+       {"type":"cook","station":"pan:dlc08_utensil_frying_pan@16.80,-21.60"},
+       {"type":"combine","station":"pan:dlc08_utensil_frying_pan@16.80,-21.60","expectedIngredientIds":[17094,262914,284626,461162]},
+       {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@25.20,-20.40"}
+     ]}
+  ]
+}
+

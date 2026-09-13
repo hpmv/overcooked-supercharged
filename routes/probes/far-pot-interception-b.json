@@ -1,0 +1,112 @@
+{
+  "description": "Native far-pot interception mechanism: fill the nearer pot, position P3 at the recorded catch area through ordinary navigation, throw a second raw sausage toward the farther pot, then let the native catcher place it into that exact original pot. This tests ordinary catch/placement and the original throw's consumption barrier; adaptive planner admission is tested separately. Revision B requests the ordinary native near-pot interaction approach instead of the prior observed coordinate inside the conservative navigation margin.",
+  "timeoutFrames": 1200,
+  "jobs": [
+    {
+      "id": "FI01-near-pot",
+      "player": 2,
+      "dependencies": [],
+      "resources": [
+        "near-pot",
+        "pantry-source"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter"
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          }
+        },
+        {
+          "type": "throw",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80"
+        }
+      ]
+    },
+    {
+      "id": "FI02-catch-position",
+      "player": 3,
+      "dependencies": [
+        "FI01-near-pot"
+      ],
+      "resources": [
+        "catcher"
+      ],
+      "actions": [
+        {
+          "type": "navigate",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80"
+        },
+        {
+          "type": "face",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "FI03-far-throw",
+      "player": 2,
+      "dependencies": [
+        "FI02-catch-position"
+      ],
+      "resources": [
+        "far-pot",
+        "pantry-source"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter"
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          }
+        },
+        {
+          "type": "throw",
+          "station": "pot:dlc08_utensil_pot_01@18.00,-10.80"
+        }
+      ]
+    },
+    {
+      "id": "FI04-native-catch-placement",
+      "player": 3,
+      "dependencies": [
+        "FI02-catch-position"
+      ],
+      "resources": [
+        "caught-source"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "path": "chefs.3.playerId",
+          "equals": 3,
+          "timeoutFrames": 2
+        },
+        {
+          "type": "wait",
+          "path": "chefs.3.heldEntityId",
+          "atLeast": 1,
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "pot:dlc08_utensil_pot_01@18.00,-10.80",
+          "timeoutFrames": 110
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "Native far-pot direct throw with the upper-left onion board empty and the nearer pot already occupied. Scene-property station selectors resolve the actual vessels. This is a mechanism probe, not a high-score route.",
+  "timeoutFrames": 900,
+  "jobs": [
+    {
+      "id": "near-pot-load", "player": 2, "dependencies": [],
+      "resources": ["sausage-crate", "near-pot", "left-throw-lane"],
+      "actions": [
+        {"type": "take", "station": "Frankfurter"},
+        {"type": "navigate", "target": {"x": 13.6, "z": -12.2}},
+        {"type": "throw", "station": "pot:dlc08_utensil_pot_01@16.80,-10.80"}
+      ]
+    },
+    {
+      "id": "far-pot-empty-lane-load", "player": 2, "dependencies": ["near-pot-load"],
+      "resources": ["sausage-crate", "far-pot", "left-throw-lane", "upper-left-upper-board"],
+      "actions": [
+        {"type": "take", "station": "Frankfurter"},
+        {"type": "navigate", "target": {"x": 13.6, "z": -12.2}},
+        {"type": "throw", "station": "pot:dlc08_utensil_pot_01@18.00,-10.80"}
+      ]
+    }
+  ]
+}

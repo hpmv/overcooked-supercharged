@@ -12,6 +12,10 @@ using BitStream;
 
 namespace SuperchargedPatch.AlteredComponents
 {
+    public static class NativeSyncCallCounters
+    {
+        public static long WorldUpdates, WorldEvents, ChefMessages, MeshPositions, BasicEvents;
+    }
     [HarmonyPatch(typeof(EntitySerialisationRegistry), "StartSynchronisingEntry")]
     public static class EntitySerialisationRegistryStartSynchronisingEntryPatch
     {
@@ -138,53 +142,9 @@ namespace SuperchargedPatch.AlteredComponents
         }
     }
 
-    [HarmonyPatch(typeof(ServerSynchronisationScheduler), "SynchroniseList")]
-    public static class PatchServerSynchronisationSchedulerSynchroniseList
-    {
-        [HarmonyPrefix]
-        public static void Prefix(ref float fFrameDelay)
-        {
-            fFrameDelay = 0f;
-        }
-    }
-
-    [HarmonyPatch(typeof(ServerWorldObjectSynchroniser), "GetServerUpdate")]
-    public static class PatchServerWorldObjectSynchroniserGetServerUpdate
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(ref Serialisable __result)
-        {
-            // Don't need to ever synchronize physics for local game.
-            // Doing so makes the game undeterministic since it's not predictable
-            // when exactly we sync. It's dependent on time.
-            __result = null;
-            return false;
-        }
-    }
-
-    [HarmonyPatch(typeof(ClientKitchenLoader), "CheckStarted")]
-    public static class PatchClientKitchenLoaderCheckStarted
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(ref bool __result)
-        {
-            // The above makes CheckStarted return false since the
-            // ClientWorldObjectSynchroniser never receives any message.
-            // We don't need this check so just return true.
-            __result = true;
-            return false;
-        }
-    }
-
-    [HarmonyPatch(typeof(MeshLerper), "Update")]
-    public static class PatchMeshLerperUpdate
-    {
-        [HarmonyPrefix]
-        public static bool Prefix()
-        {
-            return false;
-        }
-    }
+    // Advancing native synchronization cadence, world-object population, loader
+    // readiness and mesh interpolation execute unchanged. Frame observations are
+    // collected independently; only an explicit authoring pause suspends updates.
 
     [HarmonyPatch(typeof(ClientWorldObjectSynchroniser), "ApplyServerUpdate")]
     public static class PatchClientWorldObjectSynchroniserApplyServerUpdate
@@ -192,7 +152,7 @@ namespace SuperchargedPatch.AlteredComponents
         [HarmonyPrefix]
         public static void Prefix()
         {
-            Console.WriteLine("WARNING: ClientWorldObjectSynchroniser.ApplyServerUpdate called!");
+            NativeSyncCallCounters.WorldUpdates++;
         }
     }
 
@@ -202,7 +162,7 @@ namespace SuperchargedPatch.AlteredComponents
         [HarmonyPrefix]
         public static void Prefix()
         {
-            Console.WriteLine("WARNING: ClientWorldObjectSynchroniser.ApplyServerEvent called!");
+            NativeSyncCallCounters.WorldEvents++;
         }
     }
 
@@ -212,7 +172,7 @@ namespace SuperchargedPatch.AlteredComponents
         [HarmonyPrefix]
         public static void Prefix()
         {
-            Console.WriteLine("WARNING: ClientChefSynchroniser.HandleMessage called!");
+            NativeSyncCallCounters.ChefMessages++;
         }
     }
 
@@ -222,7 +182,7 @@ namespace SuperchargedPatch.AlteredComponents
         [HarmonyPrefix]
         public static void Prefix()
         {
-            Console.WriteLine("WARNING: MeshLerper.SetServerPosition called!");
+            NativeSyncCallCounters.MeshPositions++;
         }
     }
 
@@ -231,7 +191,7 @@ namespace SuperchargedPatch.AlteredComponents
         [HarmonyPrefix]
         public static void Prefix()
         {
-            Console.WriteLine("WARNING: BasicLerp.ReceiveServerEvent called!");
+            NativeSyncCallCounters.BasicEvents++;
         }
     }
 }

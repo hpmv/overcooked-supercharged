@@ -1,0 +1,43 @@
+[
+  {
+    "target": "bridge",
+    "request": {
+      "command": "pause"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "resume-phase",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1as-reset-instance\\ResumePhase.r1as-reset-instance.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.ResumePhaseModule",
+      "sha256": "66FDB2DAA0E5CF2DAB081F559DD6C8CEA9298A736583671B78DFBFAA53CF3542",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "resume-phase",
+      "operation": "activate",
+      "args": {}
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "resume-phase",
+      "operation": "status",
+      "args": {}
+    }
+  },
+  {
+    "target": "controller",
+    "request": {
+      "command": "status"
+    }
+  }
+]

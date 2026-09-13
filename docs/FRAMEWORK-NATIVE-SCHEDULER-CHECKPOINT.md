@@ -1,0 +1,28 @@
+# Native synchronization cadence restoration
+
+WorldSyncCache r1b closes the specific extra WorldObject packet in the short pickup replay, but the longer fixed-plate search still fails strict selected-input replay. In `native-x-v11b/plate-checkpoint-synced-r4-strict-review`, pickup attachment events are equal at frame55. The identical plate10 WorldObject packet appears at original57 and replay59. The older run emitted it at151 versus147. These differences are both +2 modulo6. Phase counters and all56 inputs/auxiliary bytes match; later proxy and chef differences remain genuine failures.
+
+Installed native `ServerSynchronisationScheduler.Update` adds `Time.deltaTime` to `m_fNextUpdate` and `m_fNextFastUpdate`, calls the regular list at0.1 seconds, and calls the fast list at0.0333333351 or0.1 seconds according to the actual `Fast NetworkChefs` option. `SynchroniseList` subtracts the selected delay after polling the native components. Core X suspends this update during authoring pause, but its two residual values were not previously checkpointed. They therefore retain future cadence after a rewind.
+
+The intervening candidate durations give a concrete consistency check: selected original56 frames plus the following136 and124 frames total316 ticks, leaving4 modulo6. A native six-frame poll can consequently move two frames later, matching the observed57→59 event. A focused synthetic float recurrence reproduces this exact offset; it does not assert that the old private residual values were logged. The proposed causal test restores those actual fields and repeats the same search. No clock virtualization is introduced.
+
+The external r2 module adds `NativeSchedulerSnapshot.cs` to the existing exact `NativeKitchenCheckpoint` snapshot binding. At capture it records:
+
+- The native `MultiplayerController` and its exact `m_ServerSync` instance/session.
+- Both actual residual floats and the fast-chef option.
+- Both native lists in their original order, each registered entry/GameObject incarnation, and the exact ordered synchronizer component references.
+- Every entry's urgent flag and the separate registry-wide `HasUrgentOutgoingUpdates` flag.
+
+Preflight rejects changed scheduler membership, order, component identity, owner/session/mode, or unsupported native data before core world mutation. It deliberately does not support current↔target dynamic spawn membership changes. After the core's exact attachment/body restoration, it restores both floats and every urgent flag, then reads them back. List order is validated and retained, not rebuilt. Native scheduler `Update`, delays, event emission, Unity clocks and phase counters are untouched.
+
+The scheduler's two scratch payload lists are not checkpointed: installed `SynchroniseEntity` and `SynchroniseForRecipient` clear their corresponding lists before payload use. The module does not restore mutable stale message references. It does not call `SetRequiresUrgentUpdate`, whose OR behavior would change the independently captured global flag.
+
+Ready DLL: `framework-run/modules/WorldSyncCache-r2/WorldSyncCache.r2.dll`, SHA256 `715c1edab2cedd981221cedfcaca9783039569470eab69e87c8ca8e3b03269b1`. Same `world-sync-cache` slot, entry `SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule`, API1 and explicit activate/status/deactivate. Load while fenced/paused, then perform a normal level restart and clear old graphs before warmup. Status exposes `latest.scheduler` with exact residuals, membership order and urgent flags.
+
+`scripts/FrameworkWorldSyncCacheCheck` passes66 checks, including installed native scheduler IL, actual module restoration of cadence and urgent flags, and changed-membership/mode/component/identity failures. `artifacts/framework-world-sync-cache-r2-tests.json` pins the actual native/core/module hashes and IL. Independent read-only review is recorded separately in `artifacts/world-sync-r2-independent-native-il.json`. No game calls or core rebuild were performed by the implementation agent.
+
+The subsequent parent-owned native r2 search confirms the polling-timing correction. `artifacts/framework-migration/native-x-v11b/plate-checkpoint-sync-r2-strict-review-b/summary.json` compares epochs1→4 over(31,87]: all56 frames have identical native and auxiliary message bytes/order, phase fields and inputs. The plate10 WorldObject packet occurs at frame56/offset25 in both continuations. All physical state matches through frame73. Strict physical replay still fails from frame74/offset43: plate10 Y differs by approximately6e-8 and chef103 Rotation.Z differs by approximately5.6e-9. Proxy118 first differs at75, and the complete chef observation first differs at81. Thus the cadence correction has native evidence, while the selected macro is still a failed strict physical replay.
+
+Actual module receipt `artifacts/framework-migration/native-x-v11b/world-sync-r2-after-search.json` (SHA256 `aa791bd5a3eef9e6266f97a94fe2bd7ca39bd235ca45e4fbba13f1c14e1c65b0`) records four verified sidecar restores, zero rejections, and no error. The selected frame31 scheduler values are `nextUpdate=0.0833333358` and `nextFastUpdate=0.0166666675`; regular membership contains118 entries and fast membership is exactly103,104,105,106. Native ordering and urgent flags are retained. The frame87 endpoint has a newly active plate10 rest update, which remains outside the admitted settled-target scope.
+
+An independently observed client parenting-cache mismatch remains after the core's verified manual warp; the bounded r3a extension is documented in `docs/FRAMEWORK-CLIENT-WORLD-CACHE.md`. Its causal effect on the remaining tiny geometry difference is a separate native test.

@@ -1,0 +1,3 @@
+[
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1e\\ResumePhase.r1e.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"81E4BC29FC034C37073EB31A91AB11B3989691D2DFF559A557669CE1C87D422C","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}}
+]

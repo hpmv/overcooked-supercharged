@@ -1,0 +1,7 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"mark","args":{"code":270,"value":1}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"clear","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

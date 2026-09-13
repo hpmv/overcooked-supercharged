@@ -1,0 +1,7 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"deactivate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r15c-target-null-alias-guard-build\\Oc2NativeAnimatorCheckpoint.r15c.dll","sha256":"F240A63D41E5C52EBA289F3D39A0860C44F305C273D9EAEED89E4BDBB373C6D3"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

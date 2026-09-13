@@ -1,0 +1,11 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"path":"connected","equals":true},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"path":"bridge.loadComplete","equals":true},"timeoutSeconds":155},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"food"}},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":20},
+  {"target":"bridge","request":{"command":"screenshot","path":"artifacts/story11-discovery-a.png"}},
+  {"target":"bridge","request":{"command":"status"}}
+]

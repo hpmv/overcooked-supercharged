@@ -1,0 +1,9 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r40o-explicit-target-phase\\ChefAnimatorCheckpoint.r40o-explicit-target-phase.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"11E56D403F16E15D692B08615A5D330677B949701A81A726FE8D7A2EA22BCC0B","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r16c-animation-mixer-oob-canonical-build\\Oc2NativeAnimatorCheckpoint.r16c.dll","sha256":"5B73BB0C7A8FD6E6F026CDC8703D5C8B51B1803FB17A89F94937478216ACBF07"}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1aq-explicit-target-phase\\ResumePhase.r1aq-explicit-target-phase.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"30A8B38F92B31123A9CBA0CD2C7122AE2E5509369B23926ACEDBA80648E08D59","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}}
+]

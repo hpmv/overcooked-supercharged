@@ -1,0 +1,46 @@
+{
+  "description": "Continue the paused V9 snapshot: walk the idle chef clear, then legally place the original held dirty stack.",
+  "timeoutFrames": 360,
+  "jobs": [
+    {
+      "id": "idle-chef-clear-counter",
+      "player": 3,
+      "dependencies": [],
+      "resources": [
+        "lower-left-shared-counter-approach"
+      ],
+      "actions": [
+        {
+          "type": "navigate",
+          "player": 3,
+          "target": {
+            "x": 16.6599064,
+            "z": -18.3451546
+          },
+          "timeoutFrames": 180,
+          "dash": false,
+          "shortDash": false
+        }
+      ]
+    },
+    {
+      "id": "complete-original-dirty-relay",
+      "player": 0,
+      "dependencies": [
+        "idle-chef-clear-counter"
+      ],
+      "resources": [
+        "lower-left-shared-counter-approach"
+      ],
+      "actions": [
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@15.60,-19.20",
+          "dash": false,
+          "shortDash": false,
+          "timeoutFrames": 180
+        }
+      ]
+    }
+  ]
+}

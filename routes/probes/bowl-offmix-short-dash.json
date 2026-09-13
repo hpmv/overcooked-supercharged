@@ -1,0 +1,204 @@
+{
+  "description": "Short-dash mechanism variant of bowl-offmix.json. Only listed vessel transfer navigation dash flags changed; native waits, event checks, food, geometry and time limits retained. Native bowl off-mixer storage probe. Mix chocolate dough, park the same bowl on an ordinary counter for thirteen native seconds, then fry that same dough and restore the original empty bowl. Requires a fresh four-chef Carnival 3-4 start; this is not a high-score route.",
+  "timeoutFrames": 4200,
+  "jobs": [
+    {
+      "id": "M01-supply-flour",
+      "player": 1,
+      "dependencies": [],
+      "resources": [
+        "flour-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "M02-supply-egg",
+      "player": 1,
+      "dependencies": [
+        "M01-supply-flour"
+      ],
+      "resources": [
+        "egg-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Egg",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "M03-chop-chocolate",
+      "player": 1,
+      "dependencies": [
+        "M02-supply-egg"
+      ],
+      "resources": [
+        "chocolate-crate",
+        "upper-right-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Chocolate",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "M04-mix-and-park",
+      "player": 3,
+      "dependencies": [
+        "M03-chop-chocolate"
+      ],
+      "resources": [
+        "upper-right-board",
+        "near-bowl",
+        "original-mixer",
+        "offmix-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "mix",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "take",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 240,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-10.80",
+          "timeoutFrames": 240,
+          "dash": true,
+          "shortDash": true
+        }
+      ]
+    },
+    {
+      "id": "M05-observe-offmix-thirteen-seconds",
+      "player": 3,
+      "dependencies": [
+        "M04-mix-and-park"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-mixer",
+        "offmix-counter"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "durationFrames": 780,
+          "timeoutFrames": 800
+        }
+      ]
+    },
+    {
+      "id": "M06-fry-and-restore",
+      "player": 3,
+      "dependencies": [
+        "M05-observe-offmix-thirteen-seconds"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-mixer",
+        "offmix-counter",
+        "chocolate-fryer"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-10.80",
+          "timeoutFrames": 240,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "combine",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 420,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 420,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "cook",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 900
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"controller","request":{"command":"status"}},
+  {"target":"bridge","request":{"command":"status"}}
+]

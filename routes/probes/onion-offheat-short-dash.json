@@ -1,0 +1,285 @@
+{
+  "description": "Short-dash mechanism variant of onion-offheat.json. Only listed vessel transfer navigation dash flags changed; native waits, event checks, food, geometry and time limits retained. Candidate native onion off-heat experiment; requires fresh Carnival 3-4 four-chef start. This is a probe, not a score route.",
+  "timeoutFrames": 5200,
+  "jobs": [
+    {
+      "id": "O01-chop-onion",
+      "player": 2,
+      "dependencies": [],
+      "resources": [
+        "onion-crate",
+        "upper-left-upper-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Onion",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00",
+          "timeoutFrames": 600
+        }
+      ]
+    },
+    {
+      "id": "O02-cook-onion",
+      "player": 0,
+      "dependencies": [
+        "O01-chop-onion"
+      ],
+      "resources": [
+        "upper-left-upper-board",
+        "onion-pan",
+        "onion-stove"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00",
+          "timeoutFrames": 420,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "pan:dlc08_utensil_frying_pan@18.00,-21.60",
+          "timeoutFrames": 600,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "cook",
+          "station": "pan:dlc08_utensil_frying_pan@18.00,-21.60",
+          "timeoutFrames": 900
+        }
+      ]
+    },
+    {
+      "id": "O03-park-cooked-pan",
+      "player": 0,
+      "dependencies": [
+        "O02-cook-onion"
+      ],
+      "resources": [
+        "onion-pan",
+        "onion-stove",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "pan:dlc08_utensil_frying_pan@18.00,-21.60",
+          "timeoutFrames": 240,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-21.60",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        }
+      ]
+    },
+    {
+      "id": "O04-observe-offheat-13-seconds",
+      "player": 0,
+      "dependencies": [
+        "O03-park-cooked-pan"
+      ],
+      "resources": [
+        "onion-pan",
+        "onion-stove",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "durationFrames": 780,
+          "timeoutFrames": 800
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 17.6,
+            "z": -18.7
+          },
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "H01-chop-bun",
+      "player": 2,
+      "dependencies": [
+        "O01-chop-onion"
+      ],
+      "resources": [
+        "bun-crate",
+        "upper-left-lower-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "HotdogBun",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 600
+        }
+      ]
+    },
+    {
+      "id": "H02-sausage-handoff",
+      "player": 2,
+      "dependencies": [
+        "H01-chop-bun",
+        "O02-cook-onion"
+      ],
+      "resources": [
+        "sausage-crate",
+        "upper-left-upper-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00",
+          "timeoutFrames": 420
+        }
+      ]
+    },
+    {
+      "id": "H03-prepare-unplated-hotdog",
+      "player": 3,
+      "dependencies": [
+        "H02-sausage-handoff"
+      ],
+      "resources": [
+        "upper-left-upper-board",
+        "upper-left-lower-board",
+        "sausage-pot",
+        "hotdog-buffer"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00",
+          "timeoutFrames": 600
+        },
+        {
+          "type": "place",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "cook",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "combine",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "expectedIngredientIds": [
+            262914,
+            284626
+          ],
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-10.80",
+          "timeoutFrames": 420
+        }
+      ]
+    },
+    {
+      "id": "O05-harvest-parked-onion",
+      "player": 3,
+      "dependencies": [
+        "O04-observe-offheat-13-seconds",
+        "H03-prepare-unplated-hotdog"
+      ],
+      "resources": [
+        "onion-pan",
+        "offheat-counter",
+        "hotdog-buffer",
+        "completed-hotdog-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-10.80",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "combine",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-21.60",
+          "expectedIngredientIds": [
+            262914,
+            284626,
+            461162
+          ],
+          "timeoutFrames": 600
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-21.60",
+          "timeoutFrames": 420
+        }
+      ]
+    },
+    {
+      "id": "O06-return-empty-pan",
+      "player": 0,
+      "dependencies": [
+        "O05-harvest-parked-onion"
+      ],
+      "resources": [
+        "onion-pan",
+        "onion-stove",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-21.60",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "cook-station:workstation_cooker_01@18.00,-21.60",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        }
+      ]
+    }
+  ]
+}

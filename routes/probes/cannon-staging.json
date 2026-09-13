@@ -1,0 +1,1 @@
+{"phases":[{"name":"open-floor-cannon-approach","actions":[{"player":2,"type":"navigate","target":{"x":10.7,"z":-14.35},"timeoutFrames":120}]},{"name":"face-cannon","actions":[{"player":2,"type":"face","targetEntityId":84,"durationFrames":1}]}]}

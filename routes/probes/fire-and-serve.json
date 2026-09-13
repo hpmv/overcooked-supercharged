@@ -1,0 +1,40 @@
+{
+  "phases": [
+    {
+      "name": "launch-to-service",
+      "actions": [
+        {
+          "player": 0,
+          "type": "fire-cannon",
+          "cannon": "left",
+          "passengerPlayer": 2,
+          "destinationRegion": "lower-right",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "name": "serve-first-order",
+      "actions": [
+        {
+          "player": 2,
+          "type": "place",
+          "station": "delivery",
+          "timeoutFrames": 240
+        }
+      ]
+    },
+    {
+      "name": "portal-return-to-pantry",
+      "actions": [
+        {
+          "player": 2,
+          "type": "portal",
+          "station": "portal",
+          "destinationRegion": "upper-left",
+          "timeoutFrames": 300
+        }
+      ]
+    }
+  ]
+}

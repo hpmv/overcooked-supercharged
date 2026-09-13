@@ -1,0 +1,176 @@
+{
+  "description": "Short-dash mechanism variant of pot-offheat.json. Only listed vessel transfer navigation dash flags changed; native waits, event checks, food, geometry and time limits retained. Native cooked-pot off-heat storage probe: one native boiled sausage, same pot parked on an ordinary counter for thirteen seconds, then combined into a chopped bun and original empty pot restored. Diagnostic only.",
+  "timeoutFrames": 3600,
+  "jobs": [
+    {
+      "id": "P01-load-near-pot",
+      "player": 2,
+      "dependencies": [],
+      "resources": [
+        "near-pot",
+        "sausage-source"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 240
+        }
+      ]
+    },
+    {
+      "id": "P02-prepare-bun",
+      "player": 2,
+      "dependencies": [
+        "P01-load-near-pot"
+      ],
+      "resources": [
+        "bun-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "HotdogBun",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "P03-cook-and-park",
+      "player": 0,
+      "dependencies": [
+        "P01-load-near-pot"
+      ],
+      "resources": [
+        "near-pot",
+        "pot-home",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "cook",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "take",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-10.80",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        }
+      ]
+    },
+    {
+      "id": "P04-offheat-thirteen-seconds",
+      "player": 0,
+      "dependencies": [
+        "P03-cook-and-park"
+      ],
+      "resources": [
+        "near-pot",
+        "pot-home",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "durationFrames": 780,
+          "timeoutFrames": 800
+        }
+      ]
+    },
+    {
+      "id": "P05-native-hotdog-combination",
+      "player": 0,
+      "dependencies": [
+        "P04-offheat-thirteen-seconds",
+        "P02-prepare-bun"
+      ],
+      "resources": [
+        "near-pot",
+        "offheat-counter",
+        "bun-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "combine",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-10.80",
+          "expectedIngredientIds": [
+            262914,
+            284626
+          ],
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-21.60",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "P06-original-pot-restoration",
+      "player": 0,
+      "dependencies": [
+        "P05-native-hotdog-combination"
+      ],
+      "resources": [
+        "near-pot",
+        "pot-home",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@19.20,-10.80",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        },
+        {
+          "type": "place",
+          "station": "cook-station:workstation_cooker_01@16.80,-10.80",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true
+        }
+      ]
+    }
+  ]
+}

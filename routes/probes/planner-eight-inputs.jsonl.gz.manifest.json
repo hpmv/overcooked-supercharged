@@ -1,0 +1,52 @@
+{
+  "format": "oc2-input-movie-manifest",
+  "version": 1,
+  "source": "M:\\projects\\game-test-2\\artifacts\\native-round-v8\\trial001.jsonl.gz",
+  "sourceFileSha256": "17ae5680d5113100b1ac5d743dafa26cee7bf938daa56616283b883f7bce9c5a",
+  "sourceSizeBytes": 335967768,
+  "sourceHeaders": [
+    {
+      "kind": "header",
+      "format": "overcooked-tas-trace",
+      "version": 1,
+      "createdUtc": "2026-09-07T12:44:05.5779870Z",
+      "mode": "bot",
+      "controllerVersion": "1.0.0.0"
+    }
+  ],
+  "originalCanonicalRequestsSha256": "7e7d9c9cc296fa7a6d6681f81f2db1bcc31f1c3e8985e91a8ef53a5a79a4c8a6",
+  "output": "M:\\projects\\game-test-2\\routes\\probes\\planner-eight-inputs.jsonl.gz",
+  "outputFileSha256": "37f925a9e472f1eacce83ce2b44581f1ae84cee4fe98e6e6a26caadd6c4c3ee0",
+  "outputCanonicalRequestsSha256": "7e7d9c9cc296fa7a6d6681f81f2db1bcc31f1c3e8985e91a8ef53a5a79a4c8a6",
+  "originalRequests": 6023,
+  "outputRequests": 6023,
+  "totalSteppedFrames": 6020,
+  "commands": {
+    "restart": 1,
+    "inspect": 1,
+    "preview": 1,
+    "step": 6020
+  },
+  "skippedMetadata": {
+    "header": 1,
+    "event": 5770
+  },
+  "starts": [
+    {
+      "sourceRequestIndex": 0,
+      "request": {
+        "version": 1,
+        "command": "restart",
+        "seed": 0,
+        "isolateRecipeRandom": true
+      }
+    }
+  ],
+  "requestBoundariesPreserved": true,
+  "allInputsAndOtherRequestFieldsPreserved": true,
+  "expansionRequested": false,
+  "expandedBoundaries": [],
+  "expansionAudit": null,
+  "hashEncoding": "Source/outputFile are exact file bytes; canonical requests are sorted-key compact UTF-8 JSON with LF, before compression",
+  "replayNote": "Input-only movie: execute record --script MOVIE --out TRACE, or replay --file MOVIE --no-compare. It contains no expected responses."
+}

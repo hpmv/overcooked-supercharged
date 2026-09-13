@@ -1,0 +1,20 @@
+{
+  "controllerBundle": "artifacts/planner-candidate-v13",
+  "prefixMovie": "routes/probes/sauce-staging-prefix-gf1346-neutral.jsonl.gz",
+  "setupMovie": "routes/probes/sauce-staging-setup-inputs.jsonl.gz",
+  "setupPlan": "routes/probes/sauce-staging-common-setup.json",
+  "baseline": {
+    "prefixTrace": "artifacts/sauce-staging-a-prefix.jsonl.gz",
+    "setupTrace": "artifacts/sauce-staging-a-setup.jsonl.gz",
+    "trace": "artifacts/sauce-staging-a-branch.jsonl.gz",
+    "result": "artifacts/sauce-staging-a-branch-result.json",
+    "plan": "routes/probes/sauce-staging-source37.json"
+  },
+  "near": {
+    "prefixTrace": "artifacts/sauce-staging-b-prefix.jsonl.gz",
+    "setupTrace": "artifacts/sauce-staging-b-setup.jsonl.gz",
+    "trace": "artifacts/sauce-staging-b-branch.jsonl.gz",
+    "result": "artifacts/sauce-staging-b-branch-result.json",
+    "plan": "routes/probes/sauce-staging-near40.json"
+  }
+}

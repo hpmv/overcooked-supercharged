@@ -1,0 +1,90 @@
+[
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 4,
+        "chefs": {
+          "43": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": -0.12, "y": 0.99, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": -0.12, "y": 0.99, "pickup": true, "interact": false, "dash": false },
+          "45": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false }
+        }
+      },
+      {
+        "frames": 70,
+        "chefs": {
+          "43": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false }
+        }
+      }
+    ]
+  },
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 118,
+        "chefs": {
+          "43": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false }
+        }
+      }
+    ]
+  },
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 28,
+        "chefs": {
+          "43": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": 0, "pickup": false, "interact": false, "dash": false }
+        }
+      }
+    ]
+  },
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 1,
+        "chefs": {
+          "43": { "x": 1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": 1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": -1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": -1, "pickup": false, "interact": false, "dash": false }
+        }
+      }
+    ]
+  },
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 1,
+        "chefs": {
+          "43": { "x": 1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "44": { "x": 1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "45": { "x": -1, "y": 0, "pickup": false, "interact": false, "dash": false },
+          "46": { "x": 0, "y": -1, "pickup": false, "interact": false, "dash": false }
+        }
+      }
+    ]
+  }
+]

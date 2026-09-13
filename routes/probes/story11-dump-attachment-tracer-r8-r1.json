@@ -1,0 +1,14 @@
+[
+  {
+    "target": "controller",
+    "request": {"command": "status"},
+    "until": {"all": [
+      {"path": "state", "equals": "Paused"},
+      {"path": "frame", "equals": 487},
+      {"path": "requestPending", "equals": false}
+    ]},
+    "timeoutSeconds": 10
+  },
+  {"target": "bridge", "request": {"command": "pause"}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "chef-managed-mutation-tracer", "operation": "status", "args": {}}}
+]

@@ -1,0 +1,12 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"path":"connected","equals":true},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"native-physics-trace","path":"M:\\projects\\game-test-2\\framework-run\\modules\\NativePhysicsTrace-r8u\\NativePhysicsTrace.r8u.dll","type":"SuperchargedPatch.Authoring.Modules.NativePhysicsTraceModule","sha256":"CD19E23C7A09F3351E1BB5F39EED10DDC6F1DFF70C731BAEB6509EDFAB11DAFF","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-physics-trace-r19-condition-float-build1\\Oc2NativePhysicsTrace.r19.dll","sha256":"21F318B53D977DF7E29DD40C36D3734468AE096910C6D011B5F8AE13226C04B7","mask":256}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"clear","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false}]},"timeoutSeconds":155},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"status","args":{}}}
+]

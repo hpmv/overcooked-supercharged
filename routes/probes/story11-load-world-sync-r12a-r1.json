@@ -1,0 +1,26 @@
+[
+  {
+    "target": "controller",
+    "request": {"command": "status"},
+    "until": {"all": [
+      {"path": "state", "equals": "Paused"},
+      {"path": "frame", "equals": 487},
+      {"path": "requestPending", "equals": false}
+    ]},
+    "timeoutSeconds": 10
+  },
+  {"target": "bridge", "request": {"command": "pause"}},
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "world-sync-cache",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\WorldSyncCache-r12a-dynamic-world-cache\\WorldSyncCache.r12a-dynamic-world-cache.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule",
+      "sha256": "5CF9E0AF54F42B83D136D87ECD09BA32E6587C2FEA4A2E01BE9C20EF0CDA16D7",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "world-sync-cache", "operation": "activate", "args": {}}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "world-sync-cache", "operation": "status", "args": {}}}
+]

@@ -1,0 +1,16 @@
+LIBRARY Oc2NativeAnimatorCheckpoint
+EXPORTS
+    oc2_animator_checkpoint_api_version
+    oc2_animator_controller_roundtrip
+    oc2_animator_controller_capture
+    oc2_animator_controller_input_capture
+    oc2_animator_transition_topology_capture
+    oc2_animator_mixer_graph_capture
+    oc2_animator_mixer_graph_restore
+    oc2_animator_owner_graph_capture
+    oc2_animator_playable_time_restore
+    oc2_animator_target_null_clip_restore
+    oc2_animator_override_clip_playables_probe
+    oc2_animator_settled_end_transition_normalize
+    oc2_animator_controller_normalize
+    oc2_animator_controller_restore

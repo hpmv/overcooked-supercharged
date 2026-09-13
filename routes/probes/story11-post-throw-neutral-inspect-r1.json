@@ -1,0 +1,13 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":568},
+    {"path":"requestPending","equals":false}
+  ]},"timeoutSeconds":10},
+  {"target":"controller","request":{"command":"inspect","full":true}},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

@@ -1,0 +1,13 @@
+[
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":1},
+    {"path":"requestPending","equals":false},
+    {"path":"freshLevelLoadObserved","equals":true}
+  ]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

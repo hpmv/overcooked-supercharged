@@ -1,0 +1,20 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"deactivate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"deactivate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"deactivate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"rigidbody-actor-rebuild","path":"M:\\projects\\game-test-2\\framework-run\\modules\\RigidbodyActorRebuild-r13k-reset-after-held-r12-contact-pool\\RigidbodyActorRebuild.r13k-reset-after-held-r12-contact-pool.dll","type":"SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule","sha256":"A5AE2FC3E7A9451AB3E310516FD3B0BBB113D967155F6C8C5DF73F20432AC907","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1ad-reset-after-stale-contact-pool\\ResumePhase.r1ad-reset-after-stale-contact-pool.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"4367EFD2597703AA110EA82B2D2F64E10B885A49532A90E6690787E6A0C71C18","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r40b-held-rotation-plan-diagnostics\\ChefAnimatorCheckpoint.r40b-held-rotation-plan-diagnostics.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"50BA8F1B85B819958A1650606AD0104BDECA0AE1812FBFC8C17E283D61CF69E4","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-rigidbody-rebuild-r6b-context-auto-build\\Oc2NativeRigidbodyRebuild.r6b.dll","sha256":"E8522017323090709415FCEFCBCEA9F1668275DF5E02715E9EF3DBBDF1CFD933","automaticChefs":false,"automaticGroundCollider":false,"observeContactManagerContext":true,"automaticContactPoolRestore":true,"automaticTransformDispatchRestore":true}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r15l-held-child-topology-diagnostics-build\\Oc2NativeAnimatorCheckpoint.r15l.dll","sha256":"8CAB9F15564214A6819AB22F157E16CE6003341DAFCEFCFEA7564E29CA8F9B0D"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"frame","equals":1},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

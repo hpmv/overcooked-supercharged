@@ -1,0 +1,9 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"controller","request":{"command":"actions-clear"}},
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"step","frames":2}},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"frame","equals":2},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

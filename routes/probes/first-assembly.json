@@ -1,0 +1,9 @@
+{"phases":[
+ {"name":"bun-on-plate","actions":[{"player":0,"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"name":"pick-up-bun-plate","actions":[{"player":0,"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"name":"wait-for-native-boil","actions":[{"player":0,"type":"cook","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":900}]},
+ {"name":"plate-sausage","actions":[{"player":0,"type":"combine","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","expectedIngredient":"Frankfurter"}]},
+ {"name":"add-mustard","actions":[{"player":0,"type":"apply","station":"condiment","expectedIngredient":"Mustard","expectedRecipeId":158500}]},
+ {"name":"plate-to-pantry","actions":[{"player":0,"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"}]},
+ {"name":"pickup-meal","actions":[{"player":2,"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"}]}
+]}

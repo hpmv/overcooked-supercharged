@@ -1,0 +1,13 @@
+[
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"step","frames":120}},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":198},
+    {"path":"requestPending","equals":false}
+  ]},"timeoutSeconds":45},
+  {"target":"controller","request":{"command":"inspect","full":true}},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

@@ -1,0 +1,18 @@
+LIBRARY Oc2NativeRigidbodyRebuild
+EXPORTS
+    oc2_rigidbody_rebuild_api_version
+    oc2_rigidbody_rebuild
+    oc2_rigidbody_rebuild_batch
+    oc2_rigidbody_actor_shapes
+    oc2_rigidbody_set_global_pose
+    oc2_rigidbody_get_kinematic_target
+    oc2_rigidbody_set_mass_frame
+    oc2_rigidbody_capture_shape_poses
+    oc2_rigidbody_restore_shape_poses
+    oc2_contact_manager_pool_capture
+    oc2_contact_manager_pool_restore
+    oc2_contact_manager_pool_capture_snapshot
+    oc2_contact_manager_pool_restore_snapshot
+    oc2_contact_manager_context_observer_install
+    oc2_contact_manager_context_observer_status
+    oc2_contact_manager_context_observer_uninstall

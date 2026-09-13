@@ -1,0 +1,6 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"path":"connected","equals":true},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"load","seed":0}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.paused","equals":true},{"path":"bridge.inputBlocked","equals":true},{"path":"bridge.session.stage","equals":"kitchen_ready"}]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false}]},"timeoutSeconds":30}
+]

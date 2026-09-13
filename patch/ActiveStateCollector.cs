@@ -35,7 +35,9 @@ namespace SuperchargedPatch
     public static class ActiveStateCollector
     {
         private static int FrameNumber { get; set; }
+        public static long EntityCollectionTicks, KitchenCaptureTicks, CollectionSamples;
         private static readonly Dictionary<int, CachedEntityState> cache = new Dictionary<int, CachedEntityState>();
+        public static void RequestFullObservation() { cache.Clear(); }
 
         private static ItemData EnsureItemData(this OutputData data, int entityID)
         {
@@ -47,12 +49,14 @@ namespace SuperchargedPatch
 
         public static void ClearCacheAfterWarp(int frame)
         {
+            NativeCannonCheckpoint.EndObservationBatch();
             FrameNumber = frame;
             cache.Clear();
         }
 
         public static void NotifyFrame(int frame)
         {
+            NativeCannonCheckpoint.EndObservationBatch();
             if (frame <= FrameNumber)
             {
                 // Console.WriteLine($"Restarting at frame {frame}; was at frame {FrameNumber}");
@@ -66,11 +70,23 @@ namespace SuperchargedPatch
 
         public static void CollectDataForFrame(OutputData currentFrameData)
         {
+            NativeCannonCheckpoint.BeginObservationBatch(FrameNumber);
+            try { CollectDataForFrameCore(currentFrameData); }
+            finally { NativeCannonCheckpoint.EndObservationBatch(); }
+        }
+
+        private static void CollectDataForFrameCore(OutputData currentFrameData)
+        {
+            long entityStart = System.Diagnostics.Stopwatch.GetTimestamp();
+            // Capability advertises the installed bounded preflight/transaction,
+            // not a successful restore or full native-physics equivalence.
+            currentFrameData.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 1 };
             if (currentFrameData.Items == null)
             {
                 currentFrameData.Items = new Dictionary<int, ItemData>();
             }
             currentFrameData.Chefs = new Dictionary<int, ChefSpecificData>();
+            var nativeFrozenPhysics = NativePhysicsObservation.CaptureFrozen();
             FastList<EntitySerialisationEntry> mEntitiesList = EntitySerialisationRegistry.m_EntitiesList;
             for (int i = 0; i < mEntitiesList.Count; i++)
             {
@@ -82,14 +98,14 @@ namespace SuperchargedPatch
                 Vector3 angularVelocity = Vector3.zero;
                 if (t.m_GameObject.GetPhysicsContainerIfExists() is Rigidbody container)
                 {
-                    position = container.transform.position;
-                    rotation = container.transform.rotation;
-                    velocity = container.velocity;
-                    angularVelocity = container.angularVelocity;
+                    position = container.position;
+                    rotation = container.rotation;
+                    NativePhysicsObservation.ReadVelocity(container,nativeFrozenPhysics,out velocity,out angularVelocity);
                 } else if (t.m_GameObject.GetComponent<Rigidbody>() is Rigidbody rb)
                 {
-                    velocity = rb.velocity;
-                    angularVelocity = rb.angularVelocity;
+                    position = rb.position;
+                    rotation = rb.rotation;
+                    NativePhysicsObservation.ReadVelocity(rb,nativeFrozenPhysics,out velocity,out angularVelocity);
                 }
                 EntityPathReference entityPathReference = null;
                 if (t.m_GameObject.GetComponent<EntityPathReferenceMarker>() is EntityPathReferenceMarker marker)
@@ -127,14 +143,23 @@ namespace SuperchargedPatch
                 {
                     currentFrameData.Chefs[mUEntityID] = CollectDataForChef(cpci);
                 }
+                var nativeCannon = t.m_GameObject.GetComponent<ServerCannon>();
+                if (nativeCannon != null)
+                    NativeCannonCheckpoint.ObserveFrame(nativeCannon);
 
-                // Force send messages from any entities that automatically synchronize.
+                // Observe actual contents, including the initial empty array.
+                // IngredientContainer.GetServerUpdate only sends native active-state
+                // changes; invoking a contents callback would mutate the game.
+                // These fresh messages go only to the controller observation stream.
                 for (int j = 0; j < t.m_ServerSynchronisedComponents.Count; j++)
                 {
                     var component = t.m_ServerSynchronisedComponents._items[j];
                     if (component is ServerIngredientContainer || component is ServerCookingHandler || component is ServerMixingHandler)
                     {
-                        if (component.GetServerUpdate() is Serialisable ser)
+                        var observation = component is ServerIngredientContainer ingredientContainer
+                            ? NativeIngredientContentsObservation.Capture(ingredientContainer)
+                            : component.GetServerUpdate();
+                        if (observation is Serialisable ser)
                         {
                             if (currentFrameData.ServerMessages == null)
                             {
@@ -156,6 +181,10 @@ namespace SuperchargedPatch
 
             }
             currentFrameData.FrameNumber = FrameNumber;
+            EntityCollectionTicks += System.Diagnostics.Stopwatch.GetTimestamp() - entityStart;
+            long kitchenStart = System.Diagnostics.Stopwatch.GetTimestamp();
+            try { NativeKitchenCheckpoint.CaptureFrame(currentFrameData.FrameNumber); }
+            finally { KitchenCaptureTicks += System.Diagnostics.Stopwatch.GetTimestamp() - kitchenStart; CollectionSamples++; }
             currentFrameData.InvalidStateReason = StateInvalidityManager.InvalidReason;
         }
 

@@ -298,11 +298,21 @@ namespace Hpmv
                     if (wm.m_interacting)
                     {
                         specificData.chopInteracters[chef] = TimeSpan.FromSeconds(0.2);
-                        specificData.itemBeingChopped = entityIdToRecord[(int)wm.m_itemHeader.m_uEntityID];
+                        var item = (int)wm.m_itemHeader.m_uEntityID;
+                        specificData.itemBeingChopped = item == 0 ? null : entityIdToRecord[item];
                     }
                     else
                     {
                         specificData.chopInteracters.Remove(chef);
+                        // SynchroniseInteractionState(false) carries no item
+                        // header. Once the last native interacter stops, the
+                        // workstation no longer has an item being worked. Keep
+                        // the item only while another observed interacter is
+                        // still active on the same workstation.
+                        if (specificData.chopInteracters.Count == 0)
+                        {
+                            specificData.itemBeingChopped = null;
+                        }
                     }
                 }
                 else if (payload is AttachStationMessage asm)
@@ -366,6 +376,12 @@ namespace Hpmv
                             data.interacters = data.interacters.ShallowCopyAndEnsureList();
                             data.interacters.Remove(entityRecord);
                             interactingWith.data.ChangeTo(data, frame);
+                            // The same native event clears the chef's current
+                            // interaction target. Keeping this reference made
+                            // later checkpoints claim that a chef was still
+                            // using a workstation after native state reported
+                            // InteractingEntity == -1.
+                            specificData.interactingWith = null;
                         }
                     }
                 }
@@ -380,9 +396,19 @@ namespace Hpmv
                     specificData.throwableItem.ignoredColliders =
                         tiam.m_colliders.Select(c => (Entity: entityIdToRecord[(int)c.entity.m_uEntityID], ColliderIndex: c.colliderIndex)).ToArray();
                 }
-                else if (payload is CannonModMessage cmm)
+                else if (payload is CannonMessage cmm)
                 {
                     specificData.rawGameEntityData = cmm.ToBytes();
+                }
+                else if (payload is NativeCannonAuxMessage ncam)
+                {
+                    specificData.rawNativeCannonAux = ncam.ToBytes();
+                }
+                else if (payload is PlateLifecycleAuxMessage plam)
+                {
+                    // Phase one deliberately leaves the plate observable during
+                    // native delivery animation. Actual retirement arrives later.
+                    specificData.rawPlateLifecycle = plam.ToBytes();
                 }
                 else if (payload is SessionInteractableMessage sim)
                 {
@@ -563,18 +589,28 @@ namespace Hpmv
                 }
             };
 
+            Action<GameEntityRecord> clearDestroyedWorkstationItem = retired =>
+            {
+                // Native completion destroys/replaces the workable item one
+                // frame before the final workstation-stop event. There is no
+                // separate WorkstationMessage on that completion frame, but
+                // ServerWorkstation.m_item is already null. Mirror that
+                // lifecycle without ending any still-active interacter.
+                foreach (var workstation in setup.entityRecords.GenAllEntities().Where(e => e.prefab.IsBoard))
+                {
+                    var data = workstation.data.Last();
+                    if (!ReferenceEquals(data.itemBeingChopped, retired)) continue;
+                    data.itemBeingChopped = null;
+                    workstation.data.ChangeTo(data, frame);
+                }
+            };
+
             Action<GameEntityRecord, uint> destroyEntity = (r, entityId) =>
             {
+                clearDestroyedWorkstationItem(r);
                 entityIdToRecord.Remove((int)entityId);
                 r.existed.ChangeTo(false, frame);
                 // Console.WriteLine($"Destroying {entityId} ({r.className} {r.displayName})");
-            };
-
-            Action<GameEntityRecord, uint> retireEntity = (r, entityId) =>
-            {
-                entityIdToRecord.Remove((int)entityId);
-                r.existed.ChangeTo(false, frame);
-                // Console.WriteLine($"Retiring {entityId} ({r.className} {r.displayName})");
             };
 
             // Console.WriteLine("Got message " + (MessageType) msg.Type);
@@ -703,7 +739,13 @@ namespace Hpmv
                 entityIdToRecord[entityId] = record;
             };
 
-            if (item is DestroyEntityMessage dem)
+            if (item is EntityRetirementMessage retirement)
+            {
+                // Actual native removal is an ID-map event during authoring.
+                // Target existence comes from the restored logical history.
+                entityIdToRecord.Remove((int)retirement.m_entityHeader.m_uEntityID);
+            }
+            else if (item is DestroyEntityMessage dem)
             {
                 // Console.WriteLine($"[WARP] Unmapped destroyed entity {dem.m_Header.m_uEntityID}");
                 entityIdToRecord.Remove((int)dem.m_Header.m_uEntityID);
@@ -767,7 +809,7 @@ namespace Hpmv
                     foreach (var (chef, remain) in chopInteracters)
                     {
                         var newRemain = remain - frameTime;
-                        if (newRemain < TimeSpan.Zero)
+                        if (newRemain < TimeSpan.Zero && newData.itemBeingChopped != null)
                         {
                             newData.itemBeingChopped.choppingProgress.ChangeTo(newData.itemBeingChopped.choppingProgress.Last() + 0.2, frame);
                             newRemain += TimeSpan.FromSeconds(0.2);

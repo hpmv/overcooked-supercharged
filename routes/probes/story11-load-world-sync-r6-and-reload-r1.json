@@ -1,0 +1,23 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"world-sync-cache","path":"M:\\projects\\game-test-2\\framework-run\\modules\\WorldSyncCache-r8b-reference-and-warp-rebase\\WorldSyncCache.r8b-reference-and-warp-rebase.dll","type":"SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule","sha256":"4B3A1994715B4A9AF36DBD95F793903AB68558AA7139E07476B3027380EF8574","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[
+    {"path":"bridge.loadComplete","equals":true},
+    {"path":"bridge.loading","equals":false},
+    {"path":"bridge.session.scene","equals":"s_sushi_1_1"}
+  ]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":1},
+    {"path":"requestPending","equals":false},
+    {"path":"freshLevelLoadObserved","equals":true}
+  ]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

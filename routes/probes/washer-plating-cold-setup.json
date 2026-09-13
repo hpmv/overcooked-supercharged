@@ -1,0 +1,37 @@
+{
+  "description": "Fresh native four-player cold setup for washer-side plating. No vessel receives ingredients during this setup.",
+  "timeoutFrames": 1200,
+  "jobs": [
+    {
+      "id": "W01-washer-board", "player": 1, "dependencies": [], "resources": ["right-cannon"],
+      "actions": [
+        {"type":"aim-cannon","cannon":"right","timeoutFrames":300},
+        {"type":"board-cannon","cannon":"right","timeoutFrames":300}
+      ]
+    },
+    {
+      "id": "W02-washer-arrive-and-clear-center", "player": 3, "dependencies": ["W01-washer-board"], "resources": ["right-cannon","right-fire-button"],
+      "actions": [
+        {"type":"fire-cannon","cannon":"right","passengerPlayer":1,"destinationRegion":"lower-left","timeoutFrames":300},
+        {"type":"navigate","target":{"x":22.2,"z":-12.7},"timeoutFrames":240}
+      ]
+    },
+    {
+      "id": "W03-cold-bun-and-sausage", "player": 2, "dependencies": [], "resources": ["bun-board","raw-sausage-handoff"],
+      "actions": [
+        {"type":"take","station":"HotdogBun","timeoutFrames":240},
+        {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":240},
+        {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":240},
+        {"type":"take","station":"Frankfurter","timeoutFrames":240},
+        {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00","timeoutFrames":240}
+      ]
+    },
+    {
+      "id": "W04-original-clean-plate-handoff", "player": 0, "dependencies": [], "resources": ["original-clean-plate","clean-handoff"],
+      "actions": [
+        {"type":"take","station":"plate:equipment_plate_01@19.20,-15.60","timeoutFrames":240},
+        {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40","timeoutFrames":240}
+      ]
+    }
+  ]
+}

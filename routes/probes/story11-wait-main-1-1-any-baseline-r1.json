@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.stage","equals":"kitchen_ready"},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true},{"path":"registryValidation.ok","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}}
+]

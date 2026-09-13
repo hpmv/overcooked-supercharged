@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace Hpmv
 {
-    public class InteractAction : GameAction {
+    public partial class InteractAction : GameAction {
         public IEntityReference Subject { get; set; }
         public bool Primary { get; set; } = true;
         public bool Prepare { get; set; } = false;
@@ -10,6 +10,7 @@ namespace Hpmv
         public bool ExpectSpawn { get; set; } = false;
         public bool DisallowDash { get; set; } = false;
         public bool DisallowOvershoot { get; set; } = false;
+        public bool RequireObservedTransfer { get; set; } = false;
 
         public override string Describe() {
             if (IsPickup) {
@@ -68,6 +69,7 @@ namespace Hpmv
         }
 
         public override GameActionOutput Step(GameActionInput input) {
+            if (RequireObservedTransfer) return StepObservedTransfer(input);
             var subjectEntity = GetInteractableEntity(input);
             if (subjectEntity == null) {
                 return new GameActionOutput();
@@ -161,6 +163,7 @@ namespace Hpmv
                 ExpectSpawn = ExpectSpawn,
                 DisallowDash = DisallowDash,
                 DisallowOvershoot = DisallowOvershoot,
+                RequireObservedTransfer = RequireObservedTransfer,
             };
         }
     }
@@ -175,6 +178,7 @@ namespace Hpmv
                 ExpectSpawn = action.ExpectSpawn,
                 DisallowDash = action.DisallowDash,
                 DisallowOvershoot = action.DisallowOvershoot,
+                RequireObservedTransfer = action.RequireObservedTransfer,
             };
         }
     }

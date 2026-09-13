@@ -1,0 +1,4915 @@
+{
+  "freshLevelLoadObserved": true,
+  "initialRegistry": [
+    {
+      "EntityId": 1,
+      "Name": "Plate 1",
+      "Pos": {
+        "X": 12,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 2,
+      "Name": "Plate 1 (3)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 3,
+      "Name": "Plate 1 (1)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 4,
+      "Name": "Plate 1 (4)",
+      "Pos": {
+        "X": 18,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 5,
+      "Name": "countertop_01_standard_edge (6)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": 0,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 6,
+      "Name": "countertop_01_standard_edge (11)",
+      "Pos": {
+        "X": 8.399999618530273,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 7,
+      "Name": "countertop_01_standard_edge (25)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 8,
+      "Name": "countertop_01_standard_edge (19)",
+      "Pos": {
+        "X": 19.200000762939453,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 9,
+      "Name": "countertop_01_standard_edge (17)",
+      "Pos": {
+        "X": 18,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 10,
+      "Name": "countertop_01_standard_edge (23)",
+      "Pos": {
+        "X": 9.600000381469727,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 11,
+      "Name": "countertop_01_standard_edge (20)",
+      "Pos": {
+        "X": 20.400001525878906,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 12,
+      "Name": "countertop_01_standard_edge (9)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -6,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 13,
+      "Name": "countertop_fake (5)",
+      "Pos": {
+        "X": 18,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 14,
+      "Name": "countertop_01_standard_edge (5)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -6,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 15,
+      "Name": "countertop_fake (7)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 16,
+      "Name": "countertop_01_standard_edge (12)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -2.4000000953674316,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 17,
+      "Name": "countertop_01_standard_edge (7)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": 0,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 18,
+      "Name": "countertop_01_corner",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 19,
+      "Name": "countertop_fake (8)",
+      "Pos": {
+        "X": 12,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 20,
+      "Name": "countertop_01_corner (1)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 21,
+      "Name": "countertop_fake (6)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 22,
+      "Name": "countertop_01_corner (2)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -7.200000286102295,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 23,
+      "Name": "countertop_01_corner (3)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -7.200000286102295,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 24,
+      "Name": "countertop_01_standard_edge (14)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -4.800000190734863,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 25,
+      "Name": "countertop_01_standard_edge (26)",
+      "Pos": {
+        "X": 12,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 26,
+      "Name": "countertop_01_standard_edge (18)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0,
+        "Z": 1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 27,
+      "Name": "ChoppingBoard_Side 5 (1)",
+      "Pos": {
+        "X": 9.59999942779541,
+        "Y": 0,
+        "Z": -7.199999809265137,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 28,
+      "Name": "ChoppingBoard_Side 5 (2)",
+      "Pos": {
+        "X": 19.200000762939453,
+        "Y": 0,
+        "Z": -7.200000286102295,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 29,
+      "Name": "DispenserCrate 3 (3)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -4.800000190734863,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "HandlePickupReferral",
+        "PickupItemSpawner",
+        "ItemCrateCosmeticDecisions",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerHandlePickupReferral",
+        "ServerAnticipateInteractionHighlight",
+        "ServerPickupItemSpawner",
+        "ServerItemCrateCosmeticDecisions",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientHandlePickupReferral",
+        "ClientAnticipateInteractionHighlight",
+        "ClientPickupItemSpawner",
+        "ClientItemCrateCosmeticDecisions",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 30,
+      "Name": "DispenserCrate 3 (4)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "HandlePickupReferral",
+        "PickupItemSpawner",
+        "ItemCrateCosmeticDecisions",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerHandlePickupReferral",
+        "ServerAnticipateInteractionHighlight",
+        "ServerPickupItemSpawner",
+        "ServerItemCrateCosmeticDecisions",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientHandlePickupReferral",
+        "ClientAnticipateInteractionHighlight",
+        "ClientPickupItemSpawner",
+        "ClientItemCrateCosmeticDecisions",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 31,
+      "Name": "ChoppingBoard_Side 5 (3)",
+      "Pos": {
+        "X": 8.399999618530273,
+        "Y": 0,
+        "Z": -7.200000286102295,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 32,
+      "Name": "ChoppingBoard_Side 5 (4)",
+      "Pos": {
+        "X": 20.400001525878906,
+        "Y": 0,
+        "Z": -7.200000286102295,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 33,
+      "Name": "workstation_plate_station",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -1.7999999523162842,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "AttachStation",
+        "PlateStation",
+        "AnticipateInteractionHighlight",
+        "EditorGridSnap",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerPlateStation",
+        "ServerAnticipateInteractionHighlight",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientPlateStation",
+        "ClientAnticipateInteractionHighlight",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        8,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 34,
+      "Name": "workstation_plate_return",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "PlateReturnStation",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerPlateReturnStation",
+        "ServerAnticipateInteractionHighlight",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientPlateReturnStation",
+        "ClientAnticipateInteractionHighlight",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 35,
+      "Name": "Bin 1",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -1.2000000476837158,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RubbishBin",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "TabletopConveyenceReceiver",
+        "AttachStation",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerRubbishBin",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientRubbishBin",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        48,
+        0,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 36,
+      "Name": "KillPlane",
+      "Pos": {
+        "X": 4.849999904632568,
+        "Y": 1.8200000524520874,
+        "Z": -4.269999980926514,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 37,
+      "Name": "KillPlane (1)",
+      "Pos": {
+        "X": 24.020000457763672,
+        "Y": 1.8200000524520874,
+        "Z": -4.239999771118164,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 38,
+      "Name": "KillPlane (2)",
+      "Pos": {
+        "X": 15.069999694824219,
+        "Y": 1.8200000524520874,
+        "Z": 3.4800000190734863,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 39,
+      "Name": "KillPlane (3)",
+      "Pos": {
+        "X": 14.260000228881836,
+        "Y": 1.8200000524520874,
+        "Z": -10.350000381469727,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 40,
+      "Name": "FlowManager",
+      "Pos": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "CampaignFlowController",
+        "LevelIntroFlowroutine",
+        "TutorialPopupController",
+        "ServerCampaignFlowController",
+        "ServerTutorialPopupController",
+        "ClientCampaignFlowController",
+        "ClientTutorialPopupController",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        31,
+        36
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 41,
+      "Name": "LimitedQuantityItemManager",
+      "Pos": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "LimitedQuantityItemManager",
+        "ServerLimitedQuantityItemManager",
+        "ClientLimitedQuantityItemManager",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 42,
+      "Name": "KillPlane",
+      "Pos": {
+        "X": 7,
+        "Y": -1,
+        "Z": 5,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 43,
+      "Name": "Player 3",
+      "Pos": {
+        "X": 17.826292037963867,
+        "Y": 0.00018894672393798828,
+        "Z": -5.834194183349609,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 44,
+      "Name": "Player 1",
+      "Pos": {
+        "X": 11.426291465759277,
+        "Y": 0.00018894672393798828,
+        "Z": -1.5841941833496094,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 45,
+      "Name": "Player 4",
+      "Pos": {
+        "X": 11.366291999816895,
+        "Y": 0.00018894672393798828,
+        "Z": -5.734193801879883,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 46,
+      "Name": "Player 2",
+      "Pos": {
+        "X": 17.786293029785156,
+        "Y": 0.00018894672393798828,
+        "Z": -1.6741938591003418,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 47,
+      "Name": "Plate 1 (3)_Rigidbody",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 48,
+      "Name": "Plate 1 (1)_Rigidbody",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 49,
+      "Name": "Plate 1_Rigidbody",
+      "Pos": {
+        "X": 12,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    },
+    {
+      "EntityId": 50,
+      "Name": "Plate 1 (4)_Rigidbody",
+      "Pos": {
+        "X": 18,
+        "Y": 0.550000011920929,
+        "Z": -3.6000001430511475,
+        "__isset": {
+          "x": true,
+          "y": true,
+          "z": true
+        }
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": null,
+      "__isset": {
+        "entityId": true,
+        "name": true,
+        "pos": true,
+        "components": true,
+        "syncEntityTypes": true,
+        "spawnNames": false
+      }
+    }
+  ],
+  "registry": [
+    {
+      "EntityId": 1,
+      "Name": "Plate 1",
+      "Pos": {
+        "X": 12,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 2,
+      "Name": "Plate 1 (3)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 3,
+      "Name": "Plate 1 (1)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 4,
+      "Name": "Plate 1 (4)",
+      "Pos": {
+        "X": 18,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "Plate",
+        "HandlePlacementReferral",
+        "PhysicalAttachment",
+        "CarryableItem",
+        "TeleportableItem",
+        "HandlePickupReferral",
+        "IngredientContainer",
+        "IngredientContentGUI",
+        "ContentsDisposalBehaviour",
+        "PlacementLayerSwapper",
+        "PlacementCollisionSwapper",
+        "AttachedOrderCosmeticDecisions",
+        "CookableProperties",
+        "PlacementContainer",
+        "AnticipateInteractionHighlight",
+        "CleanPlateUtensilRespawnBehaviour",
+        "EditorGridSnap",
+        "ServerWorldObjectSynchroniser",
+        "ServerPhysicalAttachment",
+        "ServerPlate",
+        "ServerHandlePlacementReferral",
+        "ServerHandlePickupReferral",
+        "ServerIngredientContainer",
+        "ServerContentsDisposalBehaviour",
+        "ServerPlacementContainer",
+        "ServerIngredientContentGUI",
+        "ServerAnticipateInteractionHighlight",
+        "ServerAttachedOrderCosmeticDecisions",
+        "ServerTeleportableItem",
+        "ServerCleanPlateUtensilRespawnBehaviour",
+        "ServerCarryableItem",
+        "ClientWorldObjectSynchroniser",
+        "ClientPhysicalAttachment",
+        "RendererSceneInfo",
+        "EmptyLerp",
+        "ClientPlate",
+        "ClientHandlePlacementReferral",
+        "ClientHandlePickupReferral",
+        "ClientIngredientContainer",
+        "ClientContentsDisposalBehaviour",
+        "ClientPlacementContainer",
+        "ClientIngredientContentGUI",
+        "ClientAnticipateInteractionHighlight",
+        "ClientAttachedOrderCosmeticDecisions",
+        "ClientTeleportableItem",
+        "ClientUtensilRespawnBehaviour",
+        "ClientCarryableItem",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        1,
+        11,
+        0,
+        0,
+        0,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 5,
+      "Name": "countertop_01_standard_edge (6)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": 0
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 6,
+      "Name": "countertop_01_standard_edge (11)",
+      "Pos": {
+        "X": 8.399999618530273,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 7,
+      "Name": "countertop_01_standard_edge (25)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 8,
+      "Name": "countertop_01_standard_edge (19)",
+      "Pos": {
+        "X": 19.200000762939453,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 9,
+      "Name": "countertop_01_standard_edge (17)",
+      "Pos": {
+        "X": 18,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 10,
+      "Name": "countertop_01_standard_edge (23)",
+      "Pos": {
+        "X": 9.600000381469727,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 11,
+      "Name": "countertop_01_standard_edge (20)",
+      "Pos": {
+        "X": 20.400001525878906,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 12,
+      "Name": "countertop_01_standard_edge (9)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -6
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 13,
+      "Name": "countertop_fake (5)",
+      "Pos": {
+        "X": 18,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 14,
+      "Name": "countertop_01_standard_edge (5)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -6
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 15,
+      "Name": "countertop_fake (7)",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 16,
+      "Name": "countertop_01_standard_edge (12)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -2.4000000953674316
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 17,
+      "Name": "countertop_01_standard_edge (7)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": 0
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 18,
+      "Name": "countertop_01_corner",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 19,
+      "Name": "countertop_fake (8)",
+      "Pos": {
+        "X": 12,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 20,
+      "Name": "countertop_01_corner (1)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 21,
+      "Name": "countertop_fake (6)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 22,
+      "Name": "countertop_01_corner (2)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -7.200000286102295
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 23,
+      "Name": "countertop_01_corner (3)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -7.200000286102295
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Flammable",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ClientFlammable",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        5
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 24,
+      "Name": "countertop_01_standard_edge (14)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -4.800000190734863
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 25,
+      "Name": "countertop_01_standard_edge (26)",
+      "Pos": {
+        "X": 12,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 26,
+      "Name": "countertop_01_standard_edge (18)",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0,
+        "Z": 1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "TabletopConveyenceWindReceiver",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 27,
+      "Name": "ChoppingBoard_Side 5 (1)",
+      "Pos": {
+        "X": 9.59999942779541,
+        "Y": 0,
+        "Z": -7.199999809265137
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 28,
+      "Name": "ChoppingBoard_Side 5 (2)",
+      "Pos": {
+        "X": 19.200000762939453,
+        "Y": 0,
+        "Z": -7.200000286102295
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 29,
+      "Name": "DispenserCrate 3 (3)",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -4.800000190734863
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "HandlePickupReferral",
+        "PickupItemSpawner",
+        "ItemCrateCosmeticDecisions",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerHandlePickupReferral",
+        "ServerAnticipateInteractionHighlight",
+        "ServerPickupItemSpawner",
+        "ServerItemCrateCosmeticDecisions",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientHandlePickupReferral",
+        "ClientAnticipateInteractionHighlight",
+        "ClientPickupItemSpawner",
+        "ClientItemCrateCosmeticDecisions",
+        "CachedObject",
+        "TriggerRecorder",
+        "SpawnableEntityCollection"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": [
+        "SushiPrawn"
+      ]
+    },
+    {
+      "EntityId": 30,
+      "Name": "DispenserCrate 3 (4)",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "HandlePickupReferral",
+        "PickupItemSpawner",
+        "ItemCrateCosmeticDecisions",
+        "AttachStation",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerHandlePickupReferral",
+        "ServerAnticipateInteractionHighlight",
+        "ServerPickupItemSpawner",
+        "ServerItemCrateCosmeticDecisions",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientHandlePickupReferral",
+        "ClientAnticipateInteractionHighlight",
+        "ClientPickupItemSpawner",
+        "ClientItemCrateCosmeticDecisions",
+        "CachedObject",
+        "TriggerRecorder",
+        "SpawnableEntityCollection"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": [
+        "SushiFish"
+      ]
+    },
+    {
+      "EntityId": 31,
+      "Name": "ChoppingBoard_Side 5 (3)",
+      "Pos": {
+        "X": 8.399999618530273,
+        "Y": 0,
+        "Z": -7.200000286102295
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 32,
+      "Name": "ChoppingBoard_Side 5 (4)",
+      "Pos": {
+        "X": 20.400001525878906,
+        "Y": 0,
+        "Z": -7.200000286102295
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "Workstation",
+        "AttachStation",
+        "Interactable",
+        "Flammable",
+        "AnticipateInteractionHighlight",
+        "TabletopConveyenceReceiver",
+        "StaticGridLocation",
+        "ChoppingStationCosmeticDecisions",
+        "EditorGridSnap",
+        "ServerFlammable",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerWorkstation",
+        "ServerAnticipateInteractionHighlight",
+        "ServerChoppingStationCosmeticDecisions",
+        "ServerTabletopConveyenceReceiver",
+        "ServerInteractable",
+        "ClientFlammable",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientWorkstation",
+        "ClientAnticipateInteractionHighlight",
+        "ClientChoppingStationCosmeticDecisions",
+        "ClientTabletopConveyenceReceiver",
+        "ClientInteractable",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        5,
+        15,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 33,
+      "Name": "workstation_plate_station",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -1.7999999523162842
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "InheritFromModelPrefab",
+        "AttachStation",
+        "PlateStation",
+        "AnticipateInteractionHighlight",
+        "EditorGridSnap",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerPlateStation",
+        "ServerAnticipateInteractionHighlight",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientPlateStation",
+        "ClientAnticipateInteractionHighlight",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        8,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 34,
+      "Name": "workstation_plate_return",
+      "Pos": {
+        "X": 21.600000381469727,
+        "Y": 0,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "AttachStation",
+        "PlateReturnStation",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerPlateReturnStation",
+        "ServerAnticipateInteractionHighlight",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientPlateReturnStation",
+        "ClientAnticipateInteractionHighlight",
+        "CachedObject",
+        "TriggerRecorder",
+        "SpawnableEntityCollection"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        0,
+        0
+      ],
+      "SpawnNames": [
+        "CleanPlateStack"
+      ]
+    },
+    {
+      "EntityId": 35,
+      "Name": "Bin 1",
+      "Pos": {
+        "X": 7.199999809265137,
+        "Y": 0,
+        "Z": -1.2000000476837158
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RubbishBin",
+        "AnticipateInteractionHighlight",
+        "StaticGridLocation",
+        "EditorGridSnap",
+        "TabletopConveyenceReceiver",
+        "AttachStation",
+        "ServerAttachStation",
+        "ServerAttachmentCatchingProxy",
+        "ServerRubbishBin",
+        "ServerAnticipateInteractionHighlight",
+        "ServerTabletopConveyenceReceiver",
+        "ClientAttachStation",
+        "ClientAttachmentCatchingProxy",
+        "ClientRubbishBin",
+        "ClientAnticipateInteractionHighlight",
+        "ClientTabletopConveyenceReceiver",
+        "CachedObject",
+        "TriggerRecorder"
+      ],
+      "SyncEntityTypes": [
+        15,
+        0,
+        48,
+        0,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 36,
+      "Name": "KillPlane",
+      "Pos": {
+        "X": 4.849999904632568,
+        "Y": 1.8200000524520874,
+        "Z": -4.269999980926514
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 37,
+      "Name": "KillPlane (1)",
+      "Pos": {
+        "X": 24.020000457763672,
+        "Y": 1.8200000524520874,
+        "Z": -4.239999771118164
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 38,
+      "Name": "KillPlane (2)",
+      "Pos": {
+        "X": 15.069999694824219,
+        "Y": 1.8200000524520874,
+        "Z": 3.4800000190734863
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 39,
+      "Name": "KillPlane (3)",
+      "Pos": {
+        "X": 14.260000228881836,
+        "Y": 1.8200000524520874,
+        "Z": -10.350000381469727
+      },
+      "Components": [
+        "Transform",
+        "BoxCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 40,
+      "Name": "FlowManager",
+      "Pos": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0
+      },
+      "Components": [
+        "Transform",
+        "CampaignFlowController",
+        "LevelIntroFlowroutine",
+        "TutorialPopupController",
+        "ServerCampaignFlowController",
+        "ServerTutorialPopupController",
+        "ClientCampaignFlowController",
+        "ClientTutorialPopupController",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        31,
+        36
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 41,
+      "Name": "LimitedQuantityItemManager",
+      "Pos": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0
+      },
+      "Components": [
+        "Transform",
+        "LimitedQuantityItemManager",
+        "ServerLimitedQuantityItemManager",
+        "ClientLimitedQuantityItemManager",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 42,
+      "Name": "KillPlane",
+      "Pos": {
+        "X": 7,
+        "Y": -1,
+        "Z": 5
+      },
+      "Components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "RespawnCollider",
+        "ServerRespawnCollider",
+        "ClientRespawnCollider",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        52
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 43,
+      "Name": "Player 3",
+      "Pos": {
+        "X": 17.826292037963867,
+        "Y": 0.04999995231628418,
+        "Z": -5.834194183349609
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 44,
+      "Name": "Player 1",
+      "Pos": {
+        "X": 11.426291465759277,
+        "Y": 0.04999995231628418,
+        "Z": -1.5841941833496094
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 45,
+      "Name": "Player 4",
+      "Pos": {
+        "X": 11.366291999816895,
+        "Y": 0.04999995231628418,
+        "Z": -5.734193801879883
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 46,
+      "Name": "Player 2",
+      "Pos": {
+        "X": 17.786293029785156,
+        "Y": 0.04999995231628418,
+        "Z": -1.6741938591003418
+      },
+      "Components": [
+        "Transform",
+        "PlayerControls",
+        "FlowbasedComponentActivation",
+        "PlayerIDProvider",
+        "Rigidbody",
+        "CapsuleCollider",
+        "RigidbodyMotion",
+        "GroundCast",
+        "CollisionRecorder",
+        "PositionRecorder",
+        "PlayerAttachmentCarrier",
+        "AttachmentThrower",
+        "AttachmentCatcher",
+        "SurfaceMovable",
+        "WindAccumulator",
+        "TeleportablePlayer",
+        "ActivationCallback",
+        "TriggerCallback",
+        "PlayerRespawnBehaviour",
+        "PlayerSlipBehaviour",
+        "PlayerAnimationDecisions",
+        "ChefMeshReplacer",
+        "HeldItemsMeshVisibility",
+        "HatMeshVisibility",
+        "TailMeshVisibility",
+        "BodyMeshVisibility",
+        "OverheadIconGUI",
+        "EmoteWheel",
+        "PlayerControlsImpl_Default",
+        "ServerChefSynchroniser",
+        "EmptyLerp",
+        "ServerInputReceiver",
+        "ServerPlayerAttachmentCarrier",
+        "ServerTeleportablePlayer",
+        "ServerHeldItemsMeshVisibility",
+        "ServerHatMeshVisibility",
+        "ServerTailMeshVisibility",
+        "ServerPlayerRespawnBehaviour",
+        "ServerEmoteWheel",
+        "ServerPlayerControlsImpl_Default",
+        "ServerAttachmentThrower",
+        "ServerAttachmentCatcher",
+        "ServerBodyMeshVisibility",
+        "ClientOnTheServerChefSynchroniser",
+        "ClientInputTransmitter",
+        "ClientPlayerAttachmentCarrier",
+        "ClientTeleportablePlayer",
+        "ClientHeldItemsMeshVisibility",
+        "ClientHatMeshVisibility",
+        "ClientTailMeshVisibility",
+        "ClientPlayerRespawnBehaviour",
+        "ClientEmoteWheel",
+        "ClientPlayerControlsImpl_Default",
+        "ClientAttachmentThrower",
+        "ClientAttachmentCatcher",
+        "ClientBodyMeshVisibility",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        3,
+        0,
+        29,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        30,
+        0,
+        37,
+        0
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 47,
+      "Name": "Plate 1 (3)_Rigidbody",
+      "Pos": {
+        "X": 10.800000190734863,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 48,
+      "Name": "Plate 1 (1)_Rigidbody",
+      "Pos": {
+        "X": 16.799999237060547,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 49,
+      "Name": "Plate 1_Rigidbody",
+      "Pos": {
+        "X": 12,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": []
+    },
+    {
+      "EntityId": 50,
+      "Name": "Plate 1 (4)_Rigidbody",
+      "Pos": {
+        "X": 18,
+        "Y": 0.5,
+        "Z": -3.6000001430511475
+      },
+      "Components": [
+        "Transform",
+        "Rigidbody",
+        "RigidbodyMotion",
+        "ObjectContainer",
+        "ForwardCollisionToChildren",
+        "GroundCast",
+        "PhysicsObjectSynchroniser",
+        "SurfaceMovable",
+        "ServerPhysicsObjectSynchroniser",
+        "CollisionRecorder",
+        "ServerClientPhysicsObjectSynchroniser",
+        "EmptyLerp",
+        "CachedObject"
+      ],
+      "SyncEntityTypes": [
+        47
+      ],
+      "SpawnNames": []
+    }
+  ]
+}

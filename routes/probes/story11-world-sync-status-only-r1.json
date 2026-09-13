@@ -1,0 +1,3 @@
+[
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}}
+]

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><TargetFramework>net10.0</TargetFramework><AssemblyName>AuthoringFixture$(Revision)</AssemblyName><DefineConstants>$(DefineConstants);REVISION_$(Revision)</DefineConstants></PropertyGroup>
+ <ItemGroup><ProjectReference Include="../Contract/Contract.csproj" /></ItemGroup>
+</Project>

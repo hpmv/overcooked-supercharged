@@ -1,0 +1,87 @@
+{
+  "description": "Matched serial sauce probe after independently replaying the SAME fresh prefix and SAME observed offmixer setup. P0 plate13/source37/temp40/output49; all other chefs neutral. Ordinary native sauce order and checks, no score/delivery target. Abort before any observed native burn/overmix deadline.",
+  "timeoutFrames": 900,
+  "jobs": [
+    {
+      "id": "S01-serial-sauce-temp40",
+      "player": 0,
+      "dependencies": [],
+      "resources": [
+        "plate13",
+        "base151",
+        "source37",
+        "temp40",
+        "dispenser72",
+        "switch79",
+        "output49"
+      ],
+      "actions": [
+        {
+          "type": "switch-condiment",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "index": 0
+        },
+        {
+          "type": "take",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "13"
+        },
+        {
+          "type": "assemble",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "37"
+        },
+        {
+          "type": "apply",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "72",
+          "expectedIngredientId": 17094
+        },
+        {
+          "type": "place",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "40"
+        },
+        {
+          "type": "switch-condiment",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "index": 1
+        },
+        {
+          "type": "take",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "40"
+        },
+        {
+          "type": "apply",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "72",
+          "expectedIngredientId": 158482
+        },
+        {
+          "type": "place",
+          "timeoutFrames": 300,
+          "dash": true,
+          "shortDash": true,
+          "station": "49"
+        }
+      ]
+    }
+  ]
+}

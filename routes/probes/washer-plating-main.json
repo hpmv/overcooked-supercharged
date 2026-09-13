@@ -1,0 +1,32 @@
+{
+  "description": "After the exact cold setup, P0 makes one native unplated Plain, P1 plates it across LL counter50 using the original plate from44, and P0 stages that same completed plate on the LR output. No delivery or score claim.",
+  "timeoutFrames": 1800,
+  "jobs": [
+    {
+      "id": "W05-native-hotdog-at-shared-counter", "player": 0, "dependencies": [], "resources": ["raw-sausage-handoff","bun-board","near-pot","near-pot-home","plating-handoff"],
+      "actions": [
+        {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00","timeoutFrames":180},
+        {"type":"place","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":180},
+        {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":180},
+        {"type":"cook","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":900},
+        {"type":"combine","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","expectedIngredientIds":[262914,284626],"timeoutFrames":180},
+        {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@15.60,-18.00","timeoutFrames":240}
+      ]
+    },
+    {
+      "id": "W06-washer-plates-exact-hotdog", "player": 1, "dependencies": ["W05-native-hotdog-at-shared-counter"], "resources": ["clean-handoff","plating-handoff","original-clean-plate"],
+      "actions": [
+        {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40","timeoutFrames":180},
+        {"type":"assemble","station":"counter:dlc08_countertop_01_standard_circus@15.60,-18.00","expectedRecipeId":296560,"timeoutFrames":240},
+        {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@15.60,-18.00","timeoutFrames":180}
+      ]
+    },
+    {
+      "id": "W07-center-recovers-completed-plate", "player": 0, "dependencies": ["W06-washer-plates-exact-hotdog"], "resources": ["plating-handoff","original-clean-plate","lower-right-output"],
+      "actions": [
+        {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@15.60,-18.00","timeoutFrames":180},
+        {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@25.20,-20.40","timeoutFrames":240}
+      ]
+    }
+  ]
+}

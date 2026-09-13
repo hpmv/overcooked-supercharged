@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-managed-mutation-tracer","operation":"mark","args":{"label":"after-replay266"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-managed-mutation-tracer","operation":"status","args":{}}}
+]

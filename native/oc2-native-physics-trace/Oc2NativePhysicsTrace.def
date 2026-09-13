@@ -1,0 +1,9 @@
+LIBRARY Oc2NativePhysicsTrace
+EXPORTS
+    oc2_trace_api_version
+    oc2_trace_install
+    oc2_trace_uninstall
+    oc2_trace_clear
+    oc2_trace_mark
+    oc2_trace_status
+    oc2_trace_read

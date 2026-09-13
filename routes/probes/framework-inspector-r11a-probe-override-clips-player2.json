@@ -1,0 +1,45 @@
+[
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "animator-checkpoint-inspector",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\AnimatorCheckpointInspector-r11a\\AnimatorCheckpointInspector.r11a.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.AnimatorCheckpointInspectorModule",
+      "sha256": "99BC46BD33848428B28A0349F37366B2C6A9E27C1B63E0938D23E94630EEAA62",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "probe-override-clip-playables",
+      "args": {
+        "nativePath": "M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r9c-override-clip-probe-build\\Oc2NativeAnimatorCheckpoint.r9c.dll",
+        "sha256": "E5291F3FDE6357CF7A57C663A8B7A212FDD578033386DE567C487F8AE68DE6E2",
+        "animatorPath": "Chefs/Player 2/Chef",
+        "acknowledgeSacrificialProcess": true
+      }
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "dump-resume-ready-owner-state",
+      "args": {}
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "dump-resume-ready-native-state",
+      "args": {}
+    }
+  }
+]

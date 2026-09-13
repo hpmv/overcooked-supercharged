@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><NoWarn>0649</NoWarn></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../framework/patch/NativeIteratorCopy.cs" Link="NativeIteratorCopy.cs" />
+    <Compile Include="../../framework/patch/NativeCannonFlightCheckpoint.cs" Link="NativeCannonFlightCheckpoint.cs" />
+  </ItemGroup>
+</Project>

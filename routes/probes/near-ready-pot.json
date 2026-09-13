@@ -1,0 +1,33 @@
+{
+  "description": "Native mechanism probe for direct pot harvest: prepare one bun, hold it while the original sausage pot reaches native Cooked, combine into that same bun, and place the unplated plain hotdog on an ordinary counter. The pot is never picked up. The probe may begin its neutral wait earlier than the adaptive policy's 11-second admission window.",
+  "timeoutFrames": 1800,
+  "jobs": [
+    {
+      "id": "NP01-load-near-pot", "player": 2, "dependencies": [], "resources": ["near-pot", "sausage-source"],
+      "actions": [
+        {"type":"take","station":"Frankfurter","timeoutFrames":300},
+        {"type":"navigate","target":{"x":13.6,"z":-12.2},"timeoutFrames":300},
+        {"type":"throw","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":240}
+      ]
+    },
+    {
+      "id": "NP02-prepare-bun", "player": 2, "dependencies": ["NP01-load-near-pot"], "resources": ["bun-board"],
+      "actions": [
+        {"type":"take","station":"HotdogBun","timeoutFrames":300},
+        {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+        {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300}
+      ]
+    },
+    {
+      "id": "NP03-held-bun-native-wait-and-harvest", "player": 0, "dependencies": ["NP02-prepare-bun"],
+      "resources": ["near-pot", "pot-home", "bun-board", "output-counter"],
+      "actions": [
+        {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+        {"type":"navigate","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":300},
+        {"type":"cook","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":900},
+        {"type":"combine","station":"pot:dlc08_utensil_pot_01@16.80,-10.80","expectedIngredientIds":[262914,284626],"timeoutFrames":300},
+        {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@19.20,-10.80","timeoutFrames":300}
+      ]
+    }
+  ]
+}
