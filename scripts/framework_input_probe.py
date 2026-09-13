@@ -10,7 +10,8 @@ from compare_framework_frames import first_difference
 from framework_rpc import Client, ControllerClient
 from framework_pause_boundary import observe_settled_pause, PauseBoundaryError
 from framework_native_search import (boundary_matches, compare_boundary, exact_values, food_trees, gameplay_round,
-                                    require_native_boundary, require_recorded_completion, native_clock_state)
+                                    require_native_boundary, require_recorded_completion, require_recorded_terminal,
+                                    native_clock_state)
 from framework_story11_registry import RegistryEvidence, world_proof
 
 
@@ -291,6 +292,81 @@ def native_physics_comparison(original, replay, fixed_entity_ids,
     }
 
 
+def round_end_terminal_comparison(original, replay, original_receipt, replay_receipt,
+                                  fixed_entity_ids, replay_native, checkpoint_frame):
+    """Exact pristine terminal equality, excluding only named authoring/allocation evidence."""
+    if not all(isinstance(value, dict) for value in (original, replay, original_receipt, replay_receipt)):
+        raise ValueError('Round-end terminal observations and receipts must be objects.')
+    raw_fields = ('outcome', 'active', 'error', 'startFrame', 'payloadFrames',
+                  'totalFramesIncludingRelease', 'emittedFrames', 'observedFrames',
+                  'recordingSha256', 'expectedTerminalGameState', 'observedTerminalGameState',
+                  'terminalFrame', 'terminalObservedFrames', 'terminalEmittedFrames')
+    receipt_fields = ('frame', 'phase', 'serverIteratorPc', 'clientIteratorPc',
+                      'dormantOutroPc', 'deferredServerPc', 'clientTimerZeroCalls')
+    def food(value):
+        result = copy.deepcopy(value)
+        if not isinstance(result, dict) or result.get('source') != 'native-server-preparation-composition' or \
+                not isinstance(result.get('entities'), list):
+            raise ValueError('Round-end receipt lacks native food evidence.')
+        result.pop('unityFrame', None)
+        return result
+    physics = native_physics_comparison(original_receipt.get('physics'), replay_receipt.get('physics'),
+                                        fixed_entity_ids, replay_native, checkpoint_frame)
+    checks = {
+        'controllerFrame': original.get('frame') == replay.get('frame'),
+        'controllerEntities': exact_values(original.get('entities'), replay.get('entities')),
+        'controllerRegistry': exact_values(original.get('registry'), replay.get('registry')),
+        'controllerRawReceipt': exact_values(
+            {field: original.get('rawInput', {}).get(field) for field in raw_fields},
+            {field: replay.get('rawInput', {}).get(field) for field in raw_fields}),
+        'nativeReceiptScalars': exact_values(
+            {field: original_receipt.get(field) for field in receipt_fields},
+            {field: replay_receipt.get(field) for field in receipt_fields}),
+        'lifecycle': exact_values(original_receipt.get('lifecycle'), replay_receipt.get('lifecycle')),
+        'nativeRound': exact_values(gameplay_round(original_receipt.get('nativeRound')),
+                                    gameplay_round(replay_receipt.get('nativeRound'))),
+        'nativeFood': exact_values(food(original_receipt.get('food')), food(replay_receipt.get('food'))),
+        'nativePhysics': physics['equal'] is True,
+        'nativeClocks': exact_values(original_receipt.get('clocks'), replay_receipt.get('clocks')),
+        'nonceProgression': type(original_receipt.get('nonce')) is int and
+                            replay_receipt.get('nonce') == original_receipt['nonce'] + 1,
+    }
+    return {
+        'equal': all(checks.values()), 'checks': checks,
+        'nativePhysicsComparison': physics,
+        'scope': ('Exact terminal controller, lifecycle, native round/food/clock and normalized physics state; '
+                  'nonce must advance once and native food Unity-frame telemetry is excluded.'),
+    }
+
+
+def round_end_contact_sidecar_comparison(status, baseline, checkpoint_frame,
+                                         restore_applied, include_transform_dispatch):
+    """Validate the one capture/one replay-restore sidecar lifecycle."""
+    if not isinstance(status, dict) or not isinstance(baseline, dict):
+        raise ValueError('Round-end contact sidecar status and baseline must be objects.')
+    expected_restores = baseline.get('restores', 0) + (1 if restore_applied else 0)
+    checks = {
+        'pendingActionClear': status.get('pendingContactPoolAction') == 'none',
+        'snapshotCaptured': status.get('contactPoolSnapshotCaptured') is True,
+        'snapshotFrame': status.get('contactPoolSnapshotFrame') == checkpoint_frame,
+        'captureCount': status.get('contactPoolCaptures') == baseline.get('captures', 0) + 1,
+        'restorePending': status.get('automaticRestorePending') is (not restore_applied),
+        'restoreCount': status.get('contactPoolRestores') == expected_restores,
+    }
+    if include_transform_dispatch:
+        checks.update({
+            'transformSnapshotCaptured': status.get('transformDispatchSnapshotCaptured') is True,
+            'transformSnapshotFrame': status.get('transformDispatchSnapshotFrame') == checkpoint_frame,
+            'transformCaptureCount': status.get('transformDispatchCaptures') ==
+                                     baseline.get('transformCaptures', 0) + 1,
+            'transformRestoreCount': status.get('transformDispatchRestores') ==
+                                     baseline.get('transformRestores', 0) +
+                                     (1 if restore_applied else 0),
+        })
+    return {'equal': all(checks.values()), 'checks': checks,
+            'phase': 'restored-before-replay' if restore_applied else 'captured-before-replay'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
@@ -345,6 +421,9 @@ def main():
                               'and after every publication.'))
     parser.add_argument('--inspect-world-sync-cache', action='store_true',
                         help='Save the active world-sync cache status at the checkpoint boundary.')
+    parser.add_argument('--expect-round-end', action='store_true',
+                        help='Prove the pristine natural RunLevelOutro terminal, automatic unwind, and replay.')
+    parser.add_argument('--round-end-latch-slot', default='round-end-checkpoint')
     args = parser.parse_args()
     if args.segments and args.frame_capture:
         parser.error('Use either --segments or --frame-capture, not both.')
@@ -358,6 +437,12 @@ def main():
         parser.error('--restore-transform-dispatch requires --restore-contact-manager-free-stack.')
     if args.reuse_contact_manager_checkpoint and not args.restore_contact_manager_free_stack:
         parser.error('--reuse-contact-manager-checkpoint requires --restore-contact-manager-free-stack.')
+    if args.expect_round_end and (args.expect_pickup or args.expect_delivery or
+            args.reuse_contact_manager_checkpoint or
+            args.inspect_animator_history or args.arm_phase_trace_before_warp or
+            args.mark_native_trace or args.split_native_trace_around_warp or
+            args.save_managed_phase_traces or args.reconcile_dynamic_registry):
+        parser.error('--expect-round-end currently requires the isolated round-end proof path.')
     if not 0 <= args.frame_capture_neutral_tail <= 36000:
         parser.error('Use 0..36000 appended neutral frames.')
     if not 1 <= args.frames <= 36000:
@@ -375,6 +460,7 @@ def main():
     began = time.monotonic()
     contact_pool_start = None
     contact_pool_cleanup_needed = False
+    round_end_cleanup_needed = False
     split_trace_config = None
     registry_evidence = RegistryEvidence() if args.reconcile_dynamic_registry else None
 
@@ -437,6 +523,27 @@ def main():
         if output is not None:
             (args.out/output).write_text(json.dumps(receipt['detail'], indent=2))
         return receipt
+
+    def arm_round_end(frame, label):
+        nonlocal round_end_cleanup_needed
+        call('bridge', {'command': 'pause'}, label + '-fence')
+        result = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                                 'operation': 'arm', 'args': {'frame': frame}}, label)['detail']['result']
+        if result.get('phase') != 'armed' or result.get('active') is not True or \
+                result.get('targetFrame') != frame or result.get('failure'):
+            raise RuntimeError('Pristine round-end latch did not arm for the exact raw-input start frame.')
+        round_end_cleanup_needed = True
+        return result
+
+    def round_end_receipt(nonce, label):
+        call('bridge', {'command': 'pause'}, label + '-fence')
+        status = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                                 'operation': 'status', 'args': {}}, label)['detail']['result']
+        matches = [receipt for receipt in status.get('terminalReceipts', [])
+                   if isinstance(receipt, dict) and receipt.get('nonce') == nonce]
+        if len(matches) != 1:
+            raise RuntimeError('Exact pristine round-end terminal receipt is unavailable.')
+        return matches[0], status
 
     def reconcile_registry(state, native, label):
         if registry_evidence is None:
@@ -653,6 +760,117 @@ def main():
             call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
                             'operation': 'clear', 'args': {}}, 'native-trace-clear-before-original')
         mark_native_trace(220, frame, 'native-trace-before-original')
+        if args.expect_round_end:
+            request.update(expectedTerminalGameState='RunLevelOutro',
+                           warpToStartOnTerminal=True, development=True)
+            first_arm = arm_round_end(frame, 'round-end-original-arm')
+            call('bridge', {'command': 'arm'}, 'input-arm')
+            call('controller', request, 'input')
+
+            # The terminal callback queues its rewind locally in the controller;
+            # Python first regains a settled boundary after lifecycle restoration.
+            restored = settled('restored')
+            original = call('controller', {'command': 'terminal-inspect'}, 'original-terminal')
+            first_receipt, first_status = round_end_receipt(first_arm['nonce'], 'original-terminal-latch')
+            exported = call('controller', {'command': 'record-input',
+                                            'path': f'input-probe-{evidence_key}-{frame}.json'}, 'export')
+            recording = json.loads(Path(exported['path']).read_text())
+            count = require_recorded_terminal(original, recording, frame)
+            if recording['payloadFrames'] != sum(segment['frames'] for segment in request['segments']):
+                raise RuntimeError('Exported terminal payload length differs from requested input.')
+            if first_receipt.get('frame') != frame + count or first_status.get('failure'):
+                raise RuntimeError('First native terminal receipt differs from the controller terminal boundary.')
+            (args.out/'recording.json').write_text(json.dumps(recording, indent=2))
+            (args.out/'original-terminal-receipt.json').write_text(json.dumps(first_receipt, indent=2))
+
+            restore_status = call('bridge', {'command': 'status'}, 'restore-native')
+            restore = restore_status['bridge']['nativeCheckpoints']['lastRestore']
+            restored_native = native_observation('restored-native')
+            require_native_boundary(restored_native)
+            old_attempts = base_native['bridge']['nativeCheckpoints']['restoreAttempts']
+            if restored['frame'] != frame or not restore or restore.get('verified') is not True or \
+                    restore.get('frame') != frame or restore.get('attempt', -1) <= old_attempts:
+                raise RuntimeError('Automatic terminal unwind did not verify the requested native checkpoint.')
+            compared = compare_boundary(base, base_native['bridge']['nativeRound'], food_trees(base_native),
+                                        restored, restored_native['bridge']['nativeRound'], food_trees(restored_native))
+            baseline_physics = native_physics_comparison(base_native['bridge']['nativePhysics'],
+                                                         restored_native['bridge']['nativePhysics'],
+                                                         fixed_entity_ids, restored_native, frame)
+            compared['nativePhysicsEqual'] = baseline_physics['equal']
+            compared['nativePhysicsComparison'] = baseline_physics
+            compared['nativeClocksEqual'] = exact_values(native_clock_state(base_native['bridge']),
+                                                         native_clock_state(restored_native['bridge']))
+            summary['restoredBaselineComparison'] = compared
+            if not boundary_matches(compared) or compared['nativePhysicsEqual'] is not True or \
+                    not compared['nativeClocksEqual']:
+                raise RuntimeError('Automatic terminal unwind restored a different initial boundary.')
+
+            if args.restore_contact_manager_free_stack:
+                call('bridge', {'command': 'pause'}, 'round-end-contact-pool-captured-fence')
+                captured_pool = call('bridge', {
+                    'command': 'hot-call', 'slot': args.actor_rebuild_slot,
+                    'operation': 'status', 'args': {},
+                }, 'round-end-contact-pool-status-captured')['detail']['result']
+                captured_progress = round_end_contact_sidecar_comparison(
+                    captured_pool, contact_pool_start, frame, False, args.restore_transform_dispatch)
+                summary['roundEndContactPoolCaptured'] = captured_progress
+                if not captured_progress['equal']:
+                    raise RuntimeError('Round-end checkpoint sidecar was not captured and scheduled exactly.')
+
+            second_arm = arm_round_end(frame, 'round-end-replay-arm')
+            call('bridge', {'command': 'arm'}, 'replay-arm')
+            call('controller', {'command': 'raw-replay', 'recording': recording,
+                                'expectedTerminalGameState': 'RunLevelOutro'}, 'replay')
+            settled('replayed-terminal-held')
+            replay = call('controller', {'command': 'terminal-inspect'}, 'replayed-terminal')
+            require_recorded_terminal(replay, recording, frame)
+            second_receipt, second_status = round_end_receipt(second_arm['nonce'], 'replayed-terminal-latch')
+            replay_native = native_observation('replayed-terminal-native')
+            require_native_boundary(replay_native)
+            if second_receipt.get('frame') != frame + count or second_status.get('phase') != 'held' or \
+                    second_status.get('failure'):
+                raise RuntimeError('Second native terminal receipt is not the exact held replay boundary.')
+            (args.out/'replayed-terminal-receipt.json').write_text(json.dumps(second_receipt, indent=2))
+            terminal = round_end_terminal_comparison(original, replay, first_receipt, second_receipt,
+                                                     fixed_entity_ids, replay_native, frame)
+            summary['terminalComparison'] = terminal
+
+            if args.restore_contact_manager_free_stack:
+                call('bridge', {'command': 'pause'}, 'round-end-contact-pool-restored-fence')
+                restored_pool = call('bridge', {
+                    'command': 'hot-call', 'slot': args.actor_rebuild_slot,
+                    'operation': 'status', 'args': {},
+                }, 'round-end-contact-pool-status-restored')['detail']['result']
+                restored_progress = round_end_contact_sidecar_comparison(
+                    restored_pool, contact_pool_start, frame, True, args.restore_transform_dispatch)
+                summary['roundEndContactPoolRestored'] = restored_progress
+                if not restored_progress['equal']:
+                    raise RuntimeError('Round-end checkpoint sidecar was not restored exactly before replay.')
+                summary['contactPoolCapture'] = captured_pool.get('contactPoolReceipts', [])[-1]
+                summary['contactPoolRestore'] = restored_pool.get('contactPoolReceipts', [])[-1]
+                if args.restore_transform_dispatch:
+                    summary['transformDispatchCapture'] = captured_pool.get(
+                        'transformDispatchReceipts', [])[-1]
+                    summary['transformDispatchRestore'] = restored_pool.get(
+                        'transformDispatchReceipts', [])[-1]
+                contact_pool_cleanup_needed = False
+
+            call('bridge', {'command': 'pause'}, 'round-end-cancel-fence')
+            cancelled = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                                        'operation': 'cancel', 'args': {}}, 'round-end-cancel')['detail']['result']
+            if cancelled.get('active') or cancelled.get('phase') != 'cancelled-at-terminal':
+                raise RuntimeError('Round-end latch did not release after completed proof capture.')
+            round_end_cleanup_needed = False
+            summary.update(startFrame=frame, originalEndFrame=original['frame'], replayEndFrame=replay['frame'],
+                           payloadFrames=recording['payloadFrames'], observedFramesToTerminal=count,
+                           originalInput=original['rawInput'], replayInput=replay['rawInput'],
+                           recordingSha256=recording['sha256'], nativeRestore=restore,
+                           terminalReceipts=[first_receipt, second_receipt],
+                           fullScreen=replay_native['bridge']['fullScreen'])
+            summary['passed'] = terminal['equal'] and boundary_matches(compared) and \
+                compared['nativePhysicsEqual'] is True and compared['nativeClocksEqual'] and \
+                original['rawInput']['recordingSha256'] == replay['rawInput']['recordingSha256']
+            return 0 if summary['passed'] else 1
         call('bridge', {'command': 'arm'}, 'input-arm')
         call('controller', request, 'input')
         original = settled('original')
@@ -868,6 +1086,15 @@ def main():
         try:
             if bridge is not None:
                 call('bridge', {'command': 'pause'}, 'finally-pause')
+                if round_end_cleanup_needed:
+                    latch = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                                            'operation': 'status', 'args': {}},
+                                 'finally-round-end-status')['detail']['result']
+                    summary['roundEndCleanupState'] = latch
+                    if latch.get('phase') in ('armed', 'held'):
+                        call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                                        'operation': 'cancel', 'args': {}}, 'finally-round-end-cancel')
+                        round_end_cleanup_needed = False
                 if contact_pool_cleanup_needed:
                     call('bridge', {'command': 'hot-call', 'slot': args.actor_rebuild_slot,
                                     'operation': 'cancel-contact-pool-next', 'args': {}},

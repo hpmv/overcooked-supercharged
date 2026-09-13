@@ -30,9 +30,14 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
     private TraceStore trace;
     private string traceFailure;
     private NativeWarpCapabilities nativeWarpCapabilities;
+    private bool NativeRoundEndHeld => nativeWarpCapabilities is not null &&
+        nativeWarpCapabilities.Version == 1 && (nativeWarpCapabilities.Features & 2) != 0;
+    private bool NativeRoundEndFailed => nativeWarpCapabilities is not null &&
+        nativeWarpCapabilities.Version == 1 && (nativeWarpCapabilities.Features & 8) != 0;
     private JsonObject warpMappingValidation;
     private JsonObject registryWarpRebranch;
     private readonly JsonArray observedProxyRetirements = new();
+    private GameState observedGameState = GameState.NotSet;
     public bool TraceFailed { get { lock (gate) return traceFailure is not null; } }
     public void AttachTrace(TraceStore store) { lock (gate) { if (trace is not null) throw new InvalidOperationException("Trace is already attached."); trace = store; } }
 
@@ -77,7 +82,10 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
             output.ServerMessages ??= new(); output.EntityRegistry ??= new(); output.Chefs ??= new(); output.Items ??= new();
             output.InvalidStateReason ??= "";
             bool load = output.ServerMessages.Any(m => m.Type is (int)MessageType.LevelLoadByIndex or (int)MessageType.LevelLoadByName);
-            if (load) { InterruptRaw("Fresh level load interrupted the input stream."); InterruptActions("Fresh level load interrupted the action graph."); DiscardAuthoredActionsForNativeLoad(); registry.Clear(); freshLoadObserved = true; stopAt = null; movementAction = null; registryAudit.Reset(); registryWarpRebranch = null; observedProxyRetirements.Clear(); }
+            if (load) { InterruptRaw("Fresh level load interrupted the input stream."); InterruptActions("Fresh level load interrupted the action graph."); DiscardAuthoredActionsForNativeLoad(); registry.Clear(); freshLoadObserved = true; stopAt = null; movementAction = null; registryAudit.Reset(); registryWarpRebranch = null; observedProxyRetirements.Clear(); observedGameState = GameState.NotSet; }
+            var gameStates = output.ServerMessages.Where(message => message.Type == (int)MessageType.GameState)
+                .Select(message => ((GameStateMessage)Deserializer.Deserialize(message.Type, message.Message)).m_State).ToArray();
+            GameState priorGameState = observedGameState;
             foreach (var entity in output.EntityRegistry) registry[entity.EntityId] = entity;
             registryAudit.Observe(output.EntityRegistry);
             registryAudit.ObserveStartupFrame(output);
@@ -92,6 +100,9 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
                 PrepareRawExchange(output);
                 bool wasWarping = core.State == RealGameState.Warping;
                 var input = core.getNext(output, cancellationToken).GetAwaiter().GetResult();
+                bool lifecycleRestored = wasWarping && core.State == RealGameState.Paused && !core.RequestPending &&
+                    output.__isset.nativeWarpCapabilities && output.NativeWarpCapabilities != null &&
+                    output.NativeWarpCapabilities.Version == 1 && (output.NativeWarpCapabilities.Features & 4) != 0;
                 foreach (var message in output.ServerMessages)
                 {
                     if (message.Type is not ((int)MessageType.EntityRetirementMessage) and not ((int)MessageType.DestroyEntity) and not ((int)MessageType.DestroyEntities)) continue;
@@ -132,7 +143,9 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
                     if (seed is int explicitSeed) input.ResetOrderSeed = explicitSeed;
                     else input.__isset.resetOrderSeed = false;
                 }
-                ApplyRawExchange(output, input);
+                ApplyRawExchange(output, input, priorGameState, gameStates);
+                if (gameStates.Length != 0) observedGameState = gameStates[gameStates.Length - 1];
+                if (lifecycleRestored) observedGameState = GameState.InLevel;
                 ApplyActionExchange(input);
                 trace?.Exchange(output, input, core.State == RealGameState.Paused && !core.RequestPending);
                 Exchange?.Invoke(output, input);
@@ -298,10 +311,15 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
             string command = request["command"]?.ToString() ?? "inspect";
             if (command == "inspect") return Inspect(request["full"]?.GetValue<bool>() == true);
             if (command == "status") return StatusCommand(request);
+            if (command == "terminal-inspect") return TerminalInspect();
             if (discoveryOnly && command is not ("pause" or "actions-clear"))
                 throw new InvalidOperationException("Story 1-1 inspection bootstrap has no validated roles or navigation map; control/checkpoint/warp commands are unavailable.");
             if (traceFailure is not null) throw new InvalidOperationException(traceFailure + " Restart with a new trace after resolving storage; inspect remains available.");
+            if (NativeRoundEndFailed)
+                throw new InvalidOperationException("The round-end authoring latch failed; only inspection is safe until the whole game process is restarted.");
             if (command == "record-input") return ExportRawRecording(request);
+            if (NativeRoundEndHeld && command != "warp")
+                throw new InvalidOperationException("The pristine RunLevelOutro latch is held; only inspection, recording export, or its exact checkpoint warp is safe.");
             if (command == "checkpoint")
             {
                 if (core.State != RealGameState.Paused || core.RequestPending || !freshLoadObserved)
@@ -361,17 +379,8 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
                     authoredActionIds.Add(movementAction.Value);
                     stopAt = checked(core.simulator.Frame + maximum); core.RequestResume(); break;
                 case "warp":
-                    if (request["development"]?.GetValue<bool>() != true) throw new InvalidOperationException("Warp requires explicit development:true and disqualifies a fresh-run proof.");
-                    if (core.State != RealGameState.Paused) throw new InvalidOperationException("Warp requires Paused.");
                     int target = request["frame"]?.GetValue<int>() ?? -1;
-                    if (target < 0 || target > setup.LastEmpiricalFrame) throw new ArgumentOutOfRangeException("frame", "Warp target must be within observed history.");
-                    warpMappingValidation = registryAudit.RequireWarpPaths(core.simulator.entityIdToRecord, core.simulator.Frame, target, nativeWarpCapabilities);
-                    if (setup.entityRecords.CriticalSectionForWarping[core.simulator.Frame] != 0 || setup.entityRecords.CriticalSectionForWarping[target] != 0)
-                        throw new InvalidOperationException("Framework marks this source or target as an unsupported warp critical section.");
-                    if (setup.entityRecords.GenAllEntities().Any(e => (e.existed[core.simulator.Frame] && e.IsInCriticalSectionForWarping(core.simulator.Frame)) ||
-                        (e.existed[target] && e.IsInCriticalSectionForWarping(target))))
-                        throw new InvalidOperationException("Current or target native cannon audit is missing or active; authoring warp requires settled observations.");
-                    warpUsed = true; core.RequestWarp(target); break;
+                    StartWarp(target, request["development"]?.GetValue<bool>() == true); break;
                 default: throw new ArgumentException("Unknown headless command: " + command);
             }
             try { trace?.Control(request); }
@@ -379,5 +388,22 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
             Control?.Invoke((JsonObject)request.DeepClone());
             var status = Inspect(); status["acceptedCommand"] = command; return status;
         }
+    }
+
+    private void StartWarp(int target, bool development)
+    {
+        if (!development) throw new InvalidOperationException("Warp requires explicit development:true and disqualifies a fresh-run proof.");
+        if (core.State != RealGameState.Paused) throw new InvalidOperationException("Warp requires Paused.");
+        if (NativeRoundEndHeld && (rawOutcome != "terminal" || target != rawStart))
+            throw new InvalidOperationException("A held RunLevelOutro latch may only rewind to the start of its receipted terminal input stream.");
+        if (target < 0 || target > setup.LastEmpiricalFrame) throw new ArgumentOutOfRangeException("frame", "Warp target must be within observed history.");
+        warpMappingValidation = registryAudit.RequireWarpPaths(core.simulator.entityIdToRecord, core.simulator.Frame, target, nativeWarpCapabilities);
+        if (setup.entityRecords.CriticalSectionForWarping[core.simulator.Frame] != 0 || setup.entityRecords.CriticalSectionForWarping[target] != 0)
+            throw new InvalidOperationException("Framework marks this source or target as an unsupported warp critical section.");
+        if (setup.entityRecords.GenAllEntities().Any(e => (e.existed[core.simulator.Frame] && e.IsInCriticalSectionForWarping(core.simulator.Frame)) ||
+            (e.existed[target] && e.IsInCriticalSectionForWarping(target))))
+            throw new InvalidOperationException("Current or target native cannon audit is missing or active; authoring warp requires settled observations.");
+        warpUsed = true;
+        core.RequestWarp(target);
     }
 }

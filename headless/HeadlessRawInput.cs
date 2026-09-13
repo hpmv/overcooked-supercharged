@@ -9,6 +9,10 @@ public sealed partial class HeadlessSession
     private RawInputPlan raw;
     private int rawStart, rawEmitted, rawObserved, rawAlignmentCallbacks;
     private string rawOutcome = "none", rawError;
+    private string rawObservedTerminalGameState;
+    private int? rawTerminalFrame, rawTerminalObservedFrames;
+    private bool rawWarpToStartOnTerminal;
+    private JsonObject rawTerminalSnapshot;
     private Stopwatch rawWall;
     private const int MaximumRawAlignmentCallbacks = 12;
     private bool RawActive => rawOutcome is "awaiting-resume" or "emitting" or "awaiting-pause";
@@ -32,8 +36,16 @@ public sealed partial class HeadlessSession
                 throw new InvalidOperationException("Raw input requires each live chef's actual native control/body registration.");
         }
         var plan = RawInputPlan.Create(setup, core.simulator.Frame, request, replay);
+        if (plan.ExpectedTerminalGameState is not null && observedGameState != GameState.InLevel)
+            throw new InvalidOperationException("Expected terminal raw input must start in InLevel.");
+        rawWarpToStartOnTerminal = request["warpToStartOnTerminal"]?.GetValue<bool>() == true;
+        if (rawWarpToStartOnTerminal && (replay || plan.ExpectedTerminalGameState is null ||
+            request["development"]?.GetValue<bool>() != true))
+            throw new InvalidOperationException("Terminal auto-warp is original-only and requires expectedTerminalGameState plus development:true.");
         raw = plan; rawStart = core.simulator.Frame; rawEmitted = rawObserved = rawAlignmentCallbacks = 0;
         rawOutcome = "awaiting-resume"; rawError = null; rawWall = null;
+        rawObservedTerminalGameState = null; rawTerminalFrame = rawTerminalObservedFrames = null;
+        rawTerminalSnapshot = null;
         movementAction = null; stopAt = null;
         core.RequestResume();
     }
@@ -48,7 +60,7 @@ public sealed partial class HeadlessSession
             core.RequestPause();
     }
 
-    private void ApplyRawExchange(OutputData output, InputData input)
+    private void ApplyRawExchange(OutputData output, InputData input, GameState priorGameState, GameState[] gameStates)
     {
         if (!RawActive) return;
         int observed = core.simulator.Frame - rawStart;
@@ -69,11 +81,49 @@ public sealed partial class HeadlessSession
         // rather than consuming it while native time is still paused.
         if (rawEmitted > 0 && (rawWall.Elapsed.TotalSeconds > 30 + raw.Frames.Count / 15.0 || observed > raw.Frames.Count + 2))
         { RawFail("Bounded raw-input wall/frame deadline exceeded.", input); return; }
+        bool terminalLatch = output.__isset.nativeWarpCapabilities && output.NativeWarpCapabilities != null &&
+            output.NativeWarpCapabilities.Version == 1 && (output.NativeWarpCapabilities.Features & 2) != 0;
+        if (raw.ExpectedTerminalGameState is not null && priorGameState == GameState.InLevel &&
+            gameStates.Length == 1 && gameStates[0].ToString() == raw.ExpectedTerminalGameState &&
+            terminalLatch && !output.LastFramePaused && output.NextFramePaused &&
+            core.State == RealGameState.Paused && !core.RequestPending && input.NextFrame == core.simulator.Frame)
+        {
+            rawObservedTerminalGameState = gameStates[0].ToString();
+            rawTerminalFrame = core.simulator.Frame;
+            rawTerminalObservedFrames = rawObserved;
+        }
         if (core.State == RealGameState.Paused)
         {
-            rawOutcome = rawObserved == raw.Frames.Count ? "complete" : "interrupted";
-            rawError = rawOutcome == "complete" ? null : "Native pause interrupted the fixed input stream before its release barrier completed.";
-            rawWall.Stop(); return;
+            bool terminal = raw.ExpectedTerminalGameState is not null &&
+                rawObservedTerminalGameState == raw.ExpectedTerminalGameState &&
+                rawTerminalFrame == core.simulator.Frame && rawTerminalObservedFrames == rawObserved &&
+                terminalLatch && !output.LastFramePaused && output.NextFramePaused && rawObserved > 0 &&
+                rawObserved < raw.Frames.Count && rawEmitted == rawObserved;
+            if (terminal)
+            {
+                try
+                {
+                    raw.AcceptTerminalReceipt(rawObserved, rawEmitted);
+                    rawOutcome = "terminal"; rawError = null;
+                    rawTerminalSnapshot = Inspect(true);
+                    if (rawWarpToStartOnTerminal) StartWarp(rawStart, true);
+                }
+                catch (Exception error)
+                {
+                    rawOutcome = "failed"; rawError = error.Message;
+                }
+            }
+            else if (raw.ExpectedTerminalGameState is not null)
+            {
+                rawOutcome = "interrupted";
+                rawError = "Native pause did not match the explicitly expected RunLevelOutro terminal boundary.";
+            }
+            else
+            {
+                rawOutcome = rawObserved == raw.Frames.Count ? "complete" : "interrupted";
+                rawError = rawOutcome == "complete" ? null : "Native pause interrupted the fixed input stream before its release barrier completed.";
+            }
+            rawWall?.Stop(); return;
         }
         if (core.State is not (RealGameState.Running or RealGameState.AwaitingResume or RealGameState.AwaitingPause) || input.NextFrame != core.simulator.Frame + 1)
             return;
@@ -114,12 +164,27 @@ public sealed partial class HeadlessSession
         ["emittedFrames"] = rawEmitted, ["observedFrames"] = rawObserved,
         ["alignmentCallbacks"] = rawAlignmentCallbacks,
         ["recordingSha256"] = raw?.Recording["sha256"]?.ToString(),
-        ["completionMeaning"] = "Fixed logical inputs plus two neutral release/pause frames observed; no task-specific interaction success is inferred."
+        ["expectedTerminalGameState"] = raw?.ExpectedTerminalGameState,
+        ["observedTerminalGameState"] = rawObservedTerminalGameState,
+        ["terminalFrame"] = rawTerminalFrame,
+        ["terminalObservedFrames"] = raw?.TerminalObservedFrames,
+        ["terminalEmittedFrames"] = raw?.TerminalEmittedFrames,
+        ["warpToStartOnTerminal"] = rawWarpToStartOnTerminal,
+        ["completionMeaning"] = rawOutcome == "terminal"
+            ? "The explicit pristine RunLevelOutro latch paused the exact advancing callback; every emitted input in the receipted prefix was consumed."
+            : "Fixed logical inputs plus two neutral release/pause frames observed; no task-specific interaction success is inferred."
     };
+
+    private JsonObject TerminalInspect()
+    {
+        if (rawTerminalSnapshot is null)
+            throw new InvalidOperationException("No retained pristine terminal snapshot is available.");
+        return (JsonObject)rawTerminalSnapshot.DeepClone();
+    }
 
     private JsonObject ExportRawRecording(JsonObject request)
     {
-        if (raw is null || rawOutcome != "complete") throw new InvalidOperationException("Only a fully observed completed raw stream can be exported for replay.");
+        if (raw is null || rawOutcome is not ("complete" or "terminal")) throw new InvalidOperationException("Only a fully observed release boundary or explicit terminal receipt can be exported for replay.");
         string path = Path.GetFullPath(Path.Combine(evidenceRoot, request["path"]?.ToString() ?? "raw-input.json"));
         if (!path.StartsWith(evidenceRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Recording path must remain under evidence root.");
         Directory.CreateDirectory(Path.GetDirectoryName(path));

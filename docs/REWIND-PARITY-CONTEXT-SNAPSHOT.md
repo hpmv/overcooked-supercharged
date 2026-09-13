@@ -1321,3 +1321,43 @@ It still does not establish complete level parity. Search remains disabled
 while coverage expands into long order/timer evolution and expiry, multiple
 deliveries and repeated dynamic-ID lifecycles, multi-chef interactions, and
 round end.
+
+## 2026-09-13: natural terminal lifecycle now rewinds exactly
+
+The pristine Story 1-1 `InLevel -> RunLevelOutro` edge is no longer an open
+rewind gap. `NativeRoundEndLatch` is an explicit local-authoring latch in the
+frozen core. It retains the live server `RunRound` and scheduled client
+`RunLevel` iterators plus a dormant client `RunLevelEnd` iterator, defers only
+the armed terminal deactivation, and pauses the exact callback. Its restore
+reinstalls the captured lifecycle/iterator state before ordinary resume without
+calling `ChangeGameState`, starting coroutines, or manually advancing them.
+Unarmed forward play is unchanged, and any latch invariant failure freezes the
+flow and requires a process restart.
+
+The clean live proof is
+`artifacts/framework-migration/story11-round-end-latch-dev5-live-r7/terminal-parity-f8492-r1/summary.json`
+(SHA256
+`9CF59DF61FFC7667B9877E9201BA9A53DE5C8BC93CA3C741C1A8ABD8B19498F9`).
+It restored f8492 exactly, then reproduced the natural f8999 terminal after 507
+frames on both branches. Exact comparisons passed for reconstructed entities
+and registry, raw terminal receipt, lifecycle and iterator PCs, native
+round/orders, food, normalized physics, and native/logical/timer clocks. The
+contact-manager free-list and TransformChangeDispatch sidecars each performed
+one exact f8492 capture and one restore before replay. Nonces were 1 then 2.
+
+Pinned binaries for that proof:
+
+- core dev5 SHA256
+  `C3E4A874FABDC3D232521972B1597330D1FE1EC197145E025A4932109BE9717F`;
+- headless SHA256
+  `01C07B138C64C7A28081B6893E2E009C179FDDE2B1FD257EE8A037C3640870EB`;
+- RoundEndCheckpoint dev5 SHA256
+  `301213527C163375CA0BE3C292B5A5977A780A62AA8F3D374AC52B00A683781C`.
+
+The prior long-neutral f1090->4692 run also passed 3600 frames exactly while
+orders 5 and 6 arrived; summary SHA256
+`E24884D929950CED4EDD381B2F1EC33500762AB9C8AA9116605CE8D90D705AE0`.
+Together these prove long timer/order evolution and pristine zero-score round
+end. Remaining broader coverage is terminal rewind with deliveries and returned
+plates, repeated dynamic object lifecycles, and wider multi-chef combinations.
+Route search remains disabled until that coverage is satisfactory.

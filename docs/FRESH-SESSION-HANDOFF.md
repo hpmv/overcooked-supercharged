@@ -1047,3 +1047,68 @@ coverage, not route search: long order/timer evolution and expiry, multiple
 deliveries with repeated dynamic-ID lifecycles, multi-chef interactions, and
 round end. Preserve plate-throw physics and commit every newly demonstrated
 milestone locally.
+
+## 2026-09-13: pristine natural round-end rewind is exact
+
+The first full Story 1-1 terminal edge is now a proved rewind milestone. Core
+dev5 adds an explicitly armed, local-authoring-only latch for the exact natural
+`InLevel -> RunLevelOutro` callback. When unarmed it does not change forward
+round-end behavior. When armed, it defers the terminal server deactivation,
+retains the live server/client round coroutine identities and dormant outro
+iterator, pauses at the single pristine callback, and permits only an immediate
+rewind to the pinned checkpoint. Restore writes the captured lifecycle and
+iterator fields directly before the ordinary resume; it does not call
+`ChangeGameState`, start an outro coroutine, or execute an iterator manually.
+
+Live proof is under
+`artifacts/framework-migration/story11-round-end-latch-dev5-live-r7/`.
+`terminal-parity-f8492-r1/summary.json` passed with SHA256
+`9CF59DF61FFC7667B9877E9201BA9A53DE5C8BC93CA3C741C1A8ABD8B19498F9`:
+
+- checkpoint f8492 restored exactly after the original terminal;
+- original and replay both reached the natural terminal at f8999 after exactly
+  507 emitted and observed input frames;
+- reconstructed frame/entities/registry and terminal input receipt matched;
+- server/client lifecycle, all three iterator PCs, native round/orders, food,
+  normalized native physics, and captured native/logical/timer clocks matched;
+- the contact-manager free-list and TransformChangeDispatch sidecars were each
+  captured once at f8492 and restored once before replay; and
+- latch nonce advanced exactly once and the latch was cancelled only after all
+  evidence was retained.
+
+The exact input recording SHA is
+`52FA366B4EF715C591804F7B5637C0162047FD2E298FEACD40D7AB810860570F`.
+The fixture receipt `setup-dev5-r1.json` has SHA256
+`4A7FF8A2535119080E3AF5146FA07B1B62F956E2C873DBFD4496007C5921727F`.
+Core SHA256 is
+`C3E4A874FABDC3D232521972B1597330D1FE1EC197145E025A4932109BE9717F`,
+headless SHA256 is
+`01C07B138C64C7A28081B6893E2E009C179FDDE2B1FD257EE8A037C3640870EB`,
+and the thin RoundEndCheckpoint authority module SHA256 is
+`301213527C163375CA0BE3C292B5A5977A780A62AA8F3D374AC52B00A683781C`.
+
+The terminal proof requires the already-proved exact contact-pool and
+Transform-dispatch sidecar. The first live latch attempt in `live-r6` captured
+the correct f8999 terminal but intentionally failed closed with
+`AUTHORING_WARP_FAILED` because the new probe had omitted that sidecar. Its
+player log was preserved, the whole game process was restarted, and the probe
+now verifies the one-capture/one-restore lifecycle explicitly.
+
+The preceding long neutral coverage is also proved under
+`story11-broader-parity-v12q8-live-r1/neutral-orders-f1090-to4692-r1/`.
+That 3600-frame continuation produced new scripted orders 5 and 6 and matched
+the rewind/replay endpoint for entities, timer/order state, food, native
+physics, clocks, and input. Its summary SHA256 is
+`E24884D929950CED4EDD381B2F1EC33500762AB9C8AA9116605CE8D90D705AE0`.
+
+This closes pristine no-delivery round-end and long neutral order/timer
+coverage. It does not yet prove every possible terminal inventory or score
+state. Broader parity work should next combine the terminal edge with delivered
+food/returned plates and repeated dynamic-ID lifecycles, then expand multi-chef
+interaction coverage. Search remains disabled.
+
+The `live-r7` game was PID 38168, UTC start ticks 639249362656054236; its
+headless host was PID 53028, start ticks 639249363220780862. The successful
+proof cancelled the latch at the terminal, so this is not an `InLevel`
+checkpoint to reuse. Revalidate process identities and start a fresh level for
+the next parity cell.

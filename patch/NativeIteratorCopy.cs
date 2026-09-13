@@ -39,6 +39,7 @@ namespace SuperchargedPatch
             internal Snapshot(NativeIteratorCopy owner, IEnumerator saved) { this.owner = owner; this.saved = saved; }
             public IEnumerator RestoreCopy() { return owner.Copy(saved); }
             public bool Matches(IEnumerator actual) { return owner.Same(saved, actual, 0); }
+            public bool Matches(Snapshot actual) { return actual != null && owner.Same(saved, actual.saved, 0); }
         }
         public Snapshot Capture(IEnumerator iterator) { return new Snapshot(this, Copy(iterator)); }
         private IEnumerator Copy(IEnumerator value)

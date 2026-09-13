@@ -76,6 +76,7 @@ namespace SuperchargedPatch
                 var warpHandler = new WarpHandler(input.Warp, checkpoint);
                 checkpoint.ObserveBodyStage("before-resume");
                 mutationStarted = true;
+                checkpoint.RestoreLifecycleBeforeResume();
                 Helpers.Resume();
                 checkpoint.ObserveBodyStage("after-resume");
                 checkpoint.RestoreClocks();

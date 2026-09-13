@@ -310,9 +310,12 @@ namespace Oc2Tas
                 Convert.ToString(NativeFields.Get(__args[1], "m_State")));
         }
 
-        private static void ObserveRoundActivation(object __instance, object[] __args)
+        private static void ObserveRoundActivation(object __instance, object[] __args, bool __runOriginal)
         {
-            if (!Active || __args == null || __args.Length == 0) return;
+            // Harmony postfixes still run when another prefix deliberately
+            // suppresses the original method.  Such a call is not a native
+            // activation transition and must not change readiness telemetry.
+            if (!Active || !__runOriginal || __args == null || __args.Length == 0) return;
             bool enabled = Convert.ToBoolean(__args[0]);
             bool server = __instance is ServerFlowControllerBase;
             if (server) ServerRoundActive = enabled;

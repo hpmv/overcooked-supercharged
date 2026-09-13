@@ -51,6 +51,23 @@ public static class RawInputTests
         Reject(() => RawInputPlan.Create(setup, 0, boolean, false), "explicit logical values required");
         var changed = new Carnival34FourLevel(); var changedChef = changed.entityRecords.Chefs.Keys.First(); var state = changed.entityRecords.Chefs[changedChef][0]; state.primaryButtonDown = true; changed.entityRecords.Chefs[changedChef].ChangeTo(state, 0);
         Reject(() => RawInputPlan.Create(changed, 0, new() { ["recording"] = plan.Recording.DeepClone() }, true), "initial controller mismatch");
+        var terminalRequest = (JsonObject)request.DeepClone(); terminalRequest["expectedTerminalGameState"] = "RunLevelOutro";
+        var terminalPlan = RawInputPlan.Create(setup, 0, terminalRequest, false);
+        Check(terminalPlan.ExpectedTerminalGameState == "RunLevelOutro" && terminalPlan.TerminalObservedFrames is null,
+            "explicit terminal starts without inventing an observation receipt");
+        terminalPlan.AcceptTerminalReceipt(2, 2);
+        var terminalReplayRequest = new JsonObject { ["recording"] = terminalPlan.Recording.DeepClone(), ["expectedTerminalGameState"] = "RunLevelOutro" };
+        var terminalReplayPlan = RawInputPlan.Create(setup, 0, terminalReplayRequest, true);
+        Check(terminalReplayPlan.TerminalObservedFrames == 2 && terminalReplayPlan.TerminalEmittedFrames == 2,
+            "terminal recording retains an exactly consumed observed prefix");
+        Reject(() => RawInputPlan.Create(setup, 0, new() { ["recording"] = terminalPlan.Recording.DeepClone() }, true),
+            "terminal replay requires explicit authority");
+        var wrongTerminal = (JsonObject)request.DeepClone(); wrongTerminal["expectedTerminalGameState"] = "RanLevelOutro";
+        Reject(() => RawInputPlan.Create(setup, 0, wrongTerminal, false), "unsupported terminal state");
+        var forgedTerminal = (JsonObject)terminalPlan.Recording.DeepClone(); forgedTerminal["terminalEmittedFrames"] = 3;
+        forgedTerminal.Remove("sha256"); forgedTerminal["sha256"] = RawInputPlan.Hash(forgedTerminal);
+        Reject(() => RawInputPlan.Create(setup, 0, new() { ["recording"] = forgedTerminal, ["expectedTerminalGameState"] = "RunLevelOutro" }, true),
+            "terminal receipt rejects a speculative unconsumed input");
 
         OutputData Frame(params ServerMessage[] messages) => new() { ServerMessages = messages.ToList(), Items = new(), Chefs = new(), EntityRegistry = new(), InvalidStateReason = "", FramesSinceLastNoPhysicsFrame = 5 };
         ServerMessage Load() => new() { Type = (int)MessageType.LevelLoadByName, Message = new LevelLoadByNameMessage { m_Scene = "s_Day_3_4", m_StartLoadGameState = GameState.InLevel, m_HideLoadingScreenGameState = GameState.InLevel }.ToBytes() };
@@ -103,6 +120,88 @@ public static class RawInputTests
         Check(!cancellation.getNext(aligned).GetAwaiter().GetResult().RequestResume,
             "cancelled resume cannot later escape when the matching native phase arrives");
         Check(!cancellation.TryCancelResumeBeforeNativeSignal(), "settled state cannot cancel a nonexistent resume");
+
+        ServerMessage Outro() => new() { Type = (int)MessageType.GameState,
+            Message = new GameStateMessage { m_State = GameState.RunLevelOutro }.ToBytes() };
+        JsonObject StorySegment(int frames) => new() { ["frames"] = frames, ["chefs"] = new JsonObject {
+            ["43"] = Pad(), ["44"] = Pad(), ["45"] = Pad(), ["46"] = Pad() } };
+        var storyTerminalRequest = new JsonObject { ["command"] = "raw-input",
+            ["segments"] = new JsonArray(StorySegment(6)), ["expectedTerminalGameState"] = "RunLevelOutro" };
+        var terminalSetup = new Story11FourLevel();
+        var terminalSession = new HeadlessSession(terminalSetup, "synthetic explicit raw terminal", evidenceRoot);
+        InputData SendTerminal(OutputData frame) => terminalSession.getNext(frame).GetAwaiter().GetResult();
+        using var storyStream = typeof(RawInputTests).Assembly.GetManifestResourceStream("Headless.Reference.Story11NativeRegistryFixture.json")!;
+        var storyFixture = JsonNode.Parse(storyStream)!;
+        var storyRegistry = storyFixture["initialRegistry"]!.Deserialize<List<EntityRegistryData>>(RuntimeHost.Json)!;
+        var storySettledRegistry = storyFixture["registry"]!.Deserialize<List<EntityRegistryData>>(RuntimeHost.Json)!;
+        SendTerminal(Frame(Load())); var terminalStart = Frame(Start()); terminalStart.EntityRegistry = storyRegistry;
+        SendTerminal(terminalStart); var terminalSettled = Frame(); terminalSettled.EntityRegistry = storySettledRegistry;
+        SendTerminal(terminalSettled); SendTerminal(pause);
+        var terminalAutoRequest = (JsonObject)storyTerminalRequest.DeepClone();
+        terminalAutoRequest["warpToStartOnTerminal"] = true; terminalAutoRequest["development"] = true;
+        terminalSession.Command(terminalAutoRequest); SendTerminal(still); SendTerminal(aligned);
+        var terminalResume = Frame(); terminalResume.LastFramePaused = true; SendTerminal(terminalResume);
+        var pristineTerminal = Frame(Outro()); pristineTerminal.NextFramePaused = true;
+        pristineTerminal.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 3 };
+        SendTerminal(pristineTerminal);
+        var terminalStatus = terminalSession.Inspect(true); var terminalRaw = terminalStatus["rawInput"]!;
+        Check(terminalRaw["outcome"]!.ToString() == "terminal" && terminalStatus["frame"]!.GetValue<int>() == 3 &&
+              terminalRaw["terminalFrame"]!.GetValue<int>() == 3 && terminalRaw["terminalObservedFrames"]!.GetValue<int>() == 1 &&
+              terminalRaw["terminalEmittedFrames"]!.GetValue<int>() == 1 && terminalStatus["requestPending"]!.GetValue<bool>(),
+            "pristine advancing InLevel-to-RunLevelOutro latch accepts only the consumed prefix and queues an immediate rewind");
+        Check(terminalSession.Command(new() { ["command"] = "terminal-inspect" })["frame"]!.GetValue<int>() == 3,
+            "terminal inspection is retained independently of the imminent rewind");
+        string terminalName = "offline-tests/raw-terminal-" + Guid.NewGuid().ToString("N") + ".json";
+        var terminalExport = terminalSession.Command(new() { ["command"] = "record-input", ["path"] = terminalName });
+        var terminalRecording = JsonNode.Parse(File.ReadAllBytes(terminalExport["path"]!.ToString()))!.AsObject();
+        Check(terminalRecording["terminalObservedFrames"]!.GetValue<int>() == 1 &&
+              terminalRecording["sha256"]!.ToString() == terminalRaw["recordingSha256"]!.ToString(),
+            "explicit terminal receipt exports with its recomputed checksum");
+        var warpDirective = SendTerminal(Frame());
+        Check(warpDirective.Warp != null && warpDirective.Warp.Frame == 2,
+            "first held callback emits the queued target rewind without a host control round trip");
+        var restoredAck = Frame(); restoredAck.FrameNumber = 2; restoredAck.LastFramePaused = restoredAck.NextFramePaused = true;
+        restoredAck.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 5 };
+        SendTerminal(restoredAck);
+        Check(terminalSession.Inspect()["state"]!.ToString() == "Paused" && !terminalSession.Inspect()["requestPending"]!.GetValue<bool>(),
+            "native lifecycle acknowledgement settles the terminal auto-warp at its start frame");
+        terminalSession.Command(new JsonObject { ["command"] = "raw-replay", ["recording"] = terminalRecording.DeepClone(),
+            ["expectedTerminalGameState"] = "RunLevelOutro" });
+        Check(terminalSession.Inspect()["rawInput"]!["active"]!.GetValue<bool>(),
+            "lifecycle-restored acknowledgement permits immediate terminal replay admission");
+        SendTerminal(still); SendTerminal(aligned); SendTerminal(terminalResume);
+        var replayTerminal = Frame(Outro()); replayTerminal.NextFramePaused = true;
+        replayTerminal.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 3 };
+        SendTerminal(replayTerminal);
+        var replayTerminalStatus = terminalSession.Command(new() { ["command"] = "terminal-inspect" });
+        Check(replayTerminalStatus["rawInput"]!["outcome"]!.ToString() == "terminal" &&
+              replayTerminalStatus["rawInput"]!["terminalObservedFrames"]!.GetValue<int>() == 1 &&
+              !terminalSession.Inspect()["requestPending"]!.GetValue<bool>(),
+            "terminal replay reaches the same consumed-prefix latch without queuing another warp");
+        var heldStill = still.DeepCopy(); heldStill.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 3 };
+        Check(SendTerminal(heldStill).Warp is null,
+            "a held replay terminal emits no implicit second rewind");
+        Check(terminalSession.Command(new() { ["command"] = "terminal-inspect" })["frame"]!.GetValue<int>() == 3,
+            "replay terminal inspection remains stable across held callbacks");
+
+        var unrequestedSetup = new Carnival34FourLevel();
+        var unrequested = new HeadlessSession(unrequestedSetup, "synthetic unrequested terminal", evidenceRoot);
+        InputData SendUnrequested(OutputData frame) => unrequested.getNext(frame).GetAwaiter().GetResult();
+        SendUnrequested(Frame(Load())); var unrequestedStart = Frame(Start()); unrequestedStart.EntityRegistry = registry;
+        SendUnrequested(unrequestedStart); SendUnrequested(Frame()); SendUnrequested(pause);
+        unrequested.Command(request); SendUnrequested(still); SendUnrequested(aligned);
+        var unrequestedResume = Frame(); unrequestedResume.LastFramePaused = true; SendUnrequested(unrequestedResume);
+        var unrequestedTerminal = Frame(Outro()); unrequestedTerminal.NextFramePaused = true;
+        unrequestedTerminal.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 3 };
+        SendUnrequested(unrequestedTerminal);
+        Check(unrequested.Inspect()["rawInput"]!["outcome"]!.ToString() == "interrupted",
+            "unrequested round-end pause remains an interruption");
+        Reject(() => unrequested.Command(new() { ["command"] = "resume" }),
+            "held round-end latch rejects an unsafe ordinary resume");
+        Reject(() => unrequested.Command(new() { ["command"] = "warp", ["frame"] = 2, ["development"] = true }),
+            "held round-end latch rejects a warp without its exact terminal receipt");
+        Reject(() => unrequested.Command(new() { ["command"] = "record-input" }),
+            "unrequested terminal cannot export a partial recording");
 
         var gatedSetup = new Carnival34FourLevel();
         var gated = new HeadlessSession(gatedSetup, "synthetic native-gated raw resume", evidenceRoot);

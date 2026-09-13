@@ -45,18 +45,23 @@ namespace SuperchargedPatch
             CaptureTicks += LastCaptureTicks;
             CaptureCount++;
             data.LastFramePaused = Helpers.IsPaused();
-            if (Injector.Server.CurrentInput.RequestPause)
+            bool terminalPauseApplied = NativeRoundEndLatch.ApplyPendingPause();
+            if (!terminalPauseApplied)
             {
-                Helpers.Pause();
-            }
-            else if (Injector.Server.CurrentInput.RequestResume)
-            {
-                Helpers.Resume();
+                if (Injector.Server.CurrentInput.RequestPause)
+                {
+                    Helpers.Pause();
+                }
+                else if (Injector.Server.CurrentInput.RequestResume)
+                {
+                    Helpers.Resume();
+                }
             }
             StateInvalidityManager.PreventInvalidState = Injector.Server.CurrentInput.PreventInvalidState;
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrame();
+            NativeRoundEndLatch.CommitCapabilityPublication();
         }
 
         public static void FixedUpdate()
@@ -127,8 +132,9 @@ namespace SuperchargedPatch
     public static class PatchServerFlowControllerBaseChangeGameState
     {
         [HarmonyPostfix]
-        public static void Postfix(GameState state)
+        public static void Postfix(ServerFlowControllerBase __instance, GameState state)
         {
+            NativeRoundEndLatch.AfterServerStateChange(__instance, state);
             if (state == GameState.InLevel)
             {
                 Console.WriteLine("At game start, physics phase shift is " + ControllerHandler.FramesSinceLastNoPhysicsFrame);

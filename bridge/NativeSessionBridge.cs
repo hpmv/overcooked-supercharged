@@ -379,7 +379,7 @@ namespace SuperchargedPatch.Bridge
 
         // Compact authoritative server getters, sampled only on request. These
         // fields are observations; no score, clock, order or food field is set.
-        private static object CaptureNativeRound()
+        internal static object CaptureNativeRound()
         {
             try
             {

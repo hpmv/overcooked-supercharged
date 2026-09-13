@@ -74,7 +74,7 @@ def native_clock_fields(receipt):
 
 
 def observe_settled_pause(read_receipt, read_frame, *, expected_frame=None, chef_ids=None,
-                         timeout_seconds=1.0, poll_seconds=0.01, monotonic=time.monotonic, sleep=time.sleep):
+                         timeout_seconds=5.0, poll_seconds=0.01, monotonic=time.monotonic, sleep=time.sleep):
     """Return {receipt, proof}; failures expose the same proof on exception.report.
 
     A distinct increasing FixedTime observation counts once, even if polling
@@ -82,8 +82,8 @@ def observe_settled_pause(read_receipt, read_frame, *, expected_frame=None, chef
     The wall-time budget is checked after each callback as well as before polls;
     the caller remains responsible for bounded RPC transport timeouts.
     """
-    if not 0 < timeout_seconds <= 1.0 or not 0 < poll_seconds <= timeout_seconds:
-        raise PauseBoundaryError("Use a positive observation budget at most one second")
+    if not 0 < timeout_seconds <= 10.0 or not 0 < poll_seconds <= timeout_seconds:
+        raise PauseBoundaryError("Use a positive observation budget at most ten seconds")
     start = monotonic()
     proof = {"passed": False, "classification": "settled authoring-pause observation; raw acknowledgement identity not asserted",
              "requiredDistinctStablePhysicsTicks": 2, "timeoutSeconds": timeout_seconds,

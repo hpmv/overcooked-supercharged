@@ -12,7 +12,7 @@ namespace SuperchargedPatch
     {
         public static bool Prefix(SynchroniserBase __instance)
         {
-            return __instance is IFlowController || !Helpers.IsPaused();
+            return __instance is IFlowController ? !NativeRoundEndLatch.FlowFreezeRequired : !Helpers.IsPaused();
         }
     }
 

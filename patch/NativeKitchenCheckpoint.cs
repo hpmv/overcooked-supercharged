@@ -157,7 +157,8 @@ namespace SuperchargedPatch
                 { "nativeCannonFlightScopeReason", NativeCannonFlightCheckpoint.LastScopeReason },
                 { "nativeDynamicWarp", NativeDynamicWarpPlan.LastReceipt },
                 { "nativeSpawnObservationError", NativeDynamicWarpPlan.ObservationError },
-                { "nativeWarpCapabilities", new Dictionary<string, object> { { "version", 1 }, { "features", 1 } } },
+                { "nativeWarpCapabilities", new Dictionary<string, object> { { "version", 1 }, { "features", NativeRoundEndLatch.CapabilityFeatures } } },
+                { "nativeRoundEndLatch", NativeRoundEndLatch.Diagnostics() },
                 { "plateLifecycleObservationError", NativePlateLifecycle.LastObservationError },
                 { "pendingNativeDeliveryFades", NativePlateLifecycle.PendingDeliveryFades }
             };
@@ -189,7 +190,10 @@ namespace SuperchargedPatch
             Snapshot snapshot;
             if (ambiguous.Contains(warp.Frame) || !history.TryGetValue(warp.Frame, out snapshot))
                 throw new InvalidOperationException("No unambiguous observed native kitchen checkpoint at output frame " + warp.Frame);
-            ValidateIdentity(snapshot);
+            ValidateIdentity(snapshot, false);
+            bool restoreRoundLifecycle = NativeRoundEndLatch.PrepareRestore(snapshot.RoundLifecycle);
+            if (!restoreRoundLifecycle && (GameState)Field(snapshot.Flow, "m_State") != GameState.InLevel)
+                throw new InvalidOperationException("Native kitchen checkpoint source is outside InLevel without an exact held round-end latch.");
             NativeSceneMetadata.RequireCurrentInitialMembershipSubset(
                 snapshot.FixedBodyPoses.Select(value => value.EntityId),
                 snapshot.FixedAttachmentPoses.Select(value => value.EntityId));
@@ -258,7 +262,42 @@ namespace SuperchargedPatch
             foreach (var pending in snapshot.Plates)
                 if (pending.Station == null || EntitySerialisationRegistry.GetEntry((uint)pending.EntityId)?.m_GameObject != pending.Station.gameObject)
                     throw new InvalidOperationException("Native plate return station incarnation changed.");
-            return new RestorePlan(snapshot,initialRecreation,ignoredAbsentFixedRows);
+            return new RestorePlan(snapshot,initialRecreation,ignoredAbsentFixedRows,restoreRoundLifecycle);
+        }
+
+        internal static NativeRoundEndLatch.Target RequireRoundEndTarget(int frame)
+        {
+            Snapshot snapshot;
+            if (ambiguous.Contains(frame) || !history.TryGetValue(frame, out snapshot))
+                throw new InvalidOperationException("No unambiguous native round lifecycle checkpoint at output frame " + frame);
+            ValidateIdentity(snapshot, true);
+            if (snapshot.RoundLifecycle == null)
+                throw new InvalidOperationException("Native round lifecycle checkpoint is unavailable at output frame " + frame);
+            return snapshot.RoundLifecycle;
+        }
+
+        internal static object CaptureNativeClockObservation(ServerKitchenFlowControllerBase flow,
+            ClientKitchenFlowControllerBase client)
+        {
+            var serverTimer = flow == null ? null : flow.RoundTimer as ServerRoundTimer;
+            var clientTimer = client == null ? null : client.RoundTimer as ClientRoundTimer;
+            if (serverTimer == null || clientTimer == null)
+                throw new InvalidOperationException("Native round-end clock observation requires both round timers.");
+            var logical = (Dictionary<string, object>)UnrealTimePatch.Diagnostics();
+            return new Dictionary<string, object> {
+                { "nativeServerClock", ReadStatics(typeof(ServerTime), serverClockFields) },
+                { "nativeClientClock", ReadStatics(typeof(ClientTime), clientClockFields) },
+                { "source", UnrealTimePatch.CaptureLogicalRealtime() },
+                { "ticks", logical["eligibleTicks"] }, { "step", logical["step"] },
+                { "serverTimer", new Dictionary<string, object> {
+                    { "elapsed", serverTimer.TimeElapsed }, { "timeLeft", (int)Field(serverTimer, "m_timeLeft") },
+                    { "limit", (float)Field(serverTimer, "m_timeLimit") }, { "suppressed", serverTimer.IsSuppressed }
+                } },
+                { "clientTimer", new Dictionary<string, object> {
+                    { "elapsed", clientTimer.TimeElapsed }, { "timeLeft", (int)Field(clientTimer, "m_timeLeft") },
+                    { "limit", (float)Field(clientTimer, "m_timeLimit") }, { "suppressed", clientTimer.IsSuppressed }
+                } }
+            };
         }
 
         private static void ValidateComponentBlocks(GameObject obj, EntityWarpSpec spec, List<string> problems)
@@ -347,6 +386,7 @@ namespace SuperchargedPatch
                 FixedBodyPoses = EndTiming(CaptureStage.FixedBodyPoses, ref started, NativeBodyPoseCheckpoint.Capture(fixedMembership.RigidBodyIds)),
                 FixedAttachmentPoses = EndTiming(CaptureStage.FixedAttachmentPoses, ref started, NativeAttachmentPoseCheckpoint.Capture(fixedMembership.PhysicalAttachmentIds))
             };
+            snapshot.RoundLifecycle = NativeRoundEndLatch.Target.Capture(flow, client, frame);
             snapshot.Orders = ((List<ServerOrderData>)Field(orders, "m_activeOrders")).Select(CopyOrder).ToArray();
             snapshot.InitialAttachmentTopology=NativeInitialAttachmentRecreation.TopologySnapshot.Capture();
             snapshot.Plates = new List<PendingPlate>();
@@ -375,7 +415,7 @@ namespace SuperchargedPatch
             return snapshot;
         }
 
-        private static void ValidateIdentity(Snapshot snapshot)
+        private static void ValidateIdentity(Snapshot snapshot, bool requireInLevel = true)
         {
             if (!ReferenceEquals(roundIdentity, snapshot.Round) || snapshot.Flow == null || snapshot.Client == null
                 || snapshot.Flow.gameObject.GetInstanceID() != snapshot.FlowInstanceId
@@ -384,7 +424,7 @@ namespace SuperchargedPatch
                 || !ReferenceEquals(snapshot.OrdersController.GetRoundInstanceData(), snapshot.Round)
                 || !ReferenceEquals(snapshot.OrdersController.GetRoundData(), snapshot.Wrapper)
                 || !ReferenceEquals(snapshot.ClientOrdersController.GetGUI(), snapshot.Gui)
-                || (GameState)Field(snapshot.Flow, "m_State") != GameState.InLevel)
+                || (requireInLevel && (GameState)Field(snapshot.Flow, "m_State") != GameState.InLevel))
                 throw new InvalidOperationException("Native kitchen checkpoint belongs to another flow/round incarnation or phase.");
             if (snapshot.ServerTimer.IsSuppressed || snapshot.ClientTimer.IsSuppressed
                 || (float)Field(snapshot.ServerTimer, "m_timeLimit") != snapshot.ServerLimit || (float)Field(snapshot.ClientTimer, "m_timeLimit") != snapshot.ClientLimit
@@ -403,7 +443,8 @@ namespace SuperchargedPatch
 
         private static bool SameGameplayBoundaryCore(Snapshot a, Snapshot b)
         {
-            if(a.DeliveryFades!=b.DeliveryFades || !NativeCannonCheckpoint.SameBoundary(a.Cannons,b.Cannons) || !NativeStationSyncCheckpoint.Same(a.StationSync,b.StationSync)
+            if(a.DeliveryFades!=b.DeliveryFades || !NativeRoundEndLatch.Target.Same(a.RoundLifecycle,b.RoundLifecycle)
+                || !NativeCannonCheckpoint.SameBoundary(a.Cannons,b.Cannons) || !NativeStationSyncCheckpoint.Same(a.StationSync,b.StationSync)
                 || !NativeChefInteractionCheckpoint.SameBoundary(a.ChefInteractions,b.ChefInteractions)
                 || !SameFixedMembership(a.FixedBodyPoses,b.FixedBodyPoses)
                 || !SameFixedMembership(a.FixedAttachmentPoses,b.FixedAttachmentPoses)) return false;
@@ -449,11 +490,13 @@ namespace SuperchargedPatch
             private readonly Snapshot snapshot;
             private readonly NativeInitialAttachmentRecreation initialRecreation;
             private readonly EntityWarpSpec[] ignoredAbsentFixedRows;
+            private readonly bool restoreRoundLifecycle;
             internal RestorePlan(Snapshot value,NativeInitialAttachmentRecreation recreation,
-                EntityWarpSpec[] ignoredRows)
+                EntityWarpSpec[] ignoredRows,bool restoreLifecycle)
             {
                 snapshot=value;initialRecreation=recreation;
                 ignoredAbsentFixedRows=ignoredRows??new EntityWarpSpec[0];
+                restoreRoundLifecycle=restoreLifecycle;
             }
             internal bool IgnoreAbsentFixedEntity(EntityWarpSpec spec)
             {return ignoredAbsentFixedRows.Any(value=>ReferenceEquals(value,spec));}
@@ -476,6 +519,10 @@ namespace SuperchargedPatch
                 RoundTime = snapshot.ServerElapsed, NextOrderId = snapshot.RoundIndex, LastComboIndex = snapshot.ComboIndex,
                 ActiveOrders = snapshot.Orders.Select(o => o.ToBytes()).ToList(), TeamScore = snapshot.ServerScore.ToBytes()
             }; } }
+            public void RestoreLifecycleBeforeResume()
+            {
+                if (restoreRoundLifecycle) NativeRoundEndLatch.Restore(snapshot.RoundLifecycle);
+            }
             public void RestoreClocks()
             {
                 ValidateIdentity(snapshot);
@@ -641,6 +688,7 @@ namespace SuperchargedPatch
             internal AuthoringClockState.Checkpoint ExactClock;
             internal int DeliveryFades;
             internal NativeChefInteractionCheckpoint.Snapshot[] ChefInteractions;
+            internal NativeRoundEndLatch.Target RoundLifecycle;
         }
     }
 }

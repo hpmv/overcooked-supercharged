@@ -120,5 +120,18 @@ class PauseBoundaryTests(unittest.TestCase):
         rows=[receipt(1+i*.02,bool(i%2)) for i in range(12)]
         with self.assertRaises(PauseBoundaryError):Source(rows).run(timeout_seconds=.05)
 
+    def test_large_read_only_receipts_may_use_a_bounded_multi_second_budget(self):
+        rows=[receipt(1),receipt(1.02),receipt(1.04)]
+        slow=Source(rows)
+        def food():
+            result=slow.food();slow.wall+=1.1;return result
+        proof=observe_settled_pause(food,slow.read_frame,expected_frame=100,
+                                   chef_ids=[103,104,105,106],timeout_seconds=5,
+                                   monotonic=slow.now,sleep=slow.sleep)["proof"]
+        self.assertTrue(proof["passed"])
+        self.assertGreater(proof["wallSeconds"],3)
+        with self.assertRaisesRegex(PauseBoundaryError,"at most ten seconds"):
+            Source(rows).run(timeout_seconds=10.01)
+
 
 if __name__=="__main__":unittest.main()

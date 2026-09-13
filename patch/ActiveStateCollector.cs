@@ -80,7 +80,8 @@ namespace SuperchargedPatch
             long entityStart = System.Diagnostics.Stopwatch.GetTimestamp();
             // Capability advertises the installed bounded preflight/transaction,
             // not a successful restore or full native-physics equivalence.
-            currentFrameData.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = 1 };
+            int nativeFeatures = NativeRoundEndLatch.PublishCapabilityFeatures();
+            currentFrameData.NativeWarpCapabilities = new NativeWarpCapabilities { Version = 1, Features = nativeFeatures };
             if (currentFrameData.Items == null)
             {
                 currentFrameData.Items = new Dictionary<int, ItemData>();

@@ -31,6 +31,7 @@ namespace SuperchargedPatch
 
         public static void Refresh()
         {
+            NativeRoundEndLatch.ResetForSceneRefresh();
             InitialRigidBodyIds.Clear();
             InitialPhysicalAttachmentIds.Clear();
             initialRigidBodyLineages.Clear();

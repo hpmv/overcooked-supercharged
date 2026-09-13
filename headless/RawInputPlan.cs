@@ -10,11 +10,15 @@ namespace Supercharged.Headless;
 /// <summary>Pure, fixed-duration logical pads; no game-state or geometry feedback.</summary>
 public sealed class RawInputPlan
 {
+    public const string SupportedTerminalGameState = "RunLevelOutro";
     public sealed record Frame(Dictionary<int, OneInputData> Inputs, Dictionary<GameEntityRecord, ControllerState> States,
         Dictionary<GameEntityRecord, ActualControllerInput> History);
     public List<Frame> Frames { get; } = new();
     public int PayloadFrames { get; private set; }
     public JsonObject Recording { get; private set; }
+    public string ExpectedTerminalGameState { get; private set; }
+    public int? TerminalObservedFrames { get; private set; }
+    public int? TerminalEmittedFrames { get; private set; }
     private readonly record struct Pad(float X, float Y, bool Pickup, bool Interact, bool Dash);
 
     public static RawInputPlan Create(GameSetup setup, int startFrame, JsonObject request, bool replay)
@@ -30,6 +34,9 @@ public sealed class RawInputPlan
         string initialHash = Hash(initial);
         var requested = new List<Dictionary<int, Pad>>();
         JsonArray expectedRows = null;
+        string requestedTerminal = request["expectedTerminalGameState"]?.ToString();
+        if (requestedTerminal is not null && requestedTerminal != SupportedTerminalGameState)
+            throw new ArgumentException("The only supported raw-input terminal is RunLevelOutro.");
         if (replay)
         {
             var recording = request["recording"]?.AsObject() ?? throw new ArgumentException("Replay requires recording.");
@@ -40,6 +47,27 @@ public sealed class RawInputPlan
             expectedRows = recording["frames"]?.AsArray() ?? throw new InvalidDataException("Recorded frames missing.");
             result.PayloadFrames = recording["payloadFrames"]?.GetValue<int>() ?? -1;
             if (result.PayloadFrames < 1 || result.PayloadFrames > 36000 || expectedRows.Count != result.PayloadFrames + 2) throw new InvalidDataException("Recording requires payload and exactly two release/barrier frames.");
+            result.ExpectedTerminalGameState = recording["expectedTerminalGameState"]?.ToString();
+            if (result.ExpectedTerminalGameState is not null && result.ExpectedTerminalGameState != SupportedTerminalGameState)
+                throw new InvalidDataException("Recorded raw-input terminal is unsupported.");
+            if (requestedTerminal != result.ExpectedTerminalGameState)
+                throw new InvalidDataException("Replay must explicitly request the recorded terminal game state.");
+            bool hasObserved = recording["terminalObservedFrames"] is not null;
+            bool hasEmitted = recording["terminalEmittedFrames"] is not null;
+            if (result.ExpectedTerminalGameState is null)
+            {
+                if (hasObserved || hasEmitted) throw new InvalidDataException("Non-terminal recording contains a terminal receipt.");
+            }
+            else
+            {
+                if (!hasObserved || !hasEmitted) throw new InvalidDataException("Terminal recording lacks its observed/emitted receipt.");
+                result.TerminalObservedFrames = recording["terminalObservedFrames"]!.GetValue<int>();
+                result.TerminalEmittedFrames = recording["terminalEmittedFrames"]!.GetValue<int>();
+                if (result.TerminalObservedFrames < 1 || result.TerminalObservedFrames >= expectedRows.Count ||
+                    result.TerminalEmittedFrames != result.TerminalObservedFrames ||
+                    result.TerminalEmittedFrames > expectedRows.Count)
+                    throw new InvalidDataException("Terminal recording has an invalid observed/emitted boundary.");
+            }
             foreach (var row in expectedRows)
             {
                 var inputs = row!["inputs"]!.Deserialize<Dictionary<int, OneInputData>>(RuntimeHost.Json)!;
@@ -57,6 +85,7 @@ public sealed class RawInputPlan
         }
         else
         {
+            result.ExpectedTerminalGameState = requestedTerminal;
             var segments = request["segments"]?.AsArray() ?? throw new ArgumentException("Raw input requires segments.");
             if (segments.Count is < 1 or > 1024) throw new ArgumentException("Use 1..1024 segments.");
             foreach (var segment in segments)
@@ -114,8 +143,37 @@ public sealed class RawInputPlan
         result.Recording = new JsonObject { ["version"] = 1, ["kind"] = "supercharged-logical-input-recording", ["payloadFrames"] = result.PayloadFrames,
             ["releaseFrames"] = 2, ["initialControllerStates"] = initial, ["initialControllerSha256"] = initialHash,
             ["frames"] = rows, ["qualification"] = "Fixed logical input stream; native interaction success and physics replay require separate observations." };
+        if (result.ExpectedTerminalGameState is not null)
+        {
+            result.Recording["expectedTerminalGameState"] = result.ExpectedTerminalGameState;
+            if (result.TerminalObservedFrames.HasValue)
+            {
+                result.Recording["terminalObservedFrames"] = result.TerminalObservedFrames.Value;
+                result.Recording["terminalEmittedFrames"] = result.TerminalEmittedFrames.Value;
+            }
+            result.Recording["qualification"] = "Fixed logical input plan with an explicit RunLevelOutro terminal; only the separately receipted observed prefix reached native gameplay.";
+        }
         result.Recording["sha256"] = Hash(result.Recording);
         return result;
+    }
+
+    public void AcceptTerminalReceipt(int observedFrames, int emittedFrames)
+    {
+        if (ExpectedTerminalGameState is null || observedFrames < 1 || observedFrames >= Frames.Count ||
+            emittedFrames != observedFrames || emittedFrames > Frames.Count)
+            throw new InvalidOperationException("Raw terminal receipt is outside the planned stream.");
+        if (TerminalObservedFrames.HasValue)
+        {
+            if (TerminalObservedFrames.Value != observedFrames || TerminalEmittedFrames.Value != emittedFrames)
+                throw new InvalidOperationException("Replayed terminal boundary differs from the recording.");
+            return;
+        }
+        TerminalObservedFrames = observedFrames;
+        TerminalEmittedFrames = emittedFrames;
+        Recording.Remove("sha256");
+        Recording["terminalObservedFrames"] = observedFrames;
+        Recording["terminalEmittedFrames"] = emittedFrames;
+        Recording["sha256"] = Hash(Recording);
     }
     private static Pad CheckedPad(double x, double y, bool pickup, bool interact, bool dash)
     {

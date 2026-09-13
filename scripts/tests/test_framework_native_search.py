@@ -45,6 +45,7 @@ class FakeProtocol:
     """Synchronous stand-in for observed RPC responses, never opens a socket."""
     def __init__(self, root):
         self.root, self.frame, self.base, self.x, self.attempt = root, 10, 10, 0.0, 0
+        self.fixed_time = 1.0
         self.calls, self.closed = [], []
         self.raw = dict(outcome='none', active=False, error=None)
         self.recording = None
@@ -62,9 +63,25 @@ class FakeProtocol:
                     recipeRandom=dict(nextIndex=1, authoringWarpCount=self.attempt, history=[6], nativeRecipes=[{'recipeId': 296560}]))
 
     def bridge(self):
+        vector = dict(x=0.0, y=0.0, z=0.0)
+        bodies = [dict(entityId=chef, bodyInstanceId=chef + 1000,
+                       position=dict(x=self.x if chef == 103 else 0.0, y=0.0, z=0.0),
+                       rotation=dict(x=0.0, y=0.0, z=0.0, w=1.0), rawVelocity=vector,
+                       rawAngularVelocity=vector, resumeVelocity=vector, resumeAngularVelocity=vector,
+                       rawIsKinematic=False, rawUseGravity=True, sleeping=True,
+                       frozenByNativeTimeManager=True, resumeIsKinematic=False, resumeUseGravity=True)
+                  for chef in range(103, 107)]
         return dict(paused=True, fullScreen=False, screenWidth=1280, screenHeight=720, loadComplete=True, nativeRound=self.native(),
                     applicationFocused=False, unfocusedVirtualInputChecks=4,
-                    nativeCheckpoints=dict(restoreAttempts=self.attempt, lastRestore=dict(verified=True, frame=self.base, attempt=self.attempt)))
+                    fixedTime=self.fixed_time, fixedDeltaTime=.02, logicalRealtime=1.0,
+                    logicalClock=dict(policy='native-float-capture-step-with-authoring-pause-suspension',
+                                      authoringPauseRequested=True, authoringPausedThisFrame=True,
+                                      value=1.0, eligibleTicks=60, step=1/60),
+                    nativePhysics=dict(source='native-rigidbody-and-TimeManager.FrozenPhysicsData', bodies=bodies),
+                    nativeCheckpoints=dict(restoreAttempts=self.attempt,
+                                           nativeServerClock=[1.0, 2.0, 3.0],
+                                           nativeClientClock=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                                           lastRestore=dict(verified=True, frame=self.base, attempt=self.attempt)))
 
     def client(self, kind):
         protocol = self
@@ -86,11 +103,12 @@ class FakeProtocol:
         command = request['command']
         if kind == 'bridge':
             if command == 'pause' and self.fail_pause: raise RuntimeError('synthetic pause transport failure')
-            result = {'bridge': self.bridge()}
+            result = {'ok': True, 'bridge': self.bridge()}
             if command == 'food': result['detail'] = {'entities': []}
+            self.fixed_time += .02
             return result
         if command == 'warp':
-            self.frame, self.x = self.base, .001 if self.drift else 0
+            self.frame, self.x = self.base, .001 if self.drift else 0.0
             if not self.stale_restore: self.attempt += 1
         elif command == 'raw-input':
             if self.fail_raw: raise RuntimeError('synthetic uncertain input transport failure')
@@ -209,6 +227,29 @@ class AdapterTests(unittest.TestCase):
         for key, value in [('releaseFrames', 0), ('payloadFrames', 8)]:
             r = copy.deepcopy(rec); r[key] = value
             with self.assertRaises(ValueError): ns.recording_frames(r)
+
+    def test_explicit_round_end_receipt_requires_same_terminal_frame_and_consumed_prefix(self):
+        p = FakeProtocol(Path('.'))
+        pads = {str(c): dict(x=0, y=0, pickup=False, interact=False, dash=False) for c in range(103, 107)}
+        rec = recording(6, pads)
+        rec.update(expectedTerminalGameState='RunLevelOutro', terminalObservedFrames=3,
+                   terminalEmittedFrames=3)
+        rec['sha256'] = fs.identity({key: value for key, value in rec.items() if key != 'sha256'})
+        p.frame = 13
+        p.raw = dict(outcome='terminal', active=False, error=None, startFrame=10,
+                     payloadFrames=6, totalFramesIncludingRelease=8, emittedFrames=3,
+                     observedFrames=3, recordingSha256=rec['sha256'],
+                     expectedTerminalGameState='RunLevelOutro', observedTerminalGameState='RunLevelOutro',
+                     terminalFrame=13, terminalObservedFrames=3, terminalEmittedFrames=3)
+        self.assertEqual(ns.require_recorded_terminal(p.state(), rec, 10), 3)
+        for key, value in [('terminalFrame', 14), ('observedFrames', 4),
+                           ('observedTerminalGameState', 'RanLevelOutro')]:
+            state = p.state(); state['rawInput'][key] = value
+            with self.assertRaises(ValueError): ns.require_recorded_terminal(state, rec, 10)
+        for key, value in [('terminalEmittedFrames', 4),
+                           ('expectedTerminalGameState', 'RanLevelOutro')]:
+            damaged = copy.deepcopy(rec); damaged[key] = value
+            with self.assertRaises(ValueError): ns.recording_frames(damaged)
 
     def test_neutral_tail_is_part_of_segment_identity_budget_and_reservations(self):
         s = segment()

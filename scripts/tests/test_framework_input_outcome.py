@@ -6,12 +6,17 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS = ROOT / 'artifacts'
+if not (ARTIFACTS / 'framework-migration' / 'native-s').exists():
+    ARTIFACTS = ROOT.parent / 'artifacts'
 sys.path.insert(0, str(ROOT / 'scripts'))
-from framework_input_probe import delivery_outcome, native_physics_comparison, pickup_outcome
+from framework_input_probe import (delivery_outcome, native_physics_comparison, pickup_outcome,
+                                   round_end_contact_sidecar_comparison,
+                                   round_end_terminal_comparison)
 
 
 def witness(run):
-    rows = json.loads((ROOT / 'artifacts/framework-migration' / run / 'pickup-probe/observations.json').read_text())
+    rows = json.loads((ARTIFACTS / 'framework-migration' / run / 'pickup-probe/observations.json').read_text())
     def take(label):
         return next(r['response'] for r in rows if r['label'] == label)
     return [take('base'), take('base-native'), take('original'), take('original-native')]
@@ -183,6 +188,107 @@ class NativePhysicsComparisonTest(unittest.TestCase):
         result = native_physics_comparison(self.physics(), self.physics(entity=53, instance=-200), set())
         self.assertFalse(result['equal'])
         self.assertEqual(result['firstDifference']['field'], '$nativePhysics/bodies/0/entityId')
+
+
+class RoundEndTerminalComparisonTest(unittest.TestCase):
+    @staticmethod
+    def state(frame=8999):
+        return {
+            'frame': frame,
+            'entities': [{'id': 44, 'position': {'x': 1, 'y': .05, 'z': 2}}],
+            'registry': [{'Id': 44, 'Components': ['Rigidbody']}],
+            'rawInput': {
+                'outcome': 'terminal', 'active': False, 'error': None, 'startFrame': 8492,
+                'payloadFrames': 700, 'totalFramesIncludingRelease': 702,
+                'emittedFrames': 507, 'observedFrames': 507,
+                'recordingSha256': 'abc', 'expectedTerminalGameState': 'RunLevelOutro',
+                'observedTerminalGameState': 'RunLevelOutro', 'terminalFrame': frame,
+                'terminalObservedFrames': 507, 'terminalEmittedFrames': 507,
+            },
+        }
+
+    @staticmethod
+    def receipt(nonce=3, unity_frame=100):
+        return {
+            'nonce': nonce, 'frame': 8999, 'phase': 'held', 'serverIteratorPc': -1,
+            'clientIteratorPc': 1, 'dormantOutroPc': 0, 'deferredServerPc': -1,
+            'clientTimerZeroCalls': 0,
+            'lifecycle': {'serverState': 'RunLevelOutro', 'clientFinished': False},
+            'nativeRound': {'available': True, 'elapsed': 150, 'remaining': 0,
+                            'recipeRandom': {'nextIndex': 0, 'history': [], 'nativeRecipes': []}},
+            'food': {'source': 'native-server-preparation-composition', 'unityFrame': unity_frame,
+                     'entities': [{'id': 2, 'composition': None}]},
+            'physics': {'fixedDeltaTime': .02, 'bodies': [
+                {'entityId': 44, 'bodyInstanceId': -44, 'position': {'x': 1, 'y': .05, 'z': 2}}]},
+            'clocks': {'nativeServerClock': [1., 2., 3.], 'nativeClientClock': [1., 2., 3., 4., 5., 6.],
+                       'source': 100., 'ticks': 6000, 'step': 1/60,
+                       'serverTimer': {'elapsed': 150., 'timeLeft': 0, 'limit': 150., 'suppressed': False},
+                       'clientTimer': {'elapsed': 150., 'timeLeft': 0, 'limit': 150., 'suppressed': False}},
+        }
+
+    def compare(self, mutate=None):
+        original, replay = self.state(), self.state()
+        first, second = self.receipt(), self.receipt(nonce=4, unity_frame=999)
+        if mutate:
+            mutate(replay, second)
+        return round_end_terminal_comparison(original, replay, first, second, {44}, {}, 8492)
+
+    def test_exact_terminal_and_food_unity_frame_only_difference_pass(self):
+        result = self.compare()
+        self.assertTrue(result['equal'])
+        self.assertTrue(all(result['checks'].values()))
+
+    def test_lifecycle_mutation_fails(self):
+        result = self.compare(lambda state, receipt: receipt['lifecycle'].__setitem__('clientFinished', True))
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['lifecycle'])
+
+    def test_fixed_physics_mutation_fails(self):
+        result = self.compare(lambda state, receipt: receipt['physics']['bodies'][0]['position'].__setitem__('y', 0))
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['nativePhysics'])
+
+    def test_nonce_must_advance_exactly_once(self):
+        result = self.compare(lambda state, receipt: receipt.__setitem__('nonce', 5))
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['nonceProgression'])
+
+    def test_clock_mutation_fails(self):
+        result = self.compare(lambda state, receipt: receipt['clocks'].__setitem__('ticks', 6001))
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['nativeClocks'])
+
+
+class RoundEndContactSidecarComparisonTest(unittest.TestCase):
+    baseline = {'captures': 2, 'restores': 1, 'transformCaptures': 2, 'transformRestores': 1}
+
+    @staticmethod
+    def status(restored=False):
+        return {
+            'pendingContactPoolAction': 'none', 'automaticRestorePending': not restored,
+            'contactPoolSnapshotCaptured': True, 'contactPoolSnapshotFrame': 8492,
+            'contactPoolCaptures': 3, 'contactPoolRestores': 2 if restored else 1,
+            'transformDispatchSnapshotCaptured': True, 'transformDispatchSnapshotFrame': 8492,
+            'transformDispatchCaptures': 3, 'transformDispatchRestores': 2 if restored else 1,
+        }
+
+    def test_capture_is_pending_for_replay(self):
+        result = round_end_contact_sidecar_comparison(
+            self.status(), self.baseline, 8492, False, True)
+        self.assertTrue(result['equal'])
+
+    def test_replay_consumes_exactly_one_restore(self):
+        result = round_end_contact_sidecar_comparison(
+            self.status(True), self.baseline, 8492, True, True)
+        self.assertTrue(result['equal'])
+
+    def test_missing_transform_restore_fails(self):
+        status = self.status(True)
+        status['transformDispatchRestores'] = 1
+        result = round_end_contact_sidecar_comparison(
+            status, self.baseline, 8492, True, True)
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['transformRestoreCount'])
 
 
 class DeliveryOutcomeTest(unittest.TestCase):

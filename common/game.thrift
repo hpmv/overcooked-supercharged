@@ -81,6 +81,9 @@ struct ServerMessage {
 struct NativeWarpCapabilities {
     1: i32 version,
     // Version1 bit0: observed dynamic spawn/delete/respawn preflight support.
+    // Version1 bit1: pristine RunLevelOutro checkpoint latch is held.
+    // Version1 bit2: this callback acknowledges a restored InLevel lifecycle.
+    // Version1 bit3: round-end authoring failed; only diagnostics and a full process restart are safe.
     2: i32 features,
 }
 

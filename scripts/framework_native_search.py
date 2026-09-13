@@ -126,6 +126,18 @@ def recording_frames(recording):
                 raise ValueError('Recording release tail is not neutral')
             if ordinal == payload + 1 and any(pad[button]['JustReleased'] for button in ('Pickup', 'Interact', 'Dash')):
                 raise ValueError('Final release barrier contains repeated release edges')
+    terminal = recording.get('expectedTerminalGameState')
+    has_terminal_counts = any(key in recording for key in ('terminalObservedFrames', 'terminalEmittedFrames'))
+    if terminal is None:
+        if has_terminal_counts:
+            raise ValueError('Non-terminal recording contains a terminal receipt')
+    else:
+        if terminal != 'RunLevelOutro':
+            raise ValueError('Unsupported recorded terminal game state')
+        observed = integer(recording.get('terminalObservedFrames'), 'terminal observed frames')
+        emitted = integer(recording.get('terminalEmittedFrames'), 'terminal emitted frames')
+        if not 1 <= observed < len(frames) or emitted != observed or emitted > len(frames):
+            raise ValueError('Terminal receipt must contain only the exactly consumed prefix inside the planned stream')
     return len(frames)
 
 
@@ -139,6 +151,28 @@ def require_recorded_completion(state, recording, start):
             raw['emittedFrames'] != count or raw['observedFrames'] != count or state['frame'] != start + count):
         raise ValueError('Native recording completion/frame/release receipt mismatch')
     return count
+
+
+def require_recorded_terminal(state, recording, start):
+    """Require the explicit pristine InLevel->RunLevelOutro latch receipt."""
+    require_paused(state)
+    count = recording_frames(recording)
+    if recording.get('expectedTerminalGameState') != 'RunLevelOutro':
+        raise ValueError('Recording does not declare the supported terminal')
+    observed = integer(recording['terminalObservedFrames'], 'terminal observed frames')
+    emitted = integer(recording['terminalEmittedFrames'], 'terminal emitted frames')
+    raw = state['rawInput']
+    if (raw['outcome'] != 'terminal' or raw.get('active') or raw.get('error') or
+            raw['recordingSha256'] != recording['sha256'] or raw['startFrame'] != start or
+            raw['payloadFrames'] != recording['payloadFrames'] or
+            raw['totalFramesIncludingRelease'] != count or raw['emittedFrames'] != emitted or
+            raw['observedFrames'] != observed or raw.get('expectedTerminalGameState') != 'RunLevelOutro' or
+            raw.get('observedTerminalGameState') != 'RunLevelOutro' or
+            raw.get('terminalFrame') != start + observed or
+            raw.get('terminalObservedFrames') != observed or raw.get('terminalEmittedFrames') != emitted or
+            state['frame'] != start + observed):
+        raise ValueError('Native pristine terminal recording/frame/consumed-prefix receipt mismatch')
+    return observed
 
 
 def require_segment_recording(segment, recording):
