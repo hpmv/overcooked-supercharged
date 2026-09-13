@@ -197,6 +197,20 @@ public static class DynamicWarpTests
             fixedBaselineRebranch["discardedFuturePaths"]!.AsArray().Any(path => path!.ToJsonString() == "[68,0,0]") &&
             fixedBaselineRebranch["retainedHistoricalAncestorPaths"]!.AsArray().Count == 0,
             "fixed target still discards all dynamic receipts from the abandoned future");
+        var proxyRetirements = new JsonArray {
+            new JsonObject { ["nativeId"] = 52, ["frame"] = 200 },
+            new JsonObject { ["nativeId"] = 54, ["frame"] = 283 },
+            new JsonObject { ["nativeId"] = 56, ["frame"] = 1090 },
+            new JsonObject { ["nativeId"] = 58, ["frame"] = 444 }
+        };
+        var proxyRebranch = HeadlessSession.RebranchProxyRetirements(proxyRetirements, 444, new HashSet<int> { 58 });
+        Check(proxyRetirements.Select(row => row!["nativeId"]!.GetValue<int>()).SequenceEqual(new[] { 52, 54 }),
+            "successful rewind retains only proxy retirements belonging to target history");
+        Check(proxyRebranch["discardedIds"]!.AsArray().Select(row => row!.GetValue<int>()).SequenceEqual(new[] { 56, 58 }) &&
+            proxyRebranch["discarded"]!.AsArray().Single(row => row!["nativeId"]!.GetValue<int>() == 56)!["abandonedFuture"]!.GetValue<bool>() &&
+            proxyRebranch["discarded"]!.AsArray().Single(row => row!["nativeId"]!.GetValue<int>() == 58)!["reincarnatedAtTarget"]!.GetValue<bool>() &&
+            !proxyRebranch["nativeStateChanged"]!.GetValue<bool>(),
+            "successful rewind expires abandoned-future and reincarnated proxy receipts without a native mutation");
         var bodyMetadata = new EntityRegistryData { EntityId = 125, Name = "fixture.PreparedBun_Rigidbody", Pos = new(), Components = new() { "Rigidbody", "ObjectContainer" }, SyncEntityTypes = new() { (int)EntityType.PhysicsObject } };
         f.audit.Observe(new[] { bodyMetadata });
         Reject(() => f.audit.RequireWarpPaths(f.live, 20, 10, caps), "a Rigidbody name/type alone never excuses an unknown registered object");

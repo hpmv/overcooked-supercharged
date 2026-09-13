@@ -984,3 +984,66 @@ User-provided decompiled code: **`H:\tiny2\Overcooked2\tinyoc2\Assets\Scripts\As
 ## Suggested opening prompt for the new session
 
 > Continue the Overcooked2 Story1-1 TAS work in M:\projects\game-test-2. First read docs/FRESH-SESSION-HANDOFF.md and the current v12d release/handoff receipt. Keep the game windowed and retain the immediate150-second timer. Finish the pending phase-specific host fix, run the four-candidate fresh preparation search and selected exact-input replay, then complete a native delivery. Report measured results honestly; full rewind parity and a Story1-1 score are not yet proven. Continue the paired physics probe afterward. Preserve existing evidence and use unique output directories.
+
+## 2026-09-13: far-rewind proxy-retirement rebranch fixed and proved
+
+The older opening sections above are historical. Search remains disabled while
+rewind parity is being completed. The current headless source adds no native
+mutation: it expires controller-owned proxy-retirement observations after a
+verified rewind when their receipt frame is later than the target frame, or
+when the same native ID was freshly registered at the target. Historical
+receipts on the surviving branch remain intact.
+
+The concrete failure was a stale `56@1090` retirement observation surviving a
+far f1500→444 rewind. It suppressed the new `observe-absent(56)` publication
+when replay later picked returned plate 57 up from stack 55. The actual game
+state, input, and normalized physics had already been exact; only the
+controller's abandoned-future evidence was wrong.
+
+The new helper is `HeadlessSession.RebranchProxyRetirements`. Its focused unit
+matrix retains `52@200` and `54@283`, discards future `56@1090`, and discards
+`58@444` when that ID is freshly registered at the target. It reports
+`nativeStateChanged=false`. Offline checks passed: DynamicWarp 55, Story11 89,
+Status 32, and the full Headless suite 369.
+
+Live proof uses headless DLL
+`framework-run/headless-host-v12q8-proxy-retirement-rebranch/Headless.dll`,
+SHA256
+`AC3CEFB2D1AB4ABC04ACB0E18E8218E75F4C0678D75D74C3F5B217C4D57368CA`.
+Evidence is under
+`artifacts/framework-migration/story11-proxy-rebranch-v12q8-live-r3/`:
+
+- focused f444→1047 delivery passed with input SHA
+  `c91fe72f0376f51e3b826761c86b2550b6d97302ebaf13bad61230eae3eb5141`;
+- f1047→1090 pickup, f1090→1122 held dash, f1122→1198 dash-drop,
+  and f1198→1500 settle each passed exact rewind/replay comparisons;
+- `nonadjacent-f1500-to444-r1/summary.json` passed the far rewind and replay,
+  discarded only `56@1090` as `abandonedFuture=true`, retained two historical
+  receipts, and matched entities, round, food, clocks, normalized native
+  physics, and input at f1047;
+- `postfar-pickup-f1047-to1090-r1/summary.json` passed the formerly failing
+  pickup, published a fresh `observe-absent(56)`, achieved the requested
+  pickup on original and replay, and matched all compared state. Its exact
+  input SHA is
+  `345305c60fc756953d3427710f517606eba5f9ed5c95c224484e2aa533aaed08`.
+
+All live route endpoints in this proof were focused. A prior apparent delivery
+regression was an unfocused run that dropped the one-frame f280 interaction;
+it was not rewind drift. Foreground the exact game process before each route
+cell and inspect `actualFocusAtEndpoints`.
+
+At this writing the isolated game is PID 90352, UTC start ticks
+639249244851564978; the headless host is PID 60080, start ticks
+639249247979836514. The controller is paused/fenced at f1090 after the
+post-far pickup proof. Revalidate both identities before reuse. On any real
+authoring-module failure or red overlay, preserve diagnostics and restart the
+whole game; a level reload does not clear all failure state.
+
+This far route also composes capabilities proved by earlier milestones:
+post-fade plate destruction/resurrection, returned-stack recreation, the
+representative Animator transition matrix, and genuine dash-drop/plate-throw
+physics. Those are not current gaps. Next work is broader Story 1-1 rewind
+coverage, not route search: long order/timer evolution and expiry, multiple
+deliveries with repeated dynamic-ID lifecycles, multi-chef interactions, and
+round end. Preserve plate-throw physics and commit every newly demonstrated
+milestone locally.

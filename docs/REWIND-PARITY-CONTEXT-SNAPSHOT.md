@@ -1278,3 +1278,46 @@ are still live. It does not yet prove resurrection after the fade destroys
 the plate. That is the next delivery boundary to exercise. A real
 dash-detach/plate-throw collision remains separate required coverage. Route
 search stays disabled.
+
+## 2026-09-13: abandoned-future registry evidence now rebranches exactly
+
+A later long-route test exposed a controller-only parity defect after an exact
+far rewind. The original f1047→1090 pickup retired returned-stack proxy 56 and
+recorded an `observedProxyRetirements` receipt at f1090. Rewinding from f1500
+to f444 correctly rebuilt and replayed the native world, but the receipt from
+the abandoned future survived because the old cleanup considered only IDs
+freshly registered at the target. On the second pickup, that stale receipt
+suppressed the new absence observation and graph validation failed even though
+entities, native round/food/clocks, normalized physics, and exact input all
+matched.
+
+`HeadlessSession.RebranchProxyRetirements` now runs only after a verified warp.
+It removes a controller-owned receipt when `receiptFrame > targetFrame` or the
+same ID is freshly registered at the target, while retaining historical
+receipts on the surviving branch. It publishes detailed telemetry and
+explicitly reports `nativeStateChanged=false`; it does not alter game state,
+physics, synchronizers, or input. The focused DynamicWarp matrix proves
+retention of `52@200` and `54@283`, abandonment of `56@1090`, and
+target-reincarnation removal of ID 58. The full Headless suite passes 369
+checks.
+
+The clean live sequence under
+`artifacts/framework-migration/story11-proxy-rebranch-v12q8-live-r3/` passed:
+f444→1047 delivery, f1047→1090 returned-plate pickup, held dash to f1122,
+dash-drop to f1198, neutral settle to f1500, far f1500→444 rewind plus replay
+to f1047, and the decisive second pickup to f1090. The far-rebranch receipt
+discarded `56@1090` with `abandonedFuture=true`, retained two historical
+receipts, and the second pickup published a fresh `observe-absent(56)`. The
+second pickup achieved the requested lifecycle on original and replay and was
+exact for reconstructed entities, native round, food, clocks, normalized
+native physics, and input SHA
+`345305c60fc756953d3427710f517606eba5f9ed5c95c224484e2aa533aaed08`.
+
+This closes the known post-far returned-plate registry failure without changing
+in-game behavior. Together with earlier milestones, the far route composes
+already-proved post-fade plate resurrection, returned-stack recreation, the
+representative Animator transition matrix, and genuine plate-throw physics.
+It still does not establish complete level parity. Search remains disabled
+while coverage expands into long order/timer evolution and expiry, multiple
+deliveries and repeated dynamic-ID lifecycles, multi-chef interactions, and
+round end.

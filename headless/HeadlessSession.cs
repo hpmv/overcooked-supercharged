@@ -103,16 +103,13 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
                 if (wasWarping && core.State == RealGameState.Paused && !core.RequestPending)
                 {
                     var freshIds = output.EntityRegistry.Select(entity => entity.EntityId).ToHashSet();
-                    var discardedRetirementIds = new SortedSet<int>();
-                    for (int index = observedProxyRetirements.Count - 1; index >= 0; index--)
-                    {
-                        int? id = observedProxyRetirements[index]?["nativeId"]?.GetValue<int>();
-                        if (id is int nativeId && freshIds.Contains(nativeId))
-                        { discardedRetirementIds.Add(nativeId); observedProxyRetirements.RemoveAt(index); }
-                    }
+                    var proxyRetirementRebranch = RebranchProxyRetirements(observedProxyRetirements,
+                        core.simulator.Frame, freshIds);
                     registryWarpRebranch = registryAudit.RebranchAfterSuccessfulWarp(core.simulator.entityIdToRecord,
                         core.simulator.Frame, freshIds);
-                    registryWarpRebranch["discardedProxyRetirementIds"] = JsonSerializerNode(discardedRetirementIds);
+                    registryWarpRebranch["discardedProxyRetirementIds"] =
+                        proxyRetirementRebranch["discardedIds"]!.DeepClone();
+                    registryWarpRebranch["proxyRetirementRebranch"] = proxyRetirementRebranch;
                 }
                 registryAudit.ObserveMappedEntities(core.simulator.entityIdToRecord, core.simulator.Frame);
                 registryAudit.ObserveSpawnMappings(output.ServerMessages, core.simulator.entityIdToRecord, core.simulator.Frame);
@@ -152,6 +149,39 @@ public sealed partial class HeadlessSession : Interceptor.IAsync
                 throw;
             }
         }
+    }
+
+    internal static JsonObject RebranchProxyRetirements(JsonArray receipts, int targetFrame,
+        IReadOnlySet<int> freshlyRegisteredIds)
+    {
+        var discardedIds = new SortedSet<int>();
+        var discarded = new JsonArray();
+        for (int index = receipts.Count - 1; index >= 0; index--)
+        {
+            if (receipts[index] is not JsonObject receipt ||
+                receipt["nativeId"]?.GetValue<int>() is not int nativeId ||
+                receipt["frame"]?.GetValue<int>() is not int receiptFrame)
+                throw new InvalidDataException("Controller-owned proxy retirement receipt is malformed.");
+            bool abandonedFuture = receiptFrame > targetFrame;
+            bool reincarnated = freshlyRegisteredIds.Contains(nativeId);
+            if (!abandonedFuture && !reincarnated) continue;
+            discardedIds.Add(nativeId);
+            discarded.Add(new JsonObject {
+                ["nativeId"] = nativeId,
+                ["receiptFrame"] = receiptFrame,
+                ["abandonedFuture"] = abandonedFuture,
+                ["reincarnatedAtTarget"] = reincarnated
+            });
+            receipts.RemoveAt(index);
+        }
+        return new JsonObject {
+            ["targetFrame"] = targetFrame,
+            ["discardedIds"] = JsonSerializerNode(discardedIds),
+            ["discarded"] = discarded,
+            ["retainedCount"] = receipts.Count,
+            ["nativeStateChanged"] = false,
+            ["scope"] = "Controller observation bookkeeping only; no native game state or input changed."
+        };
     }
 
     public void ConnectionEnded(string error = null)
