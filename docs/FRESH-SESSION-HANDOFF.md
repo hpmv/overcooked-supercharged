@@ -1,5 +1,43 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-14, quiescent pause and five-step pose
+> lattice):** the deterministic second-delivery f1045 rewind now completes
+> the native warp instead of failing on chef 46's coupled Rigidbody pose.
+> Two independent problems were separated. First, Unity continued automatic
+> PhysX simulation on render frames while the logical TAS frame was paused.
+> The authoring-only physics-pause gate now disables `Physics.autoSimulation`
+> only while the bridge owns the pause, restores it before every real resume,
+> and admits exactly one maintenance `FixedUpdate` before re-gating. The live
+> receipt recorded 18 resumes, 18 maintenance callbacks, and 18 maintenance
+> gates with no failure. Ordinary advancing gameplay is unchanged.
+>
+> Second, the PhysX 3.x quaternion-normalization/center-of-mass composition
+> makes its public actor-pose setter a quantized inverse. The real chef-46
+> residual crosses the target, briefly grows by one ULP, and becomes exact on
+> the fifth bounded assignment. BodyRestore r36 therefore gives only the
+> coupled native pose loop a five-assignment cap and removes the invalid
+> monotonic-residual assumption. Finite/candidate/residual envelopes, actual
+> candidate progress, exact final readback, and every Transform, collider,
+> motion, mass-frame, and identity postcondition remain mandatory. Both live
+> `after-final-rotation` records reached exact position and quaternion on
+> attempt 5. The tested r36 DLL SHA-256 is
+> `D5F070314E259B64D656F7634F150BF7B981B6A30607E2EDDF6C1212AA1B9322`;
+> the focused synthetic contract passes 220 checks.
+>
+> This exposed the next real boundary rather than completing the cell. At the
+> restored f1045 baseline, entities, registry, food, round state, clocks,
+> frame, poses, velocities, modes, and body incarnations are exact. The sole
+> native-physics difference is surviving dynamic body/entity 60 (the empty
+> Rigidbody container for plate-stack owner 59): checkpoint `sleeping=false`,
+> restored `sleeping=true`. Evidence is
+> `artifacts/framework-migration/story11-physics-pause-dev5-live-r4/second-delivery-f1045-rewind-r36-r1/summary.json`
+> (SHA-256
+> `CABA30B80AD6C455C63C3A109A3C136FBD57FF11FC37F68C44B4B2EFBE5496FA`)
+> with sibling `body-r36-status.json` and
+> `physics-pause-gate-status.json`. Search remains disabled. Continue by
+> restoring and verifying the checkpoint sleep lifecycle for admitted dynamic
+> container bodies, then rerun this same unwind-only cell.
+
 > **Active rewind result (2026-09-13, repeated scored terminal lifecycle):**
 > Story 1-1 now survives repeated non-adjacent f8999 -> f8492 -> f8999
 > rewinds after a real +28 delivery and returned plate/stack lifecycle, all

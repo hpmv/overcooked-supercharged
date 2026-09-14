@@ -20,6 +20,7 @@ namespace SuperchargedPatch.Authoring.Modules
     {
         private const int MaximumRotationAssignments=4;
         private const int MaximumPositionAssignments=4;
+        private const int MaximumJointPoseAssignments=5;
         private const float MaximumRotationResidual=0.000001f;
         private const float MaximumMassFrameResidual=0.00001f;
         private const float MaximumPoseMotionSideEffectResidual=0.000001f;
@@ -37,7 +38,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeSetMassFrame nativeSetMassFrame;
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private bool disposed;
-        public string Name {get{return "body-native-auto-reset-v33-surviving-shape-state-rebind";}}
+        public string Name {get{return "body-native-auto-reset-v36-five-step-pose-lattice";}}
         public int ApiVersion {get{return 1;}}
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
@@ -440,7 +441,7 @@ namespace SuperchargedPatch.Authoring.Modules
             Vector3 candidatePosition=row.BodyPosition;
             Quaternion candidateRotation=row.BodyRotation;
             float previous=float.PositiveInfinity;
-            for(int attempt=1;attempt<=MaximumPositionAssignments;attempt++) {
+            for(int attempt=1;attempt<=MaximumJointPoseAssignments;attempt++) {
                 var candidatePositionDelta=new Vector3(candidatePosition.x-row.BodyPosition.x,
                     candidatePosition.y-row.BodyPosition.y,candidatePosition.z-row.BodyPosition.z);
                 var candidateRotationDelta=Subtract(candidateRotation,row.BodyRotation);
@@ -494,16 +495,21 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
                 float size=Math.Max(MaxAbs(positionResidual),requireExactRotation?MaxAbs(rotationResidual):0.0f);
                 attemptRecord["maximumAbsoluteResidual"]=size;
-                if(size>=previous) {
-                    if(!requireExactRotation&&size<=MaximumMassFrameResidual) {
-                        record["boundedTransientAccepted"]=true;
-                        record["maximumAbsoluteResidual"]=size;
-                        return;
-                    }
-                    throw new InvalidOperationException("Native existing-actor pose preimage stagnated or worsened: "+row.EntityId);
+                // PhysX normalizes the actor quaternion and composes it through
+                // the center-of-mass frame.  Float-lattice corrections can
+                // cross the target, retain the same maximum residual, and even
+                // take one larger step before the next bounded input becomes
+                // exact.  Monotonic residual size is therefore not a valid
+                // inverse-setter prerequisite.  Candidate/residual envelopes,
+                // finite checks, actual candidate progress, the five-assignment
+                // cap, and exact final readback still reject drift and cycles.
+                if(!requireExactRotation&&size>=previous&&size<=MaximumMassFrameResidual) {
+                    record["boundedTransientAccepted"]=true;
+                    record["maximumAbsoluteResidual"]=size;
+                    return;
                 }
-                if(attempt==MaximumPositionAssignments)
-                    throw new InvalidOperationException("Native existing-actor pose has no exact readback within four assignments: "+row.EntityId);
+                if(attempt==MaximumJointPoseAssignments)
+                    throw new InvalidOperationException("Native existing-actor pose has no exact readback within five assignments: "+row.EntityId);
                 Vector3 nextPosition=new Vector3(candidatePosition.x+positionResidual.x,
                     candidatePosition.y+positionResidual.y,candidatePosition.z+positionResidual.z);
                 Quaternion nextRotation=requireExactRotation

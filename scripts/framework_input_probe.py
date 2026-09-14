@@ -1179,12 +1179,12 @@ def main():
             if trace_status.get('active') is not True or not trace_status.get('nativePath') or \
                     not trace_status.get('nativeSha256') or not trace_status.get('installedMask'):
                 raise RuntimeError('Active native trace configuration is unavailable for split capture')
-            split_trace_config = {'nativePath': trace_status['nativePath'],
-                                  'sha256': trace_status['nativeSha256'],
-                                  'mask': trace_status['installedMask']}
             save_split_trace('native-trace-original.json')
-            call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
-                            'operation': 'deactivate', 'args': {}}, 'native-trace-split-deactivate')
+            # The trace installs before the rest of the rewind stack so later
+            # Harmony detours can chain through its entry patches.  Deactivating
+            # here would restore the pre-stack entry bytes and erase those later
+            # detours during the warp.  Keep the read-only trace installed, then
+            # discard the warp records once restoration has completed.
         call('bridge', {'command': 'arm'}, 'warp-arm')
         call('controller', {'command': 'warp', 'frame': frame, 'development': True}, 'warp')
         restored = settled('restored')
@@ -1196,9 +1196,6 @@ def main():
         require_native_boundary(restored_native)
         if args.split_native_trace_around_warp:
             call('bridge', {'command': 'pause'}, 'native-trace-split-reactivate-fence')
-            call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
-                            'operation': 'activate', 'args': split_trace_config},
-                 'native-trace-split-reactivate')
             call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
                             'operation': 'clear', 'args': {}}, 'native-trace-split-clear')
         mark_native_trace(250, restored['frame'], 'native-trace-after-warp')

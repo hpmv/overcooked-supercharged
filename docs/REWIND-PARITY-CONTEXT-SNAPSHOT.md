@@ -6,6 +6,41 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — f1045 warp succeeds; one dynamic sleep bit remains
+
+The clean second-delivery f1045 rewind now gets through the complete native
+restore. The earlier red-overlay failure on chef 46 was a quantized inverse
+problem, not an Animator overwrite: PhysX normalizes the actor quaternion and
+composes it through a nonidentity center-of-mass frame, so successive exact
+float corrections can cross the target and briefly grow before converging.
+The recorded attempts and a float32 PhysX 3.3.3 composition model agree
+bit-for-bit for attempts 1–3 and predict the first exact solution at attempt
+5. BodyRestore r36 uses a dedicated five-assignment limit for this coupled
+position/quaternion loop while retaining bounded inputs/residuals, progress,
+all invariants, and exact final readback. Both live final-pose restorations
+converged exactly on attempt 5. Its DLL SHA-256 is
+`D5F070314E259B64D656F7634F150BF7B981B6A30607E2EDDF6C1212AA1B9322`,
+and the focused fixture passes 220 checks.
+
+The accompanying authoring physics gate solves the other hidden-history
+problem: automatic PhysX simulation no longer runs repeatedly while the
+logical TAS frame is paused. It changes only the authoring pause lifecycle;
+`Physics.autoSimulation` is restored before advancing gameplay. The live
+receipt proved one and only one maintenance callback for each of 18 actual
+resume-to-pause transitions and no gate failure.
+
+The restored f1045 comparison is now exact except for one field:
+`$nativePhysics/bodies/7/sleeping`. This row is entity 60 / Rigidbody instance
+`-38766`, the surviving empty container of dynamic plate-stack owner 59. It is
+kinematic with zero motion and byte-exact pose/settings in both observations,
+but was awake at capture and sleeping immediately after rewind. This is now
+the active parity target. Evidence:
+`artifacts/framework-migration/story11-physics-pause-dev5-live-r4/second-delivery-f1045-rewind-r36-r1/summary.json`
+(SHA-256
+`CABA30B80AD6C455C63C3A109A3C136FBD57FF11FC37F68C44B4B2EFBE5496FA`).
+Search remains disabled; rerun the same f1045 unwind-only cell after adding a
+fail-closed dynamic-container sleep checkpoint/restore.
+
 ## Latest result — far cross-delivery rewind passes under BodyRestore r33
 
 The retained-history rewind from settled returned-plate frame 1500 directly

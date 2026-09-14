@@ -290,6 +290,39 @@ var revised=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();revised.
 NativeBodyPoseCheckpoint.Restore(fixture.snapshot);NativeBodyPoseCheckpoint.VerifyRestored(fixture.snapshot);
 Check(Setters()==2,"replacement algorithm solves same modeled residual in same process without recapture");
 Check((long)((Dictionary<string,object>)revised.Invoke("status",new()))["restoreCalls"]==1,"replacement actual algorithm invocation is separately recorded");revised.Dispose();
+fixture=RotationFixture();var plateauModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+var plateauRow=fixture.snapshot[0];var plateauPosition=plateauRow.BodyPosition;var plateauRotation=plateauRow.BodyRotation;
+var poseEpsilon=1f/(1<<20);
+plateauModule.ConfigureNativePoseFixture(fixture.obj.body,(attempt,inputPosition,inputRotation)=>attempt switch {
+ 1=>new(new(plateauPosition.x,plateauPosition.y-poseEpsilon,plateauPosition.z),new(plateauRotation.x+poseEpsilon/2,plateauRotation.y,plateauRotation.z,plateauRotation.w)),
+ 2=>new(new(plateauPosition.x,plateauPosition.y+poseEpsilon,plateauPosition.z),new(plateauRotation.x+poseEpsilon/2,plateauRotation.y,plateauRotation.z,plateauRotation.w)),
+ _=>new(plateauPosition,plateauRotation)});
+plateauModule.RestoreExistingActorPoseFixture(plateauRow);
+var plateauStatus=(Dictionary<string,object>)plateauModule.Invoke("status",new());
+var plateauRecords=(object[])plateauStatus["nativePoseRestores"];
+Check(plateauModule.NativePoseFixtureAttempts==3&&plateauRecords.Length==1&&
+ (bool)((Dictionary<string,object>)plateauRecords[0])["exact"],
+ "external native joint-pose preimage permits one equal-size sign-changing plateau before exact third readback");
+plateauModule.Dispose();
+fixture=RotationFixture();var latticeModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+plateauRow=fixture.snapshot[0];plateauPosition=plateauRow.BodyPosition;plateauRotation=plateauRow.BodyRotation;
+latticeModule.ConfigureNativePoseFixture(fixture.obj.body,(attempt,inputPosition,inputRotation)=>attempt switch {
+ 1=>new(new(plateauPosition.x,plateauPosition.y-poseEpsilon,plateauPosition.z),plateauRotation),
+ 2=>new(new(plateauPosition.x,plateauPosition.y+poseEpsilon,plateauPosition.z),plateauRotation),
+ 3=>new(new(plateauPosition.x,plateauPosition.y-2*poseEpsilon,plateauPosition.z),plateauRotation),
+ 4=>new(new(plateauPosition.x,plateauPosition.y+poseEpsilon,plateauPosition.z),plateauRotation),
+ _=>new(plateauPosition,plateauRotation)});
+latticeModule.RestoreExistingActorPoseFixture(plateauRow);
+Check(latticeModule.NativePoseFixtureAttempts==5,
+ "external native joint-pose preimage permits bounded nonmonotonic float-lattice steps before exact fifth readback");
+latticeModule.Dispose();
+fixture=RotationFixture();var boundedPlateauModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+plateauRow=fixture.snapshot[0];plateauPosition=plateauRow.BodyPosition;plateauRotation=plateauRow.BodyRotation;
+boundedPlateauModule.ConfigureNativePoseFixture(fixture.obj.body,(attempt,inputPosition,inputRotation)=>
+ new(new(plateauPosition.x,plateauPosition.y+(attempt%2==0?poseEpsilon:-poseEpsilon),plateauPosition.z),plateauRotation));
+Reject(()=>boundedPlateauModule.RestoreExistingActorPoseFixture(plateauRow),"equal-size native joint-pose cycle remains bounded and requires an exact readback");
+Check(boundedPlateauModule.NativePoseFixtureAttempts==5,"equal-size native joint-pose cycle stops at the dedicated five-assignment cap");
+boundedPlateauModule.Dispose();
 EntitySerialisationRegistry.m_EntitiesList._items.Clear();var proxyProbe=Add(121).m_GameObject;
 proxyProbe.objectContainer=new ObjectContainer{gameObject=proxyProbe};proxyProbe.body.isKinematic=true;
 proxyProbe.body.centerOfMass=new(0,.05000001f,0);proxyProbe.body.inertiaTensor=new(0,.08166667f,0);

@@ -1,6 +1,6 @@
 namespace UnityEngine {
  public class Object {
-  static int sequence;readonly int id=++sequence;public bool Destroyed;public int GetInstanceID()=>id;
+  static int sequence;readonly int id=++sequence;private IntPtr m_CachedPtr=new(1);public bool Destroyed;public int GetInstanceID()=>id;
   public static bool operator ==(Object a,Object b){bool x=ReferenceEquals(a,null)||a.Destroyed,y=ReferenceEquals(b,null)||b.Destroyed;return x||y?x==y:ReferenceEquals(a,b);}
   public static bool operator !=(Object a,Object b)=>!(a==b);
   public override bool Equals(object value)=>ReferenceEquals(this,value);public override int GetHashCode()=>id;
