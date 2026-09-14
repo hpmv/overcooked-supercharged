@@ -1200,3 +1200,40 @@ This milestone closes repeated scored-terminal rewind, but not complete level
 parity.  Continue with multiple deliveries and repeated dynamic-ID lifecycles,
 order expiry/deduction, broader two-chef interaction combinations, and varied
 non-adjacent rewind order.  Keep route search disabled until those cells pass.
+
+## 2026-09-14: deterministic three-delivery forward fixture
+
+The bounded no-search Story 1-1 fixture now completes three consecutive native
+deliveries from a fresh frame-1 level.  The old assembly-clear route moved the
+chopper beside an adjacent board; on the second meal the incoming plate helper
+could push that chef back over the selected board interaction point and create
+a deterministic collision deadlock.  `DeliveryPlanner` now clears the chopper
+by ordinary no-button navigation back toward the exact ingredient crate already
+owned by the selected case.  This changes only generated test input; it does not
+write a chef pose, physics state, recipe, timer, score, or gameplay component.
+
+The clean proof is
+`artifacts/framework-migration/story11-multidelivery-dev5-live-r1/forward-three-initial-plates-r3/summary.json`
+(SHA-256
+`36D886392937677087DFBC1D19B3626482BBCC36610F46660123F6CF1C423567`).
+It advanced from f1 through the f1240 release boundary, delivered fish on
+plates 2 and 1 at f435 and f957, then prawn on plate 4 at f1239.  The final
+native ledger is score 92, base 60, tips 32, combo/multiplier 3, three
+deliveries and zero deductions.  Every meal is correlated to native kitchen,
+plate-station, order and ledger events.  The focused registry tests pass 9/9.
+Returned-stack pickup remains outside this fixture's admission rule.
+
+The first exact second-delivery unwind cell exposed the next real parity gap in
+`.../second-delivery-rewind-r4/summary.json`.  Original and replay both consume
+order 2 and produce the exact 28-to-56 ledger, food, order, clock, input and
+Animator state.  The restored f1045 checkpoint is exact, including dynamic
+returned-plate bodies 60/62, contact-manager free-list and Transform dispatch.
+The first divergence is the following physics step: movement history is exact
+at f1046, but at f1047 Players 1 and 2 exchange the vertical fall response
+(`-2.000004` versus zero).  Their endpoint Rigidbody heights consequently swap
+between approximately 0.0100 and 0.0404.  Animator controller memory,
+transition topology, mixer graph and pose hashes remain exact through f1048,
+so current evidence places this below Animator evaluation.  A clean process
+must install the read-only native physics tracer before the hooked rewind stack
+to compare the original and replay simulation calls; late installation
+correctly failed its entry-byte revision guard.  Search remains disabled.

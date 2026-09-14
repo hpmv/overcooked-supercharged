@@ -275,17 +275,14 @@ class DeliveryPlanner:
                 source=o.entities[board]['position'];position=o.entities[chef]['position']
                 require(position['z']>source['z']+.5 and abs(position['x']-source['x'])<.8,
                         'Occupied board approach is outside the observed front-side clearance geometry')
-                adjacent=[]
-                for other in o.role('Workstation'):
-                    p=o.entities[other]['position']
-                    if other!=board and abs(p['z']-source['z'])<.1 and 1.1<abs(p['x']-source['x'])<1.3:
-                        target={'x':p['x'],'z':p['z']+1.5}
-                        if all(hypot(o.entities[c]['position']['x']-target['x'],o.entities[c]['position']['z']-target['z'])>1.1
-                               for c in o.chefs if c!=chef):
-                            adjacent.append((other,target))
-                require(bool(adjacent),'No observed free adjacent board approach can clear the chopper')
-                other,target=min(adjacent,key=lambda p:p[0])
-                rows.append(action('clear-chopper',chef,'goto',x=target['x'],z=target['z'],resources=[board,other]))
+                # A literal waypoint beside the neighbouring board proved too
+                # fragile on later meals: the incoming helper could push the
+                # already-completed chopper action back across this board's
+                # interaction point.  Facing the exact source crate is still an
+                # ordinary no-button navigation action, is already part of the
+                # selected case, and leaves the complete board approach clear.
+                rows.append(action('clear-chopper',chef,'prepare-primary',c['crate'],
+                                   resources=[board,c['crate']]))
                 after=['clear-chopper']
             rows.append(action("face-food", helper, "prepare-primary", board, after=after, resources=[board, plate, self.source]))
             return batch(rows, "Clear any occupied front approach, then navigate to the exact native assembly target")

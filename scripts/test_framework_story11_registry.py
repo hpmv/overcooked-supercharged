@@ -11,7 +11,9 @@ from framework_story11_search import Runner, resume_case
 from framework_story11_planner import Blocked, DeliveryPlanner, Observation
 
 
-ROOT=Path(__file__).resolve().parents[1]
+REPOSITORY=Path(__file__).resolve().parents[1]
+CAPTURE_FIXTURE=Path('artifacts/framework-migration/story11-first-delivery-b')
+ROOT=REPOSITORY if (REPOSITORY/CAPTURE_FIXTURE).exists() else REPOSITORY.parent
 
 
 def captured(name):
@@ -162,14 +164,11 @@ class RegistryTests(unittest.TestCase):
         raw=proof['stagedNativeProof'];self.assertEqual(raw['rawId'],51);self.assertEqual(raw['preparedId'],53)
         planner=DeliveryPlanner(case,phase='prepare-assembly',source=53,prepared_composition=[(23600,'SushiFish')])
         actions=planner.advance(observed)['request']['actions']
-        self.assertEqual(actions[0]['type'],'goto');self.assertEqual(actions[0]['chef'],45)
-        self.assertEqual(actions[0]['x'],observed.entities[27]['position']['x']);self.assertAlmostEqual(actions[0]['z'],-5.7)
+        self.assertEqual(actions[0]['type'],'prepare-primary');self.assertEqual(actions[0]['chef'],45)
+        self.assertEqual(actions[0]['target'],case['crate'])
+        self.assertEqual(actions[0]['resources'],[case['board'],case['crate']])
         self.assertEqual(actions[1]['after'],['clear-chopper'])
         self.assertEqual(actions[1]['target'],31)
-        bad=copy.deepcopy(state)
-        next(e for e in bad['entities'] if e['id']==43)['position'].update(x=9.6,z=-5.7)
-        with self.assertRaisesRegex(Blocked,'No observed free'):
-            DeliveryPlanner(case,phase='prepare-assembly',source=53).advance(Observation(bad,self.chopped_receipt,'s_sushi_1_1'))
 
 
 if __name__=='__main__':unittest.main()

@@ -2033,3 +2033,32 @@ Evidence is
 `artifacts/framework-migration/story11-delivery-fade-r1-host-r9/delivery-r9-body-r31-animator-r53b-resume-r1bc-f444-to447-r1/summary.json`,
 the sibling `...f444-repeat2-r1/summary.json`, and
 `animator-r53b-status-after-repeat2-r1.json`. No new Animator defect was found.
+
+## 2026-09-14: second-delivery split is below the Animator boundary
+
+The first broader second-delivery replay under Animator r53b restores f1045
+exactly and reaches the same scored delivery at f1048, but fails full physics
+parity.  Read-only history from the r25b inspector proves all four endpoint
+Animator descriptors are exact: controller memory, controller input,
+transition topology, mixer graph, controller lifecycle and descendant pose
+hashes all match original versus replay.  The Animator checkpoint module also
+reports no semantic, random-state, input, transition, mixer, owner-graph or
+resume-prefix difference.
+
+PlayerControls movement history narrows the split further.  All four chefs are
+bit-exact at f1046.  At f1047 only Players 1 and 2 differ: the original branch
+records Player 1 moving vertically at about -2 while Player 2 remains at zero;
+the replay records the opposite assignment.  Players 3 and 4 remain exact.
+The corresponding chef Rigidbody heights at f1048 are approximately 0.0404
+and 0.0100 in the original and exchanged in replay.  Native food, orders,
+score, clocks, dynamic body identities, input hash, contact-pool restoration
+and Transform-dispatch restoration remain exact.
+
+Evidence is
+`artifacts/framework-migration/story11-multidelivery-dev5-live-r1/second-delivery-rewind-r4/`,
+including `summary.json`, `entity-differences.json`, and the three
+`movement-frame-1046..1048.json` receipts.  This is no longer classified as an
+Animator lifecycle defect.  The next experiment must start a clean process and
+install the verified read-only native physics/PhysX tracer before any Harmony
+hooks alter its revision-locked entry bytes, then capture the first resumed
+simulation step on both branches.
