@@ -1,51 +1,52 @@
 # Fresh-session handoff — 2026-09-08
 
-> **Active rewind result (2026-09-13, scored terminal lifecycle):** the
-> Story 1-1 terminal edge now rewinds exactly after a real delivery and the
-> returned plate/stack lifecycle.  A fresh process replayed the fixed
-> f1 -> f444 setup and f444 -> f1047 fish-sushi delivery with +28 score,
-> orders `[1,2,3] -> [2,3,4]`, exact reconstructed state, native round/food/
-> physics/clocks, contact-manager order, TransformChangeDispatch, and
-> registry rebranching.  Delivery summary SHA-256 is
-> `94ADC3C9AC67412F78C35B690A2EEF366B4314B58247B440E8166836049A1247`.
+> **Active rewind result (2026-09-13, repeated scored terminal lifecycle):**
+> Story 1-1 now survives repeated non-adjacent f8999 -> f8492 -> f8999
+> rewinds after a real +28 delivery and returned plate/stack lifecycle, all
+> without reloading the level.  The fresh r2 prerequisite f444 -> f1047
+> delivery was exact; its summary SHA-256 is
+> `EBA27395A17F67679F8DDA2918C188301E36ED263ED1E6886A48D9FC3F6DD1FE`.
 >
-> The same uninterrupted process advanced under controller ownership to
-> f8492, where the saved native score was 28 and returned bodies 56/58 were
-> still present.  Rewind restored that checkpoint exactly, including those
-> body incarnations.  Original and replay then reached the natural
-> `RunLevelOutro` edge at f8999 after exactly 507 emitted/observed frames.
-> The terminal comparison passed controller frame/entities/registry/raw
-> receipt, lifecycle and iterator PCs, native round/orders, food, normalized
-> physics, clocks, and nonce progression.  Contact-manager and Transform
-> sidecars each captured and restored f8492 exactly.  Evidence:
-> `artifacts/framework-migration/story11-scored-terminal-dev5-live-r1/scored-terminal-f8492-r1/summary.json`,
+> The r2 recovery proof began at the exact restored f8492 checkpoint left by
+> the diagnostic first repeat attempt.  It reused the persistent contact and
+> Transform sidecar instead of recapturing it, reached the natural scored
+> terminal twice for the standard original/replay comparison, and then
+> completed two additional held-latch rewind/replay cycles.  All four terminal
+> receipts (nonces 3, 4, 5, and 6) are identical at f8999, with score 28,
+> one delivery, returned body incarnations 56/58, and exactly 507 input frames
+> from f8492.  Every restored baseline and terminal comparison passed exact
+> controller entities/registry/raw receipt, lifecycle and iterator PCs,
+> round/orders, food, normalized physics, and clocks.  Animator replay stayed
+> in clean `Record` mode.  Sidecar capture counts stayed fixed and every
+> rewind consumed exactly one contact-pool and Transform restore.  Evidence:
+> `artifacts/framework-migration/story11-scored-terminal-dev5-live-r2/scored-terminal-f8492-repeat2-r2-reuse/summary.json`,
 > SHA-256
-> `BCD7E70F257AD8B3D13F12EA7E6C984F34ACB20273ED6C19D7057CDDE851B658`;
+> `E6DA273781CAECDE01B3C117BDD99E5EF9689D41865065E533848B3AA1B9606D`;
 > input SHA-256
 > `e2d1897f59cc25f692e72896e760b57f9b43af78dd1f3dd0d2e6c5c7d439c25c`.
 >
-> A failed predecessor was an operational timeout, not terminal divergence.
-> Its 300-second warmup cleanup forced a generic bridge pause at f7957 while
-> the round was still `InLevel` with 17.3382721 seconds remaining.  Two native
-> advancing states had then used the same controller frame, so WorldSyncCache
-> correctly rejected resume with `WorldObject logical clock changed during
-> authoring pause`.  ResumePhase failures are intentionally process-sticky;
-> level reload cannot recover them.  Use a controller-owned pause handshake
-> and a sufficient timeout for long probes, never promote a timeout/fallback
-> bridge pause to a checkpoint, and restart the whole game after any actual
-> `AUTHORING_*_FAILED` result.
+> The first extended r2 attempt was a harness fence error, not parity drift:
+> the held-terminal warp restored f8492 exactly, but the probe attempted a
+> managed hot-call before reissuing the bridge pause/fence handshake.  It
+> produced no authoring failure.  The corrected harness fences that restored
+> boundary, validates the latch's `restored-acknowledged` state, re-arms it,
+> and loops while the terminal latch is still held.  A completed terminal
+> probe cancels the latch once at the end; it cannot initiate another rewind
+> after cancellation.
 >
 > The pinned core/headless/RoundEnd binaries remain respectively
 > `C3E4A874FABDC3D232521972B1597330D1FE1EC197145E025A4932109BE9717F`,
 > `01C07B138C64C7A28081B6893E2E009C179FDDE2B1FD257EE8A037C3640870EB`,
 > and
 > `301213527C163375CA0BE3C292B5A5977A780A62AA8F3D374AC52B00A683781C`.
-> The verified live identities are game PID 78880 / UTC start ticks
-> 639249411141636856 and host PID 66496 / UTC start ticks
-> 639249411795456275, held at terminal f8999; revalidate both before control.
-> This closes the scored-terminal cell, not complete level parity.  Search
-> remains disabled while coverage expands to repeated deliveries/dynamic
-> lifecycles and wider multi-chef interactions.
+> The r2 identities at proof completion were game PID 26348 / UTC start ticks
+> 639249426768162416 and host PID 59064 / UTC start ticks
+> 639249427587139910.  The probe released the terminal latch cleanly, so this
+> is not a reusable in-level checkpoint; revalidate both identities and load a
+> fresh level before further control.  This proves repeatability of the scored
+> terminal cell, not complete level parity.  Search remains disabled while
+> coverage expands to multiple deliveries/dynamic-ID cycles, expiry/deduction
+> paths, wider multi-chef interactions, and arbitrary rewind order.
 
 > **Active rewind result (2026-09-13, surviving PxShape state rebind):**
 > the non-adjacent f1500 -> f444 rewind that previously failed before replay
@@ -1159,3 +1160,43 @@ headless host was PID 53028, start ticks 639249363220780862. The successful
 proof cancelled the latch at the terminal, so this is not an `InLevel`
 checkpoint to reuse. Revalidate process identities and start a fresh level for
 the next parity cell.
+
+## 2026-09-13: scored terminal rewind is repeatable without reload
+
+The scored round-end proof now composes repeatedly inside one live Story 1-1
+level.  `framework_input_probe.py --expect-round-end --terminal-repeats N`
+keeps the local-authoring round-end latch held, rewinds from f8999 to the pinned
+f8492 checkpoint, proves the restored boundary, re-arms the latch, raw-replays
+the same recording, and compares the next natural terminal against the
+immediately preceding terminal.  It cancels the latch only after every cycle.
+The option is bounded to 20 repeats and is unavailable outside the isolated
+round-end proof path.
+
+The decisive recovery proof is
+`artifacts/framework-migration/story11-scored-terminal-dev5-live-r2/scored-terminal-f8492-repeat2-r2-reuse/summary.json`
+(SHA-256
+`E6DA273781CAECDE01B3C117BDD99E5EF9689D41865065E533848B3AA1B9606D`).
+It reused the existing f8492 contact-manager/Transform checkpoint and therefore
+also proves that repeat unwind does not require level reload or sidecar
+recapture.  The standard original/replay pair and two extra cycles yielded
+terminal nonces 3 through 6.  Each endpoint was f8999 after 507 frames, and
+each comparison was exact for reconstructed entities and registry, raw input
+and terminal receipt, lifecycle and iterator PCs, score/orders/food, normalized
+native physics including returned bodies 56/58, and captured clocks.  Animator
+status was clean `Record` before each extra warp and after each replay.  Contact
+and Transform capture counters remained stable; restore counters advanced by
+exactly one per rewind.
+
+The first repeat attempt in sibling
+`scored-terminal-f8492-repeat2-r1/summary.json` is retained as diagnostic
+evidence.  Its first extra held-terminal warp and native restore were exact,
+but the new harness issued the latch-status hot-call before re-fencing the
+restored boundary.  The bridge rejected that call without an
+`AUTHORING_*_FAILED` latch.  Adding the missing pause/fence handshake fixed the
+harness; no core, synchronizer, managed gameplay module, or native C++ behavior
+changed.  The focused Python suite passes 44 tests with one expected skip.
+
+This milestone closes repeated scored-terminal rewind, but not complete level
+parity.  Continue with multiple deliveries and repeated dynamic-ID lifecycles,
+order expiry/deduction, broader two-chef interaction combinations, and varied
+non-adjacent rewind order.  Keep route search disabled until those cells pass.

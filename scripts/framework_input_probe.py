@@ -340,31 +340,32 @@ def round_end_terminal_comparison(original, replay, original_receipt, replay_rec
 
 
 def round_end_contact_sidecar_comparison(status, baseline, checkpoint_frame,
-                                         restore_applied, include_transform_dispatch):
-    """Validate the one capture/one replay-restore sidecar lifecycle."""
+                                         capture_delta, restore_delta, restore_pending,
+                                         include_transform_dispatch):
+    """Validate exact capture/restore deltas for a terminal sidecar lifecycle."""
     if not isinstance(status, dict) or not isinstance(baseline, dict):
         raise ValueError('Round-end contact sidecar status and baseline must be objects.')
-    expected_restores = baseline.get('restores', 0) + (1 if restore_applied else 0)
     checks = {
         'pendingActionClear': status.get('pendingContactPoolAction') == 'none',
         'snapshotCaptured': status.get('contactPoolSnapshotCaptured') is True,
         'snapshotFrame': status.get('contactPoolSnapshotFrame') == checkpoint_frame,
-        'captureCount': status.get('contactPoolCaptures') == baseline.get('captures', 0) + 1,
-        'restorePending': status.get('automaticRestorePending') is (not restore_applied),
-        'restoreCount': status.get('contactPoolRestores') == expected_restores,
+        'captureCount': status.get('contactPoolCaptures') ==
+                        baseline.get('captures', 0) + capture_delta,
+        'restorePending': status.get('automaticRestorePending') is restore_pending,
+        'restoreCount': status.get('contactPoolRestores') ==
+                        baseline.get('restores', 0) + restore_delta,
     }
     if include_transform_dispatch:
         checks.update({
             'transformSnapshotCaptured': status.get('transformDispatchSnapshotCaptured') is True,
             'transformSnapshotFrame': status.get('transformDispatchSnapshotFrame') == checkpoint_frame,
             'transformCaptureCount': status.get('transformDispatchCaptures') ==
-                                     baseline.get('transformCaptures', 0) + 1,
+                                     baseline.get('transformCaptures', 0) + capture_delta,
             'transformRestoreCount': status.get('transformDispatchRestores') ==
-                                     baseline.get('transformRestores', 0) +
-                                     (1 if restore_applied else 0),
+                                     baseline.get('transformRestores', 0) + restore_delta,
         })
     return {'equal': all(checks.values()), 'checks': checks,
-            'phase': 'restored-before-replay' if restore_applied else 'captured-before-replay'}
+            'phase': 'restored-before-replay' if not restore_pending else 'captured-before-replay'}
 
 
 def main():
@@ -423,6 +424,9 @@ def main():
                         help='Save the active world-sync cache status at the checkpoint boundary.')
     parser.add_argument('--expect-round-end', action='store_true',
                         help='Prove the pristine natural RunLevelOutro terminal, automatic unwind, and replay.')
+    parser.add_argument('--terminal-repeats', type=int, default=0,
+                        help=('Additional terminal-to-checkpoint-to-terminal cycles performed while the '
+                              'native round-end latch is still held; requires --expect-round-end.'))
     parser.add_argument('--round-end-latch-slot', default='round-end-checkpoint')
     args = parser.parse_args()
     if args.segments and args.frame_capture:
@@ -438,11 +442,14 @@ def main():
     if args.reuse_contact_manager_checkpoint and not args.restore_contact_manager_free_stack:
         parser.error('--reuse-contact-manager-checkpoint requires --restore-contact-manager-free-stack.')
     if args.expect_round_end and (args.expect_pickup or args.expect_delivery or
-            args.reuse_contact_manager_checkpoint or
             args.inspect_animator_history or args.arm_phase_trace_before_warp or
             args.mark_native_trace or args.split_native_trace_around_warp or
             args.save_managed_phase_traces or args.reconcile_dynamic_registry):
         parser.error('--expect-round-end currently requires the isolated round-end proof path.')
+    if not 0 <= args.terminal_repeats <= 20:
+        parser.error('Use 0..20 additional terminal repeats.')
+    if args.terminal_repeats and not args.expect_round_end:
+        parser.error('--terminal-repeats requires --expect-round-end.')
     if not 0 <= args.frame_capture_neutral_tail <= 36000:
         parser.error('Use 0..36000 appended neutral frames.')
     if not 1 <= args.frames <= 36000:
@@ -812,7 +819,10 @@ def main():
                     'operation': 'status', 'args': {},
                 }, 'round-end-contact-pool-status-captured')['detail']['result']
                 captured_progress = round_end_contact_sidecar_comparison(
-                    captured_pool, contact_pool_start, frame, False, args.restore_transform_dispatch)
+                    captured_pool, contact_pool_start, frame,
+                    0 if args.reuse_contact_manager_checkpoint else 1,
+                    1 if args.reuse_contact_manager_checkpoint else 0,
+                    True, args.restore_transform_dispatch)
                 summary['roundEndContactPoolCaptured'] = captured_progress
                 if not captured_progress['equal']:
                     raise RuntimeError('Round-end checkpoint sidecar was not captured and scheduled exactly.')
@@ -842,18 +852,241 @@ def main():
                     'operation': 'status', 'args': {},
                 }, 'round-end-contact-pool-status-restored')['detail']['result']
                 restored_progress = round_end_contact_sidecar_comparison(
-                    restored_pool, contact_pool_start, frame, True, args.restore_transform_dispatch)
+                    restored_pool, contact_pool_start, frame,
+                    0 if args.reuse_contact_manager_checkpoint else 1,
+                    2 if args.reuse_contact_manager_checkpoint else 1,
+                    False, args.restore_transform_dispatch)
                 summary['roundEndContactPoolRestored'] = restored_progress
                 if not restored_progress['equal']:
                     raise RuntimeError('Round-end checkpoint sidecar was not restored exactly before replay.')
-                summary['contactPoolCapture'] = captured_pool.get('contactPoolReceipts', [])[-1]
+                if not args.reuse_contact_manager_checkpoint:
+                    summary['contactPoolCapture'] = captured_pool.get('contactPoolReceipts', [])[-1]
                 summary['contactPoolRestore'] = restored_pool.get('contactPoolReceipts', [])[-1]
                 if args.restore_transform_dispatch:
-                    summary['transformDispatchCapture'] = captured_pool.get(
-                        'transformDispatchReceipts', [])[-1]
+                    if not args.reuse_contact_manager_checkpoint:
+                        summary['transformDispatchCapture'] = captured_pool.get(
+                            'transformDispatchReceipts', [])[-1]
                     summary['transformDispatchRestore'] = restored_pool.get(
                         'transformDispatchReceipts', [])[-1]
                 contact_pool_cleanup_needed = False
+
+            repeat_results = []
+            previous_terminal = replay
+            previous_receipt = second_receipt
+            previous_latch_status = second_status
+            previous_restore_attempt = restore.get('attempt', -1)
+            previous_pool = restored_pool if args.restore_contact_manager_free_stack else None
+            terminal_animator_failure_fields = (
+                'failure', 'resumeFailure', 'resumePrefixObserverFailure', 'chefRandomizeFailure',
+                'firstReplayDifference', 'firstRandomStateReplayDifference',
+                'firstChefRandomizeReplayDifference', 'firstControllerInputReplayDifference',
+                'firstTransitionTopologyReplayDifference', 'firstMixerGraphReplayDifference',
+                'firstOwnerGraphReplayDifference', 'firstResumePrefixPostDifference',
+                'firstResumePrefixPostRandomStateDifference',
+                'firstResumePrefixPostControllerInputDifference',
+                'firstResumePrefixPostTransitionTopologyDifference',
+                'firstResumePrefixPostMixerGraphDifference',
+                'firstResumePrefixPostOwnerGraphDifference')
+
+            def terminal_animator_status(label):
+                call('bridge', {'command': 'pause'}, label + '-fence')
+                status = call('bridge', {
+                    'command': 'hot-call', 'slot': 'chef-animator-checkpoint',
+                    'operation': 'status', 'args': {},
+                }, label)['detail']['result']
+                failures = {name: status.get(name) for name in terminal_animator_failure_fields
+                            if status.get(name) is not None}
+                result = {
+                    'mode': status.get('chefRandomizeMode'),
+                    'failures': failures,
+                    'replayFrameComparisons': status.get('replayFrameComparisons'),
+                    'replayReferenceFrames': status.get('replayReferenceFrames'),
+                }
+                if failures or result['mode'] != 'Record':
+                    raise RuntimeError(label + ' is not an exact quiescent Animator boundary: ' +
+                                       json.dumps(result))
+                return result
+
+            for repeat_number in range(1, args.terminal_repeats + 1):
+                prefix = f'terminal-repeat-{repeat_number}'
+                if previous_latch_status.get('phase') != 'held' or \
+                        previous_latch_status.get('active') is not True or \
+                        previous_latch_status.get('held') is not True or \
+                        previous_latch_status.get('targetFrame') != frame or \
+                        previous_latch_status.get('terminalFrame') != frame + count or \
+                        previous_latch_status.get('failure'):
+                    raise RuntimeError(prefix + ' did not begin at the exact held terminal lifecycle.')
+                animator_before = terminal_animator_status(prefix + '-animator-before-warp')
+                checkpoint_sidecar = None
+                if args.restore_contact_manager_free_stack:
+                    checkpoint_sidecar = call('bridge', {
+                        'command': 'hot-call', 'slot': args.actor_rebuild_slot,
+                        'operation': 'checkpoint-status', 'args': {'frame': frame},
+                    }, prefix + '-checkpoint-sidecar')['detail']['result'].get('result', {})
+                    if checkpoint_sidecar.get('captured') is not True or \
+                            checkpoint_sidecar.get('coreSnapshotMatches') is not True or \
+                            (args.restore_transform_dispatch and
+                             checkpoint_sidecar.get('transformDispatchCaptured') is not True):
+                        raise RuntimeError(prefix + ' persistent checkpoint sidecar is unavailable.')
+                call('bridge', {'command': 'arm'}, prefix + '-warp-arm')
+                call('controller', {'command': 'warp', 'frame': frame, 'development': True},
+                     prefix + '-warp')
+                repeat_restored = settled(prefix + '-restored')
+                repeat_restore_status = call('bridge', {'command': 'status'},
+                                             prefix + '-restore-native')
+                repeat_restore = repeat_restore_status['bridge']['nativeCheckpoints']['lastRestore']
+                repeat_restored_native = native_observation(prefix + '-restored-native')
+                require_native_boundary(repeat_restored_native)
+                if repeat_restored.get('frame') != frame or not repeat_restore or \
+                        repeat_restore.get('verified') is not True or \
+                        repeat_restore.get('frame') != frame or \
+                        repeat_restore.get('attempt', -1) <= previous_restore_attempt:
+                    raise RuntimeError(prefix + ' did not restore the held terminal target exactly.')
+                previous_restore_attempt = repeat_restore['attempt']
+                call('bridge', {'command': 'pause'}, prefix + '-restored-latch-fence')
+                repeat_restored_latch = call('bridge', {
+                    'command': 'hot-call', 'slot': args.round_end_latch_slot,
+                    'operation': 'status', 'args': {},
+                }, prefix + '-restored-latch')['detail']['result']
+                if repeat_restored_latch.get('phase') != 'restored-acknowledged' or \
+                        repeat_restored_latch.get('active') is not False or \
+                        repeat_restored_latch.get('held') is not False or \
+                        repeat_restored_latch.get('targetFrame') != -1 or \
+                        repeat_restored_latch.get('restoredCapabilityPending') is not False or \
+                        repeat_restored_latch.get('failure'):
+                    raise RuntimeError(prefix + ' latch did not acknowledge the restored target exactly.')
+                repeat_baseline = compare_boundary(
+                    base, base_native['bridge']['nativeRound'], food_trees(base_native),
+                    repeat_restored, repeat_restored_native['bridge']['nativeRound'],
+                    food_trees(repeat_restored_native))
+                repeat_baseline_physics = native_physics_comparison(
+                    base_native['bridge']['nativePhysics'],
+                    repeat_restored_native['bridge']['nativePhysics'], fixed_entity_ids,
+                    repeat_restored_native, frame)
+                repeat_baseline['nativePhysicsEqual'] = repeat_baseline_physics['equal']
+                repeat_baseline['nativePhysicsComparison'] = repeat_baseline_physics
+                repeat_baseline['nativeClocksEqual'] = exact_values(
+                    native_clock_state(base_native['bridge']),
+                    native_clock_state(repeat_restored_native['bridge']))
+                if not boundary_matches(repeat_baseline) or \
+                        repeat_baseline['nativePhysicsEqual'] is not True or \
+                        not repeat_baseline['nativeClocksEqual']:
+                    raise RuntimeError(prefix + ' restored a different checkpoint boundary.')
+
+                if args.restore_contact_manager_free_stack:
+                    repeat_scheduled_pool = call('bridge', {
+                        'command': 'hot-call', 'slot': args.actor_rebuild_slot,
+                        'operation': 'status', 'args': {},
+                    }, prefix + '-contact-pool-scheduled')['detail']['result']
+                    repeat_scheduled_checks = {
+                        'pendingActionClear':
+                            repeat_scheduled_pool.get('pendingContactPoolAction') == 'none',
+                        'restorePending': repeat_scheduled_pool.get('automaticRestorePending') is True,
+                        'snapshotFrame': repeat_scheduled_pool.get('contactPoolSnapshotFrame') == frame,
+                        'captureCountStable': repeat_scheduled_pool.get('contactPoolCaptures') ==
+                                              previous_pool.get('contactPoolCaptures'),
+                        'restoreCountStable': repeat_scheduled_pool.get('contactPoolRestores') ==
+                                              previous_pool.get('contactPoolRestores'),
+                    }
+                    if args.restore_transform_dispatch:
+                        repeat_scheduled_checks.update({
+                            'transformSnapshotFrame':
+                                repeat_scheduled_pool.get('transformDispatchSnapshotFrame') == frame,
+                            'transformCaptureCountStable':
+                                repeat_scheduled_pool.get('transformDispatchCaptures') ==
+                                previous_pool.get('transformDispatchCaptures'),
+                            'transformRestoreCountStable':
+                                repeat_scheduled_pool.get('transformDispatchRestores') ==
+                                previous_pool.get('transformDispatchRestores'),
+                        })
+                    if not all(repeat_scheduled_checks.values()):
+                        raise RuntimeError(prefix + ' did not schedule the persistent checkpoint sidecar.')
+
+                repeat_arm = arm_round_end(frame, prefix + '-arm')
+                if repeat_arm.get('nonce') != previous_receipt.get('nonce') + 1 or \
+                        repeat_arm.get('targetFrame') != frame or \
+                        repeat_arm.get('terminalFrame') != -1:
+                    raise RuntimeError(prefix + ' latch nonce/target did not advance exactly.')
+                call('bridge', {'command': 'arm'}, prefix + '-replay-arm')
+                call('controller', {'command': 'raw-replay', 'recording': recording,
+                                    'expectedTerminalGameState': 'RunLevelOutro'},
+                     prefix + '-replay')
+                settled(prefix + '-terminal-held')
+                repeat_terminal = call('controller', {'command': 'terminal-inspect'},
+                                       prefix + '-terminal')
+                require_recorded_terminal(repeat_terminal, recording, frame)
+                repeat_receipt, repeat_latch_status = round_end_receipt(
+                    repeat_arm['nonce'], prefix + '-latch')
+                repeat_terminal_native = native_observation(prefix + '-terminal-native')
+                require_native_boundary(repeat_terminal_native)
+                repeat_terminal_comparison = round_end_terminal_comparison(
+                    previous_terminal, repeat_terminal, previous_receipt, repeat_receipt,
+                    fixed_entity_ids, repeat_terminal_native, frame)
+                if repeat_receipt.get('frame') != frame + count or \
+                        repeat_latch_status.get('active') is not True or \
+                        repeat_latch_status.get('held') is not True or \
+                        repeat_latch_status.get('targetFrame') != frame or \
+                        repeat_latch_status.get('terminalFrame') != frame + count or \
+                        repeat_latch_status.get('phase') != 'held' or \
+                        repeat_latch_status.get('failure') or \
+                        not repeat_terminal_comparison['equal']:
+                    raise RuntimeError(prefix + ' terminal endpoint differs from the preceding exact terminal.')
+
+                repeat_sidecar = None
+                if args.restore_contact_manager_free_stack:
+                    repeat_restored_pool = call('bridge', {
+                        'command': 'hot-call', 'slot': args.actor_rebuild_slot,
+                        'operation': 'status', 'args': {},
+                    }, prefix + '-contact-pool-restored')['detail']['result']
+                    repeat_sidecar_checks = {
+                        'pendingActionClear': repeat_restored_pool.get('pendingContactPoolAction') == 'none',
+                        'restorePendingClear': repeat_restored_pool.get('automaticRestorePending') is False,
+                        'snapshotFrame': repeat_restored_pool.get('contactPoolSnapshotFrame') == frame,
+                        'captureCountStable': repeat_restored_pool.get('contactPoolCaptures') ==
+                                              previous_pool.get('contactPoolCaptures'),
+                        'restoreCount': repeat_restored_pool.get('contactPoolRestores') ==
+                                        previous_pool.get('contactPoolRestores', 0) + 1,
+                    }
+                    if args.restore_transform_dispatch:
+                        repeat_sidecar_checks.update({
+                            'transformSnapshotFrame':
+                                repeat_restored_pool.get('transformDispatchSnapshotFrame') == frame,
+                            'transformCaptureCountStable':
+                                repeat_restored_pool.get('transformDispatchCaptures') ==
+                                previous_pool.get('transformDispatchCaptures'),
+                            'transformRestoreCount':
+                                repeat_restored_pool.get('transformDispatchRestores') ==
+                                previous_pool.get('transformDispatchRestores', 0) + 1,
+                        })
+                    repeat_sidecar = {
+                        'equal': all(repeat_sidecar_checks.values()),
+                        'checks': repeat_sidecar_checks,
+                    }
+                    if not repeat_sidecar['equal']:
+                        raise RuntimeError(prefix + ' did not consume the persistent sidecar exactly once.')
+                    previous_pool = repeat_restored_pool
+
+                animator_after = terminal_animator_status(prefix + '-animator-after-replay')
+
+                repeat_results.append({
+                    'number': repeat_number,
+                    'nativeRestore': repeat_restore,
+                    'restoredBaselineComparison': repeat_baseline,
+                    'terminalComparison': repeat_terminal_comparison,
+                    'sidecarComparison': repeat_sidecar,
+                    'scheduledSidecarChecks': repeat_scheduled_checks if
+                                              args.restore_contact_manager_free_stack else None,
+                    'checkpointSidecar': checkpoint_sidecar,
+                    'animatorBeforeWarp': animator_before,
+                    'animatorAfterReplay': animator_after,
+                    'terminalReceipt': repeat_receipt,
+                    'receiptNonce': repeat_receipt.get('nonce'),
+                })
+                previous_terminal = repeat_terminal
+                previous_receipt = repeat_receipt
+                previous_latch_status = repeat_latch_status
+
+            summary['terminalRepeats'] = repeat_results
 
             call('bridge', {'command': 'pause'}, 'round-end-cancel-fence')
             cancelled = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
@@ -865,11 +1098,17 @@ def main():
                            payloadFrames=recording['payloadFrames'], observedFramesToTerminal=count,
                            originalInput=original['rawInput'], replayInput=replay['rawInput'],
                            recordingSha256=recording['sha256'], nativeRestore=restore,
-                           terminalReceipts=[first_receipt, second_receipt],
+                           terminalReceipts=[first_receipt, second_receipt] +
+                                            [row['terminalReceipt'] for row in repeat_results],
                            fullScreen=replay_native['bridge']['fullScreen'])
             summary['passed'] = terminal['equal'] and boundary_matches(compared) and \
                 compared['nativePhysicsEqual'] is True and compared['nativeClocksEqual'] and \
-                original['rawInput']['recordingSha256'] == replay['rawInput']['recordingSha256']
+                original['rawInput']['recordingSha256'] == replay['rawInput']['recordingSha256'] and \
+                all(row['restoredBaselineComparison'].get('nativePhysicsEqual') is True and
+                    row['restoredBaselineComparison'].get('nativeClocksEqual') and
+                    row['terminalComparison'].get('equal') is True and
+                    (row['sidecarComparison'] is None or row['sidecarComparison'].get('equal') is True)
+                    for row in repeat_results)
             return 0 if summary['passed'] else 1
         call('bridge', {'command': 'arm'}, 'input-arm')
         call('controller', request, 'input')

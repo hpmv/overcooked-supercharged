@@ -1409,3 +1409,40 @@ This closes scored round-end composition with a surviving returned plate/stack.
 Complete level parity remains broader: repeat delivery and dynamic-ID cycles,
 order expiry/deduction paths, wider multi-chef interaction combinations, and
 arbitrary non-adjacent rewinds still need coverage.  Route search stays off.
+
+## 2026-09-13: repeated scored-terminal unwind is exact
+
+The scored f8492 -> f8999 terminal cell is now repeatable without a level
+reload.  The extended `framework_input_probe.py` keeps the local round-end
+latch held and supports bounded `--terminal-repeats`: after every natural
+terminal it restores f8492, proves the exact baseline and native restore,
+re-arms the latch, raw-replays 507 frames, and compares the next terminal to
+the immediately preceding one.  The latch is cancelled only after the final
+comparison.
+
+Primary evidence:
+`artifacts/framework-migration/story11-scored-terminal-dev5-live-r2/scored-terminal-f8492-repeat2-r2-reuse/summary.json`,
+SHA-256
+`E6DA273781CAECDE01B3C117BDD99E5EF9689D41865065E533848B3AA1B9606D`.
+The run began from an already restored f8492 checkpoint and intentionally
+reused its native contact-manager and TransformChangeDispatch sidecar.  Its
+standard original/replay endpoints plus two extra cycles produced four exact
+f8999 receipts, nonces 3 -> 6, with score 28, one delivery, returned dynamic
+bodies 56/58, and the same 507-frame recording SHA-256
+`e2d1897f59cc25f692e72896e760b57f9b43af78dd1f3dd0d2e6c5c7d439c25c`.
+Every f8492 restore and f8999 terminal matched entities/registry, round and
+orders, food, normalized physics, clocks, lifecycle/iterator PCs, and input.
+Animator status remained clean `Record`.  Sidecar captures stayed fixed while
+each rewind consumed exactly one contact-pool and Transform restore.
+
+The sibling r1 extended attempt is useful negative evidence, not a rewind
+failure.  It restored the first extra f8999 -> f8492 warp exactly, then the
+probe made a managed hot-call before restoring the bridge pause/fence.  The
+bridge rejected the call without poisoning any authoring module.  The harness
+now fences every restored boundary before inspecting/re-arming the latch.  No
+gameplay, synchronizer, Animator, physics, or native C++ behavior changed for
+this milestone; the focused suite passes 44 tests with one expected skip.
+
+Current open coverage before search: multiple deliveries and repeated dynamic
+ID lifecycles, order expiry/deduction, broader two-chef combinations, and
+varied arbitrary non-adjacent rewind order.

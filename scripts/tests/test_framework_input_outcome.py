@@ -274,21 +274,42 @@ class RoundEndContactSidecarComparisonTest(unittest.TestCase):
 
     def test_capture_is_pending_for_replay(self):
         result = round_end_contact_sidecar_comparison(
-            self.status(), self.baseline, 8492, False, True)
+            self.status(), self.baseline, 8492, 1, 0, True, True)
         self.assertTrue(result['equal'])
 
     def test_replay_consumes_exactly_one_restore(self):
         result = round_end_contact_sidecar_comparison(
-            self.status(True), self.baseline, 8492, True, True)
+            self.status(True), self.baseline, 8492, 1, 1, False, True)
         self.assertTrue(result['equal'])
 
     def test_missing_transform_restore_fails(self):
         status = self.status(True)
         status['transformDispatchRestores'] = 1
         result = round_end_contact_sidecar_comparison(
-            status, self.baseline, 8492, True, True)
+            status, self.baseline, 8492, 1, 1, False, True)
         self.assertFalse(result['equal'])
         self.assertFalse(result['checks']['transformRestoreCount'])
+
+    def test_reused_checkpoint_consumes_pending_then_replay_restore(self):
+        baseline = {'captures': 2, 'restores': 2,
+                    'transformCaptures': 2, 'transformRestores': 2}
+        restored = self.status(True)
+        restored.update(contactPoolCaptures=2, contactPoolRestores=4,
+                        transformDispatchCaptures=2, transformDispatchRestores=4)
+        result = round_end_contact_sidecar_comparison(
+            restored, baseline, 8492, 0, 2, False, True)
+        self.assertTrue(result['equal'])
+
+    def test_reused_checkpoint_must_not_add_a_capture(self):
+        baseline = {'captures': 2, 'restores': 2,
+                    'transformCaptures': 2, 'transformRestores': 2}
+        pending = self.status()
+        pending.update(contactPoolCaptures=3, contactPoolRestores=3,
+                       transformDispatchCaptures=2, transformDispatchRestores=3)
+        result = round_end_contact_sidecar_comparison(
+            pending, baseline, 8492, 0, 1, True, True)
+        self.assertFalse(result['equal'])
+        self.assertFalse(result['checks']['captureCount'])
 
 
 class DeliveryOutcomeTest(unittest.TestCase):
