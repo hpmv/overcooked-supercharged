@@ -1,5 +1,52 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Active rewind result (2026-09-13, scored terminal lifecycle):** the
+> Story 1-1 terminal edge now rewinds exactly after a real delivery and the
+> returned plate/stack lifecycle.  A fresh process replayed the fixed
+> f1 -> f444 setup and f444 -> f1047 fish-sushi delivery with +28 score,
+> orders `[1,2,3] -> [2,3,4]`, exact reconstructed state, native round/food/
+> physics/clocks, contact-manager order, TransformChangeDispatch, and
+> registry rebranching.  Delivery summary SHA-256 is
+> `94ADC3C9AC67412F78C35B690A2EEF366B4314B58247B440E8166836049A1247`.
+>
+> The same uninterrupted process advanced under controller ownership to
+> f8492, where the saved native score was 28 and returned bodies 56/58 were
+> still present.  Rewind restored that checkpoint exactly, including those
+> body incarnations.  Original and replay then reached the natural
+> `RunLevelOutro` edge at f8999 after exactly 507 emitted/observed frames.
+> The terminal comparison passed controller frame/entities/registry/raw
+> receipt, lifecycle and iterator PCs, native round/orders, food, normalized
+> physics, clocks, and nonce progression.  Contact-manager and Transform
+> sidecars each captured and restored f8492 exactly.  Evidence:
+> `artifacts/framework-migration/story11-scored-terminal-dev5-live-r1/scored-terminal-f8492-r1/summary.json`,
+> SHA-256
+> `BCD7E70F257AD8B3D13F12EA7E6C984F34ACB20273ED6C19D7057CDDE851B658`;
+> input SHA-256
+> `e2d1897f59cc25f692e72896e760b57f9b43af78dd1f3dd0d2e6c5c7d439c25c`.
+>
+> A failed predecessor was an operational timeout, not terminal divergence.
+> Its 300-second warmup cleanup forced a generic bridge pause at f7957 while
+> the round was still `InLevel` with 17.3382721 seconds remaining.  Two native
+> advancing states had then used the same controller frame, so WorldSyncCache
+> correctly rejected resume with `WorldObject logical clock changed during
+> authoring pause`.  ResumePhase failures are intentionally process-sticky;
+> level reload cannot recover them.  Use a controller-owned pause handshake
+> and a sufficient timeout for long probes, never promote a timeout/fallback
+> bridge pause to a checkpoint, and restart the whole game after any actual
+> `AUTHORING_*_FAILED` result.
+>
+> The pinned core/headless/RoundEnd binaries remain respectively
+> `C3E4A874FABDC3D232521972B1597330D1FE1EC197145E025A4932109BE9717F`,
+> `01C07B138C64C7A28081B6893E2E009C179FDDE2B1FD257EE8A037C3640870EB`,
+> and
+> `301213527C163375CA0BE3C292B5A5977A780A62AA8F3D374AC52B00A683781C`.
+> The verified live identities are game PID 78880 / UTC start ticks
+> 639249411141636856 and host PID 66496 / UTC start ticks
+> 639249411795456275, held at terminal f8999; revalidate both before control.
+> This closes the scored-terminal cell, not complete level parity.  Search
+> remains disabled while coverage expands to repeated deliveries/dynamic
+> lifecycles and wider multi-chef interactions.
+
 > **Active rewind result (2026-09-13, surviving PxShape state rebind):**
 > the non-adjacent f1500 -> f444 rewind that previously failed before replay
 > now restores and replays the complete 603-frame first-delivery continuation

@@ -1361,3 +1361,51 @@ Together these prove long timer/order evolution and pristine zero-score round
 end. Remaining broader coverage is terminal rewind with deliveries and returned
 plates, repeated dynamic object lifecycles, and wider multi-chef combinations.
 Route search remains disabled until that coverage is satisfactory.
+
+## 2026-09-13: scored Story 1-1 terminal lifecycle is exact
+
+The remaining round-end composition with nonzero score and returned dynamic
+objects now passes in one fresh process.  The fixed f1 -> f444 setup and
+f444 -> f1047 delivery first replayed exactly.  It awarded 28 points, consumed
+order 1, changed the live order queue from `[1,2,3]` to `[2,3,4]`, and created
+the returned stack/plate owner-body pairs 55/56 and 57/58.  The prerequisite
+summary is
+`artifacts/framework-migration/story11-scored-terminal-dev5-live-r1/delivery-f444-to1047-r1/summary.json`
+(SHA-256
+`94ADC3C9AC67412F78C35B690A2EEF366B4314B58247B440E8166836049A1247`).
+
+An uninterrupted controller-owned warmup then reached f8492.  Its saved round
+state had server score 28 and elapsed time 141.559555 seconds; returned body
+incarnations 56 and 58 were still present.  Baseline restoration was exact for
+frame, entities, round, food, normalized physics, clocks, and both dynamic body
+incarnations.  Original and replay both reached `RunLevelOutro` at f8999 after
+507 frames.  All terminal comparator fields passed, including registry, raw
+latch receipt, lifecycle/iterator state, orders, physics, clocks, and nonce
+1 -> 2.  Contact-manager and TransformChangeDispatch histories were captured
+at f8492 and restored before replay.
+
+Primary evidence is
+`artifacts/framework-migration/story11-scored-terminal-dev5-live-r1/scored-terminal-f8492-r1/summary.json`,
+SHA-256
+`BCD7E70F257AD8B3D13F12EA7E6C984F34ACB20273ED6C19D7057CDDE851B658`.
+The 507-frame terminal input SHA-256 is
+`e2d1897f59cc25f692e72896e760b57f9b43af78dd1f3dd0d2e6c5c7d439c25c`.
+This uses the same frozen dev5 core, headless host, managed modules, and native
+Rigidbody/Animator helpers as the pristine terminal proof; no gameplay or
+synchronizer behavior was changed for this result.
+
+The preceding f7957 failure was diagnosed separately and must not be confused
+with a terminal bug.  A 300-second warmup timed out while the round was still
+`InLevel` with 17.3382721 seconds remaining.  Cleanup imposed a generic bridge
+pause after two advancing native states had occupied controller frame 7957.
+WorldSyncCache correctly failed closed on the resulting logical-clock mismatch,
+and the process-sticky ResumePhase failure made later level reloads appear
+stuck at frame 0.  Long probes must use sufficient wall time and only a
+controller-owned pause boundary; a timeout/fallback pause is diagnostic state,
+not a checkpoint.  Any real `AUTHORING_*_FAILED` result requires whole-process
+restart after evidence is preserved.
+
+This closes scored round-end composition with a surviving returned plate/stack.
+Complete level parity remains broader: repeat delivery and dynamic-ID cycles,
+order expiry/deduction paths, wider multi-chef interaction combinations, and
+arbitrary non-adjacent rewinds still need coverage.  Route search stays off.
