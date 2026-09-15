@@ -656,6 +656,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 case 69:return "animator-end-transition-exit";
                 case 70:return "animator-start-interrupted-transition-entry";
                 case 71:return "animator-start-interrupted-transition-exit";
+                case 72:return "nphase-core-update-dirty-interactions";
+                case 73:return "nphase-core-dirty-interaction";
+                case 74:return "shape-instance-pair-create-manager";
                 default:return "unknown";}
         }
     }

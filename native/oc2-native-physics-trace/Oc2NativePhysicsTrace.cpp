@@ -68,7 +68,10 @@ enum EventKind : uint32_t {
     EventAnimatorEndTransitionEntry = 68,
     EventAnimatorEndTransitionExit = 69,
     EventAnimatorStartInterruptedTransitionEntry = 70,
-    EventAnimatorStartInterruptedTransitionExit = 71
+    EventAnimatorStartInterruptedTransitionExit = 71,
+    EventNPhaseCoreUpdateDirtyInteractions = 72,
+    EventNPhaseCoreDirtyInteraction = 73,
+    EventShapeInstancePairCreateManager = 74
 };
 
 enum HookMask : uint32_t {
@@ -253,6 +256,8 @@ static void* g_trampolinePxDiagonalize = 0;
 static void* g_trampolinePxcDiscreteNarrowPhasePcm = 0;
 static void* g_trampolineNPhaseCoreOverlapCreated = 0;
 static void* g_trampolinePxsContextCreateContactManager = 0;
+static void* g_trampolineNPhaseCoreUpdateDirtyInteractions = 0;
+static void* g_trampolineShapeInstancePairCreateManager = 0;
 static void* g_trampolineAnimatorUpdateAvatars = 0;
 static void* g_trampolineAnimatorWriteProperties = 0;
 static void* g_trampolineDirectorPrepareStage = 0;
@@ -1379,7 +1384,7 @@ static void __cdecl RecordNPhaseCoreOverlapCreated(const uintptr_t* saved) {
     event->returnAddress = saved[9];
     event->stack[0] = saved[10]; // Element 0
     event->stack[1] = saved[11]; // Element 1
-    event->stack[2] = saved[12]; // pair flags/data
+    event->stack[2] = saved[12]; // CCD pass
     for (uint32_t i = 3; i < 8; ++i) event->stack[i] = 0;
     const uintptr_t* element0 = reinterpret_cast<const uintptr_t*>(saved[10]);
     const uintptr_t* element1 = reinterpret_cast<const uintptr_t*>(saved[11]);
@@ -1389,6 +1394,128 @@ static void __cdecl RecordNPhaseCoreOverlapCreated(const uintptr_t* saved) {
     MemoryBarrier();
     event->sequence = sequence;
     if (sequence > static_cast<LONG>(kCapacity)) g_droppedEstimate = sequence - static_cast<LONG>(kCapacity);
+}
+
+// Sc::NPhaseCore::updateDirtyInteractions iterates the compacting hash set at
+// NPhaseCore+0x44 directly through its dense mEntries array. Record the exact
+// header and one event per live entry before the untouched shipped function
+// consumes and clears it. The offsets and x86 layout are source-matched to
+// PhysX 3.3.3 and independently visible in the shipped function at A540F0.
+static void __cdecl RecordNPhaseCoreUpdateDirtyInteractions(const uintptr_t* saved) {
+    const uintptr_t nphase = saved[6];
+    const uintptr_t set = nphase + 0x44;
+    const uintptr_t buffer = *reinterpret_cast<const uintptr_t*>(set + 0x00);
+    const uintptr_t entries = *reinterpret_cast<const uintptr_t*>(set + 0x04);
+    const uintptr_t entriesNext = *reinterpret_cast<const uintptr_t*>(set + 0x08);
+    const uintptr_t hash = *reinterpret_cast<const uintptr_t*>(set + 0x0C);
+    const uint32_t entriesCapacity = *reinterpret_cast<const uint32_t*>(set + 0x10);
+    const uint32_t hashSize = *reinterpret_cast<const uint32_t*>(set + 0x14);
+    const uint32_t loadFactorBits = *reinterpret_cast<const uint32_t*>(set + 0x18);
+    const uint32_t freeList = *reinterpret_cast<const uint32_t*>(set + 0x1C);
+    const uint32_t timestamp = *reinterpret_cast<const uint32_t*>(set + 0x20);
+    const uint32_t count = *reinterpret_cast<const uint32_t*>(set + 0x24);
+
+    LONG sequence = InterlockedIncrement(&g_latestSequence);
+    TraceEvent* event = &g_events[static_cast<uint32_t>(sequence - 1) % kCapacity];
+    event->sequence = 0;
+    event->kind = EventNPhaseCoreUpdateDirtyInteractions;
+    event->threadId = GetCurrentThreadId();
+    LARGE_INTEGER qpc;
+    QueryPerformanceCounter(&qpc);
+    event->qpc = qpc.QuadPart;
+    event->self = nphase;
+    event->returnAddress = saved[9];
+    event->stack[0] = set;
+    event->stack[1] = buffer;
+    event->stack[2] = entries;
+    event->stack[3] = entriesNext;
+    event->stack[4] = hash;
+    event->stack[5] = entriesCapacity;
+    event->stack[6] = hashSize;
+    event->stack[7] = loadFactorBits;
+    event->payload[0] = freeList;
+    event->payload[1] = timestamp;
+    event->payload[2] = count;
+    const uintptr_t ownerScene = *reinterpret_cast<const uintptr_t*>(nphase);
+    event->payload[3] = ownerScene;
+    event->payload[4] = ownerScene != 0
+        ? *reinterpret_cast<const uint8_t*>(ownerScene + 0x4A4) : 0;
+    for (uint32_t i = 5; i < 8; ++i) event->payload[i] = 0;
+    for (uint32_t i = 0; i < 8; ++i) event->frames[i] = 0;
+    for (uint32_t i = 0; i < 5; ++i) event->extra[i] = 0;
+    MemoryBarrier();
+    event->sequence = sequence;
+    if (sequence > static_cast<LONG>(kCapacity))
+        g_droppedEstimate = sequence - static_cast<LONG>(kCapacity);
+
+    // Fail closed on a header that is inconsistent with a compacting set. A
+    // valid empty set may have null entries; a non-empty one may not.
+    if (count > entriesCapacity || count > 256u || (count != 0 && entries == 0)) return;
+    const uintptr_t* dense = reinterpret_cast<const uintptr_t*>(entries);
+    for (uint32_t index = 0; index < count; ++index) {
+        sequence = InterlockedIncrement(&g_latestSequence);
+        event = &g_events[static_cast<uint32_t>(sequence - 1) % kCapacity];
+        event->sequence = 0;
+        event->kind = EventNPhaseCoreDirtyInteraction;
+        event->threadId = GetCurrentThreadId();
+        QueryPerformanceCounter(&qpc);
+        event->qpc = qpc.QuadPart;
+        const uintptr_t interaction = dense[index];
+        event->self = interaction;
+        event->returnAddress = saved[9];
+        event->stack[0] = nphase;
+        event->stack[1] = set;
+        event->stack[2] = entries;
+        event->stack[3] = index;
+        event->stack[4] = count;
+        event->stack[5] = entriesCapacity;
+        event->stack[6] = hashSize;
+        event->stack[7] = hash;
+        for (uint32_t i = 0; i < 8; ++i) event->payload[i] = 0;
+        for (uint32_t i = 0; i < 8; ++i) event->frames[i] = 0;
+        for (uint32_t i = 0; i < 5; ++i) event->extra[i] = 0;
+        if (interaction != 0) {
+            const uintptr_t* raw = reinterpret_cast<const uintptr_t*>(interaction);
+            for (uint32_t i = 0; i < 8; ++i) event->payload[i] = raw[i];
+        }
+        MemoryBarrier();
+        event->sequence = sequence;
+        if (sequence > static_cast<LONG>(kCapacity))
+            g_droppedEstimate = sequence - static_cast<LONG>(kCapacity);
+    }
+}
+
+// Record the ShapeInstancePairLL object at the exact createManager entry. This
+// correlates each dense dirty-list pointer with the pair that subsequently
+// receives a transform-cache id and PxsContactManager pool slot.
+static void __cdecl RecordShapeInstancePairCreateManager(const uintptr_t* saved) {
+    LONG sequence = InterlockedIncrement(&g_latestSequence);
+    TraceEvent* event = &g_events[static_cast<uint32_t>(sequence - 1) % kCapacity];
+    event->sequence = 0;
+    event->kind = EventShapeInstancePairCreateManager;
+    event->threadId = GetCurrentThreadId();
+    LARGE_INTEGER qpc;
+    QueryPerformanceCounter(&qpc);
+    event->qpc = qpc.QuadPart;
+    event->self = saved[6];
+    event->returnAddress = saved[9];
+    for (uint32_t i = 0; i < 8; ++i) event->stack[i] = 0;
+    for (uint32_t i = 0; i < 8; ++i) event->payload[i] = 0;
+    for (uint32_t i = 0; i < 8; ++i) event->frames[i] = 0;
+    for (uint32_t i = 0; i < 5; ++i) event->extra[i] = 0;
+    if (event->self != 0) {
+        const uintptr_t* raw = reinterpret_cast<const uintptr_t*>(event->self);
+        for (uint32_t i = 0; i < 8; ++i) event->stack[i] = raw[i];
+        for (uint32_t i = 0; i < 8; ++i) event->payload[i] = raw[8 + i];
+        // The shipped ShapeInstancePairLL allocation is 0x44 bytes. Keep the
+        // read strictly within that object instead of sampling pool-adjacent
+        // storage.
+        event->frames[0] = raw[16];
+    }
+    MemoryBarrier();
+    event->sequence = sequence;
+    if (sequence > static_cast<LONG>(kCapacity))
+        g_droppedEstimate = sequence - static_cast<LONG>(kCapacity);
 }
 
 // This probe wraps PxsContext::createContactManager and records its return.
@@ -1415,6 +1542,8 @@ static void __cdecl RecordPxsContactManagerCreated(const uintptr_t* saved) {
     event->stack[1] = saved[11]; // PxvManagerDescRigidRigid
     event->stack[2] = saved[12]; // PxsMaterialManager
     for (uint32_t i = 3; i < 8; ++i) event->stack[i] = 0;
+    if (saved[11] != 0)
+        event->stack[6] = *reinterpret_cast<const uintptr_t*>(saved[11]); // descriptor userData / SIP
     for (uint32_t i = 0; i < 8; ++i) event->payload[i] = 0;
     for (uint32_t i = 0; i < 8; ++i) event->frames[i] = 0;
     for (uint32_t i = 0; i < 5; ++i) event->extra[i] = 0;
@@ -1729,6 +1858,30 @@ __declspec(naked) static void HookNPhaseCoreOverlapCreated() {
     __asm jmp dword ptr [g_trampolineNPhaseCoreOverlapCreated]
 }
 
+__declspec(naked) static void HookNPhaseCoreUpdateDirtyInteractions() {
+    __asm pushfd
+    __asm pushad
+    __asm mov eax, esp
+    __asm push eax
+    __asm call RecordNPhaseCoreUpdateDirtyInteractions
+    __asm add esp, 4
+    __asm popad
+    __asm popfd
+    __asm jmp dword ptr [g_trampolineNPhaseCoreUpdateDirtyInteractions]
+}
+
+__declspec(naked) static void HookShapeInstancePairCreateManager() {
+    __asm pushfd
+    __asm pushad
+    __asm mov eax, esp
+    __asm push eax
+    __asm call RecordShapeInstancePairCreateManager
+    __asm add esp, 4
+    __asm popad
+    __asm popfd
+    __asm jmp dword ptr [g_trampolineShapeInstancePairCreateManager]
+}
+
 // Preserve the original thiscall stack, invoke the trampoline with copied
 // arguments, record the returned manager, then perform the original ret 8.
 // The saved context word stays below pushfd/pushad and is never exposed to the
@@ -1803,6 +1956,8 @@ static HookSpec g_hooks[] = {
     {EventPxcDiscreteNarrowPhasePcm, MaskNarrowPhase, 0xA9E900, 9, {0x53,0x8B,0xDC,0x83,0xEC,0x08,0x83,0xE4,0xF0}, HookPxcDiscreteNarrowPhasePcm, &g_trampolinePxcDiscreteNarrowPhasePcm},
     {EventNPhaseCoreOverlapCreated, MaskNarrowPhase, 0xA51210, 9, {0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00}, HookNPhaseCoreOverlapCreated, &g_trampolineNPhaseCoreOverlapCreated},
     {EventPxsContactManagerCreated, MaskNarrowPhase, 0xA69E80, 6, {0x55,0x8B,0xEC,0x53,0x8B,0xD9}, HookPxsContextCreateContactManager, &g_trampolinePxsContextCreateContactManager},
+    {EventNPhaseCoreUpdateDirtyInteractions, MaskNarrowPhase, 0xA540F0, 6, {0x55,0x8B,0xEC,0x83,0xEC,0x34}, HookNPhaseCoreUpdateDirtyInteractions, &g_trampolineNPhaseCoreUpdateDirtyInteractions},
+    {EventShapeInstancePairCreateManager, MaskNarrowPhase, 0xA54430, 9, {0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00}, HookShapeInstancePairCreateManager, &g_trampolineShapeInstancePairCreateManager},
     {EventAnimatorUpdateAvatars, MaskAnimatorScheduling, 0x62B5D0, 6, {0x55,0x8B,0xEC,0x83,0xEC,0x68}, HookAnimatorUpdateAvatars, &g_trampolineAnimatorUpdateAvatars},
     {EventAnimatorWriteProperties, MaskAnimatorScheduling, 0x62C750, 6, {0x55,0x8B,0xEC,0x56,0x8B,0xF1}, HookAnimatorWriteProperties, &g_trampolineAnimatorWriteProperties},
     {EventDirectorPrepareStage, MaskAnimatorScheduling, 0x2F2030, 6, {0x55,0x8B,0xEC,0x83,0xEC,0x18}, HookDirectorPrepareStage, &g_trampolineDirectorPrepareStage},

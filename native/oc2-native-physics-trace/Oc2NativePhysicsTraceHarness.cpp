@@ -86,6 +86,11 @@ int main(int argc, char** argv) {
     static const uint8_t getCapsule[] = {0x55,0x8B,0xEC,0x83,0x79,0x74,0x02};
     static const uint8_t getFlags[] = {0x55,0x8B,0xEC,0xF6,0x41,0x24,0x40};
     static const uint8_t getLocalPose[] = {0x55,0x8B,0xEC,0xF6,0x41,0x24,0x04,0x56};
+    static const uint8_t pcm[] = {0x53,0x8B,0xDC,0x83,0xEC,0x08,0x83,0xE4,0xF0};
+    static const uint8_t overlapCreated[] = {0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00};
+    static const uint8_t createContactManager[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
+    static const uint8_t updateDirtyInteractions[] = {0x55,0x8B,0xEC,0x83,0xEC,0x34};
+    static const uint8_t pairCreateManager[] = {0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00};
     const Bytes bytes[] = {
         {0x481B50,awake,sizeof(awake)},{0x482510,create,sizeof(create)},
         {0x483550,move,sizeof(move)},{0x4840D0,kinematic,sizeof(kinematic)},
@@ -111,7 +116,11 @@ int main(int argc, char** argv) {
         {0x649C60,animatorStartInterruptedTransition,sizeof(animatorStartInterruptedTransition)},
         {0xA10740,getShapes,sizeof(getShapes)},{0x842360,getType,sizeof(getType)},
         {0xA0D0B0,getBox,sizeof(getBox)},{0xA0D0F0,getCapsule,sizeof(getCapsule)},
-        {0xA0D1D0,getFlags,sizeof(getFlags)},{0xA0D2A0,getLocalPose,sizeof(getLocalPose)}
+        {0xA0D1D0,getFlags,sizeof(getFlags)},{0xA0D2A0,getLocalPose,sizeof(getLocalPose)},
+        {0xA9E900,pcm,sizeof(pcm)},{0xA51210,overlapCreated,sizeof(overlapCreated)},
+        {0xA69E80,createContactManager,sizeof(createContactManager)},
+        {0xA540F0,updateDirtyInteractions,sizeof(updateDirtyInteractions)},
+        {0xA54430,pairCreateManager,sizeof(pairCreateManager)}
     };
     for (uint32_t i=0;i<sizeof(bytes)/sizeof(bytes[0]);++i) Put(image,bytes[i]);
 
@@ -282,6 +291,12 @@ int main(int argc, char** argv) {
     if (stateMachine != 1 || value.installedMask != 256 ||
         value.installedHookCount != 5 || value.lastError != 0) return 13;
     if (uninstall() != 1) return 14;
+
+    int narrowPhase = install(reinterpret_cast<uintptr_t>(image),16u);
+    status(&value);
+    if (narrowPhase != 1 || value.installedMask != 16 ||
+        value.installedHookCount != 5 || value.lastError != 0) return 26;
+    if (uninstall() != 1) return 27;
 
     int good = install(reinterpret_cast<uintptr_t>(image),229u);
     status(&value);

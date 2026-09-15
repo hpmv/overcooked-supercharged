@@ -1,5 +1,56 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Dirty-interaction order proved end to end (2026-09-15, native trace
+> r22):** fresh v14 live evidence is
+> `artifacts/framework-migration/story11-dirty-order-v14-live-r2/second-delivery-f1045-dirty-order-r2/`.
+> It reproduces the exact f1045 checkpoint, delivery, input SHA
+> `35867d2f81e4579fd0d02346cfde731058b5fa3d9770ee887c2cda248decc687`,
+> score/food/orders/clocks and Animator parity. The known residual remains
+> native physics only: chef 46 ends at `0.04039979` on the original branch and
+> `0.009999692` on replay (plus chef 44's sub-ulp residual velocity).
+>
+> The new entry probe at shipped `Sc::NPhaseCore::updateDirtyInteractions`
+> (RVA `0xA540F0`) records the exact compacting-set header and dense entries;
+> the probe at `ShapeInstancePairLL::createManager` (RVA `0xA54430`) and the
+> existing contact-manager receipt join the semantic pair through descriptor
+> `userData`. The first post-checkpoint simulation has the same NPhaseCore,
+> set/buffer/entries/next/hash storage, capacity 48, hash size 64, count 23,
+> owner scene and owner flags byte zero in both branches. The exact 23-pointer
+> set and typed semantic-pair multiset are also equal, but their dense order is
+> different; 21 pooled CoreInteraction prefixes and the pooled SIP-to-semantic
+> assignments have evolved differently.
+>
+> Filtering the dense list to the 15 manager-producing interactions proves
+> that its semantic order is exactly the `A57C3A` createManager order in both
+> branches. Every immediately following kind-52 receipt has descriptor
+> `userData == SIP` (15/15). Both branches consume the exact same restored pool
+> sequence `[1,5,10,7,2,14,12,15,13,4,0,11,9,8,6]`, yet the order permutation
+> changes six semantic pair-to-slot assignments. Chef 46's capsule contacts
+> against static shapes `0x476AA960` and `0x47698910` swap pool 11/pool 9,
+> exactly matching the previously observed supporting-constraint swap and
+> first native writeback divergence. Thus the restored free stack is correct;
+> `mDirtyInteractions` semantic order is the missing upstream state.
+>
+> Offline analyzer:
+> `scripts/analyze_framework_dirty_interaction_trace.py`. Its live analysis
+> passes every container, set, descriptor and pool-correlation check and
+> reports exactly six changed mappings. Native tracer DLL:
+> `artifacts/native-physics-trace-r22-dirty-order-build1/Oc2NativePhysicsTrace.r22.dll`,
+> SHA-256
+> `96A57839A3A2F5D71B2F7E559184E2799221FF1A2936B959736DCEE5805BA502`;
+> the x86 harness passes with mask 229, 22 total hooks, and no error.
+>
+> **Next:** restore the checkpoint-owned cause of this semantic ordering, not
+> a route-specific future allocation map. First inspect whether the paused
+> checkpoint already contains the intended dirty semantic order and capture
+> the relevant interaction-container/free-pool state that produces it. If a
+> one-shot `mDirtyInteractions` rebuild is used, resolve current entries by
+> semantic element-pair identity, preserve alternate-input membership, and
+> rebuild the hash buckets/next chains plus membership/dirty flags; copying or
+> permuting stale raw pointers alone is invalid because pooled interaction
+> objects are reassigned across rewind. Then rerun the same f1045 cell for full
+> endpoint parity. Search remains disabled.
+
 > **Background-launch hardening (2026-09-15, v14):** the earlier no-activation
 > core removed every explicit request to foreground Overcooked, but the launcher
 > still used `.NET ProcessWindowStyle.Minimized`, which maps to Windows

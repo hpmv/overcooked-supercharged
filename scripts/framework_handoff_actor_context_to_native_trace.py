@@ -19,8 +19,8 @@ from framework_rpc import Client, ControllerClient
 
 ACTOR_NATIVE = Path("artifacts/native-rigidbody-rebuild-v7-ninja/Oc2NativeRigidbodyRebuild.dll")
 ACTOR_SHA256 = "2E6284C6380B0085853C2240D09044EE266FC7D8415442E731B529C38910A35D"
-TRACE_NATIVE = Path("artifacts/native-physics-trace-r21-mass-diagonalize-build1/Oc2NativePhysicsTrace.r21.dll")
-TRACE_SHA256 = "07E7E0E0ED770802E85A70999FBE3BBEFBD6A0DF5CDB68B1BB05E237A0FA0030"
+TRACE_NATIVE = Path("artifacts/native-physics-trace-r22-dirty-order-build1/Oc2NativePhysicsTrace.r22.dll")
+TRACE_SHA256 = "96A57839A3A2F5D71B2F7E559184E2799221FF1A2936B959736DCEE5805BA502"
 
 
 def main() -> int:
@@ -111,7 +111,7 @@ def main() -> int:
             },
         })["detail"]["result"]
         if (trace.get("active") is not True or trace.get("installedMask") != args.mask or
-                trace.get("installedHookCount") != 10 or trace.get("lastError") != 0):
+                trace.get("installedHookCount") != 12 or trace.get("lastError") != 0):
             raise RuntimeError("Native trace did not establish the pinned mask-25 postcondition")
 
         actor_after = call({
