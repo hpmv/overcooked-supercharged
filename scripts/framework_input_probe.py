@@ -757,16 +757,25 @@ def main():
                 raise RuntimeError('Automatic contact-manager free-stack restoration is not ready')
             if args.restore_transform_dispatch and pool.get('automaticTransformDispatchRestore') is not True:
                 raise RuntimeError('Automatic transform-dispatch restoration is not ready')
+            if pool.get('dirtyInteractionHookInstalled') is not True or \
+                    pool.get('dirtyInteractionRestoreMode') not in ('exact', 'projection') or \
+                    pool.get('dirtyInteractionCapturePending') is not False or \
+                    pool.get('dirtyInteractionRestorePendingValidation') is not False:
+                raise RuntimeError('Dirty-interaction order restoration is not ready')
             contact_pool_start = {'captures': pool.get('contactPoolCaptures', 0),
                                   'restores': pool.get('contactPoolRestores', 0),
                                   'transformCaptures': pool.get('transformDispatchCaptures', 0),
-                                  'transformRestores': pool.get('transformDispatchRestores', 0)}
+                                  'transformRestores': pool.get('transformDispatchRestores', 0),
+                                  'dirtyCaptures': pool.get('dirtyInteractionCaptures', 0),
+                                  'dirtyRestores': pool.get('dirtyInteractionRestores', 0),
+                                  'dirtyMode': pool.get('dirtyInteractionRestoreMode')}
             if args.reuse_contact_manager_checkpoint:
                 checkpoint_sidecar=call('bridge', {'command': 'hot-call', 'slot': args.actor_rebuild_slot,
                                         'operation': 'checkpoint-status', 'args': {'frame': frame}},
                                         'contact-pool-reused-checkpoint')['detail']['result'].get('result', {})
                 if checkpoint_sidecar.get('captured') is not True or \
                         checkpoint_sidecar.get('coreSnapshotMatches') is not True or \
+                        not isinstance(checkpoint_sidecar.get('dirtyInteractions'), dict) or \
                         (args.restore_transform_dispatch and checkpoint_sidecar.get('transformDispatchCaptured') is not True):
                     raise RuntimeError('Matching existing contact/Transform checkpoint sidecar is unavailable')
                 summary['contactPoolCapture'] = checkpoint_sidecar
@@ -1238,6 +1247,22 @@ def main():
                     captured.get('contactPoolSnapshotFrame') != frame or \
                     captured.get('contactPoolCaptures') != expected_captures:
                 raise RuntimeError('Contact-manager free-stack snapshot was not captured for the input checkpoint')
+            expected_dirty_captures = contact_pool_start['dirtyCaptures'] + \
+                (0 if args.reuse_contact_manager_checkpoint else 1)
+            dirty_snapshot = captured.get('dirtyInteractionSnapshot')
+            if captured.get('dirtyInteractionSnapshotCaptured') is not True or \
+                    not isinstance(dirty_snapshot, dict) or dirty_snapshot.get('count') is None or \
+                    captured.get('dirtyInteractionCapturePending') is not False or \
+                    captured.get('dirtyInteractionRestorePendingValidation') is not False or \
+                    captured.get('dirtyInteractionCaptures') != expected_dirty_captures:
+                raise RuntimeError('Dirty-interaction order snapshot was not captured for the input checkpoint')
+            if captured.get('dirtyInteractionRestoreMode') != contact_pool_start['dirtyMode']:
+                raise RuntimeError('Dirty-interaction restore mode changed after checkpoint capture')
+            summary['dirtyInteractionCapture'] = dirty_snapshot if args.reuse_contact_manager_checkpoint else \
+                next((row for row in reversed(captured.get('dirtyInteractionReceipts', []))
+                      if row.get('action') == 'capture-copy'), None)
+            if not isinstance(summary['dirtyInteractionCapture'], dict):
+                raise RuntimeError('Dirty-interaction capture receipt is unavailable')
             if not args.reuse_contact_manager_checkpoint:
                 summary['contactPoolCapture'] = captured.get('contactPoolReceipts', [])[-1]
             if args.restore_transform_dispatch:
@@ -1250,11 +1275,13 @@ def main():
             if args.reuse_contact_manager_checkpoint:
                 if captured.get('automaticRestorePending') is not False or \
                         captured.get('contactPoolRestores') != contact_pool_start['restores'] + 1 or \
+                        captured.get('dirtyInteractionRestores') != contact_pool_start['dirtyRestores'] + 1 or \
                         (args.restore_transform_dispatch and
                          captured.get('transformDispatchRestores') != contact_pool_start['transformRestores'] + 1):
                     raise RuntimeError('Existing contact/Transform checkpoint was not consumed by the original branch')
                 contact_pool_start['restores']=captured.get('contactPoolRestores')
                 contact_pool_start['transformRestores']=captured.get('transformDispatchRestores')
+                contact_pool_start['dirtyRestores']=captured.get('dirtyInteractionRestores')
         exported = call('controller', {'command': 'record-input', 'path': f'input-probe-{evidence_key}-{frame}.json'}, 'export')
         recording = json.loads(Path(exported['path']).read_text())
         count = require_recorded_completion(original, recording, frame)
@@ -1393,6 +1420,21 @@ def main():
                     restored_pool.get('contactPoolRestores') != contact_pool_start['restores'] + 1:
                 raise RuntimeError('Contact-manager free-stack restore was not applied for input replay')
             summary['contactPoolRestore'] = restored_pool.get('contactPoolReceipts', [])[-1]
+            dirty_restore = next((row for row in reversed(restored_pool.get('dirtyInteractionReceipts', []))
+                                  if row.get('action') == 'restore-status'), None)
+            expected_mode = 2 if contact_pool_start['dirtyMode'] == 'projection' else 1
+            dirty_count = dirty_snapshot.get('count')
+            if restored_pool.get('dirtyInteractionRestorePendingValidation') is not False or \
+                    restored_pool.get('dirtyInteractionRestores') != contact_pool_start['dirtyRestores'] + 1 or \
+                    not isinstance(dirty_restore, dict) or dirty_restore.get('result') != 1 or \
+                    dirty_restore.get('restoreMode') != expected_mode or \
+                    dirty_restore.get('matchedCount', -1) + dirty_restore.get('capturedOnlyCount', -1) != dirty_count or \
+                    dirty_restore.get('matchedCount', -1) + dirty_restore.get('liveOnlyCount', -1) != dirty_restore.get('count') or \
+                    (contact_pool_start['dirtyMode'] == 'exact' and
+                     (dirty_restore.get('capturedOnlyCount') != 0 or dirty_restore.get('liveOnlyCount') != 0 or
+                      dirty_restore.get('orderHashAfter') != dirty_snapshot.get('orderHash'))):
+                raise RuntimeError('Dirty-interaction order restore was not applied exactly once for input replay')
+            summary['dirtyInteractionRestore'] = dirty_restore
             if args.restore_transform_dispatch:
                 if restored_pool.get('transformDispatchRestores') != contact_pool_start['transformRestores'] + 1:
                     raise RuntimeError('Transform-dispatch restore was not applied for input replay')

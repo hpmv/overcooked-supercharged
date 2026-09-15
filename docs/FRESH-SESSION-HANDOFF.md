@@ -1,5 +1,58 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Dirty-interaction projection milestone (2026-09-15, API 11):** the
+> checkpoint sidecar can now restore across legitimate alternate branches
+> whose live dirty-interaction membership differs.  Projection leaves every
+> current-only interaction in its exact live dense-array slot, orders the
+> surviving checkpoint interactions by their captured relative order, fills
+> only the surviving slots, and rebuilds the live hash buckets/next chains.
+> Captured-only interactions are discarded and no stale pooled pointer is
+> retained.  Exact mode remains available; projection is explicit and both
+> modes fail closed on invalid/duplicate identities or incoherent containers.
+> Receipts report the restore mode and matched/captured-only/live-only counts.
+>
+> Fresh minimized/non-foreground Story 1-1 evidence is
+> `artifacts/framework-migration/story11-dirty-projection-v15-live-r3/second-delivery-f1045-projection-exact-r2/`;
+> `summary.json` SHA-256 is
+> `C2D4CF9DC83ADDB66135326DFF0C3787FCF9C4D3531614E320CAA5F1603A4225`.
+> The known f1045 -> f1048 second-delivery cell remains exact: score 28 -> 56,
+> no changed entities, chef 46 Y `0.040400088` in both branches, and exact
+> native physics, Animator, round/orders, food, and clocks.  The API-11 live
+> receipt restored all 23 surviving entries in projection mode, changing the
+> order hash from `0xF0F7A028` to checkpoint hash `0x239E7130` exactly once.
+>
+> The native harness additionally covers mixed add/remove membership at equal,
+> larger, and smaller live counts, current-only slot preservation, hash rebuild,
+> exact-mode rejection, and one-shot dormancy.  It passes against
+> `artifacts/native-rigidbody-rebuild-r18-dirty-projection-cmake1/Oc2NativeRigidbodyRebuild.dll`,
+> SHA-256
+> `C6E1525C4011B7A2606D5B7CCEE914291BD9B033C3E618235BA06C5FF3470BE3`.
+> The managed actor/body DLLs are respectively
+> `65B4B6AB90EA329B3F12E134C15BEF7A5254B1D5F126438D7856BC141C1660AD`
+> and
+> `94FB8C381C485B4B0F7141CC444D839A7EBCC2F3DF8F70596A31F806D5D18C9C`.
+> Python input/background suites pass 39 tests total.
+>
+> A guarded branch transaction at restored f1045 also proved it can discard
+> the abandoned three-frame delivery future and one chef RandomizeAnimParam
+> callback without changing game state.  The following 30-frame neutral branch
+> reached f1077, but its rewind stopped later in BodyRestore because the
+> necessary pose restoration woke sleeping kinematic entity 49.  The dirty
+> restore had already completed successfully with 23 matched / zero differing
+> members, so this branch did not live-exercise the changed-membership path.
+> Evidence is sibling `commit-f1045-replay-prefix.json` (SHA-256
+> `43E96C53EABC6300DF57B9A206155E14A58ABB0BEB6A913F269FBB020794D5F9`)
+> and `neutral-reuse-f1045-projection-r1/summary.json` (SHA-256
+> `3C1518E6921CD5AB6F0D7EA11AC006B69076601F389128A633E141768D929401`).
+>
+> **Scope/next:** the live game proves API-11 exact-membership projection and
+> the harness proves the changed-membership algorithm.  Full Story 1-1 parity
+> is not claimed.  Next restore entity 49's source-equivalent kinematic sleep
+> lifecycle after a required pose write, verify exact post-maintenance island,
+> active-list, notification-list, and dirty-interaction state, then obtain a
+> live changed-membership branch.  Full-level non-element dirty-interaction
+> census and plate-throw/dash coverage remain required.  Search stays disabled.
+
 > **Dirty-interaction order restoration closes the f1045 physics drift
 > (2026-09-15, API 10):** the exact Story 1-1 second-delivery acceptance now
 > passes under the minimized/background v14 runtime. Evidence is

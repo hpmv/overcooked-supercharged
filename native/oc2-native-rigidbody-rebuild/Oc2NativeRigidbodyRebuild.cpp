@@ -154,6 +154,10 @@ struct DirtyInteractionOrderReceipt {
     uint32_t orderHashAfter;
     uint32_t installed;
     uint32_t armed;
+    uint32_t restoreMode;
+    uint32_t matchedCount;
+    uint32_t capturedOnlyCount;
+    uint32_t liveOnlyCount;
 };
 
 struct RigidPose {
@@ -413,7 +417,7 @@ static_assert(sizeof(ManifoldPoolReceipt) == 200,
     "Unexpected Win32 manifold-pool receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
-static_assert(sizeof(DirtyInteractionOrderReceipt) == 80,
+static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
     "Unexpected Win32 dirty-interaction receipt ABI");
 
 enum RebuildResult : uint32_t {
@@ -505,6 +509,12 @@ enum DirtyInteractionOrderAction : uint32_t {
     DirtyInteractionOrderRestore = 2
 };
 
+enum DirtyInteractionRestoreMode : uint32_t {
+    DirtyInteractionRestoreNone = 0,
+    DirtyInteractionRestoreExact = 1,
+    DirtyInteractionRestoreProjection = 2
+};
+
 enum SetGlobalPoseResult : uint32_t {
     SetGlobalPoseOk = 1,
     SetGlobalPoseBadArgument = 2,
@@ -585,7 +595,7 @@ enum KinematicTargetResult : uint32_t {
     KinematicTargetNonfinite = 7
 };
 
-static const uint32_t kApiVersion = 10;
+static const uint32_t kApiVersion = 11;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -796,9 +806,14 @@ static uint32_t g_dirtyInteractionHashSize = 0;
 static uint32_t g_dirtyInteractionCount = 0;
 static uint32_t g_dirtyInteractionOrderHashBefore = 0;
 static uint32_t g_dirtyInteractionOrderHashAfter = 0;
+static uint32_t g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+static uint32_t g_dirtyInteractionMatchedCount = 0;
+static uint32_t g_dirtyInteractionCapturedOnlyCount = 0;
+static uint32_t g_dirtyInteractionLiveOnlyCount = 0;
 static DirtyInteractionKey g_dirtyInteractionKeys[kMaximumDirtyInteractions] = {};
 static DirtyInteractionKey g_dirtyInteractionReorderedKeys[kMaximumDirtyInteractions] = {};
 static uintptr_t g_dirtyInteractionLive[kMaximumDirtyInteractions] = {};
+static uintptr_t g_dirtyInteractionMatched[kMaximumDirtyInteractions] = {};
 static uintptr_t g_dirtyInteractionReordered[kMaximumDirtyInteractions] = {};
 static uint8_t g_dirtyInteractionUsed[kMaximumDirtyInteractions] = {};
 static uint32_t g_dirtyInteractionOldNext[kMaximumDirtyInteractions] = {};
@@ -1604,6 +1619,10 @@ static void InitializeDirtyInteractionOrderReceipt(
     receipt->orderHashAfter = g_dirtyInteractionOrderHashAfter;
     receipt->installed = g_dirtyInteractionInstalled ? 1u : 0u;
     receipt->armed = g_dirtyInteractionAction != DirtyInteractionOrderIdle ? 1u : 0u;
+    receipt->restoreMode = g_dirtyInteractionRestoreMode;
+    receipt->matchedCount = g_dirtyInteractionMatchedCount;
+    receipt->capturedOnlyCount = g_dirtyInteractionCapturedOnlyCount;
+    receipt->liveOnlyCount = g_dirtyInteractionLiveOnlyCount;
 }
 
 static void __cdecl ObserveContactManagerContext(uintptr_t context) {
@@ -1814,6 +1833,10 @@ static void __cdecl ProcessDirtyInteractionOrder(const uintptr_t* saved) {
         for (uint32_t i = 0; i < count; ++i)
             g_dirtyInteractionKeys[i] =
                 ReadDirtyInteractionKey(g_dirtyInteractionLive[i]);
+        g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+        g_dirtyInteractionMatchedCount = 0;
+        g_dirtyInteractionCapturedOnlyCount = 0;
+        g_dirtyInteractionLiveOnlyCount = 0;
         g_dirtyInteractionOrderHashBefore = liveOrderHash;
         g_dirtyInteractionOrderHashAfter = g_dirtyInteractionOrderHashBefore;
         InterlockedIncrement(&g_dirtyInteractionCaptures);
@@ -1823,17 +1846,21 @@ static void __cdecl ProcessDirtyInteractionOrder(const uintptr_t* saved) {
 
     // The CoalescedHashSet is allowed to grow and replace its backing buffer
     // between checkpoint capture and restore.  Its storage addresses and
-    // capacities are therefore telemetry, not scene identity.  NPhaseCore is
-    // stable scene-owned identity; count plus the semantic-key match below
-    // proves exact membership before any current storage is mutated.
-    if (nphase != armedNPhaseCore || count != armedCount) {
+    // capacities are therefore telemetry, not scene identity. NPhaseCore is
+    // stable scene-owned identity. Exact mode additionally requires identical
+    // membership; projection mode permits legitimate branch-local additions
+    // and removals while ordering only the checkpoint identities that survive.
+    if (nphase != armedNPhaseCore ||
+        (g_dirtyInteractionRestoreMode == DirtyInteractionRestoreExact &&
+            count != armedCount)) {
         CompleteDirtyInteractionOrder(DirtyInteractionOrderIdentityChanged,
             ERROR_INVALID_STATE);
         return;
     }
 
     for (uint32_t i = 0; i < count; ++i) g_dirtyInteractionUsed[i] = 0;
-    for (uint32_t target = 0; target < count; ++target) {
+    uint32_t matched = 0;
+    for (uint32_t target = 0; target < armedCount; ++target) {
         uint32_t found = 0xFFFFFFFFu;
         for (uint32_t live = 0; live < count; ++live) {
             if (g_dirtyInteractionUsed[live]) continue;
@@ -1845,12 +1872,54 @@ static void __cdecl ProcessDirtyInteractionOrder(const uintptr_t* saved) {
             }
         }
         if (found == 0xFFFFFFFFu) {
-            CompleteDirtyInteractionOrder(
-                DirtyInteractionOrderMembershipChanged, ERROR_NOT_FOUND);
-            return;
+            if (g_dirtyInteractionRestoreMode == DirtyInteractionRestoreExact) {
+                CompleteDirtyInteractionOrder(
+                    DirtyInteractionOrderMembershipChanged, ERROR_NOT_FOUND);
+                return;
+            }
+            continue;
         }
         g_dirtyInteractionUsed[found] = 1;
-        g_dirtyInteractionReordered[target] = g_dirtyInteractionLive[found];
+        g_dirtyInteractionMatched[matched++] = g_dirtyInteractionLive[found];
+    }
+    g_dirtyInteractionMatchedCount = matched;
+    g_dirtyInteractionCapturedOnlyCount = armedCount - matched;
+    g_dirtyInteractionLiveOnlyCount = count - matched;
+    if (g_dirtyInteractionRestoreMode == DirtyInteractionRestoreExact &&
+        (g_dirtyInteractionCapturedOnlyCount != 0 ||
+            g_dirtyInteractionLiveOnlyCount != 0)) {
+        CompleteDirtyInteractionOrder(
+            DirtyInteractionOrderMembershipChanged, ERROR_NOT_FOUND);
+        return;
+    }
+
+    // Preserve every current-only interaction at its current dense slot.
+    // Refill only the slots occupied by surviving checkpoint interactions in
+    // captured relative order. This is the smallest permutation that restores
+    // historical order without inventing placement for branch-local contacts.
+    uint32_t nextMatched = 0;
+    for (uint32_t live = 0; live < count; ++live) {
+        g_dirtyInteractionReordered[live] = g_dirtyInteractionUsed[live]
+            ? g_dirtyInteractionMatched[nextMatched++]
+            : g_dirtyInteractionLive[live];
+    }
+    if (nextMatched != matched) {
+        CompleteDirtyInteractionOrder(
+            DirtyInteractionOrderWriteVerificationFailed, ERROR_INVALID_DATA);
+        return;
+    }
+    bool changed = false;
+    for (uint32_t i = 0; i < count; ++i)
+        if (g_dirtyInteractionReordered[i] != g_dirtyInteractionLive[i]) {
+            changed = true;
+            break;
+        }
+    if (!changed) {
+        g_dirtyInteractionOrderHashBefore = liveOrderHash;
+        g_dirtyInteractionOrderHashAfter = liveOrderHash;
+        InterlockedIncrement(&g_dirtyInteractionRestores);
+        CompleteDirtyInteractionOrder(DirtyInteractionOrderOk, ERROR_SUCCESS);
+        return;
     }
     if (!Writable(reinterpret_cast<void*>(entries),
             count * sizeof(uintptr_t)) ||
@@ -2002,6 +2071,10 @@ static int InstallDirtyInteractionOrderHook(uintptr_t unityBase,
     InterlockedExchange(&g_dirtyInteractionResult,
         DirtyInteractionOrderNotCaptured);
     InterlockedExchange(&g_dirtyInteractionError, ERROR_INVALID_STATE);
+    g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+    g_dirtyInteractionMatchedCount = 0;
+    g_dirtyInteractionCapturedOnlyCount = 0;
+    g_dirtyInteractionLiveOnlyCount = 0;
     InitializeDirtyInteractionOrderReceipt(receipt, unityBase);
     receipt->result = DirtyInteractionOrderOk;
     receipt->lastError = ERROR_SUCCESS;
@@ -2040,6 +2113,10 @@ static int ArmDirtyInteractionOrderCapture(uintptr_t unityBase,
     g_dirtyInteractionCount = 0;
     g_dirtyInteractionOrderHashBefore = 0;
     g_dirtyInteractionOrderHashAfter = 0;
+    g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+    g_dirtyInteractionMatchedCount = 0;
+    g_dirtyInteractionCapturedOnlyCount = 0;
+    g_dirtyInteractionLiveOnlyCount = 0;
     InterlockedExchange(&g_dirtyInteractionResult,
         DirtyInteractionOrderPending);
     InterlockedExchange(&g_dirtyInteractionError, ERROR_IO_PENDING);
@@ -2085,7 +2162,7 @@ static int ArmDirtyInteractionOrderRestore(uintptr_t unityBase,
     uintptr_t expectedNPhaseCore, uintptr_t expectedEntries,
     uintptr_t expectedEntriesNext, uintptr_t expectedHash,
     uint32_t expectedEntriesCapacity, uint32_t expectedHashSize,
-    const DirtyInteractionKey* keys, uint32_t count,
+    const DirtyInteractionKey* keys, uint32_t count, uint32_t restoreMode,
     DirtyInteractionOrderReceipt* receipt) {
     if (!receipt) return 0;
     InitializeDirtyInteractionOrderReceipt(receipt, unityBase);
@@ -2102,6 +2179,8 @@ static int ArmDirtyInteractionOrderRestore(uintptr_t unityBase,
         expectedHashSize == 0 ||
         expectedHashSize > kMaximumDirtyHashSize ||
         (expectedHashSize & (expectedHashSize - 1)) != 0 ||
+        (restoreMode != DirtyInteractionRestoreExact &&
+            restoreMode != DirtyInteractionRestoreProjection) ||
         count > expectedEntriesCapacity ||
         (count != 0 && (!keys || !Readable(keys,
             count * sizeof(DirtyInteractionKey)))))
@@ -2131,6 +2210,10 @@ static int ArmDirtyInteractionOrderRestore(uintptr_t unityBase,
     g_dirtyInteractionOrderHashBefore = 0;
     g_dirtyInteractionOrderHashAfter =
         DirtyInteractionKeyOrderHash(g_dirtyInteractionKeys, count);
+    g_dirtyInteractionRestoreMode = restoreMode;
+    g_dirtyInteractionMatchedCount = 0;
+    g_dirtyInteractionCapturedOnlyCount = 0;
+    g_dirtyInteractionLiveOnlyCount = 0;
     InterlockedExchange(&g_dirtyInteractionResult,
         DirtyInteractionOrderPending);
     InterlockedExchange(&g_dirtyInteractionError, ERROR_IO_PENDING);
@@ -2159,6 +2242,10 @@ static int CancelDirtyInteractionOrder(uintptr_t unityBase,
         InterlockedExchange(&g_dirtyInteractionResult,
             DirtyInteractionOrderNotCaptured);
         InterlockedExchange(&g_dirtyInteractionError, ERROR_CANCELLED);
+        g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+        g_dirtyInteractionMatchedCount = 0;
+        g_dirtyInteractionCapturedOnlyCount = 0;
+        g_dirtyInteractionLiveOnlyCount = 0;
     }
     InitializeDirtyInteractionOrderReceipt(receipt, unityBase);
     return 1;
@@ -2194,6 +2281,10 @@ static int UninstallDirtyInteractionOrderHook(uintptr_t unityBase,
     g_dirtyInteractionTrampoline = 0;
     g_dirtyInteractionInstalled = false;
     g_dirtyInteractionUnityBase = 0;
+    g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
+    g_dirtyInteractionMatchedCount = 0;
+    g_dirtyInteractionCapturedOnlyCount = 0;
+    g_dirtyInteractionLiveOnlyCount = 0;
     InterlockedExchange(&g_dirtyInteractionAction,
         DirtyInteractionOrderIdle);
     if (trampoline) VirtualFree(trampoline, 0, MEM_RELEASE);
@@ -3785,10 +3876,12 @@ extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_restore
     uintptr_t expectedEntries, uintptr_t expectedEntriesNext,
     uintptr_t expectedHash, uint32_t expectedEntriesCapacity,
     uint32_t expectedHashSize, const DirtyInteractionKey* keys,
-    uint32_t count, DirtyInteractionOrderReceipt* receipt) {
+    uint32_t count, uint32_t restoreMode,
+    DirtyInteractionOrderReceipt* receipt) {
     return ArmDirtyInteractionOrderRestore(unityBase, expectedNPhaseCore,
         expectedEntries, expectedEntriesNext, expectedHash,
-        expectedEntriesCapacity, expectedHashSize, keys, count, receipt);
+        expectedEntriesCapacity, expectedHashSize, keys, count, restoreMode,
+        receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_cancel(

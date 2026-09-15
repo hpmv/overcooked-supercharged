@@ -35,6 +35,7 @@ struct DirtyInteractionOrderReceipt {
     uintptr_t unityBase, nphaseCore, set, entries, entriesNext, hash;
     uint32_t entriesCapacity, hashSize, count, action, captures, restores;
     uint32_t orderHashBefore, orderHashAfter, installed, armed;
+    uint32_t restoreMode, matchedCount, capturedOnlyCount, liveOnlyCount;
 };
 #pragma pack(pop)
 
@@ -42,7 +43,7 @@ static_assert(sizeof(ManifoldPoolReceipt) == 200,
     "Unexpected Win32 manifold-pool receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
-static_assert(sizeof(DirtyInteractionOrderReceipt) == 80,
+static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
     "Unexpected Win32 dirty-interaction receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
@@ -59,7 +60,8 @@ typedef int (__cdecl *DirtyCaptureCopy)(uintptr_t, DirtyInteractionKey*,
     uint32_t, DirtyInteractionOrderReceipt*);
 typedef int (__cdecl *DirtyRestoreArm)(uintptr_t, uintptr_t, uintptr_t,
     uintptr_t, uintptr_t, uint32_t, uint32_t,
-    const DirtyInteractionKey*, uint32_t, DirtyInteractionOrderReceipt*);
+    const DirtyInteractionKey*, uint32_t, uint32_t,
+    DirtyInteractionOrderReceipt*);
 typedef void (__thiscall *DirtyUpdate)(void*);
 
 static int failures = 0;
@@ -261,8 +263,8 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     uint8_t scene[0x4A5] = {};
     __declspec(align(16)) uint8_t storage[256] = {};
     __declspec(align(16)) uint8_t replacementStorage[512] = {};
-    uint8_t interactions[3][0x28] = {};
-    uintptr_t elements[6] = {};
+    uint8_t interactions[4][0x28] = {};
+    uintptr_t elements[8] = {};
     *reinterpret_cast<uintptr_t*>(nphase) =
         reinterpret_cast<uintptr_t>(scene);
     uint8_t* set = nphase + 0x44;
@@ -396,7 +398,7 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
         capturedReceipt.entries, capturedReceipt.entriesNext,
         capturedReceipt.hash, capturedReceipt.entriesCapacity,
-        capturedReceipt.hashSize, captured, 3, &receipt) == 1,
+        capturedReceipt.hashSize, captured, 3, 1, &receipt) == 1,
         "dirty foreign-nphase restore arms");
     update(foreignNphase);
     Check(status(imagePointer, &receipt) == 1 && receipt.result == 15 &&
@@ -416,7 +418,7 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
         capturedReceipt.entries, capturedReceipt.entriesNext,
         capturedReceipt.hash, capturedReceipt.entriesCapacity,
-        capturedReceipt.hashSize, captured, 3, &receipt) == 1,
+        capturedReceipt.hashSize, captured, 3, 1, &receipt) == 1,
         "dirty count-mismatch restore arms");
     update(nphase);
     Check(status(imagePointer, &receipt) == 1 && receipt.result == 15 &&
@@ -435,13 +437,15 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
         capturedReceipt.entries, capturedReceipt.entriesNext,
         capturedReceipt.hash, capturedReceipt.entriesCapacity,
-        capturedReceipt.hashSize, captured, 3, &receipt) == 1 &&
+        capturedReceipt.hashSize, captured, 3, 1, &receipt) == 1 &&
         receipt.result == 18, "dirty restore arms");
     update(nphase);
     receipt = {};
     Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
         receipt.restores == 1 && receipt.orderHashBefore !=
-        receipt.orderHashAfter, "dirty restore completes one-shot");
+        receipt.orderHashAfter && receipt.restoreMode == 1 &&
+        receipt.matchedCount == 3 && receipt.capturedOnlyCount == 0 &&
+        receipt.liveOnlyCount == 0, "dirty restore completes one-shot");
     Check(receipt.nphaseCore == capturedReceipt.nphaseCore &&
         receipt.entries == entriesAddress &&
         receipt.entriesNext == reinterpret_cast<uintptr_t>(next) &&
@@ -468,7 +472,7 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
         capturedReceipt.entries, capturedReceipt.entriesNext,
         capturedReceipt.hash, capturedReceipt.entriesCapacity,
-        capturedReceipt.hashSize, captured, 3, &receipt) == 1,
+        capturedReceipt.hashSize, captured, 3, 1, &receipt) == 1,
         "dirty mismatch restore arms");
     SetDirtyInteraction(interactions[1], vtable, 3,
         reinterpret_cast<uintptr_t>(&elements[1]),
@@ -487,6 +491,97 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
         next[2] == nextBefore[2] &&
         memcmp(hash, hashBefore, sizeof(hashBefore)) == 0,
         "dirty membership rejection is non-mutating");
+
+    // Projection mode permits a branch-local replacement without inventing
+    // a position for it. The new D entry remains at dense slot 1 while the A
+    // and B survivor slots are refilled in checkpoint-relative order.
+    entries[0] = reinterpret_cast<uintptr_t>(interactions[0]); // B
+    entries[1] = reinterpret_cast<uintptr_t>(interactions[1]); // D
+    entries[2] = reinterpret_cast<uintptr_t>(interactions[2]); // A
+    BuildDirtyHash(entries, 3, next, replacementCapacity, hash,
+        replacementHashSize);
+    receipt = {};
+    Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
+        capturedReceipt.entries, capturedReceipt.entriesNext,
+        capturedReceipt.hash, capturedReceipt.entriesCapacity,
+        capturedReceipt.hashSize, captured, 3, 2, &receipt) == 1 &&
+        receipt.result == 18 && receipt.restoreMode == 2,
+        "dirty projection restore arms explicitly");
+    update(nphase);
+    receipt = {};
+    Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
+        receipt.restores == 2 && receipt.restoreMode == 2 &&
+        receipt.matchedCount == 2 && receipt.capturedOnlyCount == 1 &&
+        receipt.liveOnlyCount == 1,
+        "dirty projection reports survivor accounting");
+    Check(entries[0] == reinterpret_cast<uintptr_t>(interactions[2]) &&
+        entries[1] == reinterpret_cast<uintptr_t>(interactions[1]) &&
+        entries[2] == reinterpret_cast<uintptr_t>(interactions[0]),
+        "dirty projection preserves current-only slot and orders survivors");
+    Check(DirtyHashValid(entries, 3, next, hash, replacementHashSize),
+        "dirty projection rebuilds valid pointer hash chains");
+    uintptr_t projectedOneShot[3] = {entries[0], entries[1], entries[2]};
+    update(nphase);
+    Check(Same(entries, projectedOneShot, 3),
+        "dirty projection is dormant after one call");
+
+    // A larger live set keeps its one current-only slot while all three
+    // checkpoint interactions survive. This exercises count growth and a
+    // replacement backing allocation in projection mode.
+    SetDirtyInteraction(interactions[3], vtable, 3,
+        reinterpret_cast<uintptr_t>(&elements[4]),
+        reinterpret_cast<uintptr_t>(&elements[5])); // C
+    entries[0] = reinterpret_cast<uintptr_t>(interactions[3]); // C
+    entries[1] = reinterpret_cast<uintptr_t>(interactions[1]); // D
+    entries[2] = reinterpret_cast<uintptr_t>(interactions[0]); // B
+    entries[3] = reinterpret_cast<uintptr_t>(interactions[2]); // A
+    *reinterpret_cast<uint32_t*>(set + 0x1C) = 4;
+    *reinterpret_cast<uint32_t*>(set + 0x24) = 4;
+    BuildDirtyHash(entries, 4, next, replacementCapacity, hash,
+        replacementHashSize);
+    receipt = {};
+    Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
+        capturedReceipt.entries, capturedReceipt.entriesNext,
+        capturedReceipt.hash, capturedReceipt.entriesCapacity,
+        capturedReceipt.hashSize, captured, 3, 2, &receipt) == 1,
+        "dirty projection with live addition arms");
+    update(nphase);
+    Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
+        receipt.restores == 3 && receipt.count == 4 &&
+        receipt.matchedCount == 3 && receipt.capturedOnlyCount == 0 &&
+        receipt.liveOnlyCount == 1,
+        "dirty projection accepts a larger live set");
+    Check(entries[0] == reinterpret_cast<uintptr_t>(interactions[2]) &&
+        entries[1] == reinterpret_cast<uintptr_t>(interactions[1]) &&
+        entries[2] == reinterpret_cast<uintptr_t>(interactions[0]) &&
+        entries[3] == reinterpret_cast<uintptr_t>(interactions[3]) &&
+        DirtyHashValid(entries, 4, next, hash, replacementHashSize),
+        "dirty projection orders survivors around a live-only slot");
+
+    // A smaller live set contains A and B only. Missing checkpoint C is
+    // reported, while the survivor slots still recover A-before-B order.
+    entries[0] = reinterpret_cast<uintptr_t>(interactions[0]); // B
+    entries[1] = reinterpret_cast<uintptr_t>(interactions[2]); // A
+    *reinterpret_cast<uint32_t*>(set + 0x1C) = 2;
+    *reinterpret_cast<uint32_t*>(set + 0x24) = 2;
+    BuildDirtyHash(entries, 2, next, replacementCapacity, hash,
+        replacementHashSize);
+    receipt = {};
+    Check(armRestore(imagePointer, capturedReceipt.nphaseCore,
+        capturedReceipt.entries, capturedReceipt.entriesNext,
+        capturedReceipt.hash, capturedReceipt.entriesCapacity,
+        capturedReceipt.hashSize, captured, 3, 2, &receipt) == 1,
+        "dirty projection with checkpoint deletion arms");
+    update(nphase);
+    Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
+        receipt.restores == 4 && receipt.count == 2 &&
+        receipt.matchedCount == 2 && receipt.capturedOnlyCount == 1 &&
+        receipt.liveOnlyCount == 0,
+        "dirty projection accepts a smaller live set");
+    Check(entries[0] == reinterpret_cast<uintptr_t>(interactions[2]) &&
+        entries[1] == reinterpret_cast<uintptr_t>(interactions[0]) &&
+        DirtyHashValid(entries, 2, next, hash, replacementHashSize),
+        "dirty projection orders a checkpoint subset");
 
     receipt = {};
     Check(uninstall(imagePointer, &receipt) == 1 && receipt.result == 1,
@@ -513,7 +608,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 10 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 11 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -633,7 +728,7 @@ int main(int argc, char** argv) {
         library, "oc2_dirty_interaction_order_uninstall"));
     DirtyAction cancelDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_cancel"));
-    Check(version && version() == 10, "API version");
+    Check(version && version() == 11, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -666,7 +761,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 10 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 11 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
