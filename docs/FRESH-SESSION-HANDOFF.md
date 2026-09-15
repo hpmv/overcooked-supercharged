@@ -1,5 +1,54 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Current native-contact milestone (2026-09-15, pair activation order):**
+> the first residual chef-46 physics divergence is now localized to the order
+> in which pre-existing PhysX shape interactions recreate contact managers on
+> the first simulation after rewind. The valid split-ring evidence is
+> `artifacts/framework-migration/story11-native-narrowphase-v13-live-r4/second-delivery-f1045-native-narrowphase-r2/`;
+> `summary.json` SHA-256 is
+> `E354D662732B834DD4981634D28098BE33C45897BB9B3307A29BB63A52D6AA14`.
+> It preserves the exact f1045 checkpoint, identical second delivery, score,
+> order/food/clocks, input SHA-256, and Animator semantics. Only chef 46 differs
+> at the endpoint (`0.0404009223` original versus `0.0100009441` replay).
+>
+> Both branches enter the first native simulation with chef 46 at the exact
+> same pose and create the same 15 semantic contact pairs. They also pop the
+> exact same restored contact-manager free-stack sequence and pool indices:
+> `[1,5,10,7,2,14,12,15,13,4,0,11,9,8,6]`. The causal difference is that the
+> pair sequence is permuted, so six pairs receive different pool indices.
+> Chef 46's two static-box contacts swap pool 9 and pool 11. PhysX subsequently
+> traverses active managers by ascending pool index; the supporting constraint
+> follows the reassigned slot, and chef 46's first native writeback is already
+> different (`0.0100003481` original versus `0.05000025` replay). This rules
+> out managed movement order and rules out a defect in the restored LIFO free
+> stack by itself.
+>
+> PhysX 3.3.3 source identifies the leading hidden state as
+> `Sc::NPhaseCore::mDirtyInteractions`, a compacting
+> `Ps::CoalescedHashSet<CoreInteraction*>`. `updateDirtyInteractions()` walks
+> its dense entry array in order; each pair's `updateState()` may call
+> `ShapeInstancePairLL::createManager()`, assigning transform-cache IDs and a
+> free contact-manager slot in that order. The rewind stack restores the free
+> pools but not this dirty-interaction ordering. Active manifold contents may
+> still be a later parity issue, but they are downstream of the already-proved
+> pair-to-manager permutation.
+>
+> The diagnostic stack now loads the native trace dormant, hands the live
+> `PxsContext` from RigidbodyActorRebuild to the tracer without overlapping
+> hooks, then reactivates restoration against the explicit context. The split
+> trace harness also restores the bridge input fence before reading the
+> warp-only ring, preventing an accidental physics step. Python input-probe
+> tests pass 35 checks.
+>
+> **Next:** resolve the stripped UnityPlayer offset and exact in-memory layout
+> of `NPhaseCore::mDirtyInteractions`, then add a read-only entry probe for
+> `updateDirtyInteractions()` to prove its dense pointer order is the observed
+> contact-manager creation order. If proved, capture this checkpoint-owned
+> container order and restore it immediately before the first replay
+> `updateDirtyInteractions()` call. Do not force a route-specific future pair
+> mapping: alternate post-checkpoint inputs must remain free to change contact
+> membership. Search remains disabled.
+
 > **Current physics-localization milestone (2026-09-15, paired ground/force
 > trace):** the remaining second-delivery continuation mismatch is now proved
 > to begin inside Unity/PhysX simulation rather than captured managed chef

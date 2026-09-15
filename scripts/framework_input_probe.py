@@ -1304,9 +1304,13 @@ def main():
         restored_native = native_observation('restored-food')
         require_native_boundary(restored_native)
         if args.split_native_trace_around_warp:
+            # The controller settles paused after warp, but the preceding arm
+            # intentionally removed the bridge input fence. Native trace reads
+            # are authoring hot-calls, so restore that fence explicitly before
+            # reading or clearing the isolated warp ring.
+            call('bridge', {'command': 'pause'}, 'native-trace-split-warp-read-fence')
             save_split_trace('native-trace-warp.json')
             split_trace_warp_pending = False
-            call('bridge', {'command': 'pause'}, 'native-trace-split-reactivate-fence')
             call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
                             'operation': 'clear', 'args': {}}, 'native-trace-split-clear')
         mark_native_trace(250, restored['frame'], 'native-trace-after-warp')
@@ -1462,6 +1466,7 @@ def main():
                     contact_pool_cleanup_needed = False
                 if args.split_native_trace_around_warp and split_trace_warp_pending:
                     try:
+                        call('bridge', {'command': 'pause'}, 'finally-native-trace-warp-failure-fence')
                         save_split_trace('native-trace-warp-failure.json')
                     except Exception as trace_error:
                         summary['nativeTraceFailureCaptureError'] = str(trace_error)
