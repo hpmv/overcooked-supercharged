@@ -16,7 +16,7 @@ foreach ($tasFile in @($tasExe,(Join-Path $tasBuild 'SuperchargedPatch.dll'),(Jo
 $tasAllowed=@('Oc2Tas.dll','SuperchargedPatch.dll','Thrift.dll','Newtonsoft.Json.dll','System.Xml.dll')
 $tasUnexpected=@(Get-ChildItem -LiteralPath $tasPlugins -Recurse -Filter '*.dll' | Where-Object { $_.Name -notin $tasAllowed })
 if ($tasUnexpected.Count) { throw ('Unexpected lab plugins: '+($tasUnexpected.FullName -join ', ')) }
-$tasPlan=[ordered]@{runtime=$tasExe;profileRoot=$tasRun;port=$Port;bridgePort=$BridgePort;fullscreen=$false;width=1280;height=720;minimized=[bool]$Minimized;backgroundPrimeRequested=[bool]($Minimized -and -not $SkipBackgroundPrime);upstream='49701883ff20755daddfb819d54710c91a6d5486'}
+$tasPlan=[ordered]@{runtime=$tasExe;profileRoot=$tasRun;port=$Port;bridgePort=$BridgePort;fullscreen=$false;width=1280;height=720;minimized=[bool]$Minimized;launchShowWindow=if($Minimized){'SW_SHOWMINNOACTIVE'}else{'Normal'};backgroundPrimeRequested=[bool]($Minimized -and -not $SkipBackgroundPrime);upstream='49701883ff20755daddfb819d54710c91a6d5486'}
 if ($PlanOnly) { [pscustomobject]$tasPlan; return }
 New-Item -ItemType Directory -Force -Path $tasRun,(Join-Path $tasRun 'artifacts') | Out-Null
 $tasOldPlugin=Join-Path $tasPlugins 'Oc2Tas.dll'
@@ -51,8 +51,68 @@ $env:OC2SC_ROOT=$tasRun
 $env:OC2SC_PORT=$Port.ToString()
 $env:OC2SC_BRIDGE_PORT=$BridgePort.ToString()
 $tasArguments=@('-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',(Join-Path $tasRun 'artifacts\player.log'))
-$tasWindowStyle=if ($Minimized) { 'Minimized' } else { 'Normal' }
-$tasProcess=Start-Process -FilePath $tasExe -WorkingDirectory $tasGame -ArgumentList $tasArguments -WindowStyle $tasWindowStyle -PassThru
+if($Minimized) {
+ # ProcessWindowStyle.Minimized maps to SW_SHOWMINIMIZED, which Windows may
+ # activate. Use the explicit non-activating startup mode so a fresh game can
+ # never take keyboard focus merely because the previous foreground process
+ # launched it.
+ Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class Oc2MinimizedNoActivateProcess
+{
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StartupInfo
+    {
+        public uint cb;
+        public IntPtr reserved, desktop, title;
+        public uint x, y, xSize, ySize, xCountChars, yCountChars, fillAttribute, flags;
+        public ushort showWindow, reserved2Count;
+        public IntPtr reserved2, stdInput, stdOutput, stdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInformation
+    {
+        public IntPtr process, thread;
+        public uint processId, threadId;
+    }
+
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern bool CreateProcessW(string applicationName, StringBuilder commandLine,
+        IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles,
+        uint creationFlags, IntPtr environment, string currentDirectory,
+        ref StartupInfo startupInfo, out ProcessInformation processInformation);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    public static int Start(string applicationName, string commandLine, string currentDirectory)
+    {
+        StartupInfo startup = new StartupInfo();
+        startup.cb = (uint)Marshal.SizeOf(typeof(StartupInfo));
+        startup.flags = 0x00000001u; // STARTF_USESHOWWINDOW
+        startup.showWindow = 7;      // SW_SHOWMINNOACTIVE
+        ProcessInformation process;
+        if (!CreateProcessW(applicationName, new StringBuilder(commandLine), IntPtr.Zero,
+                IntPtr.Zero, false, 0, IntPtr.Zero, currentDirectory, ref startup, out process))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        CloseHandle(process.thread);
+        CloseHandle(process.process);
+        return checked((int)process.processId);
+    }
+}
+'@
+ $tasQuotedArguments=@($tasArguments | ForEach-Object {'"'+($_ -replace '"','\"')+'"'})
+ $tasCommandLine='"'+$tasExe+'" '+($tasQuotedArguments -join ' ')
+ $tasPid=[Oc2MinimizedNoActivateProcess]::Start($tasExe,$tasCommandLine,$tasGame)
+ $tasProcess=Get-Process -Id $tasPid -ErrorAction Stop
+} else {
+ $tasProcess=Start-Process -FilePath $tasExe -WorkingDirectory $tasGame -ArgumentList $tasArguments -WindowStyle Normal -PassThru
+}
 $tasPlan.pid=$tasProcess.Id
 $tasPlan.startedUtc=[DateTime]::UtcNow.ToString('o')
 $tasPlan.startTicks=$tasProcess.StartTime.ToUniversalTime().Ticks

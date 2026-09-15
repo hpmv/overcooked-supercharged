@@ -1,5 +1,27 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Background-launch hardening (2026-09-15, v14):** the earlier no-activation
+> core removed every explicit request to foreground Overcooked, but the launcher
+> still used `.NET ProcessWindowStyle.Minimized`, which maps to Windows
+> `SW_SHOWMINIMIZED` and is permitted to activate the child. This was exposed
+> after a clean relaunch: the window was iconic but remained the OS foreground
+> owner, so the strict background primer correctly stopped.
+>
+> Minimized launches now use `CreateProcessW` with
+> `STARTF_USESHOWWINDOW/SW_SHOWMINNOACTIVE`. As a second bounded defense, an
+> explicit authoring `window=minimize` request releases foreground ownership to
+> the Windows shell only if Unity still owns it after minimization; it never
+> changes another application's foreground. No gameplay input or ordinary game
+> path calls this authoring-only window control. Fresh PID 8708 launched and
+> passed the primer in 0.063 seconds with `foregroundOwned=false`,
+> `foregroundReleaseAttempted=false`, and no game activation request. Evidence:
+> `framework-run/artifacts/background-prime-8708.json`. Core:
+> `artifacts/framework-build-focus-v14-release-foreground/SuperchargedPatch.dll`,
+> SHA-256
+> `A4B50DB0CAF564CFCED075DADEA6109CA14F3A0C2D7C16A9310954D0C7DE960F`.
+> The Story 1-1 parity modules were rebuilt against this exact core. No user
+> focus is needed for subsequent tracing or rewind probes.
+
 > **Current native-contact milestone (2026-09-15, pair activation order):**
 > the first residual chef-46 physics divergence is now localized to the order
 > in which pre-existing PhysX shape interactions recreate contact managers on

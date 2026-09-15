@@ -29,12 +29,14 @@ def focus_view(response):
         "backgroundTasInput": bridge.get("backgroundTasInput"),
         "minimized": window.get("minimized"),
         "foregroundOwned": window.get("foregroundOwned"),
+        "foregroundReleaseAttempted": window.get("foregroundReleaseAttempted", False),
+        "foregroundReleaseSucceeded": window.get("foregroundReleaseSucceeded", False),
         "lastRequest": window.get("lastRequest"),
     }
     if type(view["unityFrame"]) is not int or any(
             type(view[name]) is not bool for name in (
                 "applicationFocused", "runInBackground", "backgroundTasInput", "minimized",
-                "foregroundOwned")):
+                "foregroundOwned", "foregroundReleaseAttempted", "foregroundReleaseSucceeded")):
         raise RuntimeError("Bridge native window/focus diagnostics have an invalid shape")
     return view
 
@@ -67,6 +69,9 @@ def prime_background(bridge, timeout):
     return {
         "before": before,
         "activationAttempted": False,
+        "gameActivationAttempted": False,
+        "foregroundReleaseAttempted": minimized_command["foregroundReleaseAttempted"],
+        "foregroundReleaseSucceeded": minimized_command["foregroundReleaseSucceeded"],
         "minimizedCommand": minimized_command,
         "backgroundStable": background,
     }
@@ -87,8 +92,8 @@ def main() -> int:
     report = {
         "passed": False,
         "classification": (
-            "Verified minimized non-foreground game window with no activation request, native gameplay "
-            "input, level load, simulation advance, or rewind"
+            "Verified minimized non-foreground game window with no game-activation request, native "
+            "gameplay input, level load, simulation advance, or rewind"
         ),
     }
     started = time.monotonic()

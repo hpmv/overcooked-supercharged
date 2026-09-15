@@ -9,13 +9,16 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from framework_prime_background import focus_view, prime_background
 
 
-def response(frame, focused, minimized, request=None, enabled=True, foreground=False):
+def response(frame, focused, minimized, request=None, enabled=True, foreground=False,
+             release_attempted=False, release_succeeded=False):
     return {"bridge": {
         "unityFrame": frame,
         "applicationFocused": focused,
         "runInBackground": enabled,
         "backgroundTasInput": enabled,
         "nativeWindow": {"minimized": minimized, "foregroundOwned": foreground,
+                         "foregroundReleaseAttempted": release_attempted,
+                         "foregroundReleaseSucceeded": release_succeeded,
                          "lastRequest": request},
     }}
 
@@ -44,6 +47,21 @@ class BackgroundPrimeTest(unittest.TestCase):
         self.assertTrue(proof["backgroundStable"]["applicationFocused"])
         self.assertEqual(bridge.requests[1], {"command": "window", "mode": "minimize"})
         self.assertNotIn({"command": "window", "mode": "activate"}, bridge.requests)
+
+    def test_records_authoring_minimize_releasing_stale_game_foreground(self):
+        bridge = FakeBridge([
+            response(20, True, True, foreground=True),
+            response(21, True, True, "minimize", release_attempted=True,
+                     release_succeeded=True),
+            response(22, True, True, "minimize", release_attempted=True,
+                     release_succeeded=True),
+        ])
+        with patch("framework_prime_background.time.sleep"):
+            proof = prime_background(bridge, 1)
+        self.assertFalse(proof["gameActivationAttempted"])
+        self.assertTrue(proof["foregroundReleaseAttempted"])
+        self.assertTrue(proof["foregroundReleaseSucceeded"])
+        self.assertFalse(proof["backgroundStable"]["foregroundOwned"])
 
     def test_disabled_background_contract_is_rejected_before_window_mutation(self):
         bridge = FakeBridge([response(1, False, True, enabled=False)])
