@@ -5,6 +5,9 @@ EXPORTS
     oc2_rigidbody_rebuild_batch
     oc2_rigidbody_actor_shapes
     oc2_rigidbody_set_global_pose
+    oc2_rigidbody_capture_body2world
+    oc2_rigidbody_restore_body2world
+    oc2_rigidbody_restore_wake_state
     oc2_rigidbody_get_kinematic_target
     oc2_rigidbody_set_mass_frame
     oc2_rigidbody_capture_shape_poses

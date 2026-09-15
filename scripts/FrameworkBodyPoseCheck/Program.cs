@@ -323,6 +323,63 @@ boundedPlateauModule.ConfigureNativePoseFixture(fixture.obj.body,(attempt,inputP
 Reject(()=>boundedPlateauModule.RestoreExistingActorPoseFixture(plateauRow),"equal-size native joint-pose cycle remains bounded and requires an exact readback");
 Check(boundedPlateauModule.NativePoseFixtureAttempts==5,"equal-size native joint-pose cycle stops at the dedicated five-assignment cap");
 boundedPlateauModule.Dispose();
+fixture=RotationFixture();var body2WorldModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+var body2WorldRow=fixture.snapshot[0];body2WorldModule.ConfigureNativeBody2WorldFixture(fixture.obj.body,"exact");
+body2WorldModule.RestoreCheckpointBody2WorldFixture(body2WorldRow);
+NativeBodyPoseCheckpoint.VerifyRestored(fixture.snapshot);
+var body2WorldStatus=(Dictionary<string,object>)body2WorldModule.Invoke("status",new());
+var body2WorldRecords=(object[])body2WorldStatus["nativeBody2WorldRestores"];
+var expectedBody2WorldCaptureSize=IntPtr.Size==4?404:528;
+var expectedBody2WorldRestoreSize=IntPtr.Size==4?404:440;
+Check(body2WorldModule.NativeBody2WorldCaptureReceiptSize==expectedBody2WorldCaptureSize&&
+ body2WorldModule.NativeBody2WorldRestoreReceiptSize==expectedBody2WorldRestoreSize,
+ "native body2World managed receipt sizes match the field layout for the active pointer ABI");
+Check(body2WorldModule.NativeBody2WorldFixtureCalls==1&&body2WorldModule.NativePoseFixtureAttempts==0&&
+ body2WorldRecords.Length==1&&(bool)((Dictionary<string,object>)body2WorldRecords[0])["exact"],
+ "exact native body2World restore bypasses the lossy public-pose inverse and records one verified receipt");
+body2WorldModule.Dispose();
+foreach(var failure in new[]{"control","mass","simulation","readback","sleep","motion"}) {
+ fixture=RotationFixture();body2WorldModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+ body2WorldRow=fixture.snapshot[0];body2WorldModule.ConfigureNativeBody2WorldFixture(fixture.obj.body,failure);
+ Reject(()=>body2WorldModule.RestoreCheckpointBody2WorldFixture(body2WorldRow),
+  "native body2World restore rejects "+failure+" side effects");
+ Check(body2WorldModule.NativeBody2WorldFixtureCalls==1,
+  "failed native body2World "+failure+" restore remains bounded to one call");
+ body2WorldModule.Dispose();
+}
+fixture=RotationFixture();NativeBodyPoseCheckpoint.Restore(fixture.snapshot);NativeBodyPoseCheckpoint.VerifyRestored(fixture.snapshot);
+var wakeModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();var wakeRow=fixture.snapshot[0];
+const uint halfWakeCounterBits=0x3F000000;fixture.obj.body.sleeping=true;
+wakeModule.ConfigureNativeWakeStateFixture(fixture.obj.body,"exact",halfWakeCounterBits);
+wakeModule.RestoreCheckpointWakeStateFixture(wakeRow,halfWakeCounterBits);
+var wakeStatus=(Dictionary<string,object>)wakeModule.Invoke("status",new());
+var wakeRecords=(object[])wakeStatus["nativeWakeStateRestores"];
+Check(wakeModule.NativeWakeStateRestoreReceiptSize==(IntPtr.Size==4?76:96),
+ "native wake-state managed receipt size matches the active pointer ABI");
+Check(wakeModule.NativeKinematicTargetReceiptSize==(IntPtr.Size==4?84:104),
+ "native kinematic-target managed receipt size matches the active pointer ABI");
+Check(!fixture.obj.body.IsSleeping()&&fixture.obj.body.WakeCalls==0&&wakeModule.NativeWakeStateFixtureCalls==1&&
+ (uint)((Dictionary<string,object>)wakeRecords[0])["callMask"]==1&&
+ (bool)((Dictionary<string,object>)wakeRecords[0])["exact"],
+ "positive checkpoint wake counter restores a sleeping body through one exact native setter receipt");
+wakeModule.Dispose();
+fixture=RotationFixture();NativeBodyPoseCheckpoint.Restore(fixture.snapshot);wakeRow=fixture.snapshot[0];
+wakeModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();fixture.obj.body.sleeping=true;
+wakeModule.ConfigureNativeWakeStateFixture(fixture.obj.body,"exact",0);
+wakeModule.RestoreCheckpointWakeStateFixture(wakeRow,0);
+wakeRecords=(object[])((Dictionary<string,object>)wakeModule.Invoke("status",new()))["nativeWakeStateRestores"];
+Check((uint)((Dictionary<string,object>)wakeRecords[0])["callMask"]==3,
+ "zero checkpoint wake counter uses the fenced wake-then-zero-counter sequence");
+wakeModule.Dispose();
+foreach(var failure in new[]{"counter","sleep","body-sim","mask","motion"}) {
+ fixture=RotationFixture();NativeBodyPoseCheckpoint.Restore(fixture.snapshot);wakeRow=fixture.snapshot[0];
+ wakeModule=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();fixture.obj.body.sleeping=true;
+ wakeModule.ConfigureNativeWakeStateFixture(fixture.obj.body,failure,halfWakeCounterBits);
+ Reject(()=>wakeModule.RestoreCheckpointWakeStateFixture(wakeRow,halfWakeCounterBits),
+  "native wake-state restore rejects "+failure+" side effects");
+ Check(wakeModule.NativeWakeStateFixtureCalls==1,"failed native wake-state "+failure+" restore remains bounded");
+ wakeModule.Dispose();
+}
 EntitySerialisationRegistry.m_EntitiesList._items.Clear();var proxyProbe=Add(121).m_GameObject;
 proxyProbe.objectContainer=new ObjectContainer{gameObject=proxyProbe};proxyProbe.body.isKinematic=true;
 proxyProbe.body.centerOfMass=new(0,.05000001f,0);proxyProbe.body.inertiaTensor=new(0,.08166667f,0);

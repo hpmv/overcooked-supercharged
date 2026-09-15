@@ -2,8 +2,10 @@
 
 The native trace trampolines revision-lock the original Unity entry bytes, so
 they must be installed before any later authoring module can Harmony-patch a
-traced method.  This is a diagnostic parity fixture; the trace is read-only and
-search remains disabled.
+traced method. Only the non-conflicting Unity lifecycle and PhysicsManager
+simulation hooks are enabled: BodyRestore independently revision-checks and
+reads the lower PhysX pose/kinematic state. This is a diagnostic parity fixture;
+the trace is read-only and search remains disabled.
 """
 from pathlib import Path
 
@@ -11,24 +13,29 @@ import framework_load_story11_r47_parity_environment as loader
 
 
 loader.STACK = (
-    ("native-physics-trace", "NativePhysicsTrace-r8ag-mass-diagonalization-core-dev5", "trace"),
-    ("level-session", "LevelSession-r2-core-dev5", None),
-    ("scripted-round", "ScriptedRound-r2-core-dev5", {}),
-    ("registry-observer", "RegistryObserver-r2-core-dev5", None),
-    ("inspection", "Inspection-r1-core-dev5", None),
-    ("world-sync-cache", "WorldSyncCache-r13n-logical-rest-clock-core-dev5", {}),
-    ("local-sync-bypass", "LocalSyncBypass-r1-core-dev5", {}),
-    ("chef-pause-pose", "ChefPausePose-r4-core-dev5", {}),
-    ("physics-sync-after-restore", "PhysicsSyncAfterRestore-r13-core-dev5", {}),
-    ("rigidbody-motion-target", "RigidbodyMotionTarget-r1-core-dev5", {}),
-    ("chef-movement-history-checkpoint", "ChefMovementHistoryCheckpoint-r3-core-dev5", {}),
-    ("rigidbody-actor-rebuild", "RigidbodyActorRebuild-r13z-manifold-pool-history-core-dev5", "actor"),
-    ("resume-phase", "ResumePhase-r1bc-core-dev5", {}),
-    ("chef-animator-checkpoint", "ChefAnimatorCheckpoint-r53b-core-dev5", "animator"),
-    ("animator-checkpoint-inspector", "AnimatorCheckpointInspector-r25b-update-zero-probe-core-dev5", None),
-    ("body-restore", "BodyRestore-r33-surviving-shape-state-rebind-core-dev5", "body"),
-    ("delivery-fade-checkpoint", "DeliveryFadeCheckpoint-r10k-persistent-backward-history-core-dev5", {}),
-    ("round-end-checkpoint", "RoundEndCheckpoint-dev5", None),
+    ("native-physics-trace", "NativePhysicsTrace-r8ag-mass-diagonalization-core-bg1", "trace"),
+    ("level-session", "LevelSession-r2-core-bg1", None),
+    ("scripted-round", "ScriptedRound-r2-core-bg1", {}),
+    ("registry-observer", "RegistryObserver-r2-core-bg1", None),
+    ("inspection", "Inspection-r1-core-bg1", None),
+    ("world-sync-cache", "WorldSyncCache-r13n-logical-rest-clock-core-bg1", {}),
+    ("local-sync-bypass", "LocalSyncBypass-r1-core-bg1", {}),
+    ("chef-pause-pose", "ChefPausePose-r4-core-bg1", {}),
+    # Activate only after fresh-scene startup settling, via
+    # framework_activate_authoring_physics_pause.py.
+    ("authoring-physics-pause-gate", "AuthoringPhysicsPauseGate-r2-core-bg1", None),
+    ("physics-sync-after-restore", "PhysicsSyncAfterRestore-r13-core-bg1", {}),
+    ("rigidbody-motion-target", "RigidbodyMotionTarget-r1-core-bg1", {}),
+    ("chef-movement-history-checkpoint", "ChefMovementHistoryCheckpoint-r3-core-bg1", {}),
+    ("rigidbody-actor-rebuild", "RigidbodyActorRebuild-r13z-manifold-pool-history-core-bg1", "actor"),
+    ("resume-phase", "ResumePhase-r1bc-core-bg1", {}),
+    ("chef-animator-checkpoint", "ChefAnimatorCheckpoint-r53b-core-bg1", "animator"),
+    ("animator-checkpoint-inspector", "AnimatorCheckpointInspector-r25b-update-zero-probe-core-bg1", None),
+    # Keep the startup-proven r44b module through scene construction. Diagnostic
+    # revisions are hot-loaded only after Story 1-1 has settled.
+    ("body-restore", "BodyRestore-r44b-corrected-lifecycle-post-maintenance-core-bg1", "body"),
+    ("delivery-fade-checkpoint", "DeliveryFadeCheckpoint-r10k-persistent-backward-history-core-bg1", {}),
+    ("round-end-checkpoint", "RoundEndCheckpoint-dev5-core-bg1", None),
 )
 
 loader.NATIVE = {
@@ -45,10 +52,15 @@ loader.NATIVE = {
         "5E207E27B0E2929A5534334C1947DA4A77B82CE439915F72D969535936A55D85",
     ),
     "body": (
-        Path("artifacts/native-rigidbody-rebuild-r10-shape-geometry-build1/Oc2NativeRigidbodyRebuild.r10.dll"),
-        "C8C08A88DB1DC4A03D7A20FDB2F2F24E1C3C782B724F9E4F59229E06801AEBCF",
+        Path("framework/artifacts/native-rigidbody-rebuild-r16-corrected-lifecycle-receipt-cmake1/Oc2NativeRigidbodyRebuild.dll"),
+        "DB41115017649D16E14A91093A3D00EADAE4B9897B11940ADE4209B8BE539664",
     ),
 }
+
+# Mask 1: Unity Rigidbody lifecycle/MovePosition/set_isKinematic.
+# Mask 8: PhysicsManager simulation boundary. Avoid mask 4 because its PhysX
+# pose hooks intentionally change entry bytes revision-checked by BodyRestore.
+loader.NATIVE_OPTIONS = {"trace": {"mask": 9}}
 
 loader.CLASSIFICATION = (
     "Pinned local Story 1-1 dev5 rewind-parity setup with read-only native physics trace; no search"

@@ -55,6 +55,13 @@ static uint32_t OrderHash(const uintptr_t* values, uint32_t count) {
     return hash;
 }
 
+static uint32_t PointerIndex(const uintptr_t* values, uint32_t count,
+    uintptr_t target) {
+    for (uint32_t i = 0; i < count; ++i)
+        if (values[i] == target) return i;
+    return 0xFFFFFFFFu;
+}
+
 #pragma pack(push, 8)
 struct RebuildReceipt {
     uint32_t apiVersion;
@@ -155,6 +162,163 @@ struct SetGlobalPoseReceipt {
     uintptr_t actor;
     RigidPose pose;
 };
+
+// The public PxRigidDynamic pose is a rounded composition of Scb::Body's
+// body2World and body2Actor transforms.  Preserve both operands so rewind can
+// reconstruct a checkpoint that is not necessarily in setGlobalPose's
+// float32 image.
+struct Body2WorldCaptureReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t rigidbody;
+    uintptr_t actor;
+    uintptr_t scene;
+    uint32_t controlState;
+    uint32_t bodyBufferFlags;
+    uint32_t simulationRunning;
+    uint32_t physicsBuffering;
+    RigidPose actorPose;
+    RigidPose body2Actor;
+    RigidPose bufferedBody2World;
+    RigidPose coreBody2World;
+    uintptr_t bodySim;
+    uint32_t wakeCounterBufferedBits;
+    uint32_t wakeCounterCoreBits;
+    uint32_t bufferedIsSleeping;
+    uint32_t bodySimActive;
+    uintptr_t bodyCore;
+    uintptr_t bodyCoreBodySim;
+    uint32_t bodyCoreFlags;
+    uintptr_t simStateData;
+    uint32_t simStateTargetValid;
+    uintptr_t interactionScene;
+    uintptr_t scScene;
+    uint32_t sceneArrayIndex;
+    uint32_t bodySimInternalFlags;
+    uint32_t velocityModState;
+    uint32_t islandHook;
+    uintptr_t activeBodiesData;
+    uint32_t activeBodiesCount;
+    uint32_t activeBodiesCapacity;
+    uint32_t activeTwoWayStart;
+    uintptr_t activeBodyAtSceneIndex;
+    uint32_t activeBodiesHash;
+    uintptr_t islandManager;
+    uintptr_t islandNodeData;
+    uintptr_t islandNodeOwner;
+    uint32_t islandNodeIslandId;
+    uint32_t islandNodeFlags;
+    uintptr_t kinematicBitmap;
+    uintptr_t kinematicChangeBitmap;
+    uintptr_t notReadyBitmap;
+    uintptr_t notReadyChangeBitmap;
+    uintptr_t kinematicBitmapMap;
+    uintptr_t kinematicChangeBitmapMap;
+    uintptr_t notReadyBitmapMap;
+    uintptr_t notReadyChangeBitmapMap;
+    uint32_t kinematicBitmapWordCount;
+    uint32_t kinematicChangeBitmapWordCount;
+    uint32_t notReadyBitmapWordCount;
+    uint32_t notReadyChangeBitmapWordCount;
+    uint32_t kinematicBitmapWord;
+    uint32_t kinematicChangeBitmapWord;
+    uint32_t notReadyBitmapWord;
+    uint32_t notReadyChangeBitmapWord;
+    uint32_t kinematicBitmapBit;
+    uint32_t kinematicChangeBitmapBit;
+    uint32_t notReadyBitmapBit;
+    uint32_t notReadyChangeBitmapBit;
+    uint32_t islandManagerFlags;
+    uintptr_t sleepBodiesData;
+    uint32_t sleepBodiesCount;
+    uint32_t sleepBodiesCapacity;
+    uint32_t sleepBodiesHash;
+    uint32_t sleepBodiesIndex;
+    uintptr_t wokeBodiesData;
+    uint32_t wokeBodiesCount;
+    uint32_t wokeBodiesCapacity;
+    uint32_t wokeBodiesHash;
+    uint32_t wokeBodiesIndex;
+    uint32_t wokeBodyListValid;
+    uint32_t sleepBodyListValid;
+    uint32_t lifecycleStable;
+};
+
+struct Body2WorldRestoreReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t rigidbody;
+    uintptr_t actor;
+    uintptr_t sceneBefore;
+    uintptr_t sceneAfter;
+    uintptr_t apiScene;
+    uint32_t dynamicTimestampBefore;
+    uint32_t dynamicTimestampAfter;
+    uint32_t controlStateBefore;
+    uint32_t controlStateAfter;
+    uint32_t bodyBufferFlagsBefore;
+    uint32_t bodyBufferFlagsAfter;
+    uint32_t simulationRunningBefore;
+    uint32_t simulationRunningAfter;
+    uint32_t physicsBufferingBefore;
+    uint32_t physicsBufferingAfter;
+    uint32_t changed;
+    RigidPose actorPoseBefore;
+    RigidPose actorPoseTarget;
+    RigidPose actorPoseAfter;
+    RigidPose body2ActorBefore;
+    RigidPose body2ActorAfter;
+    RigidPose bufferedBody2WorldBefore;
+    RigidPose coreBody2WorldBefore;
+    RigidPose body2WorldTarget;
+    RigidPose bufferedBody2WorldAfter;
+    RigidPose coreBody2WorldAfter;
+    uintptr_t bodySimBefore;
+    uintptr_t bodySimAfter;
+    uint32_t wakeCounterBufferedBitsBefore;
+    uint32_t wakeCounterBufferedBitsAfter;
+    uint32_t wakeCounterCoreBitsBefore;
+    uint32_t wakeCounterCoreBitsAfter;
+    uint32_t bufferedIsSleepingBefore;
+    uint32_t bufferedIsSleepingAfter;
+    uint32_t bodySimActiveBefore;
+    uint32_t bodySimActiveAfter;
+};
+
+struct WakeStateRestoreReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t rigidbody;
+    uintptr_t actor;
+    uintptr_t bodySim;
+    uint32_t targetWakeCounterBits;
+    uint32_t targetSleeping;
+    uint32_t wakeCounterBufferedBitsBefore;
+    uint32_t wakeCounterCoreBitsBefore;
+    uint32_t bufferedIsSleepingBefore;
+    uint32_t bodySimActiveBefore;
+    uint32_t wakeCounterBufferedBitsAfter;
+    uint32_t wakeCounterCoreBitsAfter;
+    uint32_t bufferedIsSleepingAfter;
+    uint32_t bodySimActiveAfter;
+    uint32_t callMask;
+};
+static_assert(sizeof(uintptr_t) == 4, "Native rewind helper requires the x86 Unity ABI");
+static_assert(sizeof(Body2WorldCaptureReceipt) == 404,
+    "Unexpected body2World capture receipt ABI");
+static_assert(sizeof(Body2WorldRestoreReceipt) == 404,
+    "Unexpected body2World restore receipt ABI");
+static_assert(sizeof(WakeStateRestoreReceipt) == 76,
+    "Unexpected wake-state restore receipt ABI");
 
 struct RigidMassFrame {
     float centerOfMass[3];
@@ -285,6 +449,35 @@ enum SetGlobalPoseResult : uint32_t {
     SetGlobalPoseNonfinite = 6
 };
 
+enum Body2WorldResult : uint32_t {
+    Body2WorldOk = 1,
+    Body2WorldBadArgument = 2,
+    Body2WorldUnreadableRigidbody = 3,
+    Body2WorldMissingActor = 4,
+    Body2WorldRevisionMismatch = 5,
+    Body2WorldBuffered = 6,
+    Body2WorldNonfinite = 7,
+    Body2WorldMassFrameChanged = 8,
+    Body2WorldReadbackChanged = 9,
+    Body2WorldCoreMismatch = 10,
+    Body2WorldNotInScene = 11,
+    Body2WorldMissingApiScene = 12,
+    Body2WorldPreimageMismatch = 13,
+    Body2WorldSleepStateMismatch = 14,
+    Body2WorldLifecycleUnreadable = 15,
+    Body2WorldLifecycleUnstable = 16
+};
+
+enum WakeStateResult : uint32_t {
+    WakeStateOk = 1,
+    WakeStateBadArgument = 2,
+    WakeStateBodyStateInvalid = 3,
+    WakeStateRevisionMismatch = 4,
+    WakeStateInvalidTarget = 5,
+    WakeStateSleepingTransitionUnsupported = 6,
+    WakeStateReadbackChanged = 7
+};
+
 enum SetMassFrameResult : uint32_t {
     SetMassFrameOk = 1,
     SetMassFrameBadArgument = 2,
@@ -327,7 +520,7 @@ enum KinematicTargetResult : uint32_t {
     KinematicTargetNonfinite = 7
 };
 
-static const uint32_t kApiVersion = 7;
+static const uint32_t kApiVersion = 9;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -342,6 +535,15 @@ static const uint32_t kSphereManifoldPoolSlabRva = 0xA69CCA;
 static const uint32_t kLargeManifoldCallsiteRva = 0xA69F15;
 static const uint32_t kSphereManifoldCallsiteRva = 0xA69F32;
 static const uint32_t kNpSetGlobalPoseRva = 0xA143D0;
+static const uint32_t kNpGetGlobalPoseRva = 0xA12090;
+static const uint32_t kScbBodySetBody2WorldRva = 0xA136D0;
+static const uint32_t kScBodyCoreSetBody2WorldRva = 0xA3A9B0;
+static const uint32_t kNpActorGetApiSceneRva = 0xA257E0;
+static const uint32_t kNpShapeManagerMarkSceneQueryRva = 0xA266E0;
+static const uint32_t kNpRigidDynamicVtableRva = 0xEFA6EC;
+static const uint32_t kNpSetWakeCounterRva = 0xA15760;
+static const uint32_t kNpWakeUpRva = 0xA15E80;
+static const uint32_t kNpPutToSleepRva = 0xA12E80;
 static const uint32_t kNpGetKinematicTargetRva = 0xA12530;
 static const uint32_t kNpSetCMassLocalPoseInternalRva = 0xA13E90;
 static const uint32_t kNpSetMassSpaceInertiaTensorRva = 0xA14E80;
@@ -395,6 +597,67 @@ static const uint8_t kSphereManifoldCallsiteBytes[] = {
     0x8D,0x8B,0x0C,0x04,0x00,0x00,0xE8,0x83,0xFB,0xFF,0xFF
 };
 static const uint8_t kNpSetGlobalPoseBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44};
+static const uint8_t kNpGetGlobalPoseBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x24,0xF7,0x81,
+    0x1C,0x01,0x00,0x00,0x00,0x02,0x00,0x00
+};
+static const uint8_t kScbBodySetBody2WorldBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x8B,0xF1,0x8B,0x4D,0x08,0x8B,0x01,0x89,
+    0x86,0xB0,0x00,0x00,0x00
+};
+// NpRigidDynamic::setGlobalPose must continue to pass actor+0x30 to the
+// Scb::Body routine with asPartOfBody2ActorChange=false.
+static const uint8_t kNpSetGlobalPoseScbThisBytes[] = {
+    0x8D,0x4F,0x30,0x6A,0x00
+};
+static const uint8_t kNpSetGlobalPoseScbCallBytes[] = {
+    0xE8,0x8D,0xEF,0xFF,0xFF
+};
+static const uint8_t kNpSetGlobalPoseBody2ActorSelectionBytes[] = {
+    0xF7,0x87,0x1C,0x01,0x00,0x00,0x00,0x02,0x00,0x00,0x74,0x0A,
+    0x8B,0x47,0x38,0x05,0x90,0x00,0x00,0x00,0xEB,0x03,0x8D,0x47,0x70
+};
+static const uint8_t kNpSetGlobalPoseScenePreludeBytes[] = {
+    0x57,0xE8,0xFF,0x13,0x01,0x00,0x8B,0x55,0x08,0x8B,0xD8
+};
+static const uint8_t kNpSetGlobalPoseSceneUpdateBytes[] = {
+    0x85,0xDB,0x74,0x2E,0x8D,0xB3,0x40,0x0D,0x00,0x00,0x56,
+    0x8D,0x4F,0x14,0xE8,0x51,0x22,0x01,0x00,0xFF,0x46,0x18
+};
+static const uint8_t kNpActorGetApiSceneBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x4D,0x08,0x0F,0xB7,0x41,0x04
+};
+static const uint8_t kNpShapeManagerMarkSceneQueryBytes[] = {
+    0x55,0x8B,0xEC,0x66,0x83,0x79,0x0C,0x01,0x53,0x0F,0xB7,0x59,0x04
+};
+static const uint8_t kScbBodySetBody2WorldLastCopyBytes[] = {
+    0x8B,0x41,0x18,0x89,0x86,0xC8,0x00,0x00,0x00
+};
+static const uint8_t kScbBodySetBody2WorldCorePathBytes[] = {
+    0x8B,0x46,0x04,0xC1,0xE8,0x1E,0x83,0xF8,0x03,0x74,0x1E,0x83,
+    0xF8,0x02,0x75,0x0B,0x8B,0x06,0x80,0xB8,0x81,0x09,0x00,0x00,
+    0x00,0x75,0x0E,0x51,0x8D,0x4E,0x10,0xE8,0x75,0x72,0x02,0x00,
+    0x5E,0x5D,0xC2,0x08,0x00
+};
+static const uint8_t kScBodyCoreSetBody2WorldBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x55,0x08,0x8B,0x02,0x89,0x41,0x10,0x8B,
+    0x42,0x04,0x89,0x41,0x14,0x8B,0x42,0x08,0x89,0x41,0x18,0x8B,
+    0x42,0x0C,0x89,0x41,0x1C,0x8B,0x42,0x10,0x89,0x41,0x20,0x8B,
+    0x42,0x14,0x89,0x41,0x24,0x8B,0x42,0x18,0x89,0x41,0x28,0x8B,
+    0x49,0x04,0x85,0xC9,0x74,0x05,0xE8,0xC5,0xEC,0x00,0x00,0x5D,
+    0xC2,0x04,0x00
+};
+static const uint8_t kNpSetWakeCounterBytes[] = {
+    0x55,0x8B,0xEC,0xF3,0x0F,0x10,0x45,0x08,0x51,0x83,0xC1,0x30,
+    0xF3,0x0F,0x11,0x04,0x24,0xE8,0x5A,0xFF,0xFF,0xFF,0x5D,0xC2,0x04,0x00
+};
+static const uint8_t kNpWakeUpBytes[] = {
+    0x8B,0x41,0x30,0x83,0xC1,0x30,0x51,0xF3,0x0F,0x10,0x80,0x2C,
+    0x0B,0x00,0x00,0xF3,0x0F,0x11,0x04,0x24,0xE8,0x07,0x00,0x00,0x00,0xC3
+};
+static const uint8_t kNpPutToSleepBytes[] = {
+    0x83,0xC1,0x30,0xE9,0x08,0x00,0x00,0x00
+};
 static const uint8_t kNpGetKinematicTargetBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44,0xF7,0x81,0x1C,0x01,0x00,0x00,0x00,0x10,0x00,0x00};
 static const uint8_t kNpSetCMassLocalPoseInternalBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x48,0x53,0x8B,0xD9};
 static const uint8_t kNpSetMassSpaceInertiaTensorBytes[] = {0x55,0x8B,0xEC,0x8B,0x55,0x08,0x83,0xEC,0x0C};
@@ -411,6 +674,16 @@ typedef uint32_t (__thiscall *RigidActorGetShapes)(void* self, void** shapes,
     uint32_t capacity, uint32_t startIndex);
 typedef void (__thiscall *NpRigidDynamicSetGlobalPose)(void* self,
     const PhysxTransform& pose, bool autowake);
+typedef PhysxTransform* (__thiscall *NpRigidDynamicGetGlobalPose)(void* self,
+    PhysxTransform* pose);
+typedef void (__thiscall *ScbBodySetBody2World)(void* self,
+    const PhysxTransform& pose, bool asPartOfBody2ActorChange);
+typedef void (__thiscall *NpRigidDynamicSetWakeCounter)(void* self,
+    float wakeCounter);
+typedef void (__thiscall *NpRigidDynamicWakeUp)(void* self);
+typedef void* (__cdecl *NpActorGetApiScene)(void* actor);
+typedef void (__thiscall *NpShapeManagerMarkSceneQuery)(void* shapeManager,
+    void* sceneQueryManager);
 typedef bool (__thiscall *NpRigidDynamicGetKinematicTarget)(void* self,
     PhysxTransform& pose);
 typedef void (__thiscall *NpRigidBodySetCMassLocalPoseInternal)(void* self,
@@ -477,6 +750,33 @@ static int FailSetGlobalPose(SetGlobalPoseReceipt* receipt,
     return 0;
 }
 
+static int FailBody2WorldCapture(Body2WorldCaptureReceipt* receipt,
+    Body2WorldResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailBody2WorldRestore(Body2WorldRestoreReceipt* receipt,
+    Body2WorldResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailWakeStateRestore(WakeStateRestoreReceipt* receipt,
+    WakeStateResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
 static int FailSetMassFrame(SetMassFrameReceipt* receipt,
     SetMassFrameResult result, uint32_t error) {
     if (receipt) {
@@ -513,6 +813,604 @@ static bool Finite(const RigidPose& pose) {
     for (uint32_t i = 0; i < 3; ++i) if (!Finite(pose.position[i])) return false;
     for (uint32_t i = 0; i < 4; ++i) if (!Finite(pose.rotation[i])) return false;
     return true;
+}
+
+static RigidPose ExportPose(const PhysxTransform& pose) {
+    RigidPose result = {};
+    for (uint32_t i = 0; i < 3; ++i) result.position[i] = pose.position[i];
+    for (uint32_t i = 0; i < 4; ++i) result.rotation[i] = pose.rotation[i];
+    return result;
+}
+
+static PhysxTransform ImportPose(const RigidPose& pose) {
+    PhysxTransform result = {};
+    for (uint32_t i = 0; i < 3; ++i) result.position[i] = pose.position[i];
+    for (uint32_t i = 0; i < 4; ++i) result.rotation[i] = pose.rotation[i];
+    return result;
+}
+
+struct BodyPoseState {
+    uintptr_t actor;
+    uintptr_t scene;
+    uint32_t controlState;
+    uint32_t bodyBufferFlags;
+    uint32_t simulationRunning;
+    uint32_t physicsBuffering;
+    RigidPose actorPose;
+    RigidPose body2Actor;
+    RigidPose bufferedBody2World;
+    RigidPose coreBody2World;
+    uintptr_t bodySim;
+    uint32_t wakeCounterBufferedBits;
+    uint32_t wakeCounterCoreBits;
+    uint32_t bufferedIsSleeping;
+    uint32_t bodySimActive;
+    uintptr_t bodyCore;
+    uintptr_t bodyCoreBodySim;
+    uint32_t bodyCoreFlags;
+    uintptr_t simStateData;
+    uint32_t simStateTargetValid;
+    uintptr_t interactionScene;
+    uintptr_t scScene;
+    uint32_t sceneArrayIndex;
+    uint32_t bodySimInternalFlags;
+    uint32_t velocityModState;
+    uint32_t islandHook;
+    uintptr_t activeBodiesData;
+    uint32_t activeBodiesCount;
+    uint32_t activeBodiesCapacity;
+    uint32_t activeTwoWayStart;
+    uintptr_t activeBodyAtSceneIndex;
+    uint32_t activeBodiesHash;
+    uintptr_t islandManager;
+    uintptr_t islandNodeData;
+    uintptr_t islandNodeOwner;
+    uint32_t islandNodeIslandId;
+    uint32_t islandNodeFlags;
+    uintptr_t kinematicBitmap;
+    uintptr_t kinematicChangeBitmap;
+    uintptr_t notReadyBitmap;
+    uintptr_t notReadyChangeBitmap;
+    uintptr_t kinematicBitmapMap;
+    uintptr_t kinematicChangeBitmapMap;
+    uintptr_t notReadyBitmapMap;
+    uintptr_t notReadyChangeBitmapMap;
+    uint32_t kinematicBitmapWordCount;
+    uint32_t kinematicChangeBitmapWordCount;
+    uint32_t notReadyBitmapWordCount;
+    uint32_t notReadyChangeBitmapWordCount;
+    uint32_t kinematicBitmapWord;
+    uint32_t kinematicChangeBitmapWord;
+    uint32_t notReadyBitmapWord;
+    uint32_t notReadyChangeBitmapWord;
+    uint32_t kinematicBitmapBit;
+    uint32_t kinematicChangeBitmapBit;
+    uint32_t notReadyBitmapBit;
+    uint32_t notReadyChangeBitmapBit;
+    uint32_t islandManagerFlags;
+    uintptr_t sleepBodiesData;
+    uint32_t sleepBodiesCount;
+    uint32_t sleepBodiesCapacity;
+    uint32_t sleepBodiesHash;
+    uint32_t sleepBodiesIndex;
+    uintptr_t wokeBodiesData;
+    uint32_t wokeBodiesCount;
+    uint32_t wokeBodiesCapacity;
+    uint32_t wokeBodiesHash;
+    uint32_t wokeBodiesIndex;
+    uint32_t wokeBodyListValid;
+    uint32_t sleepBodyListValid;
+    uint32_t lifecycleStable;
+};
+
+static bool ReadPointerArray(uintptr_t data, uint32_t count,
+    uint32_t rawCapacity, uint32_t* error) {
+    const uint32_t capacity = rawCapacity & 0x7FFFFFFFu;
+    if (count > capacity || count > 65536u) {
+        *error = ERROR_INVALID_DATA;
+        return false;
+    }
+    if (count && (!data || !Readable(reinterpret_cast<const void*>(data),
+            count * sizeof(uintptr_t)))) {
+        *error = ERROR_NOACCESS;
+        return false;
+    }
+    return true;
+}
+
+static bool ReadBitmapWord(uintptr_t bitmap, uint32_t bit,
+    uintptr_t* map, uint32_t* wordCount, uint32_t* word,
+    uint32_t* bitValue, uint32_t* error) {
+    *map = 0;
+    *wordCount = 0;
+    *word = 0;
+    *bitValue = 0;
+    if (!bitmap || !Readable(reinterpret_cast<const void*>(bitmap),
+            sizeof(uintptr_t) + sizeof(uint32_t))) {
+        *error = ERROR_NOACCESS;
+        return false;
+    }
+    *map = *reinterpret_cast<const uintptr_t*>(bitmap);
+    *wordCount =
+        *reinterpret_cast<const uint32_t*>(bitmap + sizeof(uintptr_t)) &
+        0x7FFFFFFFu;
+    const uint32_t wordIndex = bit >> 5;
+    if (!*map || wordIndex >= *wordCount || *wordCount > 65536u) {
+        *error = ERROR_INVALID_DATA;
+        return false;
+    }
+    const uintptr_t address = *map + wordIndex * sizeof(uint32_t);
+    if (!Readable(reinterpret_cast<const void*>(address), sizeof(uint32_t))) {
+        *error = ERROR_NOACCESS;
+        return false;
+    }
+    *word = *reinterpret_cast<const uint32_t*>(address);
+    *bitValue = (*word >> (bit & 31u)) & 1u;
+    return true;
+}
+
+static Body2WorldResult CaptureBodyLifecycleState(BodyPoseState* state,
+    uint32_t* error) {
+    const uintptr_t bodySim = state->bodySim;
+    if (!Readable(reinterpret_cast<const void*>(bodySim), 0xC0)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldLifecycleUnreadable;
+    }
+    state->interactionScene =
+        *reinterpret_cast<const uintptr_t*>(bodySim + 0x24);
+    state->sceneArrayIndex =
+        *reinterpret_cast<const uint32_t*>(bodySim + 0x28);
+    state->bodyCore =
+        *reinterpret_cast<const uintptr_t*>(bodySim + 0x34);
+    state->bodySimInternalFlags =
+        *reinterpret_cast<const uint16_t*>(bodySim + 0x90);
+    state->velocityModState =
+        *reinterpret_cast<const uint8_t*>(bodySim + 0x92);
+    state->islandHook =
+        *reinterpret_cast<const uint32_t*>(bodySim + 0xBC);
+    if (!state->bodyCore ||
+        !Readable(reinterpret_cast<const void*>(state->bodyCore), 0xA0) ||
+        !state->interactionScene ||
+        !Readable(reinterpret_cast<const void*>(state->interactionScene), 0x3F4)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldLifecycleUnreadable;
+    }
+    state->bodyCoreBodySim =
+        *reinterpret_cast<const uintptr_t*>(state->bodyCore + 0x04);
+    state->bodyCoreFlags =
+        *reinterpret_cast<const uint32_t*>(state->bodyCore + 0x2C);
+    state->simStateData =
+        *reinterpret_cast<const uintptr_t*>(state->bodyCore + 0x9C);
+    if (state->bodyCoreBodySim != bodySim) {
+        *error = ERROR_INVALID_STATE;
+        return Body2WorldLifecycleUnreadable;
+    }
+    if (state->simStateData) {
+        if (!Readable(reinterpret_cast<const void*>(state->simStateData), 0x20)) {
+            *error = ERROR_NOACCESS;
+            return Body2WorldLifecycleUnreadable;
+        }
+        state->simStateTargetValid =
+            *reinterpret_cast<const uint8_t*>(state->simStateData + 0x1C) != 0 ? 1u : 0u;
+    }
+
+    state->activeBodiesData =
+        *reinterpret_cast<const uintptr_t*>(state->interactionScene + 0x00);
+    state->activeBodiesCount =
+        *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x04);
+    state->activeBodiesCapacity =
+        *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x08);
+    state->activeTwoWayStart =
+        *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x0C);
+    state->scScene =
+        *reinterpret_cast<const uintptr_t*>(state->interactionScene + 0x3F0);
+    if (!ReadPointerArray(state->activeBodiesData, state->activeBodiesCount,
+            state->activeBodiesCapacity, error) ||
+        state->activeTwoWayStart > state->activeBodiesCount || !state->scScene ||
+        !Readable(reinterpret_cast<const void*>(state->scScene + 0x464), 0x1A))
+        return Body2WorldLifecycleUnreadable;
+    const uintptr_t* activeBodies =
+        reinterpret_cast<const uintptr_t*>(state->activeBodiesData);
+    state->activeBodiesHash = OrderHash(activeBodies, state->activeBodiesCount);
+    state->activeBodyAtSceneIndex =
+        state->sceneArrayIndex < state->activeBodiesCount ?
+        activeBodies[state->sceneArrayIndex] : 0;
+
+    const uintptr_t context =
+        *reinterpret_cast<const uintptr_t*>(state->interactionScene + 0x3E8);
+    if (!context || !Readable(reinterpret_cast<const void*>(context + 0x181C), 0x1DF)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldLifecycleUnreadable;
+    }
+    state->islandManager = context + 0x181C;
+    state->islandNodeData =
+        *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x10);
+    if (!state->islandNodeData || state->islandHook >= 0x100000u ||
+        !Readable(reinterpret_cast<const void*>(state->islandNodeData +
+            state->islandHook * 12u), 12)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldLifecycleUnreadable;
+    }
+    const uintptr_t islandNode = state->islandNodeData + state->islandHook * 12u;
+    state->islandNodeOwner =
+        *reinterpret_cast<const uintptr_t*>(islandNode + 0x00);
+    state->islandNodeIslandId =
+        *reinterpret_cast<const uint32_t*>(islandNode + 0x04);
+    state->islandNodeFlags =
+        *reinterpret_cast<const uint8_t*>(islandNode + 0x08);
+    state->kinematicBitmap =
+        *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x108);
+    state->kinematicChangeBitmap =
+        *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x10C);
+    state->notReadyBitmap =
+        *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x110);
+    state->notReadyChangeBitmap =
+        *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x114);
+    if (!ReadBitmapWord(state->kinematicBitmap, state->islandHook,
+            &state->kinematicBitmapMap, &state->kinematicBitmapWordCount,
+            &state->kinematicBitmapWord, &state->kinematicBitmapBit, error) ||
+        !ReadBitmapWord(state->kinematicChangeBitmap, state->islandHook,
+            &state->kinematicChangeBitmapMap,
+            &state->kinematicChangeBitmapWordCount,
+            &state->kinematicChangeBitmapWord,
+            &state->kinematicChangeBitmapBit, error) ||
+        !ReadBitmapWord(state->notReadyBitmap, state->islandHook,
+            &state->notReadyBitmapMap, &state->notReadyBitmapWordCount,
+            &state->notReadyBitmapWord, &state->notReadyBitmapBit, error) ||
+        !ReadBitmapWord(state->notReadyChangeBitmap, state->islandHook,
+            &state->notReadyChangeBitmapMap,
+            &state->notReadyChangeBitmapWordCount,
+            &state->notReadyChangeBitmapWord,
+            &state->notReadyChangeBitmapBit, error))
+        return Body2WorldLifecycleUnreadable;
+    if (state->islandNodeOwner != bodySim ||
+        (((state->islandNodeFlags & 0x01u) != 0 ? 1u : 0u) !=
+            state->kinematicBitmapBit) ||
+        (((state->islandNodeFlags & 0x08u) != 0 ? 1u : 0u) !=
+            state->notReadyBitmapBit)) {
+        *error = ERROR_INVALID_DATA;
+        return Body2WorldLifecycleUnreadable;
+    }
+    const uint32_t everythingAsleep =
+        *reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DC);
+    const uint32_t hasAnythingChanged =
+        *reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DD);
+    const uint32_t performIslandUpdate =
+        *reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DE);
+    if (everythingAsleep > 1u || hasAnythingChanged > 1u ||
+        performIslandUpdate > 1u) {
+        *error = ERROR_INVALID_DATA;
+        return Body2WorldLifecycleUnreadable;
+    }
+    state->islandManagerFlags = everythingAsleep |
+        (hasAnythingChanged << 8) | (performIslandUpdate << 16);
+
+    state->sleepBodiesData =
+        *reinterpret_cast<const uintptr_t*>(state->scScene + 0x464);
+    state->sleepBodiesCount =
+        *reinterpret_cast<const uint32_t*>(state->scScene + 0x468);
+    state->sleepBodiesCapacity =
+        *reinterpret_cast<const uint32_t*>(state->scScene + 0x46C);
+    state->wokeBodiesData =
+        *reinterpret_cast<const uintptr_t*>(state->scScene + 0x470);
+    state->wokeBodiesCount =
+        *reinterpret_cast<const uint32_t*>(state->scScene + 0x474);
+    state->wokeBodiesCapacity =
+        *reinterpret_cast<const uint32_t*>(state->scScene + 0x478);
+    state->wokeBodyListValid =
+        *reinterpret_cast<const uint8_t*>(state->scScene + 0x47C);
+    state->sleepBodyListValid =
+        *reinterpret_cast<const uint8_t*>(state->scScene + 0x47D);
+    if (state->wokeBodyListValid > 1u || state->sleepBodyListValid > 1u) {
+        *error = ERROR_INVALID_DATA;
+        return Body2WorldLifecycleUnreadable;
+    }
+    if (!ReadPointerArray(state->sleepBodiesData, state->sleepBodiesCount,
+            state->sleepBodiesCapacity, error) ||
+        !ReadPointerArray(state->wokeBodiesData, state->wokeBodiesCount,
+            state->wokeBodiesCapacity, error))
+        return Body2WorldLifecycleUnreadable;
+    const uintptr_t* sleepBodies =
+        reinterpret_cast<const uintptr_t*>(state->sleepBodiesData);
+    const uintptr_t* wokeBodies =
+        reinterpret_cast<const uintptr_t*>(state->wokeBodiesData);
+    state->sleepBodiesHash = OrderHash(sleepBodies, state->sleepBodiesCount);
+    state->sleepBodiesIndex = PointerIndex(sleepBodies,
+        state->sleepBodiesCount, state->bodyCore);
+    state->wokeBodiesHash = OrderHash(wokeBodies, state->wokeBodiesCount);
+    state->wokeBodiesIndex = PointerIndex(wokeBodies,
+        state->wokeBodiesCount, state->bodyCore);
+
+    uintptr_t kinematicBitmapMapAfter = 0;
+    uintptr_t kinematicChangeBitmapMapAfter = 0;
+    uintptr_t notReadyBitmapMapAfter = 0;
+    uintptr_t notReadyChangeBitmapMapAfter = 0;
+    uint32_t kinematicBitmapWordCountAfter = 0;
+    uint32_t kinematicChangeBitmapWordCountAfter = 0;
+    uint32_t notReadyBitmapWordCountAfter = 0;
+    uint32_t notReadyChangeBitmapWordCountAfter = 0;
+    uint32_t kinematicBitmapWordAfter = 0;
+    uint32_t kinematicChangeBitmapWordAfter = 0;
+    uint32_t notReadyBitmapWordAfter = 0;
+    uint32_t notReadyChangeBitmapWordAfter = 0;
+    uint32_t kinematicBitmapBitAfter = 0;
+    uint32_t kinematicChangeBitmapBitAfter = 0;
+    uint32_t notReadyBitmapBitAfter = 0;
+    uint32_t notReadyChangeBitmapBitAfter = 0;
+    if (!ReadBitmapWord(state->kinematicBitmap, state->islandHook,
+            &kinematicBitmapMapAfter, &kinematicBitmapWordCountAfter,
+            &kinematicBitmapWordAfter, &kinematicBitmapBitAfter, error) ||
+        !ReadBitmapWord(state->kinematicChangeBitmap, state->islandHook,
+            &kinematicChangeBitmapMapAfter,
+            &kinematicChangeBitmapWordCountAfter,
+            &kinematicChangeBitmapWordAfter,
+            &kinematicChangeBitmapBitAfter, error) ||
+        !ReadBitmapWord(state->notReadyBitmap, state->islandHook,
+            &notReadyBitmapMapAfter, &notReadyBitmapWordCountAfter,
+            &notReadyBitmapWordAfter, &notReadyBitmapBitAfter, error) ||
+        !ReadBitmapWord(state->notReadyChangeBitmap, state->islandHook,
+            &notReadyChangeBitmapMapAfter,
+            &notReadyChangeBitmapWordCountAfter,
+            &notReadyChangeBitmapWordAfter,
+            &notReadyChangeBitmapBitAfter, error))
+        return Body2WorldLifecycleUnreadable;
+
+    const bool stable =
+        state->sceneArrayIndex == *reinterpret_cast<const uint32_t*>(bodySim + 0x28) &&
+        state->bodySimInternalFlags == *reinterpret_cast<const uint16_t*>(bodySim + 0x90) &&
+        state->bodySimActive == ((*reinterpret_cast<const uint8_t*>(bodySim + 0x33) & 1u) ? 1u : 0u) &&
+        state->wakeCounterCoreBits == *reinterpret_cast<const uint32_t*>(state->bodyCore + 0x98) &&
+        state->islandNodeOwner == *reinterpret_cast<const uintptr_t*>(islandNode + 0x00) &&
+        state->islandNodeIslandId == *reinterpret_cast<const uint32_t*>(islandNode + 0x04) &&
+        state->islandNodeFlags == *reinterpret_cast<const uint8_t*>(islandNode + 0x08) &&
+        state->kinematicBitmap == *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x108) &&
+        state->kinematicChangeBitmap == *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x10C) &&
+        state->notReadyBitmap == *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x110) &&
+        state->notReadyChangeBitmap == *reinterpret_cast<const uintptr_t*>(state->islandManager + 0x114) &&
+        state->kinematicBitmapMap == kinematicBitmapMapAfter &&
+        state->kinematicChangeBitmapMap == kinematicChangeBitmapMapAfter &&
+        state->notReadyBitmapMap == notReadyBitmapMapAfter &&
+        state->notReadyChangeBitmapMap == notReadyChangeBitmapMapAfter &&
+        state->kinematicBitmapWordCount == kinematicBitmapWordCountAfter &&
+        state->kinematicChangeBitmapWordCount == kinematicChangeBitmapWordCountAfter &&
+        state->notReadyBitmapWordCount == notReadyBitmapWordCountAfter &&
+        state->notReadyChangeBitmapWordCount == notReadyChangeBitmapWordCountAfter &&
+        state->kinematicBitmapWord == kinematicBitmapWordAfter &&
+        state->kinematicChangeBitmapWord == kinematicChangeBitmapWordAfter &&
+        state->notReadyBitmapWord == notReadyBitmapWordAfter &&
+        state->notReadyChangeBitmapWord == notReadyChangeBitmapWordAfter &&
+        state->kinematicBitmapBit == kinematicBitmapBitAfter &&
+        state->kinematicChangeBitmapBit == kinematicChangeBitmapBitAfter &&
+        state->notReadyBitmapBit == notReadyBitmapBitAfter &&
+        state->notReadyChangeBitmapBit == notReadyChangeBitmapBitAfter &&
+        state->islandManagerFlags ==
+            (static_cast<uint32_t>(*reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DC)) |
+            (static_cast<uint32_t>(*reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DD)) << 8) |
+            (static_cast<uint32_t>(*reinterpret_cast<const uint8_t*>(state->islandManager + 0x1DE)) << 16)) &&
+        state->activeBodiesData == *reinterpret_cast<const uintptr_t*>(state->interactionScene + 0x00) &&
+        state->activeBodiesCount == *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x04) &&
+        state->activeBodiesCapacity == *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x08) &&
+        state->activeTwoWayStart == *reinterpret_cast<const uint32_t*>(state->interactionScene + 0x0C) &&
+        state->activeBodiesHash == OrderHash(activeBodies, state->activeBodiesCount) &&
+        state->sleepBodiesData == *reinterpret_cast<const uintptr_t*>(state->scScene + 0x464) &&
+        state->sleepBodiesCount == *reinterpret_cast<const uint32_t*>(state->scScene + 0x468) &&
+        state->sleepBodiesCapacity == *reinterpret_cast<const uint32_t*>(state->scScene + 0x46C) &&
+        state->sleepBodiesHash == OrderHash(sleepBodies, state->sleepBodiesCount) &&
+        state->wokeBodiesData == *reinterpret_cast<const uintptr_t*>(state->scScene + 0x470) &&
+        state->wokeBodiesCount == *reinterpret_cast<const uint32_t*>(state->scScene + 0x474) &&
+        state->wokeBodiesCapacity == *reinterpret_cast<const uint32_t*>(state->scScene + 0x478) &&
+        state->wokeBodiesHash == OrderHash(wokeBodies, state->wokeBodiesCount) &&
+        state->wokeBodyListValid ==
+            *reinterpret_cast<const uint8_t*>(state->scScene + 0x47C) &&
+        state->sleepBodyListValid ==
+            *reinterpret_cast<const uint8_t*>(state->scScene + 0x47D);
+    state->lifecycleStable = stable ? 1u : 0u;
+    if (!stable) {
+        *error = ERROR_RETRY;
+        return Body2WorldLifecycleUnstable;
+    }
+    return Body2WorldOk;
+}
+
+static Body2WorldResult CaptureBodyPoseState(uintptr_t unityBase,
+    uintptr_t rigidbody, BodyPoseState* state, uint32_t* error) {
+    if (error) *error = ERROR_SUCCESS;
+    if (!unityBase || !rigidbody || !state || !error) {
+        if (error) *error = ERROR_INVALID_PARAMETER;
+        return Body2WorldBadArgument;
+    }
+    *state = {};
+    if (!Readable(reinterpret_cast<const void*>(rigidbody), 0x38)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldUnreadableRigidbody;
+    }
+    const uintptr_t actor =
+        *reinterpret_cast<const uintptr_t*>(rigidbody + 0x34);
+    state->actor = actor;
+    if (!actor || !Readable(reinterpret_cast<const void*>(actor), 0x120)) {
+        *error = ERROR_INVALID_STATE;
+        return Body2WorldMissingActor;
+    }
+    const uintptr_t vtable = *reinterpret_cast<const uintptr_t*>(actor);
+    const void* getAddress = reinterpret_cast<const void*>(
+        unityBase + kNpGetGlobalPoseRva);
+    const void* setAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva);
+    const void* scbAddress = reinterpret_cast<const void*>(
+        unityBase + kScbBodySetBody2WorldRva);
+    const void* scbThisAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva + 0x2C1);
+    const void* scbCallAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva + 0x36E);
+    const void* scenePreludeAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva + 0x0B);
+    const void* sceneUpdateAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva + 0xAC);
+    const void* getApiSceneAddress = reinterpret_cast<const void*>(
+        unityBase + kNpActorGetApiSceneRva);
+    const void* markSceneQueryAddress = reinterpret_cast<const void*>(
+        unityBase + kNpShapeManagerMarkSceneQueryRva);
+    const void* body2ActorSelectionAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetGlobalPoseRva + 0x142);
+    const void* scbLastCopyAddress = reinterpret_cast<const void*>(
+        unityBase + kScbBodySetBody2WorldRva + 0x3E);
+    const void* scbCorePathAddress = reinterpret_cast<const void*>(
+        unityBase + kScbBodySetBody2WorldRva + 0x47);
+    const void* coreSetAddress = reinterpret_cast<const void*>(
+        unityBase + kScBodyCoreSetBody2WorldRva);
+    if (vtable != unityBase + kNpRigidDynamicVtableRva ||
+        !Readable(reinterpret_cast<const void*>(vtable), 0x58) ||
+        *reinterpret_cast<const uintptr_t*>(vtable + 0x50) !=
+            unityBase + kNpGetGlobalPoseRva ||
+        *reinterpret_cast<const uintptr_t*>(vtable + 0x54) !=
+            unityBase + kNpSetGlobalPoseRva ||
+        !Readable(getAddress, sizeof(kNpGetGlobalPoseBytes)) ||
+        !EqualBytes(getAddress, kNpGetGlobalPoseBytes,
+            sizeof(kNpGetGlobalPoseBytes)) ||
+        !Readable(setAddress, sizeof(kNpSetGlobalPoseBytes)) ||
+        !EqualBytes(setAddress, kNpSetGlobalPoseBytes,
+            sizeof(kNpSetGlobalPoseBytes)) ||
+        !Readable(scbAddress, sizeof(kScbBodySetBody2WorldBytes)) ||
+        !EqualBytes(scbAddress, kScbBodySetBody2WorldBytes,
+            sizeof(kScbBodySetBody2WorldBytes)) ||
+        !Readable(scbThisAddress, sizeof(kNpSetGlobalPoseScbThisBytes)) ||
+        !EqualBytes(scbThisAddress, kNpSetGlobalPoseScbThisBytes,
+            sizeof(kNpSetGlobalPoseScbThisBytes)) ||
+        !Readable(scbCallAddress, sizeof(kNpSetGlobalPoseScbCallBytes)) ||
+        !EqualBytes(scbCallAddress, kNpSetGlobalPoseScbCallBytes,
+            sizeof(kNpSetGlobalPoseScbCallBytes)) ||
+        !Readable(scenePreludeAddress, sizeof(kNpSetGlobalPoseScenePreludeBytes)) ||
+        !EqualBytes(scenePreludeAddress, kNpSetGlobalPoseScenePreludeBytes,
+            sizeof(kNpSetGlobalPoseScenePreludeBytes)) ||
+        !Readable(sceneUpdateAddress, sizeof(kNpSetGlobalPoseSceneUpdateBytes)) ||
+        !EqualBytes(sceneUpdateAddress, kNpSetGlobalPoseSceneUpdateBytes,
+            sizeof(kNpSetGlobalPoseSceneUpdateBytes)) ||
+        !Readable(getApiSceneAddress, sizeof(kNpActorGetApiSceneBytes)) ||
+        !EqualBytes(getApiSceneAddress, kNpActorGetApiSceneBytes,
+            sizeof(kNpActorGetApiSceneBytes)) ||
+        !Readable(markSceneQueryAddress, sizeof(kNpShapeManagerMarkSceneQueryBytes)) ||
+        !EqualBytes(markSceneQueryAddress, kNpShapeManagerMarkSceneQueryBytes,
+            sizeof(kNpShapeManagerMarkSceneQueryBytes)) ||
+        !Readable(body2ActorSelectionAddress,
+            sizeof(kNpSetGlobalPoseBody2ActorSelectionBytes)) ||
+        !EqualBytes(body2ActorSelectionAddress,
+            kNpSetGlobalPoseBody2ActorSelectionBytes,
+            sizeof(kNpSetGlobalPoseBody2ActorSelectionBytes)) ||
+        !Readable(scbLastCopyAddress,
+            sizeof(kScbBodySetBody2WorldLastCopyBytes)) ||
+        !EqualBytes(scbLastCopyAddress,
+            kScbBodySetBody2WorldLastCopyBytes,
+            sizeof(kScbBodySetBody2WorldLastCopyBytes)) ||
+        !Readable(scbCorePathAddress,
+            sizeof(kScbBodySetBody2WorldCorePathBytes)) ||
+        !EqualBytes(scbCorePathAddress,
+            kScbBodySetBody2WorldCorePathBytes,
+            sizeof(kScbBodySetBody2WorldCorePathBytes)) ||
+        !Readable(coreSetAddress, sizeof(kScBodyCoreSetBody2WorldBytes)) ||
+        !EqualBytes(coreSetAddress, kScBodyCoreSetBody2WorldBytes,
+            sizeof(kScBodyCoreSetBody2WorldBytes))) {
+        *error = ERROR_REVISION_MISMATCH;
+        return Body2WorldRevisionMismatch;
+    }
+
+    const uint32_t controlWord =
+        *reinterpret_cast<const uint32_t*>(actor + 0x34);
+    state->controlState = controlWord >> 30;
+    state->scene = *reinterpret_cast<const uintptr_t*>(actor + 0x30);
+    if (state->controlState != 2) {
+        *error = ERROR_INVALID_STATE;
+        return Body2WorldNotInScene;
+    }
+    if (!state->scene ||
+        !Readable(reinterpret_cast<const void*>(state->scene + 0x980), 2)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldBuffered;
+    }
+    state->simulationRunning =
+        *reinterpret_cast<const uint8_t*>(state->scene + 0x980) != 0 ? 1u : 0u;
+    state->physicsBuffering =
+        *reinterpret_cast<const uint8_t*>(state->scene + 0x981) != 0 ? 1u : 0u;
+    if (state->simulationRunning != 0 ||
+        state->physicsBuffering != 0) {
+        *error = ERROR_BUSY;
+        return Body2WorldBuffered;
+    }
+
+    state->bodyBufferFlags =
+        *reinterpret_cast<const uint32_t*>(actor + 0x11C);
+    if (state->bodyBufferFlags != 0) {
+        *error = ERROR_BUSY;
+        return Body2WorldBuffered;
+    }
+    state->bodySim = *reinterpret_cast<const uintptr_t*>(actor + 0x44);
+    if (!state->bodySim ||
+        !Readable(reinterpret_cast<const void*>(state->bodySim + 0x33), 1)) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldMissingActor;
+    }
+    state->wakeCounterBufferedBits =
+        *reinterpret_cast<const uint32_t*>(actor + 0x114);
+    state->wakeCounterCoreBits =
+        *reinterpret_cast<const uint32_t*>(actor + 0xD8);
+    state->bufferedIsSleeping =
+        *reinterpret_cast<const uint32_t*>(actor + 0x118);
+    state->bodySimActive =
+        (*reinterpret_cast<const uint8_t*>(state->bodySim + 0x33) & 1u) != 0 ? 1u : 0u;
+    if (state->wakeCounterBufferedBits != state->wakeCounterCoreBits ||
+        state->bufferedIsSleeping > 1u ||
+        state->bufferedIsSleeping == state->bodySimActive) {
+        *error = ERROR_INVALID_STATE;
+        return Body2WorldSleepStateMismatch;
+    }
+    const Body2WorldResult lifecycleResult =
+        CaptureBodyLifecycleState(state, error);
+    if (lifecycleResult != Body2WorldOk) return lifecycleResult;
+    uintptr_t body2Actor = actor + 0x70;
+    if ((state->bodyBufferFlags & 0x200u) != 0) {
+        const uintptr_t bodyBuffer =
+            *reinterpret_cast<const uintptr_t*>(actor + 0x38);
+        if (!bodyBuffer ||
+            !Readable(reinterpret_cast<const void*>(bodyBuffer + 0x90),
+                sizeof(PhysxTransform))) {
+            *error = ERROR_NOACCESS;
+            return Body2WorldBuffered;
+        }
+        body2Actor = bodyBuffer + 0x90;
+    }
+    if (!Readable(reinterpret_cast<const void*>(body2Actor),
+            sizeof(PhysxTransform)) ||
+        !Readable(reinterpret_cast<const void*>(actor + 0xE0),
+            sizeof(PhysxTransform)) ||
+        !Readable(reinterpret_cast<const void*>(actor + 0x50),
+            sizeof(PhysxTransform))) {
+        *error = ERROR_NOACCESS;
+        return Body2WorldMissingActor;
+    }
+    state->body2Actor = ExportPose(
+        *reinterpret_cast<const PhysxTransform*>(body2Actor));
+    state->bufferedBody2World = ExportPose(
+        *reinterpret_cast<const PhysxTransform*>(actor + 0xE0));
+    state->coreBody2World = ExportPose(
+        *reinterpret_cast<const PhysxTransform*>(actor + 0x50));
+    if (!EqualBytes(&state->bufferedBody2World,
+            reinterpret_cast<const uint8_t*>(&state->coreBody2World),
+            sizeof(RigidPose))) {
+        *error = ERROR_INVALID_STATE;
+        return Body2WorldCoreMismatch;
+    }
+    NpRigidDynamicGetGlobalPose getGlobalPose =
+        reinterpret_cast<NpRigidDynamicGetGlobalPose>(
+            unityBase + kNpGetGlobalPoseRva);
+    PhysxTransform actorPose = {};
+    getGlobalPose(reinterpret_cast<void*>(actor), &actorPose);
+    state->actorPose = ExportPose(actorPose);
+    if (!Finite(state->actorPose) || !Finite(state->body2Actor) ||
+        !Finite(state->bufferedBody2World) ||
+        !Finite(state->coreBody2World)) {
+        *error = ERROR_INVALID_DATA;
+        return Body2WorldNonfinite;
+    }
+    return Body2WorldOk;
 }
 
 static bool Finite(const RigidMassFrame& frame) {
@@ -1223,6 +2121,400 @@ static int SetExistingActorGlobalPose(uintptr_t unityBase, uintptr_t rigidbody,
     return 1;
 }
 
+static int CaptureExistingBody2World(uintptr_t unityBase, uintptr_t rigidbody,
+    Body2WorldCaptureReceipt* receipt) {
+    if (!receipt) return 0;
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(Body2WorldCaptureReceipt);
+    receipt->unityBase = unityBase;
+    receipt->rigidbody = rigidbody;
+    BodyPoseState state = {};
+    uint32_t error = ERROR_SUCCESS;
+    const Body2WorldResult result = CaptureBodyPoseState(
+        unityBase, rigidbody, &state, &error);
+    receipt->actor = state.actor;
+    receipt->scene = state.scene;
+    receipt->controlState = state.controlState;
+    receipt->bodyBufferFlags = state.bodyBufferFlags;
+    receipt->simulationRunning = state.simulationRunning;
+    receipt->physicsBuffering = state.physicsBuffering;
+    receipt->actorPose = state.actorPose;
+    receipt->body2Actor = state.body2Actor;
+    receipt->bufferedBody2World = state.bufferedBody2World;
+    receipt->coreBody2World = state.coreBody2World;
+    receipt->bodySim = state.bodySim;
+    receipt->wakeCounterBufferedBits = state.wakeCounterBufferedBits;
+    receipt->wakeCounterCoreBits = state.wakeCounterCoreBits;
+    receipt->bufferedIsSleeping = state.bufferedIsSleeping;
+    receipt->bodySimActive = state.bodySimActive;
+    receipt->bodyCore = state.bodyCore;
+    receipt->bodyCoreBodySim = state.bodyCoreBodySim;
+    receipt->bodyCoreFlags = state.bodyCoreFlags;
+    receipt->simStateData = state.simStateData;
+    receipt->simStateTargetValid = state.simStateTargetValid;
+    receipt->interactionScene = state.interactionScene;
+    receipt->scScene = state.scScene;
+    receipt->sceneArrayIndex = state.sceneArrayIndex;
+    receipt->bodySimInternalFlags = state.bodySimInternalFlags;
+    receipt->velocityModState = state.velocityModState;
+    receipt->islandHook = state.islandHook;
+    receipt->activeBodiesData = state.activeBodiesData;
+    receipt->activeBodiesCount = state.activeBodiesCount;
+    receipt->activeBodiesCapacity = state.activeBodiesCapacity;
+    receipt->activeTwoWayStart = state.activeTwoWayStart;
+    receipt->activeBodyAtSceneIndex = state.activeBodyAtSceneIndex;
+    receipt->activeBodiesHash = state.activeBodiesHash;
+    receipt->islandManager = state.islandManager;
+    receipt->islandNodeData = state.islandNodeData;
+    receipt->islandNodeOwner = state.islandNodeOwner;
+    receipt->islandNodeIslandId = state.islandNodeIslandId;
+    receipt->islandNodeFlags = state.islandNodeFlags;
+    receipt->kinematicBitmap = state.kinematicBitmap;
+    receipt->kinematicChangeBitmap = state.kinematicChangeBitmap;
+    receipt->notReadyBitmap = state.notReadyBitmap;
+    receipt->notReadyChangeBitmap = state.notReadyChangeBitmap;
+    receipt->kinematicBitmapMap = state.kinematicBitmapMap;
+    receipt->kinematicChangeBitmapMap = state.kinematicChangeBitmapMap;
+    receipt->notReadyBitmapMap = state.notReadyBitmapMap;
+    receipt->notReadyChangeBitmapMap = state.notReadyChangeBitmapMap;
+    receipt->kinematicBitmapWordCount = state.kinematicBitmapWordCount;
+    receipt->kinematicChangeBitmapWordCount = state.kinematicChangeBitmapWordCount;
+    receipt->notReadyBitmapWordCount = state.notReadyBitmapWordCount;
+    receipt->notReadyChangeBitmapWordCount = state.notReadyChangeBitmapWordCount;
+    receipt->kinematicBitmapWord = state.kinematicBitmapWord;
+    receipt->kinematicChangeBitmapWord = state.kinematicChangeBitmapWord;
+    receipt->notReadyBitmapWord = state.notReadyBitmapWord;
+    receipt->notReadyChangeBitmapWord = state.notReadyChangeBitmapWord;
+    receipt->kinematicBitmapBit = state.kinematicBitmapBit;
+    receipt->kinematicChangeBitmapBit = state.kinematicChangeBitmapBit;
+    receipt->notReadyBitmapBit = state.notReadyBitmapBit;
+    receipt->notReadyChangeBitmapBit = state.notReadyChangeBitmapBit;
+    receipt->islandManagerFlags = state.islandManagerFlags;
+    receipt->sleepBodiesData = state.sleepBodiesData;
+    receipt->sleepBodiesCount = state.sleepBodiesCount;
+    receipt->sleepBodiesCapacity = state.sleepBodiesCapacity;
+    receipt->sleepBodiesHash = state.sleepBodiesHash;
+    receipt->sleepBodiesIndex = state.sleepBodiesIndex;
+    receipt->wokeBodiesData = state.wokeBodiesData;
+    receipt->wokeBodiesCount = state.wokeBodiesCount;
+    receipt->wokeBodiesCapacity = state.wokeBodiesCapacity;
+    receipt->wokeBodiesHash = state.wokeBodiesHash;
+    receipt->wokeBodiesIndex = state.wokeBodiesIndex;
+    receipt->wokeBodyListValid = state.wokeBodyListValid;
+    receipt->sleepBodyListValid = state.sleepBodyListValid;
+    receipt->lifecycleStable = state.lifecycleStable;
+    if (result != Body2WorldOk)
+        return FailBody2WorldCapture(receipt, result, error);
+    receipt->result = Body2WorldOk;
+    return 1;
+}
+
+static void PopulateBody2WorldRestoreBefore(Body2WorldRestoreReceipt* receipt,
+    const BodyPoseState& state) {
+    receipt->actor = state.actor;
+    receipt->sceneBefore = state.scene;
+    receipt->controlStateBefore = state.controlState;
+    receipt->bodyBufferFlagsBefore = state.bodyBufferFlags;
+    receipt->simulationRunningBefore = state.simulationRunning;
+    receipt->physicsBufferingBefore = state.physicsBuffering;
+    receipt->actorPoseBefore = state.actorPose;
+    receipt->body2ActorBefore = state.body2Actor;
+    receipt->bufferedBody2WorldBefore = state.bufferedBody2World;
+    receipt->coreBody2WorldBefore = state.coreBody2World;
+    receipt->bodySimBefore = state.bodySim;
+    receipt->wakeCounterBufferedBitsBefore = state.wakeCounterBufferedBits;
+    receipt->wakeCounterCoreBitsBefore = state.wakeCounterCoreBits;
+    receipt->bufferedIsSleepingBefore = state.bufferedIsSleeping;
+    receipt->bodySimActiveBefore = state.bodySimActive;
+}
+
+static void PopulateBody2WorldRestoreAfter(Body2WorldRestoreReceipt* receipt,
+    const BodyPoseState& state) {
+    receipt->sceneAfter = state.scene;
+    receipt->controlStateAfter = state.controlState;
+    receipt->bodyBufferFlagsAfter = state.bodyBufferFlags;
+    receipt->simulationRunningAfter = state.simulationRunning;
+    receipt->physicsBufferingAfter = state.physicsBuffering;
+    receipt->actorPoseAfter = state.actorPose;
+    receipt->body2ActorAfter = state.body2Actor;
+    receipt->bufferedBody2WorldAfter = state.bufferedBody2World;
+    receipt->coreBody2WorldAfter = state.coreBody2World;
+    receipt->bodySimAfter = state.bodySim;
+    receipt->wakeCounterBufferedBitsAfter = state.wakeCounterBufferedBits;
+    receipt->wakeCounterCoreBitsAfter = state.wakeCounterCoreBits;
+    receipt->bufferedIsSleepingAfter = state.bufferedIsSleeping;
+    receipt->bodySimActiveAfter = state.bodySimActive;
+}
+
+static int RestoreExistingBody2World(uintptr_t unityBase, uintptr_t rigidbody,
+    const RigidPose* actorPose, const RigidPose* body2Actor,
+    const RigidPose* body2World, Body2WorldRestoreReceipt* receipt) {
+    if (!receipt) return 0;
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(Body2WorldRestoreReceipt);
+    receipt->unityBase = unityBase;
+    receipt->rigidbody = rigidbody;
+    if (actorPose) receipt->actorPoseTarget = *actorPose;
+    if (body2World) receipt->body2WorldTarget = *body2World;
+    if (!unityBase || !rigidbody || !actorPose || !body2Actor || !body2World)
+        return FailBody2WorldRestore(receipt, Body2WorldBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!Finite(*actorPose) || !Finite(*body2Actor) || !Finite(*body2World))
+        return FailBody2WorldRestore(receipt, Body2WorldNonfinite,
+            ERROR_INVALID_DATA);
+
+    BodyPoseState before = {};
+    uint32_t error = ERROR_SUCCESS;
+    Body2WorldResult result = CaptureBodyPoseState(
+        unityBase, rigidbody, &before, &error);
+    PopulateBody2WorldRestoreBefore(receipt, before);
+    if (result != Body2WorldOk)
+        return FailBody2WorldRestore(receipt, result, error);
+    if (!EqualBytes(&before.body2Actor,
+            reinterpret_cast<const uint8_t*>(body2Actor), sizeof(RigidPose)))
+        return FailBody2WorldRestore(receipt, Body2WorldMassFrameChanged,
+            ERROR_INVALID_STATE);
+
+    // Prove the captured internal transforms still compose to the requested
+    // public actor pose before touching scene queries, timestamps or BodySim.
+    // The shipped Np getter is pure on this zeroed shadow actor: with
+    // BF_Body2Actor clear it reads body2Actor at +0x70 and body2World at +0xE0.
+    __declspec(align(16)) uint8_t shadowActor[0x120] = {};
+    *reinterpret_cast<PhysxTransform*>(shadowActor + 0x70) =
+        ImportPose(*body2Actor);
+    *reinterpret_cast<PhysxTransform*>(shadowActor + 0xE0) =
+        ImportPose(*body2World);
+    NpRigidDynamicGetGlobalPose getGlobalPose =
+        reinterpret_cast<NpRigidDynamicGetGlobalPose>(
+            unityBase + kNpGetGlobalPoseRva);
+    PhysxTransform composedActorPose = {};
+    getGlobalPose(shadowActor, &composedActorPose);
+    const RigidPose composedPose = ExportPose(composedActorPose);
+    if (!EqualBytes(&composedPose,
+            reinterpret_cast<const uint8_t*>(actorPose), sizeof(RigidPose)))
+        return FailBody2WorldRestore(receipt, Body2WorldPreimageMismatch,
+            ERROR_INVALID_DATA);
+
+    const bool actorExact = EqualBytes(&before.actorPose,
+        reinterpret_cast<const uint8_t*>(actorPose), sizeof(RigidPose));
+    const bool bodyExact = EqualBytes(&before.bufferedBody2World,
+        reinterpret_cast<const uint8_t*>(body2World), sizeof(RigidPose));
+    if (actorExact && bodyExact) {
+        PopulateBody2WorldRestoreAfter(receipt, before);
+        receipt->result = Body2WorldOk;
+        return 1;
+    }
+
+    // Reproduce setGlobalPose's scene-query prelude exactly once, then call
+    // the official Scb setter once with the captured COM pose.  Calling the
+    // public setter first would invoke BodySim::postBody2WorldChange twice and
+    // perturb contact/trigger history unnecessarily.
+    NpActorGetApiScene getApiScene = reinterpret_cast<NpActorGetApiScene>(
+        unityBase + kNpActorGetApiSceneRva);
+    void* apiScene = getApiScene(reinterpret_cast<void*>(before.actor));
+    receipt->apiScene = reinterpret_cast<uintptr_t>(apiScene);
+    if (!apiScene)
+        return FailBody2WorldRestore(receipt,
+            Body2WorldMissingApiScene, ERROR_INVALID_STATE);
+    uint8_t* sceneBytes = static_cast<uint8_t*>(apiScene);
+    if (!Readable(sceneBytes + 0xD40, 0x1C) ||
+        !Writable(sceneBytes + 0xD58, sizeof(uint32_t)))
+        return FailBody2WorldRestore(receipt,
+            Body2WorldReadbackChanged, ERROR_NOACCESS);
+    uint32_t* timestamp = reinterpret_cast<uint32_t*>(sceneBytes + 0xD58);
+    receipt->dynamicTimestampBefore = *timestamp;
+    NpShapeManagerMarkSceneQuery markSceneQuery =
+        reinterpret_cast<NpShapeManagerMarkSceneQuery>(
+            unityBase + kNpShapeManagerMarkSceneQueryRva);
+    markSceneQuery(reinterpret_cast<void*>(before.actor + 0x14),
+        sceneBytes + 0xD40);
+    receipt->changed |= 1u;
+    ++(*timestamp);
+    receipt->changed |= 2u;
+    receipt->dynamicTimestampAfter = *timestamp;
+    if (receipt->dynamicTimestampAfter !=
+        receipt->dynamicTimestampBefore + 1u)
+        return FailBody2WorldRestore(receipt,
+            Body2WorldReadbackChanged, ERROR_WRITE_FAULT);
+
+    const PhysxTransform exactBody2World = ImportPose(*body2World);
+    ScbBodySetBody2World setBody2World =
+        reinterpret_cast<ScbBodySetBody2World>(
+            unityBase + kScbBodySetBody2WorldRva);
+    setBody2World(reinterpret_cast<void*>(before.actor + 0x30),
+        exactBody2World, false);
+    receipt->changed |= 4u;
+
+    BodyPoseState after = {};
+    error = ERROR_SUCCESS;
+    result = CaptureBodyPoseState(unityBase, rigidbody, &after, &error);
+    PopulateBody2WorldRestoreAfter(receipt, after);
+    if (result != Body2WorldOk)
+        return FailBody2WorldRestore(receipt, result, error);
+    if (after.actor != before.actor || after.scene != before.scene ||
+        after.controlState != before.controlState ||
+        after.bodyBufferFlags != before.bodyBufferFlags ||
+        after.simulationRunning != before.simulationRunning ||
+        after.physicsBuffering != before.physicsBuffering ||
+        after.bodySim != before.bodySim ||
+        after.wakeCounterBufferedBits != before.wakeCounterBufferedBits ||
+        after.wakeCounterCoreBits != before.wakeCounterCoreBits ||
+        after.bufferedIsSleeping != before.bufferedIsSleeping ||
+        after.bodySimActive != before.bodySimActive ||
+        !EqualBytes(&after.body2Actor,
+            reinterpret_cast<const uint8_t*>(body2Actor), sizeof(RigidPose)))
+        return FailBody2WorldRestore(receipt, Body2WorldMassFrameChanged,
+            ERROR_INVALID_STATE);
+    if (!EqualBytes(&after.bufferedBody2World,
+            reinterpret_cast<const uint8_t*>(body2World), sizeof(RigidPose)) ||
+        !EqualBytes(&after.coreBody2World,
+            reinterpret_cast<const uint8_t*>(body2World), sizeof(RigidPose)) ||
+        !EqualBytes(&after.actorPose,
+            reinterpret_cast<const uint8_t*>(actorPose), sizeof(RigidPose)))
+        return FailBody2WorldRestore(receipt, Body2WorldReadbackChanged,
+            ERROR_WRITE_FAULT);
+    receipt->result = Body2WorldOk;
+    return 1;
+}
+
+static void PopulateWakeStateBefore(WakeStateRestoreReceipt* receipt,
+    const BodyPoseState& state) {
+    receipt->actor = state.actor;
+    receipt->bodySim = state.bodySim;
+    receipt->wakeCounterBufferedBitsBefore = state.wakeCounterBufferedBits;
+    receipt->wakeCounterCoreBitsBefore = state.wakeCounterCoreBits;
+    receipt->bufferedIsSleepingBefore = state.bufferedIsSleeping;
+    receipt->bodySimActiveBefore = state.bodySimActive;
+}
+
+static void PopulateWakeStateAfter(WakeStateRestoreReceipt* receipt,
+    const BodyPoseState& state) {
+    receipt->wakeCounterBufferedBitsAfter = state.wakeCounterBufferedBits;
+    receipt->wakeCounterCoreBitsAfter = state.wakeCounterCoreBits;
+    receipt->bufferedIsSleepingAfter = state.bufferedIsSleeping;
+    receipt->bodySimActiveAfter = state.bodySimActive;
+}
+
+static bool WakeFunctionsMatch(uintptr_t unityBase, uintptr_t actor) {
+    if (!unityBase || !actor ||
+        !Readable(reinterpret_cast<const void*>(actor), 0x70)) return false;
+    const uintptr_t vtable = *reinterpret_cast<const uintptr_t*>(actor);
+    const void* setAddress = reinterpret_cast<const void*>(
+        unityBase + kNpSetWakeCounterRva);
+    const void* wakeAddress = reinterpret_cast<const void*>(
+        unityBase + kNpWakeUpRva);
+    const void* sleepAddress = reinterpret_cast<const void*>(
+        unityBase + kNpPutToSleepRva);
+    return vtable == unityBase + kNpRigidDynamicVtableRva &&
+        Readable(reinterpret_cast<const void*>(vtable), 0x120) &&
+        *reinterpret_cast<const uintptr_t*>(vtable + 0x110) ==
+            unityBase + kNpSetWakeCounterRva &&
+        *reinterpret_cast<const uintptr_t*>(vtable + 0x118) ==
+            unityBase + kNpWakeUpRva &&
+        *reinterpret_cast<const uintptr_t*>(vtable + 0x11C) ==
+            unityBase + kNpPutToSleepRva &&
+        Readable(setAddress, sizeof(kNpSetWakeCounterBytes)) &&
+        EqualBytes(setAddress, kNpSetWakeCounterBytes,
+            sizeof(kNpSetWakeCounterBytes)) &&
+        Readable(wakeAddress, sizeof(kNpWakeUpBytes)) &&
+        EqualBytes(wakeAddress, kNpWakeUpBytes, sizeof(kNpWakeUpBytes)) &&
+        Readable(sleepAddress, sizeof(kNpPutToSleepBytes)) &&
+        EqualBytes(sleepAddress, kNpPutToSleepBytes,
+            sizeof(kNpPutToSleepBytes));
+}
+
+static int RestoreExistingWakeState(uintptr_t unityBase, uintptr_t rigidbody,
+    uint32_t targetWakeCounterBits, uint32_t targetSleeping,
+    WakeStateRestoreReceipt* receipt) {
+    if (!receipt) return 0;
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(WakeStateRestoreReceipt);
+    receipt->unityBase = unityBase;
+    receipt->rigidbody = rigidbody;
+    receipt->targetWakeCounterBits = targetWakeCounterBits;
+    receipt->targetSleeping = targetSleeping;
+    union WakeCounterValue { uint32_t bits; float value; } target = {};
+    target.bits = targetWakeCounterBits;
+    if (!unityBase || !rigidbody || targetSleeping > 1u)
+        return FailWakeStateRestore(receipt, WakeStateBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!Finite(target.value) || target.value < 0.0f ||
+        (targetSleeping != 0 && (targetWakeCounterBits & 0x7FFFFFFFu) != 0))
+        return FailWakeStateRestore(receipt, WakeStateInvalidTarget,
+            ERROR_INVALID_DATA);
+
+    BodyPoseState before = {};
+    uint32_t error = ERROR_SUCCESS;
+    Body2WorldResult bodyResult = CaptureBodyPoseState(
+        unityBase, rigidbody, &before, &error);
+    PopulateWakeStateBefore(receipt, before);
+    if (bodyResult != Body2WorldOk)
+        return FailWakeStateRestore(receipt, WakeStateBodyStateInvalid, error);
+    if (!WakeFunctionsMatch(unityBase, before.actor))
+        return FailWakeStateRestore(receipt, WakeStateRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+    if ((*reinterpret_cast<const uint8_t*>(before.actor + 0x6C) & 1u) != 0)
+        return FailWakeStateRestore(receipt, WakeStateBodyStateInvalid,
+            ERROR_INVALID_STATE);
+
+    const bool exact = before.wakeCounterBufferedBits == targetWakeCounterBits &&
+        before.wakeCounterCoreBits == targetWakeCounterBits &&
+        before.bufferedIsSleeping == targetSleeping &&
+        before.bodySimActive == (targetSleeping == 0 ? 1u : 0u);
+    if (exact) {
+        PopulateWakeStateAfter(receipt, before);
+        receipt->result = WakeStateOk;
+        return 1;
+    }
+    if (targetSleeping != 0)
+        return FailWakeStateRestore(receipt,
+            WakeStateSleepingTransitionUnsupported, ERROR_NOT_SUPPORTED);
+
+    NpRigidDynamicSetWakeCounter setWakeCounter =
+        reinterpret_cast<NpRigidDynamicSetWakeCounter>(
+            unityBase + kNpSetWakeCounterRva);
+    NpRigidDynamicWakeUp wakeUp = reinterpret_cast<NpRigidDynamicWakeUp>(
+        unityBase + kNpWakeUpRva);
+    if (before.bufferedIsSleeping != 0 &&
+        (targetWakeCounterBits & 0x7FFFFFFFu) == 0) {
+        wakeUp(reinterpret_cast<void*>(before.actor));
+        receipt->callMask |= 2u;
+    }
+    setWakeCounter(reinterpret_cast<void*>(before.actor), target.value);
+    receipt->callMask |= 1u;
+
+    BodyPoseState after = {};
+    error = ERROR_SUCCESS;
+    bodyResult = CaptureBodyPoseState(unityBase, rigidbody, &after, &error);
+    PopulateWakeStateAfter(receipt, after);
+    if (bodyResult != Body2WorldOk)
+        return FailWakeStateRestore(receipt, WakeStateBodyStateInvalid, error);
+    if (after.actor != before.actor || after.scene != before.scene ||
+        after.controlState != before.controlState ||
+        after.bodyBufferFlags != before.bodyBufferFlags ||
+        after.simulationRunning != before.simulationRunning ||
+        after.physicsBuffering != before.physicsBuffering ||
+        after.bodySim != before.bodySim ||
+        !EqualBytes(&after.actorPose,
+            reinterpret_cast<const uint8_t*>(&before.actorPose), sizeof(RigidPose)) ||
+        !EqualBytes(&after.body2Actor,
+            reinterpret_cast<const uint8_t*>(&before.body2Actor), sizeof(RigidPose)) ||
+        !EqualBytes(&after.bufferedBody2World,
+            reinterpret_cast<const uint8_t*>(&before.bufferedBody2World), sizeof(RigidPose)) ||
+        !EqualBytes(&after.coreBody2World,
+            reinterpret_cast<const uint8_t*>(&before.coreBody2World), sizeof(RigidPose)) ||
+        after.wakeCounterBufferedBits != targetWakeCounterBits ||
+        after.wakeCounterCoreBits != targetWakeCounterBits ||
+        after.bufferedIsSleeping != 0 || after.bodySimActive != 1)
+        return FailWakeStateRestore(receipt, WakeStateReadbackChanged,
+            ERROR_WRITE_FAULT);
+    receipt->result = WakeStateOk;
+    return 1;
+}
+
 static int GetExistingActorKinematicTarget(uintptr_t unityBase,
     uintptr_t rigidbody, KinematicTargetReceipt* receipt) {
     if (!receipt) return 0;
@@ -1668,6 +2960,27 @@ extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_set_global_pose(
     uintptr_t unityBase, uintptr_t rigidbody, const RigidPose* pose,
     SetGlobalPoseReceipt* receipt) {
     return SetExistingActorGlobalPose(unityBase, rigidbody, pose, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_capture_body2world(
+    uintptr_t unityBase, uintptr_t rigidbody,
+    Body2WorldCaptureReceipt* receipt) {
+    return CaptureExistingBody2World(unityBase, rigidbody, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_restore_body2world(
+    uintptr_t unityBase, uintptr_t rigidbody, const RigidPose* actorPose,
+    const RigidPose* body2Actor, const RigidPose* body2World,
+    Body2WorldRestoreReceipt* receipt) {
+    return RestoreExistingBody2World(unityBase, rigidbody, actorPose,
+        body2Actor, body2World, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_restore_wake_state(
+    uintptr_t unityBase, uintptr_t rigidbody, uint32_t targetWakeCounterBits,
+    uint32_t targetSleeping, WakeStateRestoreReceipt* receipt) {
+    return RestoreExistingWakeState(unityBase, rigidbody,
+        targetWakeCounterBits, targetSleeping, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_get_kinematic_target(

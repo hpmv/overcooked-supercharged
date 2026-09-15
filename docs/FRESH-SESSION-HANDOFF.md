@@ -1,6 +1,58 @@
 # Fresh-session handoff — 2026-09-08
 
-> **Current milestone (2026-09-14/15, unattended background logical input):**
+> **Current milestone (2026-09-14/15, r44i exact rewind boundary):** the
+> deterministic Story 1-1 f1048 -> f1045 rewind now completes instead of
+> failing the entity-48 kinematic wake guard. The restored f1045 baseline is
+> exact across reconstructed entities, native round/food, native physics, and
+> native clocks; Animator semantic parity passes. Replaying the identical
+> three-frame delivery input produces the same second delivery, score 28 ->
+> 56, combo/order transition, and recording SHA-256
+> `35867d2f81e4579fd0d02346cfde731058b5fa3d9770ee887c2cda248decc687`.
+> The probe still reports failure only because continuation physics now exposes
+> the next residual: chef 46 Y is `0.0404009223` on the original f1048 and
+> `0.0100009441` on replay; the report's only changed entity is 46.
+>
+> The causal chain is proved. R44e showed that `TimeManager.FrozenPhysicsData`
+> woke already-kinematic entity 48. R44f pinned the first cause to a redundant
+> `Rigidbody.velocity = Vector3.zero`; r44g proved the following redundant
+> angular-velocity setter independently did the same. R44h suppressed both only
+> for a stable, targetless, bit-exact-zero, sleeping kinematic body. That moved
+> the first transition outside the pause setters: entity 48 stayed asleep and
+> targetless through `after-early-body-pose-restore`, then entities 48-50 all
+> became awake with same-pose kinematic targets before
+> `before-final-attachment-pose-restore`.
+>
+> `WarpHandler.WarpChefAndPositions` was unconditionally rewriting position,
+> rotation, velocity, and angular velocity after the exact early body restore;
+> body-only proxies could traverse both the physics-container and body branches.
+> R44i now skips only componentwise bit-exact public-state no-ops in all three
+> branches. Every real pose/motion difference retains the original Unity setter
+> and ordering. This is authoring-warp code only; normal gameplay and plate
+> throwing are untouched. The new core is
+> `artifacts/framework-build-r44i-exact-warp-noops/SuperchargedPatch.dll`,
+> SHA-256
+> `AF0F8E7EE1D6BC067AF9E444E31D77A78B06A841376C73E1A2EC48BAD24BC8A5`.
+> The matching body module is
+> `BodyRestore-r44i-exact-warp-noops-core-bg2`, SHA-256
+> `61B6F745B27A63569A4F332EF5C874EB60DEECDA72D719D9FA965C2E49188EF9`.
+>
+> Live evidence is under
+> `artifacts/framework-migration/story11-exact-warp-noops-r44i-bg-live-r2/`;
+> the decisive summary is
+> `second-delivery-f1045-rewind-r44i-bg-r1/summary.json`, SHA-256
+> `17FB2F83E43A9164BBA73F54322C251EA8A4BC8BB31087F208FACF065ABD11E3`.
+> Offline checks pass: BodyRestore 248, kitchen-ordering 28, dynamic-warp 92,
+> and warp-component coverage 13. All 18 advancing leases in the live run were
+> exact while minimized and `Application.isFocused=false`; no user focus or
+> native gameplay input was used. The focus milestone is committed as
+> `70b8c6f`.
+>
+> **Next:** isolate chef 46's continuation-only vertical discrepancy between
+> restored f1045 and replayed f1048. Do not search or reload routes for search;
+> continue using this single exact unwind/replay cell. Commit every working
+> parity milestone locally and never push.
+
+> **Background-input milestone (2026-09-14/15, unattended logical input):**
 > advancing TAS segments no longer require the user to focus Overcooked. Gameplay
 > input remains entirely at the game's managed logical-button layer; no Win32
 > keyboard/controller input is injected. The minimized launcher now performs one
@@ -51,10 +103,10 @@
 > minimized/unfocused background contract for every advancing segment instead of
 > requiring foreground focus.
 >
-> Next: make the focus milestone commit, rebuild the active rewind modules against
-> this core hash, then resume the r43 Story 1-1 unwind-only parity cell entirely
-> minimized. Search remains disabled until full rewind parity. The older notes
-> below that request a manual focus lease are superseded by this milestone.
+> This milestone is committed as `70b8c6f`. The active rewind stack has since
+> been rebuilt against the r44i core and runs entirely minimized. Search remains
+> disabled until full rewind parity. The older notes below that request a manual
+> focus lease are superseded by this milestone.
 
 > **Current investigation (2026-09-14, r42 kinematic capture-phase skew):** a
 > fresh focused r42 f1048 -> f1045 run reproduced the real failure with complete

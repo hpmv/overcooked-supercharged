@@ -120,7 +120,11 @@ namespace SuperchargedPatch.Authoring.Modules
             owner.nativeShapeCheckpoints.Set(rebound,new NativeShapeCheckpoint {Body=rebound.Body,
                 RigidbodyPointer=currentNative.RigidbodyPointer,Shapes=new UIntPtr[0],
                 Poses=new NativeRigidPose[0],Geometries=new NativeShapeGeometry[0],
-                Colliders=new Collider[0],ColliderShapes=new UIntPtr[0]});
+                Colliders=new Collider[0],ColliderShapes=new UIntPtr[0],
+                ActorPose=saved.NativeShapes.ActorPose,Body2Actor=saved.NativeShapes.Body2Actor,
+                Body2World=saved.NativeShapes.Body2World,WakeCounterBits=saved.NativeShapes.WakeCounterBits,
+                BufferedIsSleeping=saved.NativeShapes.BufferedIsSleeping,BodySimActive=saved.NativeShapes.BodySimActive,
+                KinematicTarget=saved.NativeShapes.KinematicTarget,Lifecycle=saved.NativeShapes.Lifecycle});
 
             // Every check above is observation-only. Dispatch through the
             // permanent core so the ordinary collider-ancestor prefix, active
@@ -169,7 +173,10 @@ namespace SuperchargedPatch.Authoring.Modules
             return new NativeShapeCheckpoint {Body=value.Body,RigidbodyPointer=value.RigidbodyPointer,
                 Shapes=(UIntPtr[])value.Shapes.Clone(),Poses=(NativeRigidPose[])value.Poses.Clone(),
                 Geometries=(NativeShapeGeometry[])value.Geometries.Clone(),
-                Colliders=(Collider[])value.Colliders.Clone(),ColliderShapes=(UIntPtr[])value.ColliderShapes.Clone()};
+                Colliders=(Collider[])value.Colliders.Clone(),ColliderShapes=(UIntPtr[])value.ColliderShapes.Clone(),
+                ActorPose=value.ActorPose,Body2Actor=value.Body2Actor,Body2World=value.Body2World,
+                WakeCounterBits=value.WakeCounterBits,BufferedIsSleeping=value.BufferedIsSleeping,
+                BodySimActive=value.BodySimActive,KinematicTarget=value.KinematicTarget,Lifecycle=value.Lifecycle};
         }
 
         private static bool SameDynamicIncarnation(Snapshot target,Snapshot current)

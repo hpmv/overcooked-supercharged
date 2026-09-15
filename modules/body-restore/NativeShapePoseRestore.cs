@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Threading;
 using HarmonyLib;
@@ -46,6 +47,14 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeShapeGeometry[] Geometries;
             internal Collider[] Colliders;
             internal UIntPtr[] ColliderShapes;
+            internal NativeRigidPose ActorPose;
+            internal NativeRigidPose Body2Actor;
+            internal NativeRigidPose Body2World;
+            internal uint WakeCounterBits;
+            internal uint BufferedIsSleeping;
+            internal uint BodySimActive;
+            internal NativeKinematicTargetReceipt KinematicTarget;
+            internal NativeBody2WorldCaptureReceipt Lifecycle;
         }
 
         private sealed class WeakShapeEntry
@@ -60,15 +69,45 @@ namespace SuperchargedPatch.Authoring.Modules
             internal Collider HistoricalCollider,CurrentCollider;
         }
 
+        public sealed class NativeFreezeObservationState
+        {
+            internal Snapshot Row;
+            internal Rigidbody Body;
+            internal object Before;
+            internal int Layer;
+        }
+
+        private sealed class NativeFreezeSetterObservationState
+        {
+            internal Snapshot Row;
+            internal Rigidbody Body;
+            internal object Before,ManagedBefore,RequestedValue;
+            internal string Stage,Setter;
+        }
+
         // The Unity 2017 managed profile has no ConditionalWeakTable. Keep weak
         // keys explicitly so checkpoint-history eviction also releases sidecars.
         private sealed class WeakShapeTable
         {
+            private const uint SweepInterval=4096;
             private readonly Dictionary<int,List<WeakShapeEntry>> buckets=
                 new Dictionary<int,List<WeakShapeEntry>>();
+            private uint setsSinceSweep;
+
+            internal void Sweep()
+            {
+                foreach(int key in new List<int>(buckets.Keys))
+                {
+                    var entries=buckets[key];
+                    for(int i=entries.Count-1;i>=0;i--)
+                        if(entries[i].Snapshot.Target==null)entries.RemoveAt(i);
+                    if(entries.Count==0)buckets.Remove(key);
+                }
+            }
 
             internal void Set(Snapshot snapshot,NativeShapeCheckpoint checkpoint)
             {
+                if(++setsSinceSweep>=SweepInterval){setsSinceSweep=0;Sweep();}
                 int key=System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(snapshot);
                 List<WeakShapeEntry> entries;
                 if(!buckets.TryGetValue(key,out entries)) {
@@ -84,6 +123,19 @@ namespace SuperchargedPatch.Authoring.Modules
                     }
                 }
                 entries.Add(new WeakShapeEntry {Snapshot=new WeakReference(snapshot),Checkpoint=checkpoint});
+            }
+
+            internal void Remove(Snapshot snapshot)
+            {
+                int key=System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(snapshot);
+                List<WeakShapeEntry> entries;
+                if(!buckets.TryGetValue(key,out entries))return;
+                for(int i=entries.Count-1;i>=0;i--)
+                {
+                    object target=entries[i].Snapshot.Target;
+                    if(target==null||ReferenceEquals(target,snapshot))entries.RemoveAt(i);
+                }
+                if(entries.Count==0)buckets.Remove(key);
             }
 
             internal bool TryGetValue(Snapshot snapshot,out NativeShapeCheckpoint checkpoint)
@@ -105,22 +157,64 @@ namespace SuperchargedPatch.Authoring.Modules
                 return false;
             }
 
-            internal void Clear(){buckets.Clear();}
+            internal void Clear(){buckets.Clear();setsSinceSweep=0;}
         }
 
         private static BodyRestoreModule nativeShapeCaptureOwner;
         private Harmony nativeShapeCaptureHarmony;
         private readonly WeakShapeTable nativeShapeCheckpoints=new WeakShapeTable();
+        private readonly List<object> nativeBody2WorldCaptures=new List<object>();
         private NativeCaptureShapePoses nativeCaptureShapePoses;
         private NativeRestoreShapePoses nativeRestoreShapePoses;
         private readonly List<object> nativeShapePoseRestores=new List<object>();
         private readonly List<object> nativeShapeTopologyMismatches=new List<object>();
+        private readonly List<object> nativeKinematicWakeMismatches=new List<object>();
+        private readonly List<object> nativeKinematicStageObservations=new List<object>();
+        private readonly List<object> nativePostMaintenanceComparisons=new List<object>();
+        private readonly List<object> nativeKinematicFreezeObservations=new List<object>();
+        private readonly List<object> nativeKinematicFreezeSetterObservations=new List<object>();
+        private readonly Dictionary<Rigidbody,Snapshot> latestNativeRowsByBody=new Dictionary<Rigidbody,Snapshot>();
         private readonly List<object> nativeShapeGeometryRebinds=new List<object>();
         private readonly List<PendingRecreatedShape> pendingRecreatedShapes=new List<PendingRecreatedShape>();
         private long nativeShapePoseCaptures;
         private string nativeShapePoseCaptureFailure;
         private bool nativeShapeGeometryRebindPoisoned;
         private string nativeShapeGeometryRebindFailure;
+        private int nativeKinematicStageFrame=-1,nativeKinematicStagesDiscarded;
+        private string currentNativeKinematicStage;
+        private Snapshot[] pendingNativePostMaintenanceTargets,currentNativePostMaintenanceTargets;
+        private int pendingNativePostMaintenanceArmUnityFrame=-1;
+        private FieldInfo frozenPhysicsBody,frozenPhysicsIsKinematic;
+        private NativeFreezeObservationState nativeKinematicFreezeSetterScope;
+        private string nativeKinematicFreezeSetterStage;
+        private int nativeKinematicFreezeSetterTranspilers;
+
+        private object NativeKinematicStageDiagnostics
+        {
+            get {return new Dictionary<string,object>{
+                {"scope","read-only-native-kinematic-wake-and-target-stage-observations"},
+                {"frame",nativeKinematicStageFrame},{"maximumStages",32},
+                {"discardedOlderStages",nativeKinematicStagesDiscarded},
+                {"stages",nativeKinematicStageObservations.ToArray()}};}
+        }
+
+        private object NativePostMaintenanceDiagnostics
+        {
+            get {return new Dictionary<string,object>{
+                {"scope","read-only-pre-pause-target-versus-immediate-post-maintenance-native-body-comparison"},
+                {"pending",pendingNativePostMaintenanceTargets!=null},
+                {"armUnityFrame",pendingNativePostMaintenanceArmUnityFrame},
+                {"comparisons",nativePostMaintenanceComparisons.ToArray()}};}
+        }
+
+        private object NativeKinematicFreezeDiagnostics
+        {
+            get {return new Dictionary<string,object>{
+                {"scope","read-only-native-lifecycle-before-and-after-TimeManager-FrozenPhysicsData-for-already-kinematic-checkpoint-bodies"},
+                {"transpiledMethods",nativeKinematicFreezeSetterTranspilers},
+                {"observations",nativeKinematicFreezeObservations.ToArray()},
+                {"setterObservations",nativeKinematicFreezeSetterObservations.ToArray()}};}
+        }
 
         private bool NativeShapeCaptureActive
         {
@@ -130,13 +224,35 @@ namespace SuperchargedPatch.Authoring.Modules
         private void ActivateNativeShapeCapture()
         {
             if(nativeShapeCaptureHarmony!=null)return;
-            if(nativeCaptureShapePoses==null||nativeRestoreShapePoses==null||cachedPtr==null)
-                throw new InvalidOperationException("Native shape-state capture requires the version-6 native helper.");
+            if(nativeCaptureShapePoses==null||nativeRestoreShapePoses==null||nativeCaptureBody2World==null||
+                nativeRestoreBody2World==null||nativeRestoreWakeState==null||nativeGetKinematicTarget==null||cachedPtr==null)
+                throw new InvalidOperationException("Native shape/body-state capture requires the version-9 native helper.");
             if(nativeShapeCaptureOwner!=null)
                 throw new InvalidOperationException("Another native shape-pose capture module is active.");
             var capture=AccessTools.DeclaredMethod(typeof(SuperchargedPatch.NativeBodyPoseCheckpoint),
                 "Capture",new[]{typeof(HashSet<int>)});
             var postfix=GetType().GetMethod("AfterNativeBodyCapture",BindingFlags.Public|BindingFlags.Static);
+            var beginStage=AccessTools.DeclaredMethod(typeof(SuperchargedPatch.NativeBodyPoseCheckpoint),
+                "BeginStageObservations",new[]{typeof(int)});
+            var beginStagePostfix=GetType().GetMethod("AfterBeginNativeBodyStageObservations",BindingFlags.Public|BindingFlags.Static);
+            var observeStage=AccessTools.DeclaredMethod(typeof(SuperchargedPatch.NativeBodyPoseCheckpoint),
+                "ObserveStage",new[]{typeof(Snapshot[]),typeof(string)});
+            var observeStagePrefix=GetType().GetMethod("BeforeNativeBodyStageObservation",BindingFlags.Public|BindingFlags.Static);
+            var observeStagePostfix=GetType().GetMethod("AfterNativeBodyStageObservation",BindingFlags.Public|BindingFlags.Static);
+            var controller=typeof(SuperchargedPatch.Bridge.NativeSessionBridge).Assembly.GetType(
+                "SuperchargedPatch.ControllerHandler",true);
+            var update=AccessTools.DeclaredMethod(controller,"Update",Type.EmptyTypes);
+            var postMaintenance=GetType().GetMethod("ObserveNativePostMaintenance",BindingFlags.Public|BindingFlags.Static);
+            var frozen=typeof(TimeManager).GetNestedType("FrozenPhysicsData",BindingFlags.NonPublic);
+            var freezeConstructor=frozen==null?null:AccessTools.Constructor(frozen,new[]{typeof(Rigidbody),typeof(int)});
+            var unfreeze=frozen==null?null:AccessTools.DeclaredMethod(frozen,"Unfreeze",Type.EmptyTypes);
+            frozenPhysicsBody=frozen==null?null:frozen.GetField("m_frozenBody",BindingFlags.Instance|BindingFlags.NonPublic);
+            frozenPhysicsIsKinematic=frozen==null?null:frozen.GetField("m_isKinematic",BindingFlags.Instance|BindingFlags.NonPublic);
+            var beforeFreeze=GetType().GetMethod("BeforeNativeKinematicFreeze",BindingFlags.Public|BindingFlags.Static);
+            var afterFreeze=GetType().GetMethod("AfterNativeKinematicFreeze",BindingFlags.Public|BindingFlags.Static);
+            var beforeUnfreeze=GetType().GetMethod("BeforeNativeKinematicUnfreeze",BindingFlags.Public|BindingFlags.Static);
+            var afterUnfreeze=GetType().GetMethod("AfterNativeKinematicUnfreeze",BindingFlags.Public|BindingFlags.Static);
+            var transpileSetters=GetType().GetMethod("TranspileNativeKinematicFreezeSetters",BindingFlags.Public|BindingFlags.Static);
             var rebindShape=AccessTools.DeclaredMethod(typeof(SuperchargedPatch.NativeBodyColliderCheckpoint),
                 "RebindRecreatedOwnerShape",new[]{typeof(Shape),typeof(Shape),typeof(Transform),typeof(Transform),typeof(Rigidbody)});
             var rebindShapePostfix=GetType().GetMethod("AfterRebindRecreatedOwnerShape",BindingFlags.Public|BindingFlags.Static);
@@ -144,6 +260,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 "RebindSurvivingWithRecreatedColliders",new[]{typeof(Snapshot),typeof(Snapshot),typeof(Shape[])});
             var rebindBodyPostfix=GetType().GetMethod("AfterRebindSurvivingWithRecreatedColliders",BindingFlags.Public|BindingFlags.Static);
             if(capture==null||capture.ReturnType!=typeof(Snapshot[])||postfix==null
+                ||beginStage==null||beginStage.ReturnType!=typeof(void)||beginStagePostfix==null
+                ||observeStage==null||observeStage.ReturnType!=typeof(void)||observeStagePrefix==null||observeStagePostfix==null
+                ||update==null||update.ReturnType!=typeof(void)||postMaintenance==null
+                ||freezeConstructor==null||unfreeze==null||unfreeze.ReturnType!=typeof(void)
+                ||frozenPhysicsBody==null||frozenPhysicsBody.FieldType!=typeof(Rigidbody)
+                ||frozenPhysicsIsKinematic==null||frozenPhysicsIsKinematic.FieldType!=typeof(bool)
+                ||beforeFreeze==null||afterFreeze==null||beforeUnfreeze==null||afterUnfreeze==null||transpileSetters==null
                 ||rebindShape==null||rebindShape.ReturnType!=typeof(Shape)||rebindShapePostfix==null
                 ||rebindBody==null||rebindBody.ReturnType!=typeof(Snapshot)||rebindBodyPostfix==null)
                 throw new InvalidOperationException("Frozen native-body checkpoint capture contract differs.");
@@ -153,6 +276,18 @@ namespace SuperchargedPatch.Authoring.Modules
             pendingRecreatedShapes.Clear();nativeShapeGeometryRebindPoisoned=false;nativeShapeGeometryRebindFailure=null;
             try {
                 nativeShapeCaptureHarmony.Patch(capture,postfix:new HarmonyMethod(postfix));
+                nativeShapeCaptureHarmony.Patch(beginStage,postfix:new HarmonyMethod(beginStagePostfix));
+                nativeShapeCaptureHarmony.Patch(observeStage,prefix:new HarmonyMethod(observeStagePrefix),
+                    postfix:new HarmonyMethod(observeStagePostfix));
+                var postMaintenancePatch=new HarmonyMethod(postMaintenance);postMaintenancePatch.priority=Priority.Last;
+                nativeShapeCaptureHarmony.Patch(update,prefix:postMaintenancePatch);
+                var setterTranspilerPatch=new HarmonyMethod(transpileSetters);
+                nativeShapeCaptureHarmony.Patch(freezeConstructor,prefix:new HarmonyMethod(beforeFreeze),
+                    postfix:new HarmonyMethod(afterFreeze),transpiler:setterTranspilerPatch);
+                nativeShapeCaptureHarmony.Patch(unfreeze,prefix:new HarmonyMethod(beforeUnfreeze),
+                    postfix:new HarmonyMethod(afterUnfreeze),transpiler:setterTranspilerPatch);
+                if(nativeKinematicFreezeSetterTranspilers!=2)
+                    throw new InvalidOperationException("FrozenPhysicsData setter transpiler count differs.");
                 nativeShapeCaptureHarmony.Patch(rebindShape,postfix:new HarmonyMethod(rebindShapePostfix));
                 nativeShapeCaptureHarmony.Patch(rebindBody,postfix:new HarmonyMethod(rebindBodyPostfix));
             }
@@ -166,18 +301,489 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ReferenceEquals(nativeShapeCaptureOwner,this))nativeShapeCaptureOwner=null;
             nativeShapeCheckpoints.Clear();
             pendingRecreatedShapes.Clear();nativeShapeGeometryRebindPoisoned=false;nativeShapeGeometryRebindFailure=null;
+            currentNativeKinematicStage=null;nativeKinematicStageObservations.Clear();
+            nativeKinematicStageFrame=-1;nativeKinematicStagesDiscarded=0;
+            pendingNativePostMaintenanceTargets=null;currentNativePostMaintenanceTargets=null;
+            pendingNativePostMaintenanceArmUnityFrame=-1;nativePostMaintenanceComparisons.Clear();
+            nativeKinematicFreezeObservations.Clear();nativeKinematicFreezeSetterObservations.Clear();
+            latestNativeRowsByBody.Clear();nativeKinematicFreezeSetterScope=null;
+            nativeKinematicFreezeSetterStage=null;nativeKinematicFreezeSetterTranspilers=0;
+            frozenPhysicsBody=null;frozenPhysicsIsKinematic=null;
         }
 
         public static void AfterNativeBodyCapture(Snapshot[] __result)
         {
             var owner=nativeShapeCaptureOwner;
             if(owner==null)return;
-            try {owner.CaptureNativeShapeTargets(__result);}
+            try {
+                owner.CaptureNativeShapeTargets(__result);
+                if(owner.currentNativeKinematicStage!=null) {
+                    try {
+                        if(owner.currentNativeKinematicStage=="after-final-maintenance")
+                            owner.RecordNativePostMaintenanceComparison(
+                                owner.currentNativePostMaintenanceTargets,__result);
+                        else owner.RecordNativeKinematicStage(__result,owner.currentNativeKinematicStage);
+                    }
+                    finally {if(__result!=null)foreach(var row in __result)if(row!=null)owner.nativeShapeCheckpoints.Remove(row);}
+                }
+            }
             catch(Exception error) {
                 // Observation must not change ordinary gameplay. A snapshot that
                 // lacks this sidecar is rejected before any later rewind mutation.
                 owner.nativeShapePoseCaptureFailure=error.ToString();
+                if(owner.currentNativeKinematicStage!=null)
+                    owner.RecordNativeKinematicStageFailure(owner.currentNativeKinematicStage,error);
             }
+        }
+
+        public static void AfterBeginNativeBodyStageObservations(int __0)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null)return;
+            owner.nativeKinematicStageFrame=__0;owner.nativeKinematicStagesDiscarded=0;
+            owner.nativeKinematicStageObservations.Clear();owner.currentNativeKinematicStage=null;
+        }
+
+        public static void BeforeNativeBodyStageObservation(Snapshot[] __0,string __1)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null)return;
+            owner.currentNativeKinematicStage=__1??"<null>";
+            if(__1=="after-final-pause"&&__0!=null) {
+                owner.pendingNativePostMaintenanceTargets=(Snapshot[])__0.Clone();
+                owner.pendingNativePostMaintenanceArmUnityFrame=Time.frameCount;
+            }
+            if(__1=="after-final-maintenance")owner.currentNativePostMaintenanceTargets=__0;
+        }
+
+        public static void AfterNativeBodyStageObservation()
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner!=null) {
+                owner.currentNativeKinematicStage=null;
+                owner.currentNativePostMaintenanceTargets=null;
+            }
+        }
+
+        public static void ObserveNativePostMaintenance()
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null||owner.pendingNativePostMaintenanceTargets==null||
+                Time.frameCount<=owner.pendingNativePostMaintenanceArmUnityFrame||
+                !SuperchargedPatch.Bridge.NativeSessionBridge.KitchenReady||
+                !TimeManager.IsPaused(TimeManager.PauseLayer.Main)||Physics.autoSimulation)return;
+            var target=owner.pendingNativePostMaintenanceTargets;
+            owner.pendingNativePostMaintenanceTargets=null;
+            try {SuperchargedPatch.NativeBodyPoseCheckpoint.ObserveStage(target,"after-final-maintenance");}
+            catch(Exception error) {
+                owner.AddNativePostMaintenanceComparison(new Dictionary<string,object>{
+                    {"unityFrame",Time.frameCount},{"captured",false},{"error",error.ToString()}});
+            }
+        }
+
+        public static void BeforeNativeKinematicFreeze(Rigidbody __0,int __1,
+            out NativeFreezeObservationState __state)
+        {
+            __state=null;var owner=nativeShapeCaptureOwner;
+            if(owner!=null){owner.nativeKinematicFreezeSetterScope=null;owner.nativeKinematicFreezeSetterStage=null;}
+            if(owner==null||__0==null||!__0.isKinematic)return;
+            Snapshot row;
+            if(!owner.latestNativeRowsByBody.TryGetValue(__0,out row)||row==null)return;
+            try {
+                __state=new NativeFreezeObservationState {Row=row,Body=__0,Layer=__1,
+                    Before=owner.CaptureNativeShapeCheckpoint(__0,row.Colliders)};
+                owner.nativeKinematicFreezeSetterScope=__state;
+                owner.nativeKinematicFreezeSetterStage="freeze-setter";
+            }
+            catch(Exception error){owner.AddNativeKinematicFreezeFailure("freeze-before",row,error);}
+        }
+
+        public static void AfterNativeKinematicFreeze(NativeFreezeObservationState __state)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null)return;
+            try {if(__state!=null)owner.RecordNativeKinematicFreezeTransition("freeze",__state);}
+            finally {owner.nativeKinematicFreezeSetterScope=null;owner.nativeKinematicFreezeSetterStage=null;}
+        }
+
+        public static void BeforeNativeKinematicUnfreeze(object __instance,
+            out NativeFreezeObservationState __state)
+        {
+            __state=null;var owner=nativeShapeCaptureOwner;
+            if(owner!=null){owner.nativeKinematicFreezeSetterScope=null;owner.nativeKinematicFreezeSetterStage=null;}
+            if(owner==null||__instance==null)return;
+            try {
+                if(!(bool)owner.frozenPhysicsIsKinematic.GetValue(__instance))return;
+                var body=(Rigidbody)owner.frozenPhysicsBody.GetValue(__instance);Snapshot row;
+                if(body==null||!owner.latestNativeRowsByBody.TryGetValue(body,out row)||row==null)return;
+                __state=new NativeFreezeObservationState {Row=row,Body=body,Layer=-1,
+                    Before=owner.CaptureNativeShapeCheckpoint(body,row.Colliders)};
+                owner.nativeKinematicFreezeSetterScope=__state;
+                owner.nativeKinematicFreezeSetterStage="unfreeze-setter";
+            }
+            catch(Exception error){owner.AddNativeKinematicFreezeFailure("unfreeze-before",null,error);}
+        }
+
+        public static void AfterNativeKinematicUnfreeze(NativeFreezeObservationState __state)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null)return;
+            try {if(__state!=null)owner.RecordNativeKinematicFreezeTransition("unfreeze",__state);}
+            finally {owner.nativeKinematicFreezeSetterScope=null;owner.nativeKinematicFreezeSetterStage=null;}
+        }
+
+        public static IEnumerable<CodeInstruction> TranspileNativeKinematicFreezeSetters(
+            IEnumerable<CodeInstruction> instructions,MethodBase __originalMethod)
+        {
+            var velocity=AccessTools.PropertySetter(typeof(Rigidbody),"velocity");
+            var angular=AccessTools.PropertySetter(typeof(Rigidbody),"angularVelocity");
+            var kinematic=AccessTools.PropertySetter(typeof(Rigidbody),"isKinematic");
+            var gravity=AccessTools.PropertySetter(typeof(Rigidbody),"useGravity");
+            var wrappedVelocity=AccessTools.Method(typeof(BodyRestoreModule),
+                "SetVelocityWithNativeFreezeObservation");
+            var wrappedAngular=AccessTools.Method(typeof(BodyRestoreModule),
+                "SetAngularVelocityWithNativeFreezeObservation");
+            var wrappedKinematic=AccessTools.Method(typeof(BodyRestoreModule),
+                "SetIsKinematicWithNativeFreezeObservation");
+            var wrappedGravity=AccessTools.Method(typeof(BodyRestoreModule),
+                "SetUseGravityWithNativeFreezeObservation");
+            if(velocity==null||angular==null||kinematic==null||gravity==null||wrappedVelocity==null
+                ||wrappedAngular==null||wrappedKinematic==null||wrappedGravity==null)
+                throw new InvalidOperationException("FrozenPhysicsData Rigidbody setter contract differs.");
+            int velocityCount=0,angularCount=0,kinematicCount=0,gravityCount=0;
+            var result=new List<CodeInstruction>();
+            foreach(var instruction in instructions)
+            {
+                if((instruction.opcode==OpCodes.Call||instruction.opcode==OpCodes.Callvirt)
+                    &&Equals(instruction.operand,velocity))
+                {instruction.opcode=OpCodes.Call;instruction.operand=wrappedVelocity;velocityCount++;}
+                else if((instruction.opcode==OpCodes.Call||instruction.opcode==OpCodes.Callvirt)
+                    &&Equals(instruction.operand,angular))
+                {instruction.opcode=OpCodes.Call;instruction.operand=wrappedAngular;angularCount++;}
+                else if((instruction.opcode==OpCodes.Call||instruction.opcode==OpCodes.Callvirt)
+                    &&Equals(instruction.operand,kinematic))
+                {instruction.opcode=OpCodes.Call;instruction.operand=wrappedKinematic;kinematicCount++;}
+                else if((instruction.opcode==OpCodes.Call||instruction.opcode==OpCodes.Callvirt)
+                    &&Equals(instruction.operand,gravity))
+                {instruction.opcode=OpCodes.Call;instruction.operand=wrappedGravity;gravityCount++;}
+                result.Add(instruction);
+            }
+            if(velocityCount!=1||angularCount!=1||kinematicCount!=1||gravityCount!=1)
+                throw new InvalidOperationException("FrozenPhysicsData setter call count differs in "+
+                    (__originalMethod==null?"<unknown>":__originalMethod.Name)+": velocity="+velocityCount+
+                    " angular="+angularCount+" kinematic="+kinematicCount+" gravity="+gravityCount+".");
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null)throw new InvalidOperationException("FrozenPhysicsData setter observer has no active owner.");
+            owner.nativeKinematicFreezeSetterTranspilers++;
+            return result;
+        }
+
+        public static void SetVelocityWithNativeFreezeObservation(Rigidbody body,Vector3 value)
+        {
+            var state=BeginNativeKinematicFreezeSetterObservation(body,"velocity",VectorDiagnostic(value));
+            string suppression;
+            if(ShouldSuppressRedundantSleepingKinematicMotion(
+                state,body,value,false,out suppression)) {
+                EndNativeKinematicFreezeSetterObservation(state,false,suppression);
+                return;
+            }
+            body.velocity=value;
+            EndNativeKinematicFreezeSetterObservation(state,true,null);
+        }
+
+        public static void SetAngularVelocityWithNativeFreezeObservation(Rigidbody body,Vector3 value)
+        {
+            var state=BeginNativeKinematicFreezeSetterObservation(body,"angularVelocity",VectorDiagnostic(value));
+            string suppression;
+            if(ShouldSuppressRedundantSleepingKinematicMotion(
+                state,body,value,true,out suppression)) {
+                EndNativeKinematicFreezeSetterObservation(state,false,suppression);
+                return;
+            }
+            body.angularVelocity=value;
+            EndNativeKinematicFreezeSetterObservation(state,true,null);
+        }
+
+        public static void SetIsKinematicWithNativeFreezeObservation(Rigidbody body,bool value)
+        {
+            var state=BeginNativeKinematicFreezeSetterObservation(body,"isKinematic",value);
+            body.isKinematic=value;
+            EndNativeKinematicFreezeSetterObservation(state,true,null);
+        }
+
+        public static void SetUseGravityWithNativeFreezeObservation(Rigidbody body,bool value)
+        {
+            var state=BeginNativeKinematicFreezeSetterObservation(body,"useGravity",value);
+            body.useGravity=value;
+            EndNativeKinematicFreezeSetterObservation(state,true,null);
+        }
+
+        private static bool ShouldSuppressRedundantSleepingKinematicMotion(
+            NativeFreezeSetterObservationState state,Rigidbody body,Vector3 value,
+            bool angularSetter,out string reason)
+        {
+            reason=null;
+            if(state==null||body==null||state.Row==null||state.Before==null||
+                (state.Stage!="freeze-setter"&&state.Stage!="unfreeze-setter"))return false;
+            var native=(NativeShapeCheckpoint)state.Before;
+            Vector3 linear=body.velocity,angular=body.angularVelocity;
+            Vector3 current=angularSetter?angular:linear;
+            if(!state.Row.RawIsKinematic||!body.isKinematic||!body.IsSleeping()||
+                linear.x!=0f||linear.y!=0f||linear.z!=0f||
+                angular.x!=0f||angular.y!=0f||angular.z!=0f||
+                value.x!=current.x||value.y!=current.y||value.z!=current.z||
+                native.WakeCounterBits!=0||native.BufferedIsSleeping!=1||native.BodySimActive!=0||
+                native.KinematicTarget.UnityIsKinematic!=1||native.KinematicTarget.PublicTargetValid!=0||
+                native.KinematicTarget.BufferedTargetValid!=0||native.KinematicTarget.SimStateIsKinematic!=1||
+                native.KinematicTarget.CoreTargetValid!=0||native.Lifecycle.LifecycleStable!=1)return false;
+            reason=angularSetter
+                ?"authoring-freeze-redundant-zero-angular-velocity-on-stable-targetless-sleeping-kinematic"
+                :"authoring-freeze-redundant-zero-velocity-on-stable-targetless-sleeping-kinematic";
+            return true;
+        }
+
+        private static NativeFreezeSetterObservationState BeginNativeKinematicFreezeSetterObservation(
+            Rigidbody body,string setter,object requestedValue)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null||owner.nativeKinematicFreezeSetterScope==null
+                ||!ReferenceEquals(owner.nativeKinematicFreezeSetterScope.Body,body))return null;
+            var scope=owner.nativeKinematicFreezeSetterScope;
+            try {
+                return new NativeFreezeSetterObservationState {Row=scope.Row,Body=body,
+                    Stage=owner.nativeKinematicFreezeSetterStage,Setter=setter,RequestedValue=requestedValue,
+                    ManagedBefore=ManagedRigidbodyDiagnostic(body),
+                    Before=owner.CaptureNativeShapeCheckpoint(body,scope.Row.Colliders)};
+            }
+            catch(Exception error) {
+                owner.AddNativeKinematicFreezeSetterObservation(new Dictionary<string,object>{
+                    {"stage",owner.nativeKinematicFreezeSetterStage??"<null>"},{"setter",setter},
+                    {"unityFrame",Time.frameCount},{"entityId",scope.Row==null?-1:scope.Row.EntityId},
+                    {"requested",requestedValue},{"captured",false},{"phase","before"},
+                    {"error",error.ToString()}});
+                return null;
+            }
+        }
+
+        private static void EndNativeKinematicFreezeSetterObservation(NativeFreezeSetterObservationState state,
+            bool setterInvoked,string suppressionReason)
+        {
+            var owner=nativeShapeCaptureOwner;
+            if(owner==null||state==null)return;
+            try {
+                var after=owner.CaptureNativeShapeCheckpoint(state.Body,state.Row.Colliders);
+                owner.AddNativeKinematicFreezeSetterObservation(new Dictionary<string,object>{
+                    {"stage",state.Stage??"<null>"},{"setter",state.Setter},{"unityFrame",Time.frameCount},
+                    {"entityId",state.Row.EntityId},{"requested",state.RequestedValue},{"captured",true},
+                    {"setterInvoked",setterInvoked},{"suppressionReason",suppressionReason},
+                    {"managedBefore",state.ManagedBefore},{"managedAfter",ManagedRigidbodyDiagnostic(state.Body)},
+                    {"before",owner.NativeBodyCheckpointDiagnostic(state.Row,
+                        (NativeShapeCheckpoint)state.Before)},
+                    {"after",owner.NativeBodyCheckpointDiagnostic(state.Row,after)}});
+            }
+            catch(Exception error) {
+                owner.AddNativeKinematicFreezeSetterObservation(new Dictionary<string,object>{
+                    {"stage",state.Stage??"<null>"},{"setter",state.Setter},{"unityFrame",Time.frameCount},
+                    {"entityId",state.Row==null?-1:state.Row.EntityId},{"requested",state.RequestedValue},
+                    {"setterInvoked",setterInvoked},{"suppressionReason",suppressionReason},
+                    {"captured",false},{"phase","after"},{"error",error.ToString()}});
+            }
+        }
+
+        private static object ManagedRigidbodyDiagnostic(Rigidbody body)
+        {
+            return new Dictionary<string,object>{{"velocity",VectorDiagnostic(body.velocity)},
+                {"angularVelocity",VectorDiagnostic(body.angularVelocity)},
+                {"isKinematic",body.isKinematic},{"useGravity",body.useGravity},
+                {"isSleeping",body.IsSleeping()}};
+        }
+
+        private static object VectorDiagnostic(Vector3 value)
+        {
+            return new[]{value.x,value.y,value.z};
+        }
+
+        private void AddNativeKinematicFreezeSetterObservation(object value)
+        {
+            nativeKinematicFreezeSetterObservations.Add(value);
+            if(nativeKinematicFreezeSetterObservations.Count>1024)
+                nativeKinematicFreezeSetterObservations.RemoveAt(0);
+        }
+
+        private void RecordNativeKinematicFreezeTransition(string stage,NativeFreezeObservationState state)
+        {
+            try {
+                var after=CaptureNativeShapeCheckpoint(state.Body,state.Row.Colliders);
+                AddNativeKinematicFreezeObservation(new Dictionary<string,object>{{"stage",stage},
+                    {"unityFrame",Time.frameCount},{"entityId",state.Row.EntityId},{"layer",state.Layer},
+                    {"before",NativeBodyCheckpointDiagnostic(state.Row,(NativeShapeCheckpoint)state.Before)},
+                    {"after",NativeBodyCheckpointDiagnostic(state.Row,after)}});
+            }
+            catch(Exception error){AddNativeKinematicFreezeFailure(stage+"-after",state.Row,error);}
+        }
+
+        private void AddNativeKinematicFreezeFailure(string stage,Snapshot row,Exception error)
+        {
+            AddNativeKinematicFreezeObservation(new Dictionary<string,object>{{"stage",stage},
+                {"unityFrame",Time.frameCount},{"entityId",row==null?-1:row.EntityId},
+                {"captured",false},{"error",error.ToString()}});
+        }
+
+        private void AddNativeKinematicFreezeObservation(object value)
+        {
+            nativeKinematicFreezeObservations.Add(value);
+            if(nativeKinematicFreezeObservations.Count>256)nativeKinematicFreezeObservations.RemoveAt(0);
+        }
+
+        private void RecordNativeKinematicStage(Snapshot[] snapshots,string stage)
+        {
+            var bodies=new List<object>();
+            if(snapshots==null)throw new ArgumentNullException("snapshots");
+            foreach(var row in snapshots)
+            {
+                NativeShapeCheckpoint value;
+                if(row==null||row.Body==null||!row.Body.isKinematic)continue;
+                if(!nativeShapeCheckpoints.TryGetValue(row,out value)||value==null)
+                    throw new InvalidOperationException("Native kinematic stage sidecar is missing for entity "+row.EntityId+".");
+                bodies.Add(new Dictionary<string,object>{{"entityId",row.EntityId},
+                    {"bodyInstanceId",row.Body.GetInstanceID()},{"rigidbody",NativeHex(value.RigidbodyPointer)},
+                    {"wakeCounterBits",value.WakeCounterBits},{"bufferedIsSleeping",value.BufferedIsSleeping},
+                    {"bodySimActive",value.BodySimActive},{"publicIsSleeping",row.Body.IsSleeping()},
+                    {"actorPose",NativePoseDiagnostic(value.ActorPose)},
+                    {"kinematicTarget",NativeKinematicTargetDiagnostic(value.KinematicTarget)},
+                    {"lifecycle",NativeLifecycleDiagnostic(value.Lifecycle)}});
+            }
+            AddNativeKinematicStageObservation(new Dictionary<string,object>{{"stage",stage},
+                {"bodyCount",bodies.Count},{"bodies",bodies.ToArray()},{"captureValidated",true}});
+        }
+
+        private void RecordNativePostMaintenanceComparison(Snapshot[] targets,Snapshot[] current)
+        {
+            if(targets==null||current==null)throw new ArgumentNullException(targets==null?"targets":"current");
+            var byEntity=new Dictionary<int,Snapshot>();
+            foreach(var row in targets) {
+                if(row==null||byEntity.ContainsKey(row.EntityId))
+                    throw new InvalidOperationException("Post-maintenance target body identity is invalid.");
+                byEntity.Add(row.EntityId,row);
+            }
+            var bodies=new List<object>();bool allExact=targets.Length==current.Length;
+            foreach(var row in current) {
+                Snapshot targetRow;NativeShapeCheckpoint targetValue,currentValue;
+                if(row==null||!byEntity.TryGetValue(row.EntityId,out targetRow)||
+                    !nativeShapeCheckpoints.TryGetValue(targetRow,out targetValue)||targetValue==null||
+                    !nativeShapeCheckpoints.TryGetValue(row,out currentValue)||currentValue==null)
+                    throw new InvalidOperationException("Post-maintenance native sidecar is missing for a captured body.");
+                bool identityExact=targetValue.RigidbodyPointer.Equals(currentValue.RigidbodyPointer)&&
+                    targetValue.Lifecycle.Actor.Equals(currentValue.Lifecycle.Actor)&&
+                    targetValue.Lifecycle.BodySim.Equals(currentValue.Lifecycle.BodySim)&&
+                    targetValue.Lifecycle.BodyCore.Equals(currentValue.Lifecycle.BodyCore);
+                bool poseExact=SameBits(targetValue.ActorPose,currentValue.ActorPose)&&
+                    SameBits(targetValue.Body2Actor,currentValue.Body2Actor)&&
+                    SameBits(targetValue.Body2World,currentValue.Body2World);
+                bool wakeExact=targetValue.WakeCounterBits==currentValue.WakeCounterBits&&
+                    targetValue.BufferedIsSleeping==currentValue.BufferedIsSleeping&&
+                    targetValue.BodySimActive==currentValue.BodySimActive;
+                bool lifecycleExact=SameNativeLifecycle(targetValue.Lifecycle,currentValue.Lifecycle);
+                bool kinematicTargetExact=targetRow.RawIsKinematic==row.RawIsKinematic&&
+                    (!targetRow.RawIsKinematic||SameNativeKinematicTarget(
+                        targetValue.KinematicTarget,currentValue.KinematicTarget));
+                bool exact=identityExact&&poseExact&&wakeExact&&lifecycleExact&&kinematicTargetExact;
+                allExact&=exact;
+                bodies.Add(new Dictionary<string,object>{{"entityId",row.EntityId},{"exact",exact},
+                    {"identityExact",identityExact},{"poseExact",poseExact},{"wakeExact",wakeExact},
+                    {"lifecycleExact",lifecycleExact},{"kinematicTargetExact",kinematicTargetExact},
+                    {"target",NativeBodyCheckpointDiagnostic(targetRow,targetValue)},
+                    {"current",NativeBodyCheckpointDiagnostic(row,currentValue)}});
+            }
+            AddNativePostMaintenanceComparison(new Dictionary<string,object>{
+                {"unityFrame",Time.frameCount},{"targetLogicalFrame",nativeKinematicStageFrame},
+                {"captured",true},{"allExact",allExact},{"bodyCount",bodies.Count},
+                {"bodies",bodies.ToArray()}});
+        }
+
+        private object NativeBodyCheckpointDiagnostic(Snapshot row,NativeShapeCheckpoint value)
+        {
+            var result=new Dictionary<string,object>{{"rawIsKinematic",row.RawIsKinematic},
+                {"bodyInstanceId",row.Body.GetInstanceID()},{"rigidbody",NativeHex(value.RigidbodyPointer)},
+                {"wakeCounterBits",value.WakeCounterBits},{"bufferedIsSleeping",value.BufferedIsSleeping},
+                {"bodySimActive",value.BodySimActive},{"publicIsSleeping",row.Body.IsSleeping()},
+                {"actorPose",NativePoseDiagnostic(value.ActorPose)},
+                {"body2Actor",NativePoseDiagnostic(value.Body2Actor)},
+                {"body2World",NativePoseDiagnostic(value.Body2World)},
+                {"lifecycle",NativeLifecycleDiagnostic(value.Lifecycle)}};
+            if(row.RawIsKinematic)result["kinematicTarget"]=NativeKinematicTargetDiagnostic(value.KinematicTarget);
+            return result;
+        }
+
+        private static bool SameNativeKinematicTarget(NativeKinematicTargetReceipt a,NativeKinematicTargetReceipt b)
+        {
+            return a.Actor.Equals(b.Actor)&&a.UnityIsKinematic==b.UnityIsKinematic&&
+                a.PublicTargetValid==b.PublicTargetValid&&a.ScbBodyBufferFlags==b.ScbBodyBufferFlags&&
+                a.BufferedTargetValid==b.BufferedTargetValid&&a.SimStateData.Equals(b.SimStateData)&&
+                a.SimStateIsKinematic==b.SimStateIsKinematic&&a.CoreTargetValid==b.CoreTargetValid&&
+                SameBits(a.Target,b.Target);
+        }
+
+        private static bool SameNativeLifecycle(NativeBody2WorldCaptureReceipt a,NativeBody2WorldCaptureReceipt b)
+        {
+            return a.Actor.Equals(b.Actor)&&a.Scene.Equals(b.Scene)&&a.ControlState==b.ControlState&&
+                a.BodyBufferFlags==b.BodyBufferFlags&&a.SimulationRunning==b.SimulationRunning&&
+                a.PhysicsBuffering==b.PhysicsBuffering&&a.BodySim.Equals(b.BodySim)&&
+                a.BodyCore.Equals(b.BodyCore)&&a.BodyCoreBodySim.Equals(b.BodyCoreBodySim)&&
+                a.BodyCoreFlags==b.BodyCoreFlags&&a.SimStateData.Equals(b.SimStateData)&&
+                a.SimStateTargetValid==b.SimStateTargetValid&&a.InteractionScene.Equals(b.InteractionScene)&&
+                a.ScScene.Equals(b.ScScene)&&a.SceneArrayIndex==b.SceneArrayIndex&&
+                a.BodySimInternalFlags==b.BodySimInternalFlags&&a.VelocityModState==b.VelocityModState&&
+                a.IslandHook==b.IslandHook&&a.ActiveBodiesData.Equals(b.ActiveBodiesData)&&
+                a.ActiveBodiesCount==b.ActiveBodiesCount&&a.ActiveBodiesCapacity==b.ActiveBodiesCapacity&&
+                a.ActiveTwoWayStart==b.ActiveTwoWayStart&&a.ActiveBodyAtSceneIndex.Equals(b.ActiveBodyAtSceneIndex)&&
+                a.ActiveBodiesHash==b.ActiveBodiesHash&&a.IslandManager.Equals(b.IslandManager)&&
+                a.IslandNodeData.Equals(b.IslandNodeData)&&a.IslandNodeOwner.Equals(b.IslandNodeOwner)&&
+                a.IslandNodeIslandId==b.IslandNodeIslandId&&a.IslandNodeFlags==b.IslandNodeFlags&&
+                a.KinematicBitmap.Equals(b.KinematicBitmap)&&a.KinematicChangeBitmap.Equals(b.KinematicChangeBitmap)&&
+                a.NotReadyBitmap.Equals(b.NotReadyBitmap)&&a.NotReadyChangeBitmap.Equals(b.NotReadyChangeBitmap)&&
+                a.KinematicBitmapMap.Equals(b.KinematicBitmapMap)&&
+                a.KinematicChangeBitmapMap.Equals(b.KinematicChangeBitmapMap)&&
+                a.NotReadyBitmapMap.Equals(b.NotReadyBitmapMap)&&
+                a.NotReadyChangeBitmapMap.Equals(b.NotReadyChangeBitmapMap)&&
+                a.KinematicBitmapWordCount==b.KinematicBitmapWordCount&&
+                a.KinematicChangeBitmapWordCount==b.KinematicChangeBitmapWordCount&&
+                a.NotReadyBitmapWordCount==b.NotReadyBitmapWordCount&&
+                a.NotReadyChangeBitmapWordCount==b.NotReadyChangeBitmapWordCount&&
+                a.KinematicBitmapWord==b.KinematicBitmapWord&&
+                a.KinematicChangeBitmapWord==b.KinematicChangeBitmapWord&&
+                a.NotReadyBitmapWord==b.NotReadyBitmapWord&&
+                a.NotReadyChangeBitmapWord==b.NotReadyChangeBitmapWord&&
+                a.KinematicBitmapBit==b.KinematicBitmapBit&&
+                a.KinematicChangeBitmapBit==b.KinematicChangeBitmapBit&&
+                a.NotReadyBitmapBit==b.NotReadyBitmapBit&&
+                a.NotReadyChangeBitmapBit==b.NotReadyChangeBitmapBit&&
+                a.IslandManagerFlags==b.IslandManagerFlags&&a.SleepBodiesData.Equals(b.SleepBodiesData)&&
+                a.SleepBodiesCount==b.SleepBodiesCount&&a.SleepBodiesCapacity==b.SleepBodiesCapacity&&
+                a.SleepBodiesHash==b.SleepBodiesHash&&a.SleepBodiesIndex==b.SleepBodiesIndex&&
+                a.WokeBodiesData.Equals(b.WokeBodiesData)&&a.WokeBodiesCount==b.WokeBodiesCount&&
+                a.WokeBodiesCapacity==b.WokeBodiesCapacity&&a.WokeBodiesHash==b.WokeBodiesHash&&
+                a.WokeBodiesIndex==b.WokeBodiesIndex&&a.WokeBodyListValid==b.WokeBodyListValid&&
+                a.SleepBodyListValid==b.SleepBodyListValid&&a.LifecycleStable==b.LifecycleStable;
+        }
+
+        private void AddNativePostMaintenanceComparison(object receipt)
+        {
+            nativePostMaintenanceComparisons.Add(receipt);
+            if(nativePostMaintenanceComparisons.Count>8)nativePostMaintenanceComparisons.RemoveAt(0);
+        }
+
+        private void RecordNativeKinematicStageFailure(string stage,Exception error)
+        {
+            AddNativeKinematicStageObservation(new Dictionary<string,object>{{"stage",stage},
+                {"captureValidated",false},{"error",error.ToString()}});
+        }
+
+        private void AddNativeKinematicStageObservation(object receipt)
+        {
+            nativeKinematicStageObservations.Add(receipt);
+            if(nativeKinematicStageObservations.Count>32)
+            {nativeKinematicStageObservations.RemoveAt(0);nativeKinematicStagesDiscarded++;}
         }
 
         public static void AfterRebindRecreatedOwnerShape(Shape __0,Shape __1,Transform __2,
@@ -318,7 +924,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 var rebased=new NativeShapeCheckpoint {Body=currentNative.Body,RigidbodyPointer=currentNative.RigidbodyPointer,
                     Shapes=(UIntPtr[])currentNative.Shapes.Clone(),Poses=poses,
                     Geometries=geometries,Colliders=(Collider[])currentNative.Colliders.Clone(),
-                    ColliderShapes=(UIntPtr[])currentNative.ColliderShapes.Clone()};
+                    ColliderShapes=(UIntPtr[])currentNative.ColliderShapes.Clone(),
+                    ActorPose=historicalNative.ActorPose,Body2Actor=historicalNative.Body2Actor,
+                    Body2World=historicalNative.Body2World,WakeCounterBits=historicalNative.WakeCounterBits,
+                    BufferedIsSleeping=historicalNative.BufferedIsSleeping,BodySimActive=historicalNative.BodySimActive,
+                    KinematicTarget=historicalNative.KinematicTarget,Lifecycle=historicalNative.Lifecycle};
                 nativeShapeCheckpoints.Set(result,rebased);
                 receipt["entityId"]=result.EntityId;receipt["recreatedRows"]=recreatedRows;
                 receipt["differingPoseRows"]=differingPoseRows;
@@ -368,6 +978,7 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             foreach(var pair in captured) {
                 nativeShapeCheckpoints.Set(pair.Key,pair.Value);
+                latestNativeRowsByBody[pair.Key.Body]=pair.Key;
             }
             nativeShapePoseCaptures+=captured.Count;
             nativeShapePoseCaptureFailure=null;
@@ -378,6 +989,64 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             IntPtr bodyPointer=(IntPtr)cachedPtr.GetValue(body);
             if(bodyPointer==IntPtr.Zero)throw new InvalidOperationException("Native shape checkpoint Rigidbody pointer is null.");
+            var nativePointer=new UIntPtr(unchecked((uint)bodyPointer.ToInt32()));
+            NativeBody2WorldCaptureReceipt bodyReceipt;
+            int bodyOk=nativeCaptureBody2World(new UIntPtr(unityPlayerBase),nativePointer,out bodyReceipt);
+            var bodyRecord=new Dictionary<string,object>{{"rigidbody",NativeHex(bodyReceipt.Rigidbody)},
+                {"actor",NativeHex(bodyReceipt.Actor)},{"scene",NativeHex(bodyReceipt.Scene)},
+                {"controlState",bodyReceipt.ControlState},{"bodyBufferFlags",bodyReceipt.BodyBufferFlags},
+                {"simulationRunning",bodyReceipt.SimulationRunning},{"physicsBuffering",bodyReceipt.PhysicsBuffering},
+                {"actorPose",NativePoseDiagnostic(bodyReceipt.ActorPose)},
+                {"body2Actor",NativePoseDiagnostic(bodyReceipt.Body2Actor)},
+                {"bufferedBody2World",NativePoseDiagnostic(bodyReceipt.BufferedBody2World)},
+                {"coreBody2World",NativePoseDiagnostic(bodyReceipt.CoreBody2World)},
+                {"bodyInstanceId",body.GetInstanceID()},{"bodySim",NativeHex(bodyReceipt.BodySim)},
+                {"wakeCounterBufferedBits",bodyReceipt.WakeCounterBufferedBits},
+                {"wakeCounterCoreBits",bodyReceipt.WakeCounterCoreBits},
+                {"bufferedIsSleeping",bodyReceipt.BufferedIsSleeping},
+                {"bodySimActive",bodyReceipt.BodySimActive},{"publicIsSleeping",body.IsSleeping()},
+                {"lifecycle",NativeLifecycleDiagnostic(bodyReceipt)},
+                {"result",bodyReceipt.Result},{"lastError",bodyReceipt.LastError},{"exact",false}};
+            nativeBody2WorldCaptures.Add(bodyRecord);
+            if(nativeBody2WorldCaptures.Count>128)nativeBody2WorldCaptures.RemoveAt(0);
+            var publicPose=new NativeRigidPose {Px=body.position.x,Py=body.position.y,Pz=body.position.z,
+                Qx=body.rotation.x,Qy=body.rotation.y,Qz=body.rotation.z,Qw=body.rotation.w};
+            if(bodyOk!=1||bodyReceipt.ApiVersion!=NativeHelperApiVersion||
+                bodyReceipt.StructSize!=(uint)Marshal.SizeOf(typeof(NativeBody2WorldCaptureReceipt))||
+                bodyReceipt.Result!=1||!bodyReceipt.Rigidbody.Equals(nativePointer)||
+                bodyReceipt.ControlState!=2||bodyReceipt.BodyBufferFlags!=0||
+                bodyReceipt.SimulationRunning!=0||bodyReceipt.PhysicsBuffering!=0||
+                !SameBits(bodyReceipt.ActorPose,publicPose)||
+                !SameBits(bodyReceipt.BufferedBody2World,bodyReceipt.CoreBody2World)||
+                !Finite(bodyReceipt.ActorPose)||!Finite(bodyReceipt.Body2Actor)||
+                !Finite(bodyReceipt.BufferedBody2World)||bodyReceipt.BodySim.Equals(UIntPtr.Zero)||
+                bodyReceipt.WakeCounterBufferedBits!=bodyReceipt.WakeCounterCoreBits||
+                bodyReceipt.BufferedIsSleeping>1||bodyReceipt.BodySimActive>1||
+                bodyReceipt.BufferedIsSleeping==bodyReceipt.BodySimActive||
+                bodyReceipt.LifecycleStable!=1||bodyReceipt.BodyCore.Equals(UIntPtr.Zero)||
+                !bodyReceipt.BodyCoreBodySim.Equals(bodyReceipt.BodySim)||
+                (bodyReceipt.BodySimActive!=0&&!bodyReceipt.ActiveBodyAtSceneIndex.Equals(bodyReceipt.BodySim))||
+                (bodyReceipt.BufferedIsSleeping!=0)!=body.IsSleeping())
+                throw new InvalidOperationException("Native body2World capture failed: result="+
+                    bodyReceipt.Result+" error="+bodyReceipt.LastError);
+            NativeKinematicTargetReceipt kinematicTarget=default(NativeKinematicTargetReceipt);
+            if(body.isKinematic)
+            {
+                int targetOk=nativeGetKinematicTarget(new UIntPtr(unityPlayerBase),nativePointer,out kinematicTarget);
+                bodyRecord["kinematicTarget"]=NativeKinematicTargetDiagnostic(kinematicTarget);
+                if(targetOk!=1||kinematicTarget.ApiVersion!=NativeHelperApiVersion||
+                    kinematicTarget.StructSize!=(uint)Marshal.SizeOf(typeof(NativeKinematicTargetReceipt))||
+                    kinematicTarget.Result!=1||!kinematicTarget.Rigidbody.Equals(nativePointer)||
+                    !kinematicTarget.Actor.Equals(bodyReceipt.Actor)||kinematicTarget.UnityIsKinematic!=1||
+                    kinematicTarget.PublicTargetValid>1||kinematicTarget.BufferedTargetValid>1||
+                    kinematicTarget.SimStateData.Equals(UIntPtr.Zero)||kinematicTarget.SimStateIsKinematic!=1||
+                    kinematicTarget.CoreTargetValid>1||
+                    kinematicTarget.PublicTargetValid!=kinematicTarget.CoreTargetValid||
+                    (kinematicTarget.PublicTargetValid!=0&&!Finite(kinematicTarget.Target)))
+                    throw new InvalidOperationException("Native kinematic-target capture failed: result="+
+                        kinematicTarget.Result+" error="+kinematicTarget.LastError);
+            }
+            bodyRecord["exact"]=true;
             int poseSize=Marshal.SizeOf(typeof(NativeRigidPose));
             int geometrySize=Marshal.SizeOf(typeof(NativeShapeGeometry));
             IntPtr shapes=Marshal.AllocHGlobal(MaximumNativeShapePoses*IntPtr.Size);
@@ -385,7 +1054,6 @@ namespace SuperchargedPatch.Authoring.Modules
             IntPtr geometries=Marshal.AllocHGlobal(MaximumNativeShapePoses*geometrySize);
             try {
                 uint count,error;
-                var nativePointer=new UIntPtr(unchecked((uint)bodyPointer.ToInt32()));
                 int ok=nativeCaptureShapePoses(new UIntPtr(unityPlayerBase),nativePointer,
                     shapes,poses,geometries,MaximumNativeShapePoses,out count,out error);
                 if(ok!=1||error!=0||count>MaximumNativeShapePoses)
@@ -402,7 +1070,11 @@ namespace SuperchargedPatch.Authoring.Modules
                         throw new InvalidOperationException("Native shape-state capture returned an invalid row.");
                 }
                 var checkpoint=new NativeShapeCheckpoint {Body=body,RigidbodyPointer=nativePointer,Shapes=shapeCopy,
-                    Poses=poseCopy,Geometries=geometryCopy};
+                    Poses=poseCopy,Geometries=geometryCopy,ActorPose=bodyReceipt.ActorPose,
+                    Body2Actor=bodyReceipt.Body2Actor,Body2World=bodyReceipt.BufferedBody2World,
+                    WakeCounterBits=bodyReceipt.WakeCounterBufferedBits,
+                    BufferedIsSleeping=bodyReceipt.BufferedIsSleeping,BodySimActive=bodyReceipt.BodySimActive,
+                    KinematicTarget=kinematicTarget,Lifecycle=bodyReceipt};
                 CaptureNativeColliderBindings(managedShapes,checkpoint);
                 return checkpoint;
             }
@@ -436,6 +1108,18 @@ namespace SuperchargedPatch.Authoring.Modules
                         throw new InvalidOperationException("Native shape identity/order changed for entity "+row.EntityId+" at index "+i+".");
                     }
                 RequireNativeColliderBindingsSame(row.EntityId,target,current);
+                if(row.Body.isKinematic&&(target.WakeCounterBits!=current.WakeCounterBits||
+                    target.BufferedIsSleeping!=current.BufferedIsSleeping||target.BodySimActive!=current.BodySimActive))
+                {
+                    RecordNativeKinematicWakeMismatch(row,target,current);
+                    throw new InvalidOperationException("Kinematic native wake state changed for entity "+row.EntityId+
+                        ": target=(wake "+target.WakeCounterBits+", sleeping "+target.BufferedIsSleeping+
+                        ", active "+target.BodySimActive+", publicTarget "+target.KinematicTarget.PublicTargetValid+
+                        ", coreTarget "+target.KinematicTarget.CoreTargetValid+") current=(wake "+current.WakeCounterBits+
+                        ", sleeping "+current.BufferedIsSleeping+", active "+current.BodySimActive+
+                        ", publicTarget "+current.KinematicTarget.PublicTargetValid+", coreTarget "+
+                        current.KinematicTarget.CoreTargetValid+").");
+                }
                 result.Add(row,target);
             }
             return result;
@@ -457,6 +1141,24 @@ namespace SuperchargedPatch.Authoring.Modules
             if(nativeShapeTopologyMismatches.Count>32)nativeShapeTopologyMismatches.RemoveAt(0);
         }
 
+        private void RecordNativeKinematicWakeMismatch(Snapshot row,NativeShapeCheckpoint target,
+            NativeShapeCheckpoint current)
+        {
+            nativeKinematicWakeMismatches.Add(new Dictionary<string,object>{{"entityId",row.EntityId},
+                {"rigidbody",NativeHex(target.RigidbodyPointer)},
+                {"targetWakeCounterBits",target.WakeCounterBits},
+                {"targetBufferedIsSleeping",target.BufferedIsSleeping},{"targetBodySimActive",target.BodySimActive},
+                {"currentWakeCounterBits",current.WakeCounterBits},
+                {"currentBufferedIsSleeping",current.BufferedIsSleeping},{"currentBodySimActive",current.BodySimActive},
+                {"targetActorPose",NativePoseDiagnostic(target.ActorPose)},
+                {"currentActorPose",NativePoseDiagnostic(current.ActorPose)},
+                {"targetKinematicTarget",NativeKinematicTargetDiagnostic(target.KinematicTarget)},
+                {"currentKinematicTarget",NativeKinematicTargetDiagnostic(current.KinematicTarget)},
+                {"targetLifecycle",NativeLifecycleDiagnostic(target.Lifecycle)},
+                {"currentLifecycle",NativeLifecycleDiagnostic(current.Lifecycle)}});
+            if(nativeKinematicWakeMismatches.Count>32)nativeKinematicWakeMismatches.RemoveAt(0);
+        }
+
         private static bool SameShapeSet(UIntPtr[] a,UIntPtr[] b)
         {
             if(a.Length!=b.Length)return false;
@@ -471,6 +1173,79 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             return new Dictionary<string,object>{{"position",new[]{value.Px,value.Py,value.Pz}},
                 {"rotation",new[]{value.Qx,value.Qy,value.Qz,value.Qw}}};
+        }
+
+        private static object NativeKinematicTargetDiagnostic(NativeKinematicTargetReceipt value)
+        {
+            return new Dictionary<string,object>{{"result",value.Result},{"lastError",value.LastError},
+                {"actor",NativeHex(value.Actor)},{"unityIsKinematic",value.UnityIsKinematic},
+                {"publicTargetValid",value.PublicTargetValid},{"scbBodyBufferFlags",value.ScbBodyBufferFlags},
+                {"bufferedTargetValid",value.BufferedTargetValid},{"simStateData",NativeHex(value.SimStateData)},
+                {"simStateIsKinematic",value.SimStateIsKinematic},{"coreTargetValid",value.CoreTargetValid},
+                {"target",NativePoseDiagnostic(value.Target)}};
+        }
+
+        private static object NativeLifecycleDiagnostic(NativeBody2WorldCaptureReceipt value)
+        {
+            return new Dictionary<string,object>{
+                {"bodyCore",NativeHex(value.BodyCore)},{"bodyCoreBodySim",NativeHex(value.BodyCoreBodySim)},
+                {"bodyCoreFlags",value.BodyCoreFlags},{"simStateData",NativeHex(value.SimStateData)},
+                {"simStateTargetValid",value.SimStateTargetValid},
+                {"interactionScene",NativeHex(value.InteractionScene)},{"scScene",NativeHex(value.ScScene)},
+                {"sceneArrayIndex",value.SceneArrayIndex},{"bodySimInternalFlags",value.BodySimInternalFlags},
+                {"kinematicMoved",(value.BodySimInternalFlags&0x4)!=0},
+                {"kinematicSettling",(value.BodySimInternalFlags&0x200)!=0},
+                {"inSleepList",(value.BodySimInternalFlags&0x10)!=0},
+                {"inWakeList",(value.BodySimInternalFlags&0x20)!=0},
+                {"sleepNotify",(value.BodySimInternalFlags&0x40)!=0},
+                {"wakeNotify",(value.BodySimInternalFlags&0x80)!=0},
+                {"velocityModState",value.VelocityModState},{"islandHook",value.IslandHook},
+                {"activeBodiesData",NativeHex(value.ActiveBodiesData)},
+                {"activeBodiesCount",value.ActiveBodiesCount},{"activeBodiesCapacity",value.ActiveBodiesCapacity},
+                {"activeTwoWayStart",value.ActiveTwoWayStart},
+                {"activeBodyAtSceneIndex",NativeHex(value.ActiveBodyAtSceneIndex)},
+                {"activeBodiesHash",value.ActiveBodiesHash},
+                {"islandManager",NativeHex(value.IslandManager)},{"islandNodeData",NativeHex(value.IslandNodeData)},
+                {"islandNodeOwner",NativeHex(value.IslandNodeOwner)},
+                {"islandNodeIslandId",value.IslandNodeIslandId},{"islandNodeFlags",value.IslandNodeFlags},
+                {"islandNodeKinematic",(value.IslandNodeFlags&0x1)!=0},
+                {"islandNodeNotReadyForSleeping",(value.IslandNodeFlags&0x8)!=0},
+                {"islandNodeInSleepingIsland",(value.IslandNodeFlags&0x10)!=0},
+                {"kinematicBitmap",NativeHex(value.KinematicBitmap)},
+                {"kinematicChangeBitmap",NativeHex(value.KinematicChangeBitmap)},
+                {"notReadyBitmap",NativeHex(value.NotReadyBitmap)},
+                {"notReadyChangeBitmap",NativeHex(value.NotReadyChangeBitmap)},
+                {"kinematicBitmapMap",NativeHex(value.KinematicBitmapMap)},
+                {"kinematicChangeBitmapMap",NativeHex(value.KinematicChangeBitmapMap)},
+                {"notReadyBitmapMap",NativeHex(value.NotReadyBitmapMap)},
+                {"notReadyChangeBitmapMap",NativeHex(value.NotReadyChangeBitmapMap)},
+                {"kinematicBitmapWordCount",value.KinematicBitmapWordCount},
+                {"kinematicChangeBitmapWordCount",value.KinematicChangeBitmapWordCount},
+                {"notReadyBitmapWordCount",value.NotReadyBitmapWordCount},
+                {"notReadyChangeBitmapWordCount",value.NotReadyChangeBitmapWordCount},
+                {"kinematicBitmapWord",value.KinematicBitmapWord},
+                {"kinematicChangeBitmapWord",value.KinematicChangeBitmapWord},
+                {"notReadyBitmapWord",value.NotReadyBitmapWord},
+                {"notReadyChangeBitmapWord",value.NotReadyChangeBitmapWord},
+                {"kinematicBitmapBit",value.KinematicBitmapBit},
+                {"kinematicChangeBitmapBit",value.KinematicChangeBitmapBit},
+                {"notReadyBitmapBit",value.NotReadyBitmapBit},
+                {"notReadyChangeBitmapBit",value.NotReadyChangeBitmapBit},
+                {"islandManagerFlags",value.IslandManagerFlags},
+                {"islandEverythingAsleep",(value.IslandManagerFlags&0xFF)!=0},
+                {"islandHasAnythingChanged",((value.IslandManagerFlags>>8)&0xFF)!=0},
+                {"islandPerformUpdate",((value.IslandManagerFlags>>16)&0xFF)!=0},
+                {"sleepBodiesData",NativeHex(value.SleepBodiesData)},
+                {"sleepBodiesCount",value.SleepBodiesCount},{"sleepBodiesCapacity",value.SleepBodiesCapacity},
+                {"sleepBodiesHash",value.SleepBodiesHash},{"sleepBodiesIndex",value.SleepBodiesIndex},
+                {"sleepBodiesContainsBody",value.SleepBodyListValid!=0&&value.SleepBodiesIndex!=uint.MaxValue},
+                {"wokeBodiesData",NativeHex(value.WokeBodiesData)},
+                {"wokeBodiesCount",value.WokeBodiesCount},{"wokeBodiesCapacity",value.WokeBodiesCapacity},
+                {"wokeBodiesHash",value.WokeBodiesHash},{"wokeBodiesIndex",value.WokeBodiesIndex},
+                {"wokeBodiesContainsBody",value.WokeBodyListValid!=0&&value.WokeBodiesIndex!=uint.MaxValue},
+                {"wokeBodyListValid",value.WokeBodyListValid},{"sleepBodyListValid",value.SleepBodyListValid},
+                {"stable",value.LifecycleStable}
+            };
         }
 
         private static object NativeGeometryDiagnostic(NativeShapeGeometry value)
@@ -629,7 +1404,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     {"lastError",receipt.LastError},{"exact",false}};
                 nativeShapePoseRestores.Add(record);
                 if(nativeShapePoseRestores.Count>128)nativeShapePoseRestores.RemoveAt(0);
-                if(ok!=1||receipt.ApiVersion!=6||receipt.StructSize!=(uint)Marshal.SizeOf(typeof(NativeShapePoseRestoreReceipt))
+                if(ok!=1||receipt.ApiVersion!=NativeHelperApiVersion||receipt.StructSize!=(uint)Marshal.SizeOf(typeof(NativeShapePoseRestoreReceipt))
                     ||receipt.Result!=1||!receipt.Rigidbody.Equals(target.RigidbodyPointer)||receipt.Count!=(uint)count
                     ||receipt.ExpectedOrderHash!=receipt.ObservedOrderHash)
                     throw new InvalidOperationException("Native shape-state restore failed for "+row.EntityId+

@@ -678,19 +678,23 @@ namespace SuperchargedPatch
             {
                 if (entityThrift.__isset.position)
                 {
-                    container.position = entityThrift.Position.FromThrift();
+                    var target = entityThrift.Position.FromThrift();
+                    if (!SameComponents(container.position, target)) container.position = target;
                 }
                 if (entityThrift.__isset.rotation)
                 {
-                    container.rotation = entityThrift.Rotation.FromThrift();
+                    var target = entityThrift.Rotation.FromThrift();
+                    if (!SameComponents(container.rotation, target)) container.rotation = target;
                 }
                 if (entityThrift.__isset.velocity)
                 {
-                    container.velocity = entityThrift.Velocity.FromThrift();
+                    var target = entityThrift.Velocity.FromThrift();
+                    if (!SameComponents(container.velocity, target)) container.velocity = target;
                 }
                 if (entityThrift.__isset.angularVelocity)
                 {
-                    container.angularVelocity = entityThrift.AngularVelocity.FromThrift();
+                    var target = entityThrift.AngularVelocity.FromThrift();
+                    if (!SameComponents(container.angularVelocity, target)) container.angularVelocity = target;
                 }
             }
             if (entity.m_GameObject.GetComponent<ClientPlayerControlsImpl_Default>() is ClientPlayerControlsImpl_Default cpci)
@@ -736,19 +740,23 @@ namespace SuperchargedPatch
                 var rigidbody = entity.m_GameObject.GetComponent<Rigidbody>();
                 if (entityThrift.__isset.position)
                 {
-                    rigidbody.position = entityThrift.Position.FromThrift();
+                    var target = entityThrift.Position.FromThrift();
+                    if (!SameComponents(rigidbody.position, target)) rigidbody.position = target;
                 }
                 if (entityThrift.__isset.rotation)
                 {
-                    rigidbody.rotation = entityThrift.Rotation.FromThrift();
+                    var target = entityThrift.Rotation.FromThrift();
+                    if (!SameComponents(rigidbody.rotation, target)) rigidbody.rotation = target;
                 }
                 if (entityThrift.__isset.velocity)
                 {
-                    rigidbody.velocity = entityThrift.Velocity.FromThrift();
+                    var target = entityThrift.Velocity.FromThrift();
+                    if (!SameComponents(rigidbody.velocity, target)) rigidbody.velocity = target;
                 }
                 if (entityThrift.__isset.angularVelocity)
                 {
-                    rigidbody.angularVelocity = entityThrift.AngularVelocity.FromThrift();
+                    var target = entityThrift.AngularVelocity.FromThrift();
+                    if (!SameComponents(rigidbody.angularVelocity, target)) rigidbody.angularVelocity = target;
                 }
 
                 entity.m_GameObject.GetComponent<GroundCast>().ForceUpdateNow();
@@ -757,11 +765,39 @@ namespace SuperchargedPatch
             {
                 // Body-only scene proxies (including unused attachment
                 // containers) have native state even while their item is held.
-                if(entityThrift.__isset.position)nativeBody.position=entityThrift.Position.FromThrift();
-                if(entityThrift.__isset.rotation)nativeBody.rotation=entityThrift.Rotation.FromThrift();
-                if(entityThrift.__isset.velocity)nativeBody.velocity=entityThrift.Velocity.FromThrift();
-                if(entityThrift.__isset.angularVelocity)nativeBody.angularVelocity=entityThrift.AngularVelocity.FromThrift();
+                if(entityThrift.__isset.position) {
+                    var target=entityThrift.Position.FromThrift();
+                    if(!SameComponents(nativeBody.position,target))nativeBody.position=target;
+                }
+                if(entityThrift.__isset.rotation) {
+                    var target=entityThrift.Rotation.FromThrift();
+                    if(!SameComponents(nativeBody.rotation,target))nativeBody.rotation=target;
+                }
+                if(entityThrift.__isset.velocity) {
+                    var target=entityThrift.Velocity.FromThrift();
+                    if(!SameComponents(nativeBody.velocity,target))nativeBody.velocity=target;
+                }
+                if(entityThrift.__isset.angularVelocity) {
+                    var target=entityThrift.AngularVelocity.FromThrift();
+                    if(!SameComponents(nativeBody.angularVelocity,target))nativeBody.angularVelocity=target;
+                }
             }
+        }
+
+        // Authoring warp may reach the same Rigidbody through both its item and
+        // physics-container registrations after the exact early pose restore.
+        // A same-value Unity setter is not a no-op for sleeping kinematics: it
+        // can wake the actor and install a one-step target. Skip only bit-exact
+        // public-state no-ops; every real pose or motion change keeps the
+        // original setter and ordering.
+        private static bool SameComponents(Vector3 a,Vector3 b)
+        {
+            return a.x==b.x&&a.y==b.y&&a.z==b.z;
+        }
+
+        private static bool SameComponents(UnityEngine.Quaternion a,UnityEngine.Quaternion b)
+        {
+            return a.x==b.x&&a.y==b.y&&a.z==b.z&&a.w==b.w;
         }
 
         private static void WarpAfterChefInteractionPropagation(EntitySerialisationEntry entity, EntityWarpSpec entityThrift)

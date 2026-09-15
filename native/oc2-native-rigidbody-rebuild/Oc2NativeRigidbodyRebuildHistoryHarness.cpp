@@ -165,7 +165,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 7 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 9 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -269,7 +269,7 @@ int main(int argc, char** argv) {
     RestoreManifoldSnapshot restoreManifold =
         reinterpret_cast<RestoreManifoldSnapshot>(GetProcAddress(library,
             "oc2_manifold_pool_restore_snapshot"));
-    Check(version && version() == 7, "API version");
+    Check(version && version() == 9, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -297,7 +297,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 7 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 9 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 

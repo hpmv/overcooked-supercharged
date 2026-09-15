@@ -27,6 +27,7 @@ namespace UnityEngine {
  }
  public class Rigidbody:Component {
   Vector3 pos;Quaternion orient;public Vector3 velocity,angularVelocity;public bool useGravity,detectCollisions=true;
+  public bool sleeping;public int SleepCalls,WakeCalls;public Action OnSleep,OnWake;
   bool kin;public Action<bool> OnKinematicSet;public bool isKinematic{get=>kin;set{kin=value;OnKinematicSet?.Invoke(value);}}
   public float mass=1,drag,angularDrag=.05f,sleepThreshold=.005f,maxAngularVelocity=7;
   public Vector3 centerOfMass{get;set;}public Vector3 inertiaTensor{get;set;}=new(1,1,1);public Quaternion inertiaTensorRotation{get;set;}=new(0,0,0,1);
@@ -38,6 +39,9 @@ namespace UnityEngine {
   public Func<Vector3,Vector3> PositionRoundtrip;
   public Vector3 position {get=>pos;set{Events.Rows.Add("body-position");pos=PositionRoundtrip==null?value:PositionRoundtrip(value);}}
   public Quaternion rotation {get=>orient;set{Events.Rows.Add("body-rotation");orient=RotationRoundtrip==null?value:RotationRoundtrip(value);OnRotationSet?.Invoke();}}
+  public bool IsSleeping()=>sleeping;
+  public void Sleep(){SleepCalls++;sleeping=true;OnSleep?.Invoke();}
+  public void WakeUp(){WakeCalls++;sleeping=false;OnWake?.Invoke();}
  }
  public class PhysicMaterial:Object{}
  public class Mesh:Object{}

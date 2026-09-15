@@ -48,6 +48,10 @@ NATIVE = {
     ),
 }
 
+# Optional per-native-module activation arguments for derived diagnostic
+# loaders. The ordinary parity loaders leave this empty.
+NATIVE_OPTIONS = {}
+
 CLASSIFICATION = "Pinned local r47/r17d rewind-parity setup; no search"
 
 
@@ -108,6 +112,7 @@ def main() -> int:
                 if actual != native_sha:
                     raise RuntimeError("Native dependency hash mismatch: " + str(native_path))
                 activation_args = {"nativePath": str(native_path.resolve()), "sha256": native_sha}
+                activation_args.update(NATIVE_OPTIONS.get(activation, {}))
                 if activation == "actor":
                     activation_args.update({
                         "automaticChefs": False,
@@ -123,6 +128,12 @@ def main() -> int:
                 })
                 if activated.get("ok") is not True:
                     raise RuntimeError("Failed to activate " + slot)
+                if "mask" in activation_args:
+                    activation_result = activated.get("detail", {}).get("result", {})
+                    if activation_result.get("active") is not True or \
+                            activation_result.get("installedMask") != activation_args["mask"] or \
+                            activation_result.get("lastError") != 0:
+                        raise RuntimeError("Native hook mask activation differs for " + slot)
             report["modules"].append({
                 "slot": slot, "revision": revision, "sha256": manifest["sha256"],
                 "activated": activation_args is not None, "nativeSha256": native_sha,
