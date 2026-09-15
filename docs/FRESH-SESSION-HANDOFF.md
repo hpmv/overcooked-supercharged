@@ -1,5 +1,271 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Current milestone (2026-09-14/15, unattended background logical input):**
+> advancing TAS segments no longer require the user to focus Overcooked. Gameplay
+> input remains entirely at the game's managed logical-button layer; no Win32
+> keyboard/controller input is injected. The minimized launcher now performs one
+> automatic, process-local Unity focus lifecycle (activate, hold for three Unity
+> frames, minimize) and verifies `Application.isFocused=false` before returning.
+> This briefly surfaces the game once per fresh process, for roughly 50 ms of the
+> 0.31-second primer in the latest run; it is not repeated per route, segment, or
+> rewind. The game then stays minimized while `Application.runInBackground` and
+> the verified local-TAS focus bypass handle advancing input.
+>
+> The apparent remaining focus failure was actually an input-protocol bug. The
+> headless controller's phase-only `RequestResume` reply legitimately carries
+> `Input=null` before the first advancing frame. `InjectorServer` previously sent
+> that through `ApplyInputFrame` as an empty pad set. While Unity was unfocused,
+> removing all active pad ownership made `LogicalButtonBase.Update(false)` fail
+> the TAS verification and execute Unity's native `ClaimPressEvent`; the first
+> real pickup frame therefore arrived already claimed. Object-identity receipts
+> proved the same gate/device instances changed from neutral/unclaimed at arm to
+> neutral/claimed before the pickup. A full `ControlSchemeData.ClearEvents` call-
+> site probe recorded no calls and was removed.
+>
+> `Input=null` is now preserved only for replies received from the authenticated
+> controller: it means "no new pad sample." Locally manufactured connection/
+> timeout control pauses still fail safe to explicit neutral and claimed input.
+> Native gate callbacks, menu/direct-control suppression, local ownership checks,
+> native edge histories, and the exact `ClientPlayerControlsImpl_Default.Update_Carry`
+> consumer remain in place. The cleaned core build is
+> `artifacts/framework-build-focus-v12/SuperchargedPatch.dll`, SHA-256
+> `E36DB870CD4C35C298BA5AF69563A039533E0DBAB483ECC7264D4C1F831AA924`.
+> The linked installed-IL/native-history fixture passes 42 checks and the Python
+> input/primer suite passes 37 tests.
+>
+> Fresh-process proof is
+> `artifacts/framework-migration/focus-background-carnival-r6/`: the launcher's
+> `automatic-prime.json`, normal four-local `bootstrap.json`, and
+> `button-smoke-r1.json` all pass. The smoke advanced f1 -> f4 with the window
+> minimized and Unity unfocused throughout; it records the phase-only f1 resume
+> preserving pads, then the exact f2 pickup returning `true` at the native
+> `Update_Carry` consumer, followed by a clean release. A repeated same-process
+> proof also passed in r5. No user click, native input, checkpoint, rewind,
+> search, or level reload was involved.
+>
+> After the reboot, Windows HTTP.sys returned `ERROR_INVALID_HANDLE` even though
+> its service reported running. The headless-only `RuntimeHost` now falls back to
+> a loopback `TcpListener` implementation of the same small HTTP/JSON contract;
+> the live r3-r6 controller runs used this fallback. This does not enter or alter
+> the game process. `framework_input_probe.py` now requires and receipts the
+> minimized/unfocused background contract for every advancing segment instead of
+> requiring foreground focus.
+>
+> Next: make the focus milestone commit, rebuild the active rewind modules against
+> this core hash, then resume the r43 Story 1-1 unwind-only parity cell entirely
+> minimized. Search remains disabled until full rewind parity. The older notes
+> below that request a manual focus lease are superseded by this milestone.
+
+> **Current investigation (2026-09-14, r42 kinematic capture-phase skew):** a
+> fresh focused r42 f1048 -> f1045 run reproduced the real failure with complete
+> staged receipts:
+> `Kinematic native wake state changed for entity 48: target=(wake 0,
+> sleeping 1, active 0, publicTarget 0, coreTarget 0) current=(wake 1053609164,
+> sleeping 0, active 1, publicTarget 0, coreTarget 0).`  Contrary to the r38
+> bounded-ring interpretation preserved below, entity 48 is already awake on
+> entry to the warp and stays byte-for-byte awake through every recorded restore
+> stage: preflight, before/after authoring resume, spawn/removal work, attachment
+> and component restore, early fixed-pose restore, and the final pause path.  The
+> rewind does not perform the sleep -> wake transition.  The checkpoint sidecar
+> and the current state on entry to the warp describe different lifecycle
+> phases, but the exact pause-maintenance boundary between them is not yet
+> resolved.
+>
+> `ActiveStateCollector.CollectDataForFrame` calls
+> `NativeKitchenCheckpoint.CaptureFrame` before `ControllerHandler` calls
+> `Helpers.Pause`.  The f1045 checkpoint sidecar therefore records entity 48
+> asleep, targetless, and inactive at the pre-pause end-of-frame point.  The
+> immediate paused warp stages and the `base-native`/`original-native` host
+> observations record it awake, targetless, and active.  The large-dump
+> timeline now proves those base/original observations occur after their
+> admitted maintenance simulations: base gates at Unity 164241 -> 164242 and
+> is sampled at 164245/247/249; original gates at 164274 -> 164275 and is
+> sampled at 164279/280/282.  Conversely, the failed warp is still awake at
+> `after-final-pause`, then its sole admitted maintenance simulation runs and
+> the 164309 `finally-pause` observation plus every later native-body capture
+> records entity 48 asleep with wake counter zero.  Thus the mismatch is a
+> real checkpoint-phase skew: the pre-pause sidecar is asleep, the normal
+> host-visible f1045 boundary is awake, and the failed rewind's final
+> maintenance step advances the actor back to sleep.  The remaining question
+> is which exact `MOVED`/targetless `SETTLING`/asleep phase and hidden lists
+> correspond to each boundary.
+>
+> PhysX 3.3.3 and UnityPlayer review rules out a tempting but incorrect fix: the
+> pause/unpause code repeatedly assigns `isKinematic=true`, but
+> `Sc::BodyCore::setFlags` is a no-op when the flags are unchanged, and the
+> kinematic velocity setters are rejected.  Skipping a redundant managed
+> property assignment cannot explain or repair this phase skew.  Ignoring the
+> guard is also not yet justified: even when final public wake bits agree,
+> active-body ordering, island/change bitmaps, notification lists, and
+> interaction ordering may retain different history.
+>
+> The next step is a read-only lifecycle receipt at each relevant boundary:
+> capture `BodySim+0x90` internal flags (especially `MOVED` and
+> `KINEMATIC_SETTLING`), active-list index/order, island node/bitmap state, and
+> wake/sleep notification arrays alongside the existing public wake/target
+> fields.  That will identify the exact phase of each observation and show
+> whether the rewind divergence is a one-step phase offset or hidden lifecycle
+> history.  Do not implement a phase rebase or add native active-list/island
+> writes until this receipt proves the required source-equivalent transition.
+>
+> R43 implements that read-only receipt in native-helper API 8.  It appends
+> `BodySim+0x90` flags, reciprocal BodyCore identity, scene active-list
+> index/count/hash, island-node and relevant bitmap words, and sleep/wake
+> notification-list membership/count/hash/validity to each existing body
+> capture.  It double-reads the quiescent list headers/hashes and fails closed
+> if they move.  No native lifecycle state is written and no restore guard has
+> been relaxed.  The x86 helper static ABI is 356 bytes; its caller-owned pool
+> harness passes.  The managed BodyRestore suite still passes 248 checks and
+> the input-outcome suite passes 34.  Prepared artifacts are
+> `framework-run/modules/BodyRestore-r43-kinematic-lifecycle-receipt-core-dev5/`
+> (DLL SHA-256
+> `B34DE21FA885F52F8C5BCC52BA549C6F44082278229AB66F04F6483E603123FD`)
+> and
+> `artifacts/native-rigidbody-rebuild-r15-lifecycle-receipt-cmake1/Release/Oc2NativeRigidbodyRebuild.dll`
+> (SHA-256
+> `1B4ED5FEC76C6B1F53C59FAD8A863C7EE7373B63A7CD85BAAA9D4339B8EFBEB0`).
+>
+> Evidence is under
+> `artifacts/framework-migration/story11-kinematic-r42-trace-live-r4/second-delivery-f1045-rewind-r42-r1/`.
+> The exact advancing recording SHA-256 remained
+> `35867d2f81e4579fd0d02346cfde731058b5fa3d9770ee887c2cda248decc687`;
+> all 17 focus-lease segments were valid, the second delivery advanced the
+> ledger from 28 to 56, and the pause gate recorded 18 matching
+> resume/maintenance/gate callbacks.  The isolated warp trace contains 777
+> events with no drops.  R38 through the next read-only diagnostics remain
+> uncommitted; the last working milestone commit remains `e953c92`.
+>
+> Focus is needed only for deterministic advancing input/replay segments,
+> normally once per fresh route (about 45 seconds for this diagnostic), not for
+> builds, dump analysis, capture-only polling, or warp-only work.
+> `runInBackground` keeps Unity simulation alive but does not make focused raw
+> input polling reliable.  The durable workarounds are to inject at the logical
+> gameplay-input abstraction or run the game in an isolated desktop/VM.  Until
+> then, warn the user before every focus-sensitive segment and release focus
+> immediately afterward.  The r42 run has finished and the user may use the
+> computer normally now.
+
+> **Superseded r38 interpretation (kept for diagnostic history):** the focused
+> r38 f1048 -> f1045 attempt reached the real
+> rewind and failed closed before BodyRestore made a body mutation:
+> `Kinematic native wake state changed for entity 48.`  The f1045 checkpoint
+> directly proves entity 48 was awake/active (`sleeping=0`, `BodySimActive=1`),
+> and the full r38 observation trace proves all three settled `original-native`
+> observations immediately before the warp were also awake.  The first rows
+> retained in the smaller failure ring are asleep, but the earliest in-warp
+> stages were evicted.  Thus the awake -> asleep transition happens inside the
+> warp/resume lifecycle; r38 does not identify its first stage or whether a
+> kinematic target was still valid at that boundary.
+>
+> PhysX 3.3.3 source establishes that this is meaningful lifecycle state:
+> `setKinematicTarget` produces the awake `MOVED` state; post-simulation target
+> consumption produces an awake/no-target `SETTLING` state; the following
+> targetless step sleeps and removes the actor from the active set.  Dynamic
+> `wakeUp`/`setWakeCounter` APIs are invalid for kinematics.  A general fix must
+> reconstruct the applicable source-equivalent lifecycle and account for
+> active-list/island/notification state, rather than ignore or raw-write the
+> public sleep fields.
+>
+> Managed BodyRestore r39 bound API7's already-existing read-only
+> `oc2_rigidbody_get_kinematic_target` export.  Each kinematic checkpoint
+> retains public/core/buffered target validity and exact actor-space target;
+> a wake mismatch serializes target and current diagnostics before preserving
+> the existing exception.  No parity check was relaxed and no new native write
+> was added.  R40 additionally labels the already-occurring read-only native
+> body/kinematic capture for every restore stage, so the next failure receipt
+> will identify the first stage at which entity 48 sleeps without introducing
+> another physics call.  R42 makes each stage failure explicit and persistent
+> in that warp's receipt, removes transient stage sidecars immediately, and
+> periodically sweeps dead historical weak keys.  R41's attempted 4,096-entry
+> cap was rejected by live evidence: the legitimate retained checkpoint history
+> already contained 58,967 sidecars at f1045.  It caused an early entity-49
+> missing-sidecar failure before the intended guard and is not a parity result.
+> It also preserves the kinematic-target receipt when cloning supported dynamic
+> sidecars.  The offline BodyRestore suite passes 248 checks. Built
+> module:
+> `framework-run/modules/BodyRestore-r42-kinematic-stage-transient-cleanup-core-dev5/BodyRestore.r42-kinematic-stage-transient-cleanup-core-dev5.dll`,
+> SHA-256
+> `56B0A628BAB3168B6C5E01D74B4D10AD2F6D5DBA36AD03BC13662ABE03FF3C8B`.
+> The dev5 loaders point at r42 and the unchanged API7/r14 native helper.
+> R38 through r42 remain uncommitted diagnostics; the last working milestone
+> commit remains
+> `e953c92`.
+>
+> The next focused run is prepared as one combined receipt.  The trace loader
+> installs only native trace masks 1 and 8 (Unity Rigidbody lifecycle plus
+> PhysicsManager simulation boundaries).  Do not enable mask 4: its PhysX pose
+> hooks intentionally change the pose entrypoints whose revision BodyRestore
+> verifies, causing native error 1306 before this diagnostic.  The input probe
+> now keeps those hooks installed but clears the ring immediately before the
+> rewind, then saves `native-trace-warp.json` or
+> `native-trace-warp-failure.json`; the long forward route can no longer evict
+> the short rewind trace.
+> Mask 1 also hooks Rigidbody creation, which conflicts with the actor-rebuild
+> helper only if a rewind actually requests native actor reconstruction.  The
+> exact f1048 -> f1045 cell has unchanged membership and zero rebuilds, so mask
+> 9 is valid for this diagnostic but is not a generally composable parity
+> configuration.
+>
+> Static managed/IL review also rules out both network synchronizers as direct
+> entity-48 body writers.  `ServerWorldObjectSynchroniser` only reads/caches and
+> sends pose state, while `ServerPhysicsObjectSynchroniser` reads velocities and
+> contacts and packages messages.  With owner 3 still attached to parent 21,
+> the synchronous warp performs no detach/attach and therefore none of the
+> game's explicit kinematic toggles.  The only recurring relevant managed write
+> is held-item `Transform.position = m_transform.position` in
+> `ServerPhysicalAttachment.UpdateSynchronising`; it happens during ordinary
+> Update, not inside the rewind's LateUpdate call.  Removing either synchronizer
+> is not proven behavior-neutral and cannot explain this guard failure.
+>
+> Exact next probe recipe: replay the 15 requests in
+> `story11-multidelivery-dev5-live-r1/forward-three-initial-plates-r3/prefix-through-second-service.json`
+> (byte-for-byte equal to the prefix recovered from the r38 observations), then
+> use a 90-frame neutral warmup to reach f1045 and the one-payload-frame
+> `meal-1-batch-06-raw-capture.json` to reach f1048.  Use chef 46,
+> `--expect-delivery`, contact-pool plus Transform-dispatch restoration,
+> Animator/world-sync inspection, registry reconciliation, and both native trace
+> flags.  The original r38 recording SHA-256 was
+> `35867d2f81e4579fd0d02346cfde731058b5fa3d9770ee887c2cda248decc687`.
+> A fresh process and uninterrupted game focus are required only while that
+> advancing probe runs.
+>
+> The PhysX active-order investigation proves that sleeping and re-waking this
+> kinematic actor is not a locally isolated operation: it changes active-body
+> ordering, island/change bitmaps, wake/sleep lists, and potentially interaction
+> ordering.  Even a source-equivalent MOVED -> SETTLING reconstruction cannot
+> claim parity without restoring those structures.  Re-reading the *full* r38
+> observation trace corrects the bounded-ring interpretation: all three settled
+> `original-native` observations immediately before the f1048 -> f1045 warp show
+> entity 48 awake, and all prefix/base observations do too.  The first retained
+> in-warp/current ring rows show it asleep, but later capture pumping evicted the
+> earliest stages.  Therefore the awake -> asleep transition occurs inside the
+> authoring warp/resume lifecycle, not naturally in the abandoned future.  R42
+> will identify the first exact restore stage and the checkpoint/current target-
+> valid phase.  Both the f1045 checkpoint and f1048 current paused snapshots
+> record `resumeIsKinematic=true` for entity 48, so the transition is not the
+> ordinary dynamic -> temporary-kinematic pause conversion.
+>
+> If the staged receipt still cannot identify the cause, the next deeper native
+> diagnostic is a bounded lifecycle receipt covering BodySim flags, active-list
+> position, wake/sleep notification lists, and island bitmaps.  Critical layout
+> correction from the PhysX 3.3.3 source/disassembly: the `Sc::BodyCore*` is at
+> `*(BodySim + 0x34)`, not `BodySim + 0x04`; validate it with the inverse
+> `*(BodyCore + 0x04) == BodySim`.  `BodySim + 0x04` is inherited Actor
+> interaction storage.  Do not add native active-list writes merely to satisfy
+> this diagnostic—sleep/re-wake changes actor ordering and island state.
+>
+> The failed game and host were stopped after preserving diagnostics.  The
+> user is actively using the computer, so do not launch or foreground the game
+> without warning.  A focused/unfocused A/B proved that the prior unfocused route
+> delivered the same one-frame pickup to the framework, but native gameplay did
+> not consume it.  This was a false-negative forward run, not rewind evidence.
+> `framework_input_probe.py` now takes a harness-only focus lease around every
+> advancing input burst: it fails before arming when unfocused and rejects an
+> endpoint if either unfocused-input counter changed.  Warp-only work and all
+> offline analysis remain background-safe.  All current work is offline. A fresh full game
+> process is mandatory before the next live run because r38 displayed a real
+> `AUTHORING_WARP_FAILED` overlay.
+
 > **Active rewind result (2026-09-14, quiescent pause and five-step pose
 > lattice):** the deterministic second-delivery f1045 rewind now completes
 > the native warp instead of failing on chef 46's coupled Rigidbody pose.

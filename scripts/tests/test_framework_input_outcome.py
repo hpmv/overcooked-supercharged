@@ -10,7 +10,9 @@ ARTIFACTS = ROOT / 'artifacts'
 if not (ARTIFACTS / 'framework-migration' / 'native-s').exists():
     ARTIFACTS = ROOT.parent / 'artifacts'
 sys.path.insert(0, str(ROOT / 'scripts'))
-from framework_input_probe import (delivery_outcome, native_physics_comparison, pickup_outcome,
+from framework_input_probe import (advancing_background_comparison, advancing_background_state,
+                                   delivery_outcome, native_physics_comparison, pickup_outcome,
+                                   require_advancing_background,
                                    round_end_contact_sidecar_comparison,
                                    round_end_terminal_comparison)
 
@@ -20,6 +22,57 @@ def witness(run):
     def take(label):
         return next(r['response'] for r in rows if r['label'] == label)
     return [take('base'), take('base-native'), take('original'), take('original-native')]
+
+
+class AdvancingBackgroundLeaseTest(unittest.TestCase):
+    @staticmethod
+    def status(focused=False, minimized=True, run_in_background=True,
+               background_input=True, virtual=10, logical=20):
+        return {'bridge': {
+            'applicationFocused': focused,
+            'nativeWindow': {'minimized': minimized},
+            'runInBackground': run_in_background,
+            'backgroundTasInput': background_input,
+            'unfocusedVirtualInputChecks': virtual,
+            'unfocusedLogicalInputChecks': logical,
+        }}
+
+    def test_background_state_is_retained_exactly(self):
+        self.assertEqual(advancing_background_state(self.status()), {
+            'applicationFocused': False,
+            'minimized': True,
+            'runInBackground': True,
+            'backgroundTasInput': True,
+            'unfocusedVirtualInputChecks': 10,
+            'unfocusedLogicalInputChecks': 20,
+        })
+
+    def test_foreground_or_missing_preflight_is_rejected(self):
+        for invalid in (self.status(focused=True), self.status(minimized=False),
+                        self.status(run_in_background=False), self.status(background_input=False),
+                        {}, {'bridge': {}}, self.status(virtual=True), self.status(logical=-1)):
+            with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
+                require_advancing_background(invalid, 'input-arm')
+
+    def test_unchanged_background_segment_is_exact(self):
+        before = require_advancing_background(self.status(), 'input-arm')
+        self.assertTrue(advancing_background_comparison(
+            'input-arm', before, self.status(virtual=11, logical=24))['exact'])
+
+    def test_endpoint_focus_or_restore_is_rejected(self):
+        before = require_advancing_background(self.status(), 'input-arm')
+        for after in (self.status(focused=True), self.status(minimized=False),
+                      self.status(run_in_background=False), self.status(background_input=False)):
+            with self.subTest(after=after):
+                self.assertFalse(advancing_background_comparison(
+                    'input-arm', before, after)['exact'])
+
+    def test_counters_cannot_move_backwards(self):
+        before = require_advancing_background(self.status(), 'input-arm')
+        for after in (self.status(virtual=9), self.status(logical=19)):
+            with self.subTest(after=after):
+                self.assertFalse(advancing_background_comparison(
+                    'input-arm', before, after)['exact'])
 
 
 class PickupOutcomeTest(unittest.TestCase):

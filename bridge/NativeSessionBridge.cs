@@ -46,7 +46,11 @@ namespace SuperchargedPatch.Bridge
         {
             RequireMainThread();
             immediateInputConsumer = consumer;
-            if (neutralFence && consumer != null) consumer(neutral);
+            if (neutralFence && consumer != null)
+            {
+                TASLogicalButton.MarkNextInputReason("bridge-wiring-neutral");
+                consumer(neutral);
+            }
         }
 
         public static void Awake()
@@ -96,7 +100,11 @@ namespace SuperchargedPatch.Bridge
             neutralFence = true;
             lastRelease = reason ?? "explicit";
             RefreshChefIds();
-            if (immediateInputConsumer != null) immediateInputConsumer(neutral);
+            if (immediateInputConsumer != null)
+            {
+                TASLogicalButton.MarkNextInputReason(lastRelease);
+                immediateInputConsumer(neutral);
+            }
         }
 
         public static void LateUpdate()
@@ -185,8 +193,9 @@ namespace SuperchargedPatch.Bridge
                     case "food": detail = NativeFoodSnapshot.Capture(); break;
                     case "window":
                         string mode = JsonRead.Text(request, "mode", "");
-                        if (mode != "minimize" && mode != "show") throw new ArgumentException("Window mode must be minimize or show.");
-                        NativeWindowControl.SetMinimized(mode == "minimize");
+                        if (mode == "activate") NativeWindowControl.Activate();
+                        else if (mode == "minimize" || mode == "show") NativeWindowControl.SetMinimized(mode == "minimize");
+                        else throw new ArgumentException("Window mode must be activate, minimize or show.");
                         break;
                     case "render":
                         int requestedFps = JsonRead.Integer(request, "fps", 60);
@@ -222,6 +231,7 @@ namespace SuperchargedPatch.Bridge
                             throw new InvalidOperationException("Arm requires a completed native load which is still paused.");
                         if (immediateInputConsumer == null) throw new InvalidOperationException("Framework logical-input callback is not wired.");
                         ForceNeutral("bridge-arm-boundary");
+                        TASLogicalButton.PrepareNeutralHistoriesForInput("bridge-arm-boundary");
                         neutralFence = false; holdPause = false;
                         controlOwner = envelope.Owner; lastCommand = command;
                         message = "Framework input armed; native pause is retained until the framework requests resume.";
@@ -233,6 +243,7 @@ namespace SuperchargedPatch.Bridge
                         // Force an explicit neutral cache boundary before the
                         // next newly accepted framework input can regain control.
                         ForceNeutral("bridge-resume-boundary");
+                        TASLogicalButton.PrepareNeutralHistoriesForInput("bridge-resume-boundary");
                         neutralFence = false; holdPause = false; Helpers.Resume();
                         controlOwner = envelope.Owner; lastCommand = command;
                         break;
@@ -348,6 +359,7 @@ namespace SuperchargedPatch.Bridge
                 "applicationFocused", Application.isFocused, "backgroundTasInput", BackgroundTasInputFocus.Enabled,
                 "unfocusedVirtualInputChecks", BackgroundTasInputFocus.UnfocusedVirtualChecks,
                 "unfocusedLogicalInputChecks", BackgroundTasInputFocus.UnfocusedLogicalChecks,
+                "tasLogicalInput", TASLogicalButton.Diagnostics(),
                 "runInBackground", Application.runInBackground, "lastCommand", lastCommand, "lastRelease", lastRelease,
                 "chefs", chefs, "transport", queue.Capture(), "nativeRound", CaptureNativeRound(),
                 "nativePhysics", NativePhysicsObservation.CaptureRegistry(),

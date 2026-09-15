@@ -1,4 +1,4 @@
-param([int]$Port=14455,[int]$BridgePort=17636,[switch]$PlanOnly,[string]$PluginBuild,[switch]$Minimized)
+param([int]$Port=14455,[int]$BridgePort=17636,[switch]$PlanOnly,[string]$PluginBuild,[switch]$Minimized,[switch]$SkipBackgroundPrime)
 $ErrorActionPreference='Stop'
 $tasRoot=Split-Path -Parent $PSScriptRoot
 $tasGame=Join-Path $tasRoot 'lab\runtime'
@@ -16,7 +16,7 @@ foreach ($tasFile in @($tasExe,(Join-Path $tasBuild 'SuperchargedPatch.dll'),(Jo
 $tasAllowed=@('Oc2Tas.dll','SuperchargedPatch.dll','Thrift.dll','Newtonsoft.Json.dll','System.Xml.dll')
 $tasUnexpected=@(Get-ChildItem -LiteralPath $tasPlugins -Recurse -Filter '*.dll' | Where-Object { $_.Name -notin $tasAllowed })
 if ($tasUnexpected.Count) { throw ('Unexpected lab plugins: '+($tasUnexpected.FullName -join ', ')) }
-$tasPlan=[ordered]@{runtime=$tasExe;profileRoot=$tasRun;port=$Port;bridgePort=$BridgePort;fullscreen=$false;width=1280;height=720;minimized=[bool]$Minimized;upstream='49701883ff20755daddfb819d54710c91a6d5486'}
+$tasPlan=[ordered]@{runtime=$tasExe;profileRoot=$tasRun;port=$Port;bridgePort=$BridgePort;fullscreen=$false;width=1280;height=720;minimized=[bool]$Minimized;backgroundPrimeRequested=[bool]($Minimized -and -not $SkipBackgroundPrime);upstream='49701883ff20755daddfb819d54710c91a6d5486'}
 if ($PlanOnly) { [pscustomobject]$tasPlan; return }
 New-Item -ItemType Directory -Force -Path $tasRun,(Join-Path $tasRun 'artifacts') | Out-Null
 $tasOldPlugin=Join-Path $tasPlugins 'Oc2Tas.dll'
@@ -58,4 +58,20 @@ $tasPlan.startedUtc=[DateTime]::UtcNow.ToString('o')
 $tasPlan.startTicks=$tasProcess.StartTime.ToUniversalTime().Ticks
 $tasPlan.pluginHash=(Get-FileHash -LiteralPath (Join-Path $tasPlugins 'SuperchargedPatch.dll') -Algorithm SHA256).Hash
 $tasPlan | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $tasRun 'artifacts\process.json') -Encoding utf8
+if ($Minimized -and -not $SkipBackgroundPrime) {
+ $tasDeadline=(Get-Date).AddSeconds(30)
+ do {
+  $tasListener=@(Get-NetTCPConnection -LocalPort $BridgePort -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $tasProcess.Id })
+  if ($tasListener.Count) { break }
+  if ($tasProcess.HasExited) { throw 'Overcooked exited before the background primer became available.' }
+  Start-Sleep -Milliseconds 100
+ } while ((Get-Date) -lt $tasDeadline)
+ if (-not $tasListener.Count) { throw 'Timed out waiting for the framework background primer.' }
+ $tasPrimePath=Join-Path $tasRun ('artifacts\background-prime-'+$tasProcess.Id+'.json')
+ & python (Join-Path $tasRoot 'scripts\framework_prime_background.py') --out $tasPrimePath --bridge-port $BridgePort --timeout 10 | Out-Null
+ if ($LASTEXITCODE -ne 0) { throw 'Framework background primer failed; inspect '+$tasPrimePath }
+ $tasPlan['backgroundPrime']=(Get-Content -LiteralPath $tasPrimePath -Raw | ConvertFrom-Json)
+ $tasPlan['backgroundPrimePath']=$tasPrimePath
+ $tasPlan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $tasRun 'artifacts\process.json') -Encoding utf8
+}
 [pscustomobject]$tasPlan

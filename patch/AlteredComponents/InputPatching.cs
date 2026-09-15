@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Team17.Online.Multiplayer.Messaging;
 using UnityEngine;
@@ -79,6 +81,45 @@ namespace SuperchargedPatch.AlteredComponents
     {
         [HarmonyPostfix]
         public static void Postfix(ILogicalButton _toProtect, ILogicalButton __result) { TASLogicalButton.ObserveNativeGate(_toProtect, __result); }
+    }
+
+    [HarmonyPatch(typeof(PlayerControls), "SetControlSchemeData")]
+    public static class ObserveAssignedNativeControlScheme
+    {
+        [HarmonyPostfix]
+        public static void Postfix(PlayerControls.ControlSchemeData _controlScheme)
+        {
+            TASLogicalButton.ObserveControlScheme(_controlScheme);
+        }
+    }
+
+    [HarmonyPatch(typeof(ClientPlayerControlsImpl_Default), "Update_Carry")]
+    public static class ObserveNativePickupEdgeConsumer
+    {
+        [HarmonyTranspiler]
+        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var original = AccessTools.Method(typeof(ILogicalButton), "JustPressed");
+            var gameObject = AccessTools.PropertyGetter(typeof(Component), "gameObject");
+            var replacement = AccessTools.Method(typeof(TASLogicalButton), "ObservePickupJustPressed");
+            int matches = 0;
+            foreach (var instruction in instructions)
+            {
+                if (instruction.opcode == OpCodes.Callvirt && Equals(instruction.operand, original))
+                {
+                    var load = new CodeInstruction(OpCodes.Ldarg_0);
+                    load.labels.AddRange(instruction.labels); instruction.labels.Clear();
+                    load.blocks.AddRange(instruction.blocks); instruction.blocks.Clear();
+                    yield return load;
+                    yield return new CodeInstruction(OpCodes.Callvirt, gameObject);
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = replacement;
+                    matches++;
+                }
+                yield return instruction;
+            }
+            if (matches != 1) throw new InvalidOperationException("Expected exactly one native Update_Carry pickup edge poll.");
+        }
     }
 }
 

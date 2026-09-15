@@ -117,7 +117,11 @@ namespace Hpmv {
         }
         private void Accept(InputData value, bool fromController) {
             currentInput = SuperchargedPatch.Bridge.NativeSessionBridge.FilterInput(value);
-            SuperchargedPatch.TASLogicalButton.ApplyInputFrame(currentInput);
+            SuperchargedPatch.TASLogicalButton.MarkNextInputReason(fromController ? "controller-reply" : "control-pause");
+            // A controller reply with Input unset is a phase/control response
+            // (notably RequestResume), not a new neutral gameplay sample. A
+            // locally manufactured control pause still fails safe to neutral.
+            SuperchargedPatch.TASLogicalButton.ApplyInputFrame(currentInput, fromController);
             if (fromController) controllerRepliesConsumed++; else controlPauses++;
         }
         private bool AcceptReply(Reply reply) {

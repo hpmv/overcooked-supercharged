@@ -29,6 +29,10 @@ var patch=candidate.MainModule.Types.Single(t=>t.Name=="BackgroundTasLogicalInpu
 Check(patch.CustomAttributes.Any(a=>a.AttributeType.Name=="HarmonyPatch"&&a.ConstructorArguments.Any(v=>v.Value?.ToString()=="CanProcessInput")),"compiled plugin patch targets CanProcessInput only");
 var tas=candidate.MainModule.Types.Single(t=>t.Name=="TASLogicalButton");
 Check(!tas.Methods.Any(m=>new[]{"Update","JustPressed","JustReleased","CanProcessInput"}.Contains(m.Name)),"TAS device does not replace native claim/down/edge methods");
+var assigned=candidate.MainModule.Types.Single(t=>t.Name=="ObserveAssignedNativeControlScheme");
+Check(assigned.CustomAttributes.Any(a=>a.AttributeType.Name=="HarmonyPatch"&&a.ConstructorArguments.Any(v=>v.Value?.ToString()=="SetControlSchemeData")),"compiled plugin observes the authoritative assigned native control scheme");
+var consumer=candidate.MainModule.Types.Single(t=>t.Name=="ObserveNativePickupEdgeConsumer");
+Check(consumer.CustomAttributes.Any(a=>a.AttributeType.Name=="HarmonyPatch"&&a.ConstructorArguments.Any(v=>v.Value?.ToString()=="Update_Carry")),"compiled plugin wraps the exact native pickup edge consumer");
 var getter=AccessTools.PropertyGetter(typeof(Application),"isFocused");
 var input=new[]{new CodeInstruction(OpCodes.Call,getter),new CodeInstruction(OpCodes.Ret)};
 var generated=BackgroundTasLogicalInputFocus.Transpiler(input).ToArray();
@@ -39,6 +43,9 @@ LogicalButtonBase.Focus=(Func<LogicalButtonBase,bool>)method.CreateDelegate(type
 void Reject(IEnumerable<CodeInstruction> list,string name){try{BackgroundTasLogicalInputFocus.Transpiler(list).ToArray();throw new Exception("accepted");}catch(InvalidOperationException){checks.Add(name);}}
 Reject(new[]{new CodeInstruction(OpCodes.Ret)},"changed native body without focus getter rejected");
 Reject(new[]{new CodeInstruction(OpCodes.Call,getter),new CodeInstruction(OpCodes.Call,getter)},"multiple native focus reads rejected");
+var canProcess=AccessTools.Method(typeof(LogicalButtonBase),"CanProcessInput");
+var updated=BackgroundTasLogicalInputUpdateFocus.Transpiler(new[]{new CodeInstruction(OpCodes.Call,canProcess)}).Single();
+Check(updated.opcode==OpCodes.Call&&updated.operand is MethodInfo updateFocus&&updateFocus.Name=="IsFocusedForLogicalButton","native history Update directly uses the verified background predicate despite Mono inlining");
 var owner=new GameObject();EntitySerialisationRegistry.Ids[owner]=103;var physical=new Physical();
 var device=(TASLogicalButton)TASLogicalButton.GetOrCreate(103,TASLogicalButtonType.Pickup,physical,owner);
 bool open=true;int callbacks=0;var gate=new GateLogicalButton(device,()=>{callbacks++;return open;});TASLogicalButton.ObserveNativeGate(device,gate);
@@ -52,6 +59,23 @@ else {
  Check(callbacks==0,"focus verification never invokes native gate callback");
  Check(!LogicalButtonBase.Focus(physical),"ordinary physical button retains unfocused rejection");
  Check(!LogicalButtonBase.Focus(new GateLogicalButton(device,()=>true)),"unobserved gate rejected even around a virtual device");
+ var assignedInner=new GateLogicalButton(device,()=>true);var assignedOuter=new GateLogicalButton(assignedInner,()=>true);
+ TASLogicalButton.ObserveControlScheme(new PlayerControls.ControlSchemeData{m_pickupButton=assignedOuter});
+ Check(LogicalButtonBase.Focus(assignedInner)&&LogicalButtonBase.Focus(assignedOuter),"assigned native control scheme registers an otherwise unobserved complete gate chain");
+ var diagnostics=TASLogicalButton.Diagnostics();
+ Check((long)diagnostics["controlSchemeGatesNewlyTracked"]==2,"assigned-scheme receipt proves both missing gate layers were newly tracked");
+ var claimed=typeof(LogicalButtonBase).GetField("m_pressClaimed",BindingFlags.NonPublic|BindingFlags.Instance)!;
+ Pad(false);TASLogicalButton.MarkNextInputReason("test-phase-resume");
+ TASLogicalButton.ApplyInputFrame(new InputData{RequestResume=true},true);
+ Check(LogicalButtonBase.Focus(device)&&claimed.GetValue(device)!.Equals(false),"phase-only controller resume preserves neutral virtual-pad ownership and history");
+ TASLogicalButton.MarkNextInputReason("test-control-pause");TASLogicalButton.ApplyInputFrame(new InputData{RequestPause=true},false);
+ Check(!LogicalButtonBase.Focus(device)&&claimed.GetValue(device)!.Equals(true),"locally manufactured control pause still fails safe to neutral claimed input");Pad(false);
+ Pad(false);TASLogicalButton.PrepareNeutralHistoriesForInput("test-arm");Time.time=4;Pad(true);
+ Check(assignedOuter.JustPressed(),"authoring arm gives every verified native gate the missing accepted neutral history sample");
+ Check(((List<Dictionary<string,object>>)TASLogicalButton.Diagnostics()["neutralPreparations"]).Count==1,"authoring neutral-history preparation records one bounded receipt");
+ Pad(false);assignedOuter.HasUnclaimedPressEvent();Time.time=5;Pad(true);
+ Check(TASLogicalButton.ObservePickupJustPressed(assignedOuter,owner),"pickup consumer wrapper returns the single native JustPressed result");
+ Check(((List<Dictionary<string,object>>)TASLogicalButton.Diagnostics()["pickupPolls"]).Count==1,"pickup consumer wrapper records one bounded down-level receipt");
  var foreign=new GateLogicalButton(physical,()=>true);TASLogicalButton.ObserveNativeGate(device,foreign);Check(!LogicalButtonBase.Focus(foreign),"gate whose native child differs from observed source rejected");
  Pad(false);gate.HasUnclaimedPressEvent();outer.HasUnclaimedPressEvent();Time.time=10;Pad(true);
  Check(gate.JustPressed()&&!gate.JustPressed(),"unfocused virtual press accepted exactly once by native gate history");

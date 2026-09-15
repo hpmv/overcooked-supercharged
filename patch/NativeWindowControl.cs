@@ -11,6 +11,7 @@ namespace SuperchargedPatch
         [DllImport("user32.dll")] private static extern IntPtr GetActiveWindow();
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
         [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
         [DllImport("kernel32.dll")] private static extern uint GetCurrentProcessId();
         public static string LastRequest { get; private set; }
@@ -35,6 +36,15 @@ namespace SuperchargedPatch
         {
             ShowWindow(OwnWindow(), minimize ? 6 : 4); // SW_MINIMIZE / SW_SHOWNOACTIVATE
             LastRequest = minimize ? "minimize" : "show-without-activation";
+        }
+
+        public static void Activate()
+        {
+            IntPtr window = OwnWindow();
+            ShowWindow(window, 9); // SW_RESTORE
+            if (!SetForegroundWindow(window))
+                throw new InvalidOperationException("Windows refused to activate the verified Unity process window.");
+            LastRequest = "activate";
         }
 
         public static object Observe()

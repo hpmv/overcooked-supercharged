@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Hpmv;
 using UnityEngine;
 using Team17.Online.Multiplayer.Messaging;
@@ -24,6 +25,21 @@ namespace SuperchargedPatch
         private static Dictionary<int, PadState> pads = new Dictionary<int, PadState>();
         private static bool emulationActive;
         private static int resetGeneration;
+        private static long controlSchemesObserved;
+        private static long controlSchemeChainsObserved;
+        private static long controlSchemeGatesObserved;
+        private static long controlSchemeGatesNewlyTracked;
+        private static long pickupPollSequence;
+        private static long inputApplicationSequence;
+        private static long neutralPreparationSequence;
+        private static long focusDecisionSequence;
+        private static int lastAppliedControllerFrame = -1;
+        private static string nextInputReason;
+        private static string lastInputReason = "startup";
+        private static readonly List<Dictionary<string, object>> pickupPolls = new List<Dictionary<string, object>>();
+        private static readonly List<Dictionary<string, object>> inputApplications = new List<Dictionary<string, object>>();
+        private static readonly List<Dictionary<string, object>> neutralPreparations = new List<Dictionary<string, object>>();
+        private static readonly List<Dictionary<string, object>> focusDecisions = new List<Dictionary<string, object>>();
         public static bool IsEmulatedChef(int entityId) { return emulationActive && pads.ContainsKey(entityId); }
         private static readonly FieldInfo pressClaimed = NativeField("m_pressClaimed");
         private static readonly FieldInfo releaseClaimed = NativeField("m_releaseClaimed");
@@ -61,11 +77,199 @@ namespace SuperchargedPatch
             if (device != null && gate != null && gate.GetType() == typeof(GateLogicalButton) && gateChild != null &&
                 ReferenceEquals(gateChild.GetValue(gate), source)) TrackHistory(gate, device);
         }
+        // Observe the exact button chains assigned to native PlayerControls. Tiny
+        // GetGated helpers may be inlined before Harmony can see their postfixes;
+        // the nontrivial native setter is the authoritative, behavior-neutral
+        // point at which the final control scheme becomes visible.
+        public static void ObserveControlScheme(PlayerControls.ControlSchemeData scheme)
+        {
+            if (scheme == null) return;
+            controlSchemesObserved++;
+            ObserveControlSchemeChain(scheme.m_pickupButton, TASLogicalButtonType.Pickup);
+            ObserveControlSchemeChain(scheme.m_worksurfaceUseButton, TASLogicalButtonType.Use);
+            ObserveControlSchemeChain(scheme.m_dashButton, TASLogicalButtonType.Dash);
+        }
+        private static void ObserveControlSchemeChain(ILogicalButton head, TASLogicalButtonType expected)
+        {
+            var gates = new List<LogicalButtonBase>();
+            ILogicalButton cursor = head;
+            for (int depth = 0; depth < 8; depth++)
+            {
+                var device = cursor as TASLogicalButton;
+                if (device != null)
+                {
+                    if (device.type != expected) return;
+                    controlSchemeChainsObserved++;
+                    foreach (var gate in gates)
+                    {
+                        controlSchemeGatesObserved++;
+                        if (ObservedDevice(gate) == null) controlSchemeGatesNewlyTracked++;
+                        TrackHistory(gate, device);
+                    }
+                    return;
+                }
+                var nativeGate = cursor as GateLogicalButton;
+                if (nativeGate == null || gateChild == null) return;
+                var child = gateChild.GetValue(nativeGate) as ILogicalButton;
+                if (child == null || ReferenceEquals(child, cursor)) return;
+                gates.Add(nativeGate);
+                cursor = child;
+            }
+        }
+        public static Dictionary<string, object> Diagnostics()
+        {
+            return new Dictionary<string, object> {
+                { "devices", devices.Count }, { "liveHistories", LiveHistories().Count },
+                { "controlSchemesObserved", controlSchemesObserved },
+                { "controlSchemeChainsObserved", controlSchemeChainsObserved },
+                { "controlSchemeGatesObserved", controlSchemeGatesObserved },
+                { "controlSchemeGatesNewlyTracked", controlSchemeGatesNewlyTracked },
+                { "lastAppliedControllerFrame", lastAppliedControllerFrame },
+                { "lastInputReason", lastInputReason },
+                { "inputApplications", new List<Dictionary<string, object>>(inputApplications) },
+                { "neutralPreparations", new List<Dictionary<string, object>>(neutralPreparations) },
+                { "focusDecisions", new List<Dictionary<string, object>>(focusDecisions) },
+                { "pickupPolls", new List<Dictionary<string, object>>(pickupPolls) }
+            };
+        }
+        // Exact replacement for the one native Update_Carry JustPressed call.
+        // The button is evaluated once; the return value and private history are
+        // observed around that same evaluation only when its TAS pickup level is
+        // currently down (or a release from that level is still pending).
+        public static bool ObservePickupJustPressed(ILogicalButton button, GameObject consumer)
+        {
+            TASLogicalButton device;
+            var before = DescribeChain(button, out device);
+            bool trace = device != null && device.type == TASLogicalButtonType.Pickup &&
+                (device.IsDown() || ChainWasDown(before));
+            bool result = button.JustPressed();
+            if (trace)
+            {
+                TASLogicalButton ignored;
+                var receipt = new Dictionary<string, object> {
+                    { "sequence", ++pickupPollSequence }, { "unityFrame", Time.frameCount },
+                    { "unityTime", Time.time }, { "applicationFocused", Application.isFocused },
+                    { "controllerFrame", lastAppliedControllerFrame }, { "inputReason", lastInputReason },
+                    { "consumerEntity", consumer == null ? -1 : (int)EntitySerialisationRegistry.GetId(consumer) },
+                    { "deviceEntity", device.playerEntityId }, { "inputLevel", device.IsDown() },
+                    { "result", result }, { "before", before }, { "after", DescribeChain(button, out ignored) }
+                };
+                pickupPolls.Add(receipt);
+                if (pickupPolls.Count > 128) pickupPolls.RemoveAt(0);
+            }
+            return result;
+        }
+        // The authoring pause prevents PlayerControls.Update_Carry from polling
+        // its outer native gates. ForceNeutral updates the TAS devices, then this
+        // applies the same accepted neutral sample to every verified native gate
+        // history before a new segment is armed. No gate callback is invoked and
+        // no press/release event is manufactured.
+        public static void PrepareNeutralHistoriesForInput(string reason)
+        {
+            int updated = 0, priorClaimedPresses = 0, priorDown = 0;
+            var rows = new List<Dictionary<string, object>>();
+            foreach (var history in LiveHistories())
+            {
+                var button = history.Button.Target as LogicalButtonBase;
+                if (button == null || !IsVerifiedEmulatedButton(button)) continue;
+                var value = ReadHistory(button);
+                if (value.PressClaimed) priorClaimedPresses++;
+                if (value.Down) priorDown++;
+                value.PressClaimed = false;
+                value.Down = false;
+                WriteHistory(button, value, 0);
+                if (history.Device.type == TASLogicalButtonType.Pickup)
+                    rows.Add(HistoryRow(button, history.Device));
+                updated++;
+            }
+            var receipt = new Dictionary<string, object> {
+                { "sequence", ++neutralPreparationSequence }, { "unityFrame", Time.frameCount },
+                { "unityTime", Time.time }, { "applicationFocused", Application.isFocused },
+                { "reason", reason ?? "unspecified" }, { "updated", updated },
+                { "priorClaimedPresses", priorClaimedPresses }, { "priorDown", priorDown },
+                { "pickupHistoriesAfter", rows }
+            };
+            neutralPreparations.Add(receipt);
+            if (neutralPreparations.Count > 64) neutralPreparations.RemoveAt(0);
+        }
+        private static List<Dictionary<string, object>> DescribeChain(ILogicalButton head, out TASLogicalButton device)
+        {
+            device = null;
+            var result = new List<Dictionary<string, object>>();
+            ILogicalButton cursor = head;
+            for (int depth = 0; depth < 8 && cursor != null; depth++)
+            {
+                var logical = cursor as LogicalButtonBase;
+                var currentDevice = cursor as TASLogicalButton;
+                if (logical == null) break;
+                var history = ReadHistory(logical);
+                result.Add(new Dictionary<string, object> {
+                    { "depth", depth }, { "identity", RuntimeHelpers.GetHashCode(logical) },
+                    { "type", logical.GetType().FullName },
+                    { "verified", IsVerifiedEmulatedButton(logical) },
+                    { "down", history.Down }, { "pressClaimed", history.PressClaimed },
+                    { "releaseClaimed", history.ReleaseClaimed },
+                    { "downTime", history.DownTime }, { "downLength", history.DownLength }
+                });
+                if (currentDevice != null) { device = currentDevice; break; }
+                if (logical.GetType() != typeof(GateLogicalButton) || gateChild == null) break;
+                var child = gateChild.GetValue(logical) as ILogicalButton;
+                if (child == null || ReferenceEquals(child, cursor)) break;
+                cursor = child;
+            }
+            return result;
+        }
+        private static bool ChainWasDown(List<Dictionary<string, object>> chain)
+        {
+            foreach (var layer in chain)
+                if (layer.ContainsKey("down") && (bool)layer["down"]) return true;
+            return false;
+        }
         private static TASLogicalButton ObservedDevice(ILogicalButton button)
         {
             foreach (var history in histories)
                 if (ReferenceEquals(history.Button.Target, button)) return history.Device;
             return null;
+        }
+        internal static void ObserveFocusDecision(LogicalButtonBase button, bool verified)
+        {
+            var device = ObservedDevice(button);
+            if (device == null || device.type != TASLogicalButtonType.Pickup || !device.IsDown()) return;
+            var history = ReadHistory(button);
+            var receipt = new Dictionary<string, object> {
+                { "sequence", ++focusDecisionSequence }, { "unityFrame", Time.frameCount },
+                { "unityTime", Time.time }, { "controllerFrame", lastAppliedControllerFrame },
+                { "inputReason", lastInputReason }, { "buttonType", button.GetType().FullName },
+                { "deviceEntity", device.playerEntityId }, { "verified", verified },
+                { "down", history.Down }, { "pressClaimed", history.PressClaimed },
+                { "releaseClaimed", history.ReleaseClaimed }
+            };
+            if (!verified) receipt["failure"] = VerificationFailure(button, device);
+            focusDecisions.Add(receipt);
+            if (focusDecisions.Count > 128) focusDecisions.RemoveAt(0);
+        }
+        private static string VerificationFailure(LogicalButtonBase button, TASLogicalButton device)
+        {
+            if (!emulationActive) return "emulation-inactive";
+            if (device.owner == null) return "owner-destroyed";
+            if (device.owner.GetInstanceID() != device.ownerInstanceId) return "owner-incarnation";
+            if (!pads.ContainsKey(device.playerEntityId)) return "pad-absent";
+            TASLogicalButton current;
+            if (!devices.TryGetValue(device.deviceKey, out current) || !ReferenceEquals(current, device)) return "device-superseded";
+            if ((int)EntitySerialisationRegistry.GetId(device.owner) != device.playerEntityId) return "registry-owner";
+            var provider = device.owner.GetComponent<PlayerIDProvider>();
+            if (provider == null) return "provider-missing";
+            if (!provider.IsLocallyControlled()) return "provider-remote";
+            ILogicalButton cursor = button;
+            for (int depth = 0; depth < 8; depth++)
+            {
+                if (ReferenceEquals(cursor, device)) return "verified-inconsistent";
+                if (cursor == null || cursor.GetType() != typeof(GateLogicalButton)) return "chain-type";
+                if (gateChild == null) return "chain-field";
+                if (!ReferenceEquals(ObservedDevice(cursor), device)) return "chain-untracked";
+                cursor = gateChild.GetValue(cursor) as ILogicalButton;
+            }
+            return "chain-depth";
         }
         internal static bool IsVerifiedEmulatedButton(LogicalButtonBase button)
         {
@@ -100,10 +304,25 @@ namespace SuperchargedPatch
         // Unity main thread only, once per accepted logical input frame. Reapplying
         // unchanged levels cannot create another edge. Protocol JustPressed/Released
         // hints do not manufacture events. Missing input is neutral once activated.
+        public static void MarkNextInputReason(string reason)
+        {
+            nextInputReason = String.IsNullOrEmpty(reason) ? "unspecified" : reason;
+        }
         public static void ApplyInputFrame(InputData input)
         {
-            var next = new Dictionary<int, PadState>();
-            if (input != null && input.Input != null)
+            ApplyInputFrame(input, false);
+        }
+        public static void ApplyInputFrame(InputData input, bool preserveMissingControllerInput)
+        {
+            string reason = nextInputReason;
+            nextInputReason = null;
+            if (String.IsNullOrEmpty(reason)) reason = input != null && input.__isset.nextFrame ? "controller-frame" : "direct";
+            int controllerFrame = input != null && input.__isset.nextFrame ? input.NextFrame : -1;
+            bool preservedMissingInput = preserveMissingControllerInput && input != null && input.Input == null;
+            var next = preservedMissingInput
+                ? new Dictionary<int, PadState>(pads)
+                : new Dictionary<int, PadState>();
+            if (!preservedMissingInput && input != null && input.Input != null)
                 foreach (var pair in input.Input)
                 {
                     if (pair.Value == null) throw new ArgumentException("Null chef input.");
@@ -118,10 +337,67 @@ namespace SuperchargedPatch
                         Dash = value.Dash != null && value.Dash.Down
                     });
                 }
+            bool pickupChanged = false, pickupDown = false;
+            foreach (var pair in next)
+            {
+                PadState prior;
+                if (pair.Value.Pickup) pickupDown = true;
+                if (!pads.TryGetValue(pair.Key, out prior) || prior.Pickup != pair.Value.Pickup) pickupChanged = true;
+            }
+            foreach (var pair in pads) if (!next.ContainsKey(pair.Key) && pair.Value.Pickup) pickupChanged = true;
+            var beforeDownHistories = new List<Dictionary<string, object>>();
+            foreach (var owner in LiveHistories())
+            {
+                PadState incoming;
+                var button = owner.Button.Target as LogicalButtonBase;
+                if (button != null && owner.Device.type == TASLogicalButtonType.Pickup &&
+                    next.TryGetValue(owner.Device.playerEntityId, out incoming) && incoming.Pickup)
+                    beforeDownHistories.Add(HistoryRow(button, owner.Device));
+            }
             pads = next;
+            lastAppliedControllerFrame = controllerFrame;
+            lastInputReason = reason;
             if (input != null && input.Input != null) emulationActive = true;
             foreach (var device in devices.Values)
                 if (device.owner != null) device.Update(device.IsDown());
+            if (pickupChanged || pickupDown || preservedMissingInput && (input.RequestResume || input.RequestPause) ||
+                (reason != "controller-frame" && reason != "controller-reply" && reason != "control-pause"))
+            {
+                var levels = new Dictionary<string, object>();
+                foreach (var pair in pads) if (pair.Value.Pickup) levels[pair.Key.ToString()] = true;
+                var receipt = new Dictionary<string, object> {
+                    { "sequence", ++inputApplicationSequence }, { "unityFrame", Time.frameCount },
+                    { "unityTime", Time.time }, { "applicationFocused", Application.isFocused },
+                    { "controllerFrame", controllerFrame }, { "reason", reason },
+                    { "preservedMissingInput", preservedMissingInput },
+                    { "requestResume", input != null && input.RequestResume },
+                    { "requestPause", input != null && input.RequestPause }, { "pickupDown", levels }
+                };
+                if (pickupDown)
+                {
+                    var afterHistories = new List<Dictionary<string, object>>();
+                    foreach (var owner in LiveHistories())
+                    {
+                        var button = owner.Button.Target as LogicalButtonBase;
+                        if (button == null || owner.Device.type != TASLogicalButtonType.Pickup || !owner.Device.IsDown()) continue;
+                        afterHistories.Add(HistoryRow(button, owner.Device));
+                    }
+                    receipt["beforeHistories"] = beforeDownHistories;
+                    receipt["afterHistories"] = afterHistories;
+                }
+                inputApplications.Add(receipt);
+                if (inputApplications.Count > 128) inputApplications.RemoveAt(0);
+            }
+        }
+        private static Dictionary<string, object> HistoryRow(LogicalButtonBase button, TASLogicalButton device)
+        {
+            var history = ReadHistory(button);
+            return new Dictionary<string, object> {
+                { "identity", RuntimeHelpers.GetHashCode(button) }, { "buttonType", button.GetType().FullName },
+                { "deviceEntity", device.playerEntityId }, { "verified", IsVerifiedEmulatedButton(button) },
+                { "down", history.Down }, { "pressClaimed", history.PressClaimed },
+                { "releaseClaimed", history.ReleaseClaimed }
+            };
         }
 
         // Fresh load/disconnect: release levels and consume old claims, retaining
@@ -130,6 +406,10 @@ namespace SuperchargedPatch
         {
             pads = new Dictionary<int, PadState>();
             resetGeneration++;
+            pickupPolls.Clear();
+            inputApplications.Clear();
+            neutralPreparations.Clear();
+            focusDecisions.Clear();
             foreach (var history in LiveHistories())
                 WriteHistory(history.Button.Target as LogicalButtonBase, new ButtonHistory {
                     PressClaimed = true, ReleaseClaimed = true, DownTime = Time.time

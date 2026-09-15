@@ -15,6 +15,66 @@ from framework_native_search import (boundary_matches, compare_boundary, exact_v
 from framework_story11_registry import RegistryEvidence, world_proof
 
 
+def advancing_background_state(status):
+    """Return the exact bridge/window tuple required by a background probe."""
+    bridge = status.get('bridge') if isinstance(status, dict) else None
+    window = bridge.get('nativeWindow') if isinstance(bridge, dict) else None
+    if not isinstance(bridge, dict) or not isinstance(window, dict):
+        raise RuntimeError('Bridge does not expose advancing-background diagnostics.')
+    focused = bridge.get('applicationFocused')
+    minimized = window.get('minimized')
+    run_in_background = bridge.get('runInBackground')
+    background_input = bridge.get('backgroundTasInput')
+    virtual = bridge.get('unfocusedVirtualInputChecks')
+    logical = bridge.get('unfocusedLogicalInputChecks')
+    if any(type(value) is not bool for value in
+           (focused, minimized, run_in_background, background_input)) or \
+            type(virtual) is not int or type(logical) is not int or virtual < 0 or logical < 0:
+        raise RuntimeError('Bridge advancing-background diagnostics have an invalid shape.')
+    return {
+        'applicationFocused': focused,
+        'minimized': minimized,
+        'runInBackground': run_in_background,
+        'backgroundTasInput': background_input,
+        'unfocusedVirtualInputChecks': virtual,
+        'unfocusedLogicalInputChecks': logical,
+    }
+
+
+def require_advancing_background(status, label):
+    state = advancing_background_state(status)
+    if state['applicationFocused'] or not state['minimized'] or \
+            not state['runInBackground'] or not state['backgroundTasInput']:
+        raise RuntimeError('A minimized, unfocused logical-input background session is required: ' + label)
+    return state
+
+
+def advancing_background_comparison(label, before, after_status):
+    after = advancing_background_state(after_status)
+    result = {
+        'label': label,
+        'focusedBefore': before['applicationFocused'],
+        'focusedAfter': after['applicationFocused'],
+        'minimizedBefore': before['minimized'],
+        'minimizedAfter': after['minimized'],
+        'runInBackgroundBefore': before['runInBackground'],
+        'runInBackgroundAfter': after['runInBackground'],
+        'backgroundTasInputBefore': before['backgroundTasInput'],
+        'backgroundTasInputAfter': after['backgroundTasInput'],
+        'unfocusedVirtualInputChecksBefore': before['unfocusedVirtualInputChecks'],
+        'unfocusedVirtualInputChecksAfter': after['unfocusedVirtualInputChecks'],
+        'unfocusedLogicalInputChecksBefore': before['unfocusedLogicalInputChecks'],
+        'unfocusedLogicalInputChecksAfter': after['unfocusedLogicalInputChecks'],
+    }
+    result['exact'] = not result['focusedBefore'] and not result['focusedAfter'] and \
+        result['minimizedBefore'] and result['minimizedAfter'] and \
+        result['runInBackgroundBefore'] and result['runInBackgroundAfter'] and \
+        result['backgroundTasInputBefore'] and result['backgroundTasInputAfter'] and \
+        result['unfocusedVirtualInputChecksAfter'] >= result['unfocusedVirtualInputChecksBefore'] and \
+        result['unfocusedLogicalInputChecksAfter'] >= result['unfocusedLogicalInputChecksBefore']
+    return result
+
+
 def load_prefix_requests(path):
     """Load raw-input prefixes, expanding request or exact-capture entries in order."""
     values = json.loads(path.read_text(encoding='utf-8-sig'))
@@ -411,8 +471,8 @@ def main():
     parser.add_argument('--mark-native-trace', action='store_true',
                         help='Write phase markers to the active native-physics-trace module.')
     parser.add_argument('--split-native-trace-around-warp', action='store_true',
-                        help=('Export and deactivate the native trace before warp, then reactivate it after warp. '
-                              'This permits pose-setter hooks whose exact entry bytes are verified by BodyRestore.'))
+                        help=('Export and clear the native trace before the warp, preserve the isolated warp '
+                              'trace, then clear again for replay. The hooks stay installed so later detours remain intact.'))
     parser.add_argument('--save-managed-phase-traces', action='store_true',
                         help=('Clear and label the active chef-managed-mutation-tracer at each branch boundary, '
                               'then save its original and replay receipts outside observations.json.'))
@@ -468,7 +528,8 @@ def main():
     contact_pool_start = None
     contact_pool_cleanup_needed = False
     round_end_cleanup_needed = False
-    split_trace_config = None
+    advancing_background_lease = None
+    split_trace_warp_pending = False
     registry_evidence = RegistryEvidence() if args.reconcile_dynamic_registry else None
 
     def call(target, request, label):
@@ -477,16 +538,45 @@ def main():
         return result
 
     def settled(label):
+        nonlocal advancing_background_lease
         deadline = time.monotonic() + args.settle_timeout
         while True:
             s = host.call({'command': 'status'})
             if s['errors'] or s['state'] == 'Error':
                 raise RuntimeError(json.dumps(s))
             if s['state'] == 'Paused' and not s['requestPending']:
-                return call('controller', {'command': 'inspect', 'full': True}, label)
+                result = call('controller', {'command': 'inspect', 'full': True}, label)
+                if advancing_background_lease is not None:
+                    after = call('bridge', {'command': 'status'},
+                                 advancing_background_lease['label'] + '-background-after')
+                    comparison = advancing_background_comparison(
+                        advancing_background_lease['label'], advancing_background_lease, after)
+                    summary.setdefault('advancingBackgroundLeases', []).append(comparison)
+                    advancing_background_lease = None
+                    if not comparison['exact']:
+                        raise RuntimeError('Background input contract changed during an advancing TAS segment: ' +
+                                           json.dumps(comparison))
+                return result
             if time.monotonic() > deadline:
                 raise TimeoutError(json.dumps(s))
             time.sleep(.025)
+
+    def arm_advancing(label):
+        nonlocal advancing_background_lease
+        if advancing_background_lease is not None:
+            raise RuntimeError('An advancing TAS background lease is already active.')
+        background_status = call('bridge', {'command': 'status'}, label + '-background-before')
+        before = require_advancing_background(background_status, label)
+        call('bridge', {'command': 'arm'}, label)
+        advancing_background_lease = {
+            'label': label,
+            'applicationFocused': before['applicationFocused'],
+            'minimized': before['minimized'],
+            'runInBackground': before['runInBackground'],
+            'backgroundTasInput': before['backgroundTasInput'],
+            'unfocusedVirtualInputChecks': before['unfocusedVirtualInputChecks'],
+            'unfocusedLogicalInputChecks': before['unfocusedLogicalInputChecks'],
+        }
 
     def native_observation(label):
         def read_frame():
@@ -610,7 +700,7 @@ def main():
                         segment['frames'] < 1 or not isinstance(segment.get('chefs'), dict)
                         for segment in prefix_request['segments']):
                     raise ValueError(f'Prefix request {index} has invalid segments.')
-                call('bridge', {'command': 'arm'}, f'prefix-{index}-arm')
+                arm_advancing(f'prefix-{index}-arm')
                 call('controller', prefix_request, f'prefix-{index}-input')
                 prefix_state = settled(f'prefix-{index}-settled')
                 if registry_evidence is not None:
@@ -620,7 +710,7 @@ def main():
         initial = settled('initial')
         mark_native_trace(200, initial['frame'], 'native-trace-before-warmup')
         if args.warmup:
-            call('bridge', {'command': 'arm'}, 'arm')
+            arm_advancing('arm')
             call('controller', {'command': 'step', 'frames': args.warmup}, 'warmup')
             base = settled('base')
         else:
@@ -771,7 +861,7 @@ def main():
             request.update(expectedTerminalGameState='RunLevelOutro',
                            warpToStartOnTerminal=True, development=True)
             first_arm = arm_round_end(frame, 'round-end-original-arm')
-            call('bridge', {'command': 'arm'}, 'input-arm')
+            arm_advancing('input-arm')
             call('controller', request, 'input')
 
             # The terminal callback queues its rewind locally in the controller;
@@ -828,7 +918,7 @@ def main():
                     raise RuntimeError('Round-end checkpoint sidecar was not captured and scheduled exactly.')
 
             second_arm = arm_round_end(frame, 'round-end-replay-arm')
-            call('bridge', {'command': 'arm'}, 'replay-arm')
+            arm_advancing('replay-arm')
             call('controller', {'command': 'raw-replay', 'recording': recording,
                                 'expectedTerminalGameState': 'RunLevelOutro'}, 'replay')
             settled('replayed-terminal-held')
@@ -1007,7 +1097,7 @@ def main():
                         repeat_arm.get('targetFrame') != frame or \
                         repeat_arm.get('terminalFrame') != -1:
                     raise RuntimeError(prefix + ' latch nonce/target did not advance exactly.')
-                call('bridge', {'command': 'arm'}, prefix + '-replay-arm')
+                arm_advancing(prefix + '-replay-arm')
                 call('controller', {'command': 'raw-replay', 'recording': recording,
                                     'expectedTerminalGameState': 'RunLevelOutro'},
                      prefix + '-replay')
@@ -1110,7 +1200,7 @@ def main():
                     (row['sidecarComparison'] is None or row['sidecarComparison'].get('equal') is True)
                     for row in repeat_results)
             return 0 if summary['passed'] else 1
-        call('bridge', {'command': 'arm'}, 'input-arm')
+        arm_advancing('input-arm')
         call('controller', request, 'input')
         original = settled('original')
         if original['rawInput']['outcome'] != 'complete':
@@ -1183,8 +1273,13 @@ def main():
             # The trace installs before the rest of the rewind stack so later
             # Harmony detours can chain through its entry patches.  Deactivating
             # here would restore the pre-stack entry bytes and erase those later
-            # detours during the warp.  Keep the read-only trace installed, then
-            # discard the warp records once restoration has completed.
+            # detours during the warp. Keep the read-only trace installed, but
+            # clear its data ring so the short warp cannot be evicted by the
+            # much longer original forward route.
+            call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
+                            'operation': 'clear', 'args': {}}, 'native-trace-split-clear-before-warp')
+            split_trace_warp_pending = True
+            mark_native_trace(240, frame, 'native-trace-before-warp-isolated')
         call('bridge', {'command': 'arm'}, 'warp-arm')
         call('controller', {'command': 'warp', 'frame': frame, 'development': True}, 'warp')
         restored = settled('restored')
@@ -1195,6 +1290,8 @@ def main():
         restored_native = native_observation('restored-food')
         require_native_boundary(restored_native)
         if args.split_native_trace_around_warp:
+            save_split_trace('native-trace-warp.json')
+            split_trace_warp_pending = False
             call('bridge', {'command': 'pause'}, 'native-trace-split-reactivate-fence')
             call('bridge', {'command': 'hot-call', 'slot': 'native-physics-trace',
                             'operation': 'clear', 'args': {}}, 'native-trace-split-clear')
@@ -1226,7 +1323,7 @@ def main():
         if args.save_managed_phase_traces:
             managed_trace('clear')
             managed_trace('mark', 'replay')
-        call('bridge', {'command': 'arm'}, 'replay-arm')
+        arm_advancing('replay-arm')
         call('controller', {'command': 'raw-replay', 'recording': recording}, 'replay')
         replay = settled('replayed')
         require_recorded_completion(replay, recording, frame)
@@ -1322,6 +1419,17 @@ def main():
         try:
             if bridge is not None:
                 call('bridge', {'command': 'pause'}, 'finally-pause')
+                if advancing_background_lease is not None:
+                    try:
+                        after = call('bridge', {'command': 'status'},
+                                     advancing_background_lease['label'] + '-background-aborted')
+                        comparison = advancing_background_comparison(
+                            advancing_background_lease['label'], advancing_background_lease, after)
+                        comparison['segmentSettled'] = False
+                        summary.setdefault('advancingBackgroundLeases', []).append(comparison)
+                    except Exception as background_error:
+                        summary['advancingBackgroundLeaseError'] = str(background_error)
+                    advancing_background_lease = None
                 if round_end_cleanup_needed:
                     latch = call('bridge', {'command': 'hot-call', 'slot': args.round_end_latch_slot,
                                             'operation': 'status', 'args': {}},
@@ -1336,6 +1444,11 @@ def main():
                                     'operation': 'cancel-contact-pool-next', 'args': {}},
                          'finally-contact-pool-cancel')
                     contact_pool_cleanup_needed = False
+                if args.split_native_trace_around_warp and split_trace_warp_pending:
+                    try:
+                        save_split_trace('native-trace-warp-failure.json')
+                    except Exception as trace_error:
+                        summary['nativeTraceFailureCaptureError'] = str(trace_error)
         except Exception as error:
             summary['pauseError'] = str(error)
             summary['passed'] = False

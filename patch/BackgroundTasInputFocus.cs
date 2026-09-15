@@ -19,7 +19,9 @@ namespace SuperchargedPatch
         internal static bool IsFocusedForLogicalButton(LogicalButtonBase button)
         {
             if (Application.isFocused) return true;
-            if (!Enabled || !TASLogicalButton.IsVerifiedEmulatedButton(button)) return false;
+            bool verified = Enabled && TASLogicalButton.IsVerifiedEmulatedButton(button);
+            TASLogicalButton.ObserveFocusDecision(button, verified);
+            if (!verified) return false;
             UnfocusedLogicalChecks++;
             return true;
         }
@@ -84,6 +86,32 @@ namespace SuperchargedPatch
                 yield return instruction;
             }
             if (matches != 1) throw new InvalidOperationException("Expected exactly one native LogicalButtonBase focus check.");
+        }
+    }
+
+    // CanProcessInput itself is tiny and may be inlined by Unity's old Mono JIT.
+    // Also replace its one call inside the only native history-mutating method,
+    // ensuring a background TAS edge cannot be reclaimed by an inlined focus read.
+    [HarmonyPatch(typeof(LogicalButtonBase), "Update")]
+    public static class BackgroundTasLogicalInputUpdateFocus
+    {
+        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var original = AccessTools.Method(typeof(LogicalButtonBase), "CanProcessInput");
+            var replacement = AccessTools.Method(typeof(BackgroundTasInputFocus), "IsFocusedForLogicalButton");
+            int matches = 0;
+            foreach (var instruction in instructions)
+            {
+                if ((instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt) &&
+                    Equals(instruction.operand, original))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = replacement;
+                    matches++;
+                }
+                yield return instruction;
+            }
+            if (matches != 1) throw new InvalidOperationException("Expected exactly one native LogicalButtonBase.Update focus predicate.");
         }
     }
 }
