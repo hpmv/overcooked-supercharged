@@ -1,11 +1,11 @@
-"""Prime Unity 2017's real focus lifecycle, then leave the game minimized.
+"""Verify a focus-free Unity 2017 background session.
 
 The game injects TAS controls at its logical-button layer, so gameplay does not
-need foreground keyboard/controller input.  Unity 2017 nevertheless needs to
-observe one real activation followed by deactivation after process launch;
-otherwise Application.isFocused can remain at its startup value indefinitely.
-This utility performs that one process-local window cycle through the bridge
-and records a bounded proof.
+need foreground keyboard/controller input.  Unity 2017 can retain a stale
+Application.isFocused startup value when a process starts minimized, so that
+managed bit is diagnostic only.  This utility never requests foreground focus:
+it minimizes the verified process-owned window and proves that Windows reports
+another process as foreground while Unity continues running in background.
 """
 from __future__ import annotations
 
@@ -28,11 +28,13 @@ def focus_view(response):
         "runInBackground": bridge.get("runInBackground"),
         "backgroundTasInput": bridge.get("backgroundTasInput"),
         "minimized": window.get("minimized"),
+        "foregroundOwned": window.get("foregroundOwned"),
         "lastRequest": window.get("lastRequest"),
     }
     if type(view["unityFrame"]) is not int or any(
             type(view[name]) is not bool for name in (
-                "applicationFocused", "runInBackground", "backgroundTasInput", "minimized")):
+                "applicationFocused", "runInBackground", "backgroundTasInput", "minimized",
+                "foregroundOwned")):
         raise RuntimeError("Bridge native window/focus diagnostics have an invalid shape")
     return view
 
@@ -52,31 +54,19 @@ def prime_background(bridge, timeout):
     if not before["runInBackground"] or not before["backgroundTasInput"]:
         raise RuntimeError("Background priming requires runInBackground and logical TAS focus bypass")
 
-    activated_command = focus_view(bridge.call({"command": "window", "mode": "activate"}))
-    activation_frame = activated_command["unityFrame"]
-    activated = wait_for(
-        bridge,
-        lambda state: (state["applicationFocused"] and not state["minimized"] and
-                       state["lastRequest"] == "activate" and
-                       state["unityFrame"] >= activation_frame + 3),
-        time.monotonic() + timeout,
-        "a stable activated Unity window",
-    )
-
     minimized_command = focus_view(bridge.call({"command": "window", "mode": "minimize"}))
     minimize_frame = minimized_command["unityFrame"]
     background = wait_for(
         bridge,
-        lambda state: (not state["applicationFocused"] and state["minimized"] and
+        lambda state: (not state["foregroundOwned"] and state["minimized"] and
                        state["lastRequest"] == "minimize" and
                        state["unityFrame"] > minimize_frame),
         time.monotonic() + timeout,
-        "Unity's deactivated minimized background state",
+        "a minimized non-foreground Unity window",
     )
     return {
         "before": before,
-        "activatedCommand": activated_command,
-        "activatedStable": activated,
+        "activationAttempted": False,
         "minimizedCommand": minimized_command,
         "backgroundStable": background,
     }
@@ -97,8 +87,8 @@ def main() -> int:
     report = {
         "passed": False,
         "classification": (
-            "One verified game-window activation/deactivation cycle; no native gameplay input, "
-            "level load, simulation advance, or rewind"
+            "Verified minimized non-foreground game window with no activation request, native gameplay "
+            "input, level load, simulation advance, or rewind"
         ),
     }
     started = time.monotonic()

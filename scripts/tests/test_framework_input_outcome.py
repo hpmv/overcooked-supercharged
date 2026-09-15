@@ -27,10 +27,10 @@ def witness(run):
 class AdvancingBackgroundLeaseTest(unittest.TestCase):
     @staticmethod
     def status(focused=False, minimized=True, run_in_background=True,
-               background_input=True, virtual=10, logical=20):
+               background_input=True, virtual=10, logical=20, foreground=False):
         return {'bridge': {
             'applicationFocused': focused,
-            'nativeWindow': {'minimized': minimized},
+            'nativeWindow': {'minimized': minimized, 'foregroundOwned': foreground},
             'runInBackground': run_in_background,
             'backgroundTasInput': background_input,
             'unfocusedVirtualInputChecks': virtual,
@@ -41,14 +41,15 @@ class AdvancingBackgroundLeaseTest(unittest.TestCase):
         self.assertEqual(advancing_background_state(self.status()), {
             'applicationFocused': False,
             'minimized': True,
+            'foregroundOwned': False,
             'runInBackground': True,
             'backgroundTasInput': True,
             'unfocusedVirtualInputChecks': 10,
             'unfocusedLogicalInputChecks': 20,
         })
 
-    def test_foreground_or_missing_preflight_is_rejected(self):
-        for invalid in (self.status(focused=True), self.status(minimized=False),
+    def test_foreground_window_or_missing_preflight_is_rejected(self):
+        for invalid in (self.status(foreground=True), self.status(minimized=False),
                         self.status(run_in_background=False), self.status(background_input=False),
                         {}, {'bridge': {}}, self.status(virtual=True), self.status(logical=-1)):
             with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
@@ -59,13 +60,18 @@ class AdvancingBackgroundLeaseTest(unittest.TestCase):
         self.assertTrue(advancing_background_comparison(
             'input-arm', before, self.status(virtual=11, logical=24))['exact'])
 
-    def test_endpoint_focus_or_restore_is_rejected(self):
+    def test_endpoint_foreground_or_restore_is_rejected(self):
         before = require_advancing_background(self.status(), 'input-arm')
-        for after in (self.status(focused=True), self.status(minimized=False),
+        for after in (self.status(foreground=True), self.status(minimized=False),
                       self.status(run_in_background=False), self.status(background_input=False)):
             with self.subTest(after=after):
                 self.assertFalse(advancing_background_comparison(
                     'input-arm', before, after)['exact'])
+
+    def test_stale_unity_focus_bit_is_admitted(self):
+        before = require_advancing_background(self.status(focused=True), 'input-arm')
+        self.assertTrue(advancing_background_comparison(
+            'input-arm', before, self.status(focused=True, virtual=11, logical=21))['exact'])
 
     def test_counters_cannot_move_backwards(self):
         before = require_advancing_background(self.status(), 'input-arm')

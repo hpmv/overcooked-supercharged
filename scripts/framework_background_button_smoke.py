@@ -1,4 +1,4 @@
-"""Prove one logical pickup edge is consumed while Unity stays minimized."""
+"""Prove one logical pickup edge is consumed while Unity stays minimized and non-foreground."""
 from __future__ import annotations
 
 import argparse
@@ -49,8 +49,8 @@ def main() -> int:
         initial = wait_paused(host, args.timeout)
         before_response = bridge.call({"command": "status"})
         before = focus_view(before_response)
-        if before["applicationFocused"] or not before["minimized"]:
-            raise RuntimeError("Background smoke requires a minimized, unfocused Unity process")
+        if before["foregroundOwned"] or not before["minimized"]:
+            raise RuntimeError("Background smoke requires a minimized, non-foreground Unity process")
         logical = before_response["bridge"].get("tasLogicalInput", {})
         prior_polls = logical.get("pickupPolls")
         prior_applications = logical.get("inputApplications")
@@ -74,7 +74,7 @@ def main() -> int:
         final = wait_paused(host, args.timeout)
         after_response = bridge.call({"command": "status"})
         after = focus_view(after_response)
-        if after["applicationFocused"] or not after["minimized"]:
+        if after["foregroundOwned"] or not after["minimized"]:
             raise RuntimeError("Unity left the minimized background state during logical input")
         polls = [row for row in after_response["bridge"]["tasLogicalInput"]["pickupPolls"]
                  if isinstance(row, dict) and row.get("sequence", 0) > last_sequence]
@@ -87,12 +87,12 @@ def main() -> int:
                          row.get("preservedMissingInput") is True]
         checks = {
             "controllerAdvanced": final.get("frame") == initial.get("frame") + 3,
-            "remainedUnfocused": after["applicationFocused"] is False,
+            "remainedNonForeground": after["foregroundOwned"] is False,
             "remainedMinimized": after["minimized"] is True,
             "exactlyOneDownConsumerPoll": len(down_polls) == 1,
             "nativeLogicalEdgeAccepted": len(down_polls) == 1 and down_polls[0].get("result") is True,
-            "consumerSawUnfocusedUnity": len(down_polls) == 1 and
-                                          down_polls[0].get("applicationFocused") is False,
+            "consumerReportedUnityFocus": len(down_polls) == 1 and
+                                             type(down_polls[0].get("applicationFocused")) is bool,
             "verifiedGateChain": len(down_polls) == 1 and all(
                 layer.get("verified") is True for layer in down_polls[0].get("before", [])),
             "phaseOnlyResumePreservedPads": len(phase_resumes) == 1,

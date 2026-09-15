@@ -23,17 +23,19 @@ def advancing_background_state(status):
         raise RuntimeError('Bridge does not expose advancing-background diagnostics.')
     focused = bridge.get('applicationFocused')
     minimized = window.get('minimized')
+    foreground_owned = window.get('foregroundOwned')
     run_in_background = bridge.get('runInBackground')
     background_input = bridge.get('backgroundTasInput')
     virtual = bridge.get('unfocusedVirtualInputChecks')
     logical = bridge.get('unfocusedLogicalInputChecks')
     if any(type(value) is not bool for value in
-           (focused, minimized, run_in_background, background_input)) or \
+           (focused, minimized, foreground_owned, run_in_background, background_input)) or \
             type(virtual) is not int or type(logical) is not int or virtual < 0 or logical < 0:
         raise RuntimeError('Bridge advancing-background diagnostics have an invalid shape.')
     return {
         'applicationFocused': focused,
         'minimized': minimized,
+        'foregroundOwned': foreground_owned,
         'runInBackground': run_in_background,
         'backgroundTasInput': background_input,
         'unfocusedVirtualInputChecks': virtual,
@@ -43,9 +45,9 @@ def advancing_background_state(status):
 
 def require_advancing_background(status, label):
     state = advancing_background_state(status)
-    if state['applicationFocused'] or not state['minimized'] or \
+    if state['foregroundOwned'] or not state['minimized'] or \
             not state['runInBackground'] or not state['backgroundTasInput']:
-        raise RuntimeError('A minimized, unfocused logical-input background session is required: ' + label)
+        raise RuntimeError('A minimized, non-foreground logical-input background session is required: ' + label)
     return state
 
 
@@ -57,6 +59,8 @@ def advancing_background_comparison(label, before, after_status):
         'focusedAfter': after['applicationFocused'],
         'minimizedBefore': before['minimized'],
         'minimizedAfter': after['minimized'],
+        'foregroundOwnedBefore': before['foregroundOwned'],
+        'foregroundOwnedAfter': after['foregroundOwned'],
         'runInBackgroundBefore': before['runInBackground'],
         'runInBackgroundAfter': after['runInBackground'],
         'backgroundTasInputBefore': before['backgroundTasInput'],
@@ -66,7 +70,7 @@ def advancing_background_comparison(label, before, after_status):
         'unfocusedLogicalInputChecksBefore': before['unfocusedLogicalInputChecks'],
         'unfocusedLogicalInputChecksAfter': after['unfocusedLogicalInputChecks'],
     }
-    result['exact'] = not result['focusedBefore'] and not result['focusedAfter'] and \
+    result['exact'] = not result['foregroundOwnedBefore'] and not result['foregroundOwnedAfter'] and \
         result['minimizedBefore'] and result['minimizedAfter'] and \
         result['runInBackgroundBefore'] and result['runInBackgroundAfter'] and \
         result['backgroundTasInputBefore'] and result['backgroundTasInputAfter'] and \
@@ -572,6 +576,7 @@ def main():
             'label': label,
             'applicationFocused': before['applicationFocused'],
             'minimized': before['minimized'],
+            'foregroundOwned': before['foregroundOwned'],
             'runInBackground': before['runInBackground'],
             'backgroundTasInput': before['backgroundTasInput'],
             'unfocusedVirtualInputChecks': before['unfocusedVirtualInputChecks'],
@@ -851,6 +856,10 @@ def main():
                                 'item': args.expect_pickup[0], 'source': args.expect_pickup[1]}
         request['command'] = 'raw-input'
         if args.save_managed_phase_traces:
+            # Keep the deep per-callback tracer out of the long setup route.
+            # Its evidence scope begins at the already-fenced comparison
+            # checkpoint and covers only original/restore/replay work.
+            managed_trace('activate')
             managed_trace('clear')
             managed_trace('mark', 'original')
         if args.split_native_trace_around_warp:

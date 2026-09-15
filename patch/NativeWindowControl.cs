@@ -9,6 +9,7 @@ namespace SuperchargedPatch
     public static class NativeWindowControl
     {
         [DllImport("user32.dll")] private static extern IntPtr GetActiveWindow();
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
@@ -49,7 +50,15 @@ namespace SuperchargedPatch
 
         public static object Observe()
         {
-            try { return new Dictionary<string, object> { { "minimized", IsIconic(OwnWindow()) }, { "lastRequest", LastRequest } }; }
+            try
+            {
+                IntPtr window = OwnWindow();
+                return new Dictionary<string, object> {
+                    { "minimized", IsIconic(window) },
+                    { "foregroundOwned", BelongsToThisProcess(GetForegroundWindow()) },
+                    { "lastRequest", LastRequest }
+                };
+            }
             catch (Exception error) { return new Dictionary<string, object> { { "error", error.Message }, { "lastRequest", LastRequest } }; }
         }
     }

@@ -1,5 +1,26 @@
 # Native logical focus and checkpoint discovery
 
+## No-activation background launch
+
+The current launcher never requests foreground activation. Unity 2017 may
+retain `Application.isFocused=true` when the process starts minimized, even
+while Windows reports that the process does not own the foreground window.
+The stale Unity bit is therefore retained as a diagnostic, not used as proof
+that the game has focus. `NativeWindowControl.Observe` publishes
+`foregroundOwned`; the launcher and advancing probes require the verified game
+window to remain minimized and non-foreground, with `runInBackground` and the
+managed logical TAS path enabled.
+
+Live evidence is under
+`artifacts/framework-migration/focus-background-no-activation-v13-r1/`.
+The launch receipt records `activationAttempted=false`. A subsequent native
+logical-button smoke advances f1 -> f4 and accepts one pickup edge while the
+window remains minimized/non-foreground. The Unity focus bit remains stale and
+true for the whole proof, which directly demonstrates that neither foreground
+activation nor a false Unity focus bit is needed. No native gameplay input is
+sent. Candidate core SHA-256 is
+`36D2E8EB7B05D32ED04EF196FDEFD89A793482E96A3BA6E324060FDDE01B82DD`.
+
 The installed `LogicalButtonBase.Update` consumes both press and release claims when its virtual `CanProcessInput` returns false. The native default predicate reads `Application.isFocused`. `GateLogicalButton` inherits that predicate while maintaining its own claims. The earlier virtual-pad patch changed only the separate `PlayerControls.CanButtonBePressed` focus check, so unfocused movement levels could work while pickup edges were silently claimed.
 
 Frozen plugin V adds a focus-getter substitution in the original logical predicate. It admits only a registered TAS device, or an observed native gate chain whose exact child references lead to that device. The device must still belong to the same locally controlled chef incarnation and current active virtual pad. Native gate callbacks, down levels, press/release claims, held duration and cooldowns retain their original implementations. Physical buttons, unobserved wrappers, stale/foreign chefs and `OC2SC_BACKGROUND_INPUT=0` retain the native focus behavior.

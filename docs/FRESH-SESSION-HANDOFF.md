@@ -1,5 +1,30 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Background-input milestone (2026-09-15, no foreground activation):**
+> process launch no longer calls `SetForegroundWindow` or asks the user to
+> focus Overcooked. Unity 2017 can leave `Application.isFocused=true` when it
+> starts minimized even though Windows has never made the game foreground.
+> That managed bit is now diagnostic only: the launcher calls only the verified
+> process-owned minimize operation, and advancing probes require the window to
+> remain minimized and `foregroundOwned=false` before and after every input
+> lease. `runInBackground` and the managed logical TAS input contract remain
+> mandatory. Native keyboard/controller input is still never injected.
+>
+> Fresh proof is
+> `artifacts/framework-migration/focus-background-no-activation-v13-r1/`.
+> `automatic-prime.json` proves `activationAttempted=false` and a minimized,
+> non-foreground window across consecutive Unity frames. `button-smoke-r1.json`
+> then advances controller f1 -> f4 and accepts exactly one logical pickup edge
+> while the window remains minimized/non-foreground; the stale Unity focus bit
+> remains true throughout, directly proving it is not needed. The linked
+> installed-IL check passes 42 assertions and the Python focus/input suite
+> passes 38 tests. Candidate core:
+> `artifacts/framework-build-focus-v13-no-activation/SuperchargedPatch.dll`,
+> SHA-256
+> `36D2E8EB7B05D32ED04EF196FDEFD89A793482E96A3BA6E324060FDDE01B82DD`.
+> This supersedes the v12 launch primer below. It is launcher/authoring
+> infrastructure only and does not alter normal gameplay.
+
 > **Current milestone (2026-09-14/15, r44i exact rewind boundary):** the
 > deterministic Story 1-1 f1048 -> f1045 rewind now completes instead of
 > failing the entity-48 kinematic wake guard. The restored f1045 baseline is
@@ -52,7 +77,7 @@
 > continue using this single exact unwind/replay cell. Commit every working
 > parity milestone locally and never push.
 
-> **Background-input milestone (2026-09-14/15, unattended logical input):**
+> **Superseded background-input milestone (2026-09-14/15, unattended logical input):**
 > advancing TAS segments no longer require the user to focus Overcooked. Gameplay
 > input remains entirely at the game's managed logical-button layer; no Win32
 > keyboard/controller input is injected. The minimized launcher now performs one

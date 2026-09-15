@@ -9,13 +9,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from framework_prime_background import focus_view, prime_background
 
 
-def response(frame, focused, minimized, request=None, enabled=True):
+def response(frame, focused, minimized, request=None, enabled=True, foreground=False):
     return {"bridge": {
         "unityFrame": frame,
         "applicationFocused": focused,
         "runInBackground": enabled,
         "backgroundTasInput": enabled,
-        "nativeWindow": {"minimized": minimized, "lastRequest": request},
+        "nativeWindow": {"minimized": minimized, "foregroundOwned": foreground,
+                         "lastRequest": request},
     }}
 
 
@@ -30,20 +31,19 @@ class FakeBridge:
 
 
 class BackgroundPrimeTest(unittest.TestCase):
-    def test_exact_activate_dwell_minimize_deactivate_sequence(self):
+    def test_minimizes_without_requesting_activation(self):
         bridge = FakeBridge([
             response(10, True, True),
-            response(11, True, False, "activate"),
-            response(12, True, False, "activate"),
-            response(14, True, False, "activate"),
-            response(15, True, True, "minimize"),
-            response(16, False, True, "minimize"),
+            response(11, True, True, "minimize"),
+            response(12, True, True, "minimize"),
         ])
         with patch("framework_prime_background.time.sleep"):
             proof = prime_background(bridge, 1)
-        self.assertFalse(proof["backgroundStable"]["applicationFocused"])
-        self.assertEqual(bridge.requests[1], {"command": "window", "mode": "activate"})
-        self.assertEqual(bridge.requests[-2], {"command": "window", "mode": "minimize"})
+        self.assertFalse(proof["activationAttempted"])
+        self.assertFalse(proof["backgroundStable"]["foregroundOwned"])
+        self.assertTrue(proof["backgroundStable"]["applicationFocused"])
+        self.assertEqual(bridge.requests[1], {"command": "window", "mode": "minimize"})
+        self.assertNotIn({"command": "window", "mode": "activate"}, bridge.requests)
 
     def test_disabled_background_contract_is_rejected_before_window_mutation(self):
         bridge = FakeBridge([response(1, False, True, enabled=False)])
@@ -55,7 +55,8 @@ class BackgroundPrimeTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid shape"):
             focus_view({"bridge": {"unityFrame": 1, "applicationFocused": "false",
                                     "runInBackground": True, "backgroundTasInput": True,
-                                    "nativeWindow": {"minimized": True}}})
+                                    "nativeWindow": {"minimized": True,
+                                                     "foregroundOwned": False}}})
 
 
 if __name__ == "__main__":
