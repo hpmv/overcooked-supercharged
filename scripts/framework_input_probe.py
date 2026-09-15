@@ -1220,6 +1220,11 @@ def main():
         original, original_native = reconcile_registry(original, original_native, 'original')
         if args.save_managed_phase_traces:
             managed_trace('status', output='managed-trace-original.json')
+            # Keep the deliberately narrow forward-movement wrappers installed
+            # so Harmony never rebuilds a patch chain at the rewind boundary,
+            # but suspend all collection while the exact restore transaction
+            # runs. The tracer patches no warp/checkpoint/synchronizer method.
+            managed_trace('suspend')
         mark_native_trace(230, original['frame'], 'native-trace-after-original')
         if args.restore_contact_manager_free_stack:
             contact_pool_cleanup_needed = False
@@ -1330,6 +1335,7 @@ def main():
             contact_pool_cleanup_needed = True
         mark_native_trace(260, frame, 'native-trace-before-replay')
         if args.save_managed_phase_traces:
+            managed_trace('resume')
             managed_trace('clear')
             managed_trace('mark', 'replay')
         arm_advancing('replay-arm')
@@ -1338,6 +1344,7 @@ def main():
         require_recorded_completion(replay, recording, frame)
         if args.save_managed_phase_traces:
             managed_trace('status', output='managed-trace-replay.json')
+            managed_trace('deactivate')
         inspect_animator_history(replay['frame'], 'animator-replay-endpoint-history')
         if args.inspect_animator_history:
             animator_status = call('bridge', {'command': 'hot-call', 'slot': 'chef-animator-checkpoint',

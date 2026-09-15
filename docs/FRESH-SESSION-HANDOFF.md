@@ -1,5 +1,54 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Current physics-localization milestone (2026-09-15, paired ground/force
+> trace):** the remaining second-delivery continuation mismatch is now proved
+> to begin inside Unity/PhysX simulation rather than captured managed chef
+> movement. A fresh no-tracer v13 control reproduced the clean r44i result:
+> exact f1045 restoration and exact delivery/Animator/round/food/clocks, followed
+> only by chef 46 Y (`0.04039979` original versus `0.009999692` replay) and a
+> chef-44 residual Y velocity (`-4.7683716e-7` versus `-2.3841858e-7`). Evidence:
+> `artifacts/framework-migration/story11-clean-r44i-v13-control-r2/second-delivery-f1045-clean-control-r1/`.
+>
+> The first broad tracer disturbed the rewind patch chain and caused an
+> entity-49 kinematic-wake guard. That was an observer effect, not a v13/r44i
+> regression. The replacement tracer patches only ordinary advancing
+> `PlayerControls`, `ClientPlayerControlsImpl_Default`, `RigidbodyMotion`,
+> `GroundCast`, and `SurfaceMovable` methods. It never patches authoring warp,
+> checkpoint, attachment, synchronizer, or `FrozenPhysicsData` methods. Its
+> wrappers stay installed but collection is suspended across rewind, avoiding
+> Harmony-chain reconstruction at the restore boundary.
+>
+> The fresh paired trace is
+> `artifacts/framework-migration/story11-ground-force-v5-live-r1/second-delivery-f1045-ground-force-paired-r1/`.
+> Original and replay contain the same 188 managed callbacks with identical
+> order. Chef 46 is exact through the phase sample immediately after all four
+> first-step `PlayerControls.FixedUpdate` calls. At the prefix of the very next
+> callback, `RigidbodyMotion.Accelerate`, native simulation/write-back has
+> already produced the branch difference: original Y `0.0100002289`, replay Y
+> `0.05000007`. At that point the captured previous/local velocity, GroundCast
+> collider/point/normal/distance/current, surface velocity, gravity flag,
+> leftover time, last velocity, and dash/impact timers are still exact. Later
+> managed differences are consequences of the already-different Rigidbody.
+> Chef 44's tiny residual likewise first appears across a later native physics
+> interval with an exact pre-step state.
+>
+> The cleaned r5b tracer compiles against the v13 core and passed a complete
+> restored-history rewind/replay without changing its exact endpoint. DLL:
+> `framework-run/modules/ChefManagedMutationTracer-r5b-ground-force-only-core-bg3-v13-r44i/`,
+> SHA-256
+> `2FD3315A933D785C3D6A354C31623E8C92577382AE202DE882BBA92D56D03BC1`.
+> Its validation is `.../story11-ground-force-v5-live-r1/second-delivery-f1045-r5b-validation-r1/`.
+> The input-probe suite passes 35 checks.
+>
+> **Next:** install the existing read-only native trace before the rewind stack
+> with masks for Unity lifecycle, PhysicsManager simulation/write-back, and
+> PhysX narrowphase/contact-manager creation. Compare the original and replay
+> f1045->f1048 contact work units. If pair creation/order differs, restore the
+> responsible broadphase/contact lifecycle. If the same contact managers and
+> work units enter narrowphase, instrument the specific chef-floor manifold and
+> solver warm-start data using the matched PhysX 3.3.3 source. Search remains
+> disabled.
+
 > **Background-input milestone (2026-09-15, no foreground activation):**
 > process launch no longer calls `SetForegroundWindow` or asks the user to
 > focus Overcooked. Unity 2017 can leave `Application.isFocused=true` when it

@@ -21,25 +21,17 @@ namespace SuperchargedPatch.Authoring.Modules
             public int EntityId, BodyId;
             public Vector3 BodyPosition, TransformPosition, LocalPosition, Velocity, AngularVelocity;
             public Vector3 PreviousPosition, LocalVelocity;
+            public Vector3 GroundPoint, GroundNormal, SurfaceVelocity, LastVelocity;
             public Quaternion BodyRotation, TransformRotation, LocalRotation;
-            public float XzSpeed;
-            public bool Kinematic, Gravity, Sleeping;
+            public float XzSpeed, GroundDistance, LeftOverTime, DashTimer, ImpactTimer;
+            public int GroundColliderId;
+            public bool Kinematic, Gravity, Sleeping, GroundCurrent, ApplyGravity;
         }
 
         public sealed class TraceCall
         {
             public string Method;
             public BodyState[] Before;
-            public AttachmentState[] AttachmentsBefore;
-        }
-
-        public sealed class AttachmentState
-        {
-            public int EntityId,ServerId,TransformId,BodyId,ParentId,RegisteredAncestorId;
-            public string Name,ParentPath;
-            public Vector3 Position,LocalPosition,LocalScale,LossyScale,BodyPosition;
-            public Quaternion Rotation,LocalRotation,BodyRotation;
-            public bool Held,BodyKinematic,BodySleeping;
         }
 
         private sealed class TraceDriver : MonoBehaviour
@@ -49,16 +41,17 @@ namespace SuperchargedPatch.Authoring.Modules
             private void LateUpdate() { var value=active;if(value!=null&&value.driver==this)value.AddPhase("late-update"); }
         }
 
-        private static ChefManagedMutationTracerModule active;
+        private static ChefManagedMutationTracerModule active, installed;
         private Harmony harmony;
-        private FieldInfo previousPosition, localVelocity, xzSpeed, attachmentHeld;
+        private FieldInfo previousPosition, localVelocity, xzSpeed, applyGravity;
+        private FieldInfo groundCastField, surfaceMovableField, groundCollider, groundPoint, groundNormal;
+        private FieldInfo groundDistance, groundCurrent, surfaceVelocity, leftOverTime, lastVelocity;
+        private FieldInfo dashTimer, impactTimer;
         private GameObject driverObject;
         private TraceDriver driver;
         private readonly List<Rigidbody> chefs = new List<Rigidbody>();
         private readonly Dictionary<Rigidbody,int> entityIds = new Dictionary<Rigidbody,int>();
         private readonly Dictionary<Rigidbody,PlayerControls> controlsByBody = new Dictionary<Rigidbody,PlayerControls>();
-        private readonly List<ServerPhysicalAttachment> attachments = new List<ServerPhysicalAttachment>();
-        private readonly Dictionary<ServerPhysicalAttachment,int> attachmentEntityIds = new Dictionary<ServerPhysicalAttachment,int>();
         private readonly List<object> calls = new List<object>();
         private readonly List<object> phases = new List<object>();
         private readonly List<string> patched = new List<string>();
@@ -67,17 +60,19 @@ namespace SuperchargedPatch.Authoring.Modules
         private int discardedCalls, discardedPhases;
         private string segment="setup", failure;
 
-        public string Name { get { return "local-chef-attachment-managed-mutation-tracer-v3"; } }
+        public string Name { get { return "local-chef-managed-mutation-tracer-v5-ground-force-only"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation,Dictionary<string,object> args)
         {
             if(disposed)throw new ObjectDisposedException("ChefManagedMutationTracerModule");
             if(operation=="activate")Activate(args);
+            else if(operation=="suspend")Suspend(args);
+            else if(operation=="resume")Resume(args);
             else if(operation=="mark")Mark(args);
             else if(operation=="clear")Clear(args);
             else if(operation=="deactivate")Deactivate();
-            else if(operation!="status")throw new ArgumentException("Use activate, mark, clear, status or deactivate.");
+            else if(operation!="status")throw new ArgumentException("Use activate, suspend, resume, mark, clear, status or deactivate.");
             else RequireNone(args);
             return Status();
         }
@@ -87,59 +82,57 @@ namespace SuperchargedPatch.Authoring.Modules
             RequireNone(args);
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
                 throw new InvalidOperationException("Chef mutation tracer activation requires the authoring pause fence.");
-            if(harmony!=null)return;
-            if(active!=null)throw new InvalidOperationException("Another chef mutation tracer is active.");
+            if(harmony!=null){Resume(args);return;}
+            if(installed!=null||active!=null)throw new InvalidOperationException("Another chef mutation tracer is installed.");
             BindChefs();
-            BindAttachments();
             previousPosition=AccessTools.Field(typeof(PlayerControls),"m_previousPosition");
             localVelocity=AccessTools.Field(typeof(PlayerControls),"m_localVelocity");
             xzSpeed=AccessTools.Field(typeof(PlayerControls),"m_xzSpeed");
-            attachmentHeld=AccessTools.Field(typeof(ServerPhysicalAttachment),"m_isHeld");
+            applyGravity=AccessTools.Field(typeof(PlayerControls),"m_bApplyGravity");
+            groundCastField=AccessTools.Field(typeof(PlayerControls),"m_groundCast");
+            surfaceMovableField=AccessTools.Field(typeof(PlayerControls),"m_surfaceMovable");
+            groundCollider=AccessTools.Field(typeof(GroundCast),"m_groundCollider");
+            groundPoint=AccessTools.Field(typeof(GroundCast),"m_groundPoint");
+            groundNormal=AccessTools.Field(typeof(GroundCast),"m_groundNormal");
+            groundDistance=AccessTools.Field(typeof(GroundCast),"m_groundDistance");
+            groundCurrent=AccessTools.Field(typeof(GroundCast),"m_isCurrent");
+            surfaceVelocity=AccessTools.Field(typeof(SurfaceMovable),"m_surfaceVelocity");
+            leftOverTime=AccessTools.Field(typeof(ClientPlayerControlsImpl_Default),"m_LeftOverTime");
+            lastVelocity=AccessTools.Field(typeof(ClientPlayerControlsImpl_Default),"m_lastVelocity");
+            dashTimer=AccessTools.Field(typeof(ClientPlayerControlsImpl_Default),"m_dashTimer");
+            impactTimer=AccessTools.Field(typeof(ClientPlayerControlsImpl_Default),"m_impactTimer");
             if(previousPosition==null||previousPosition.FieldType!=typeof(Vector3)
                 ||localVelocity==null||localVelocity.FieldType!=typeof(Vector3)
                 ||xzSpeed==null||xzSpeed.FieldType!=typeof(float)
-                ||attachmentHeld==null||attachmentHeld.FieldType!=typeof(bool))
-                throw new InvalidOperationException("Installed movement/attachment trace contract differs.");
+                ||applyGravity==null||applyGravity.FieldType!=typeof(bool)
+                ||groundCastField==null||groundCastField.FieldType!=typeof(GroundCast)
+                ||surfaceMovableField==null||surfaceMovableField.FieldType!=typeof(SurfaceMovable)
+                ||groundCollider==null||groundCollider.FieldType!=typeof(Collider)
+                ||groundPoint==null||groundPoint.FieldType!=typeof(Vector3)
+                ||groundNormal==null||groundNormal.FieldType!=typeof(Vector3)
+                ||groundDistance==null||groundDistance.FieldType!=typeof(float)
+                ||groundCurrent==null||groundCurrent.FieldType!=typeof(bool)
+                ||surfaceVelocity==null||surfaceVelocity.FieldType!=typeof(Vector3)
+                ||leftOverTime==null||leftOverTime.FieldType!=typeof(float)
+                ||lastVelocity==null||lastVelocity.FieldType!=typeof(Vector3)
+                ||dashTimer==null||dashTimer.FieldType!=typeof(float)
+                ||impactTimer==null||impactTimer.FieldType!=typeof(float))
+                throw new InvalidOperationException("Installed movement trace contract differs.");
             harmony=new Harmony("supercharged.authoring.chef-managed-mutation-tracer."+GetType().Assembly.GetName().Name);
-            active=this;
+            installed=active=this;
             try
             {
-                AddNamed(typeof(RigidbodyMotion),"Awake","OnDisable","SetKinematic","SetVelocity","AddVelocity",
-                    "Movement","SetPosition","SetRotation");
-                var frozen=typeof(TimeManager).GetNestedType("FrozenPhysicsData",BindingFlags.NonPublic);
-                if(frozen==null)throw new InvalidOperationException("Installed FrozenPhysicsData is missing.");
-                Add(frozen.GetConstructor(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,
-                    new[]{typeof(Rigidbody),typeof(int)},null));
-                AddNamed(frozen,"Unfreeze");
-                AddNamed(typeof(ClientPlayerControlsImpl_Default),"Awake","StartSynchronising","Disable","Update_Movement");
+                // Patch only methods that execute during ordinary advancing chef
+                // movement. In particular, never detour authoring warp, checkpoint,
+                // synchronizer, attachment or FrozenPhysicsData methods: rebuilding
+                // those Harmony chains changed the kinematic restore experiment.
+                AddNamed(typeof(RigidbodyMotion),"SetVelocity","AddVelocity","Accelerate","Movement");
+                AddNamed(typeof(GroundCast),"Update","ForceUpdateNow","FindGround","ProcessGroundHit","HitGround");
+                AddNamed(typeof(SurfaceMovable),"Update","OnGroundChanged");
+                AddNamed(typeof(ClientPlayerControlsImpl_Default),"Update_Impl",
+                    "Update_Movement","ApplyGravityForce","ApplyGroundMovement");
                 AddNamed(typeof(PlayerControls),"FixedUpdate");
-                AddNamed(typeof(PlayerAnimationDecisions),"UpdateVariables");
-                AddNamed(typeof(PositionRecorder),"Awake","TakeSample","Setup","Clear",
-                    "GetLagCompensatedPositionDelta","GetLagCompensatedPositionDeltaParents","Teleport");
-                AddNamed(typeof(RemoteChefPositionRecorder),"InternalRestorePosition","InternalSetChefToTime");
-                AddNamed(typeof(ClientOnTheServerChefSynchroniser),"StartSynchronising","ApplyServerUpdate",
-                    "ApplyServerEvent","ApplyResumeData","HandleMessage","Pause","Resume");
-                AddNamed(typeof(ClientWorldObjectSynchroniser),"DoReparenting","ApplyServerUpdate","ApplyServerEvent","ApplyResumeData");
-                AddNamed(typeof(ClientWorldObjectSynchroniser),"CorrectScale","ParentingLogic","OnParentChanged","UpdateSynchronising");
-                AddNamed(typeof(ServerPhysicalAttachment),"Attach","Detach","AttachToRigidBodyContainer",
-                    "DetachFromRigidBodyContainer","OnAttachChanged","UpdateSynchronising");
-                AddNamed(typeof(ClientPhysicalAttachment),"ApplyServerEvent","OnParentChanged","UpdateSynchronising");
-                AddNamed(typeof(NativeKitchenCheckpoint.RestorePlan),"Complete");
-                AddNamed(typeof(NativeBodyPoseCheckpoint),"Restore","RestoreBuiltin","RecomputeMassFrame","RestoreRotation");
-                AddNamed(typeof(WarpHandler),"HandleWarpRequestIfAny","WarpChefAndPositions");
-                // These are the currently used out-of-core authoring seams.
-                // Patch every loaded revision: inactive revisions never call
-                // their static callbacks, while this avoids silently omitting
-                // a pose experiment merely because its assembly is hot-loaded.
-                AddExternalNamed("SuperchargedPatch.Authoring.Modules.BodyRestoreModule",
-                    "Restore","RestorePositionBeforeMassReset","RestoreRotation","RestoreEmptyProxyMass");
-                AddExternalNamed("SuperchargedPatch.Authoring.Modules.ChefPausePoseModule",
-                    "BeforeFreeze","BeforeCapture","BeforeUnfreeze","AfterUnfreeze");
-                AddExternalNamed("SuperchargedPatch.Authoring.Modules.ChefContactRefreshModule",
-                    "BeforeUnfreeze","AfterUnfreeze");
-                AddExternalNamed("SuperchargedPatch.Authoring.Modules.PhysicsSyncAfterRestoreModule",
-                    "AfterComplete","AfterHandleWarp","Synchronize");
-                if(patched.Count<20)throw new InvalidOperationException("Unexpectedly small managed writer/lifecycle target set.");
+                if(patched.Count<10)throw new InvalidOperationException("Unexpectedly small managed movement target set.");
                 driverObject=new GameObject("__TAS_ChefManagedMutationTracer");
                 driver=driverObject.AddComponent<TraceDriver>();
                 AddPhase("activated");
@@ -167,23 +160,6 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Tracer requires four distinct registered local chefs.");
         }
 
-        private void BindAttachments()
-        {
-            attachments.Clear();attachmentEntityIds.Clear();
-            var entries=EntitySerialisationRegistry.m_EntitiesList;
-            for(int i=0;i<entries.Count;i++)
-            {
-                var entry=entries._items[i];var obj=entry==null?null:entry.m_GameObject;
-                var server=obj==null?null:obj.GetComponent<ServerPhysicalAttachment>();
-                var physical=obj==null?null:obj.GetComponent<PhysicalAttachment>();
-                if(server==null||physical==null||physical.m_container==null)continue;
-                if(attachmentEntityIds.ContainsKey(server))throw new InvalidOperationException("Duplicate physical attachment component.");
-                attachments.Add(server);attachmentEntityIds.Add(server,(int)entry.m_Header.m_uEntityID);
-            }
-            attachments.Sort((a,b)=>attachmentEntityIds[a].CompareTo(attachmentEntityIds[b]));
-            if(attachments.Count==0)throw new InvalidOperationException("No registered physical attachments were found.");
-        }
-
         private void AddNamed(Type type,params string[] names)
         {
             const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.DeclaredOnly;
@@ -191,17 +167,6 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 var methods=type.GetMethods(flags).Where(method=>method.Name==name).Cast<MethodBase>().ToArray();
                 foreach(var method in methods)Add(method);
-            }
-        }
-
-        private void AddExternalNamed(string fullName,params string[] names)
-        {
-            foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                Type type;
-                try{type=assembly.GetType(fullName,false);}
-                catch{continue;}
-                if(type!=null)AddNamed(type,names);
             }
         }
 
@@ -224,14 +189,14 @@ namespace SuperchargedPatch.Authoring.Modules
             __state=null;var module=active;
             if(module==null||TimeManager.IsPaused(TimeManager.PauseLayer.Main))return;
             try{__state=new TraceCall{Method=__originalMethod.DeclaringType.FullName+"::"+__originalMethod,
-                Before=module.ReadAll(),AttachmentsBefore=module.ReadAttachments()};}
+                Before=module.ReadAll()};}
             catch(Exception error){module.failure="Managed prefix: "+error.Message;throw;}
         }
 
         public static void AfterManagedCall(TraceCall __state)
         {
             var module=active;if(module==null||__state==null)return;
-            try{module.AddCall(__state,module.ReadAll(),module.ReadAttachments());}
+            try{module.AddCall(__state,module.ReadAll());}
             catch(Exception error){module.failure="Managed postfix: "+error.Message;throw;}
         }
 
@@ -248,52 +213,38 @@ namespace SuperchargedPatch.Authoring.Modules
                 PlayerControls controls;
                 if(!controlsByBody.TryGetValue(body,out controls)||controls==null)
                     throw new InvalidOperationException("Local PlayerControls incarnation changed.");
+                var ground=(GroundCast)groundCastField.GetValue(controls);
+                var surface=(SurfaceMovable)surfaceMovableField.GetValue(controls);
+                var client=body.GetComponent<ClientPlayerControlsImpl_Default>();
+                if(ground==null||surface==null||client==null)
+                    throw new InvalidOperationException("Local chef movement dependencies changed.");
+                var collider=(Collider)groundCollider.GetValue(ground);
                 result[i]=new BodyState{EntityId=entityIds[body],BodyId=body.GetInstanceID(),
                     BodyPosition=body.position,TransformPosition=body.transform.position,LocalPosition=body.transform.localPosition,
                     BodyRotation=body.rotation,TransformRotation=body.transform.rotation,LocalRotation=body.transform.localRotation,
                     Velocity=body.velocity,AngularVelocity=body.angularVelocity,Kinematic=body.isKinematic,
                     Gravity=body.useGravity,Sleeping=body.IsSleeping(),
                     PreviousPosition=(Vector3)previousPosition.GetValue(controls),
-                    LocalVelocity=(Vector3)localVelocity.GetValue(controls),XzSpeed=(float)xzSpeed.GetValue(controls)};
+                    LocalVelocity=(Vector3)localVelocity.GetValue(controls),XzSpeed=(float)xzSpeed.GetValue(controls),
+                    GroundColliderId=collider==null?0:collider.GetInstanceID(),
+                    GroundPoint=(Vector3)groundPoint.GetValue(ground),GroundNormal=(Vector3)groundNormal.GetValue(ground),
+                    GroundDistance=(float)groundDistance.GetValue(ground),GroundCurrent=(bool)groundCurrent.GetValue(ground),
+                    SurfaceVelocity=(Vector3)surfaceVelocity.GetValue(surface),ApplyGravity=(bool)applyGravity.GetValue(controls),
+                    LeftOverTime=(float)leftOverTime.GetValue(client),LastVelocity=(Vector3)lastVelocity.GetValue(client),
+                    DashTimer=(float)dashTimer.GetValue(client),ImpactTimer=(float)impactTimer.GetValue(client)};
             }
             return result;
         }
 
-        private AttachmentState[] ReadAttachments()
-        {
-            var result=new AttachmentState[attachments.Count];
-            for(int i=0;i<attachments.Count;i++)
-            {
-                var server=attachments[i];int entityId;
-                if(server==null||server.GetInstanceID()==0||!attachmentEntityIds.TryGetValue(server,out entityId))
-                    throw new InvalidOperationException("Physical attachment incarnation changed.");
-                var transform=server.transform;var physical=server.GetComponent<PhysicalAttachment>();
-                var body=physical==null?null:physical.m_container;
-                if(transform==null||physical==null||body==null)
-                    throw new InvalidOperationException("Physical attachment owner/container contract changed: "+entityId+".");
-                Transform parent=transform.parent;
-                result[i]=new AttachmentState{EntityId=entityId,ServerId=server.GetInstanceID(),
-                    TransformId=transform.GetInstanceID(),BodyId=body.GetInstanceID(),Name=server.name,
-                    ParentId=parent==null?0:parent.GetInstanceID(),ParentPath=TransformPath(parent),
-                    RegisteredAncestorId=RegisteredAncestor(parent),Position=transform.position,
-                    LocalPosition=transform.localPosition,LocalScale=transform.localScale,LossyScale=transform.lossyScale,
-                    Rotation=transform.rotation,LocalRotation=transform.localRotation,
-                    BodyPosition=body.position,BodyRotation=body.rotation,BodyKinematic=body.isKinematic,
-                    BodySleeping=body.IsSleeping(),Held=(bool)attachmentHeld.GetValue(server)};
-            }
-            return result;
-        }
-
-        private void AddCall(TraceCall call,BodyState[] after,AttachmentState[] attachmentsAfter)
+        private void AddCall(TraceCall call,BodyState[] after)
         {
             observedCalls++;
             calls.Add(new Dictionary<string,object>{{"sequence",++sequence},{"segment",segment},
                 {"method",call.Method},{"unityFrame",Time.frameCount},{"time",Time.time},{"fixedTime",Time.fixedTime},
                 {"outputFrame",OutputFrame()},{"outputPhase",OutputPhase()},
                 {"paused",TimeManager.IsPaused(TimeManager.PauseLayer.Main)},
-                {"changed",!Same(call.Before,after)},{"changedAttachments",!Same(call.AttachmentsBefore,attachmentsAfter)},
-                {"before",Encode(call.Before)},{"after",Encode(after)},
-                {"attachmentsBefore",Encode(call.AttachmentsBefore)},{"attachmentsAfter",Encode(attachmentsAfter)}});
+                {"changed",!Same(call.Before,after)},
+                {"before",Encode(call.Before)},{"after",Encode(after)}});
             if(calls.Count>4096){calls.RemoveAt(0);discardedCalls++;}
         }
 
@@ -306,8 +257,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 phases.Add(new Dictionary<string,object>{{"sequence",++sequence},{"segment",segment},{"phase",phase},
                     {"unityFrame",Time.frameCount},{"time",Time.time},{"fixedTime",Time.fixedTime},
                     {"outputFrame",OutputFrame()},{"outputPhase",OutputPhase()},
-                    {"paused",TimeManager.IsPaused(TimeManager.PauseLayer.Main)},{"chefs",Encode(ReadAll())},
-                    {"attachments",Encode(ReadAttachments())}});
+                    {"paused",TimeManager.IsPaused(TimeManager.PauseLayer.Main)},{"chefs",Encode(ReadAll())}});
                 if(phases.Count>2048){phases.RemoveAt(0);discardedPhases++;}
             }
             catch(Exception error){failure="Phase sample: "+error.Message;throw;}
@@ -327,23 +277,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 &&Exact(a.BodyRotation,b.BodyRotation)&&Exact(a.TransformRotation,b.TransformRotation)&&Exact(a.LocalRotation,b.LocalRotation)
                 &&Exact(a.Velocity,b.Velocity)&&Exact(a.AngularVelocity,b.AngularVelocity)&&a.Kinematic==b.Kinematic
                 &&a.Gravity==b.Gravity&&a.Sleeping==b.Sleeping&&Exact(a.PreviousPosition,b.PreviousPosition)
-                &&Exact(a.LocalVelocity,b.LocalVelocity)&&a.XzSpeed==b.XzSpeed;
-        }
-
-        private static bool Same(AttachmentState[] a,AttachmentState[] b)
-        {
-            if(a==null||b==null||a.Length!=b.Length)return false;
-            for(int i=0;i<a.Length;i++)if(!Same(a[i],b[i]))return false;
-            return true;
-        }
-
-        private static bool Same(AttachmentState a,AttachmentState b)
-        {
-            return a.EntityId==b.EntityId&&a.ServerId==b.ServerId&&a.TransformId==b.TransformId&&a.BodyId==b.BodyId
-                &&a.ParentId==b.ParentId&&a.RegisteredAncestorId==b.RegisteredAncestorId&&a.Name==b.Name&&a.ParentPath==b.ParentPath
-                &&Exact(a.Position,b.Position)&&Exact(a.LocalPosition,b.LocalPosition)&&Exact(a.LocalScale,b.LocalScale)&&Exact(a.LossyScale,b.LossyScale)
-                &&Exact(a.Rotation,b.Rotation)&&Exact(a.LocalRotation,b.LocalRotation)&&Exact(a.BodyPosition,b.BodyPosition)&&Exact(a.BodyRotation,b.BodyRotation)
-                &&a.Held==b.Held&&a.BodyKinematic==b.BodyKinematic&&a.BodySleeping==b.BodySleeping;
+                &&Exact(a.LocalVelocity,b.LocalVelocity)&&a.XzSpeed==b.XzSpeed
+                &&a.GroundColliderId==b.GroundColliderId&&Exact(a.GroundPoint,b.GroundPoint)
+                &&Exact(a.GroundNormal,b.GroundNormal)&&a.GroundDistance==b.GroundDistance
+                &&a.GroundCurrent==b.GroundCurrent&&Exact(a.SurfaceVelocity,b.SurfaceVelocity)
+                &&a.ApplyGravity==b.ApplyGravity&&a.LeftOverTime==b.LeftOverTime
+                &&Exact(a.LastVelocity,b.LastVelocity)&&a.DashTimer==b.DashTimer&&a.ImpactTimer==b.ImpactTimer;
         }
 
         private static bool Exact(Vector3 a,Vector3 b)
@@ -359,27 +298,23 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"transformRotation",Rotation(value.TransformRotation)},{"localRotation",Rotation(value.LocalRotation)},
                 {"velocity",Point(value.Velocity)},{"angularVelocity",Point(value.AngularVelocity)},
                 {"previousPosition",Point(value.PreviousPosition)},{"localVelocity",Point(value.LocalVelocity)},
-                {"xzSpeed",value.XzSpeed},{"bodyPositionBits",PointBits(value.BodyPosition)},
+                {"xzSpeed",value.XzSpeed},{"groundColliderInstanceId",value.GroundColliderId},
+                {"groundPoint",Point(value.GroundPoint)},{"groundNormal",Point(value.GroundNormal)},
+                {"groundDistance",value.GroundDistance},{"groundCurrent",value.GroundCurrent},
+                {"surfaceVelocity",Point(value.SurfaceVelocity)},{"applyGravity",value.ApplyGravity},
+                {"leftOverTime",value.LeftOverTime},{"lastVelocity",Point(value.LastVelocity)},
+                {"dashTimer",value.DashTimer},{"impactTimer",value.ImpactTimer},
+                {"bodyPositionBits",PointBits(value.BodyPosition)},
                 {"transformPositionBits",PointBits(value.TransformPosition)},{"localPositionBits",PointBits(value.LocalPosition)},
                 {"previousPositionBits",PointBits(value.PreviousPosition)},{"localVelocityBits",PointBits(value.LocalVelocity)},
-                {"xzSpeedBits",Bits(value.XzSpeed)},
+                {"xzSpeedBits",Bits(value.XzSpeed)},{"groundPointBits",PointBits(value.GroundPoint)},
+                {"groundNormalBits",PointBits(value.GroundNormal)},{"groundDistanceBits",Bits(value.GroundDistance)},
+                {"surfaceVelocityBits",PointBits(value.SurfaceVelocity)},{"leftOverTimeBits",Bits(value.LeftOverTime)},
+                {"lastVelocityBits",PointBits(value.LastVelocity)},{"dashTimerBits",Bits(value.DashTimer)},
+                {"impactTimerBits",Bits(value.ImpactTimer)},
                 {"bodyYBits",Bits(value.BodyPosition.y)},{"transformYBits",Bits(value.TransformPosition.y)},
                 {"localYBits",Bits(value.LocalPosition.y)},{"kinematic",value.Kinematic},{"gravity",value.Gravity},
                 {"sleeping",value.Sleeping}}).ToArray();
-        }
-
-        private static object[] Encode(AttachmentState[] values)
-        {
-            return values.Select(value=>(object)new Dictionary<string,object>{{"entityId",value.EntityId},
-                {"serverInstanceId",value.ServerId},{"transformInstanceId",value.TransformId},{"bodyInstanceId",value.BodyId},
-                {"name",value.Name},{"parentInstanceId",value.ParentId},{"parentPath",value.ParentPath},
-                {"registeredAncestorEntityId",value.RegisteredAncestorId},{"held",value.Held},
-                {"position",Point(value.Position)},{"localPosition",Point(value.LocalPosition)},
-                {"localScale",Point(value.LocalScale)},{"lossyScale",Point(value.LossyScale)},
-                {"rotation",Rotation(value.Rotation)},{"localRotation",Rotation(value.LocalRotation)},
-                {"bodyPosition",Point(value.BodyPosition)},{"bodyRotation",Rotation(value.BodyRotation)},
-                {"localScaleBits",PointBits(value.LocalScale)},{"lossyScaleBits",PointBits(value.LossyScale)},
-                {"bodyKinematic",value.BodyKinematic},{"bodySleeping",value.BodySleeping}}).ToArray();
         }
 
         private void Mark(Dictionary<string,object> args)
@@ -398,14 +333,37 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private object Status()
         {
-            return new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"active",ReferenceEquals(active,this)},
+            return new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"installed",ReferenceEquals(installed,this)},
+                {"active",ReferenceEquals(active,this)},
                 {"segment",segment},{"chefEntityIds",entityIds.Values.OrderBy(x=>x).ToArray()},
-                {"attachmentEntityIds",attachmentEntityIds.Values.OrderBy(x=>x).ToArray()},
                 {"patchedMethods",patched.ToArray()},{"observedCalls",observedCalls},{"discardedCalls",discardedCalls},
                 {"discardedPhases",discardedPhases},{"failure",failure},{"current",Encode(ReadAll())},
-                {"currentAttachments",Encode(ReadAttachments())},
                 {"calls",calls.ToArray()},{"phases",phases.ToArray()},
-                {"scope","Read-only local-chef and registered PhysicalAttachment public Rigidbody/Transform state around managed pose, attachment, scale-correction and lifecycle methods, interleaved with FixedUpdate/Update/LateUpdate samples. No Unity setter, physics step, input, clock, synchronizer or gameplay-state write."}};
+                {"scope","Read-only local-chef public Rigidbody/Transform, GroundCast, surface and gravity-call state around ordinary advancing movement methods, interleaved with FixedUpdate/Update/LateUpdate samples. No authoring warp, checkpoint, synchronizer or attachment method is patched; no Unity setter, physics step, input, clock or gameplay-state write."}};
+        }
+
+        private void Suspend(Dictionary<string,object> args)
+        {
+            RequireNone(args);
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Chef mutation tracer suspension requires the authoring pause fence.");
+            if(harmony==null||!ReferenceEquals(installed,this))
+                throw new InvalidOperationException("Chef mutation tracer is not installed.");
+            if(active!=null&&!ReferenceEquals(active,this))
+                throw new InvalidOperationException("Another chef mutation tracer is active.");
+            if(ReferenceEquals(active,this)){AddPhase("suspended");active=null;}
+        }
+
+        private void Resume(Dictionary<string,object> args)
+        {
+            RequireNone(args);
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Chef mutation tracer resume requires the authoring pause fence.");
+            if(harmony==null||!ReferenceEquals(installed,this))
+                throw new InvalidOperationException("Chef mutation tracer is not installed.");
+            if(active!=null&&!ReferenceEquals(active,this))
+                throw new InvalidOperationException("Another chef mutation tracer is active.");
+            active=this;AddPhase("resumed");
         }
 
         private static void RequireNone(Dictionary<string,object> args){if(args!=null&&args.Count!=0)throw new ArgumentException("Operation takes no arguments.");}
@@ -416,32 +374,12 @@ namespace SuperchargedPatch.Authoring.Modules
         private static int OutputFrame(){return Hpmv.Injector.Server==null?-1:Hpmv.Injector.Server.CurrentFrameData.FrameNumber;}
         private static int OutputPhase(){return Hpmv.Injector.Server==null?-1:Hpmv.Injector.Server.CurrentFrameData.FramesSinceLastNoPhysicsFrame;}
 
-        private static string TransformPath(Transform value)
-        {
-            if(value==null)return null;
-            var names=new List<string>();Transform cursor=value;
-            for(int i=0;cursor!=null&&i<64;i++){names.Add(cursor.name+"#"+cursor.GetInstanceID());cursor=cursor.parent;}
-            names.Reverse();return String.Join("/",names.ToArray());
-        }
-
-        private static int RegisteredAncestor(Transform value)
-        {
-            var entries=EntitySerialisationRegistry.m_EntitiesList;Transform cursor=value;
-            for(int depth=0;cursor!=null&&depth<64;depth++,cursor=cursor.parent)
-                for(int i=0;i<entries.Count;i++)
-                {
-                    var entry=entries._items[i];
-                    if(entry!=null&&entry.m_GameObject!=null&&ReferenceEquals(entry.m_GameObject,cursor.gameObject))
-                        return (int)entry.m_Header.m_uEntityID;
-                }
-            return 0;
-        }
-
         private void Deactivate()
         {
             if(harmony!=null)harmony.UnpatchSelf();harmony=null;
             if(driverObject!=null)UnityEngine.Object.Destroy(driverObject);driverObject=null;driver=null;
             if(ReferenceEquals(active,this))active=null;
+            if(ReferenceEquals(installed,this))installed=null;
         }
 
         public void Dispose(){if(disposed)return;Deactivate();disposed=true;}
