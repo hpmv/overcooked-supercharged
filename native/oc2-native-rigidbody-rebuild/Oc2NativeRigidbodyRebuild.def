@@ -21,3 +21,10 @@ EXPORTS
     oc2_contact_manager_context_observer_install
     oc2_contact_manager_context_observer_status
     oc2_contact_manager_context_observer_uninstall
+    oc2_dirty_interaction_order_install
+    oc2_dirty_interaction_order_status
+    oc2_dirty_interaction_order_capture_arm
+    oc2_dirty_interaction_order_capture_copy
+    oc2_dirty_interaction_order_restore_arm
+    oc2_dirty_interaction_order_cancel
+    oc2_dirty_interaction_order_uninstall

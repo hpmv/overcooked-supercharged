@@ -18,7 +18,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // plugin never includes it. Native reset/pose algorithm revisions belong here.
     public sealed partial class BodyRestoreModule:IAuthoringModule,IBodyRestoreStrategy
     {
-        private const uint NativeHelperApiVersion=9;
+        private const uint NativeHelperApiVersion=10;
         private const string ExpectedUnityPlayerSha256="90E2FB176B133E3C1401FA21FD0C365DBED82AFD409912B824D222E66E868560";
         private const int MaximumRotationAssignments=4;
         private const int MaximumPositionAssignments=4;

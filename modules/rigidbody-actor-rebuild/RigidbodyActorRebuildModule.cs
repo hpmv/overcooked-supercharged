@@ -27,6 +27,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int AutomaticCanonicalCycles=5;
         private const int MaximumContactManagers=4096;
         private const int MaximumManifolds=4096;
+        private const int MaximumDirtyInteractions=4096;
         private const int MaximumCheckpointSidecars=20000;
         private const uint LargeManifoldPoolKind=0;
         private const uint SphereManifoldPoolKind=1;
@@ -67,6 +68,22 @@ namespace SuperchargedPatch.Authoring.Modules
             public uint Observations,Installed;
         }
 
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeDirtyInteractionKey
+        {
+            public UIntPtr ElementLow,ElementHigh,PrimaryVtable;
+            public uint InteractionType;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeDirtyInteractionReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,Set,Entries,EntriesNext,Hash;
+            public uint EntriesCapacity,HashSize,Count,Action,Captures,Restores;
+            public uint OrderHashBefore,OrderHashAfter,Installed,Armed;
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate uint NativeApiVersion();
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeRebuildBatch(
             UIntPtr unityBase, IntPtr rigidbodies, uint count, IntPtr receipts);
@@ -82,6 +99,13 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr unityBase,UIntPtr context,uint poolKind,UIntPtr expectedPool,IntPtr snapshot,uint count,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionAction(
+            UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionCaptureCopy(
+            UIntPtr unityBase,IntPtr keys,uint capacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionRestoreArm(
+            UIntPtr unityBase,UIntPtr nphaseCore,UIntPtr entries,UIntPtr entriesNext,UIntPtr hash,
+            uint entriesCapacity,uint hashSize,IntPtr keys,uint count,IntPtr receipt);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Unicode)] private static extern IntPtr LoadLibrary(string path);
         [DllImport("kernel32",SetLastError=true)] private static extern bool FreeLibrary(IntPtr module);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Ansi)] private static extern IntPtr GetProcAddress(IntPtr module,string name);
@@ -129,12 +153,19 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint[] Order;
         }
 
+        private sealed class DirtyInteractionState
+        {
+            internal uint NPhaseCore,Entries,EntriesNext,Hash,EntriesCapacity,HashSize,OrderHash;
+            internal NativeDirtyInteractionKey[] Keys;
+        }
+
         private sealed class CheckpointSidecar
         {
             internal int Frame;
             internal uint Context,FreeArray,OrderHash;
             internal uint[] ContactPoolOrder;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
+            internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
             internal object CoreSnapshot;
         }
@@ -153,11 +184,16 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeManifoldPoolCaptureSnapshot captureManifoldPoolSnapshot;
         private NativeManifoldPoolRestoreSnapshot restoreManifoldPoolSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
+        private NativeDirtyInteractionAction installDirtyInteractionOrder,statusDirtyInteractionOrder;
+        private NativeDirtyInteractionAction armDirtyInteractionCapture,cancelDirtyInteractionOrder,uninstallDirtyInteractionOrder;
+        private NativeDirtyInteractionCaptureCopy copyDirtyInteractionCapture;
+        private NativeDirtyInteractionRestoreArm armDirtyInteractionRestore;
         private uint unityPlayerBase;
         private uint contactManagerContext,contextObservations;
         private string nativePath,nativeSha256,failure;
         private bool automatic,automaticGroundCollider,observeContactManagerContext,contextObserverInstalled;
         private bool automaticContactPoolRestore,automaticTransformDispatchRestore,automaticRestorePending,warpInProgress,warpTargetRestoreEligible,disposed;
+        private bool dirtyInteractionHookInstalled,dirtyRestorePendingValidation;
         private int pendingContactPoolAction;
         private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
         private object pendingCoreSnapshot;
@@ -169,9 +205,14 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> manifoldPoolReceipts=new List<object>();
         private readonly Dictionary<int,CheckpointSidecar> checkpointSidecars=new Dictionary<int,CheckpointSidecar>();
         private CheckpointSidecar warpTargetSidecar;
+        private CheckpointSidecar pendingDirtyCaptureSidecar;
+        private DirtyInteractionState pendingDirtyRestoreState;
+        private uint pendingDirtyCaptureOrdinal,pendingDirtyRestoreOrdinal;
         private long transformDispatchCaptures,transformDispatchRestores;
         private readonly List<object> transformDispatchReceipts=new List<object>();
         private object lastContextObserverReceipt,lastSceneOwnedReset;
+        private readonly List<object> dirtyInteractionReceipts=new List<object>();
+        private long dirtyInteractionCaptures,dirtyInteractionRestores;
 
         public string Name { get { return "authoring-rigidbody-actor-rebuild-v1"; } }
         public int ApiVersion { get { return 1; } }
@@ -234,7 +275,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
-                if(apiVersion()!=7)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                installDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_install");
+                statusDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_status");
+                armDirtyInteractionCapture=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_capture_arm");
+                copyDirtyInteractionCapture=Export<NativeDirtyInteractionCaptureCopy>("oc2_dirty_interaction_order_capture_copy");
+                armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
+                cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
+                uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
+                if(apiVersion()!=10)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
                 observeContactManagerContext=observeContext;automaticContactPoolRestore=autoPoolRestore;
                 automaticTransformDispatchRestore=autoDispatchRestore;sceneMetadataGeneration=NativeSceneMetadata.Refreshes;
@@ -244,6 +292,12 @@ namespace SuperchargedPatch.Authoring.Modules
                     RunContextObserver(installContextObserver,"install");
                     contextObserverInstalled=true;
                     RefreshObservedContactManagerContext();
+                }
+                if(automaticContactPoolRestore)
+                {
+                    NativeDirtyInteractionReceipt dirty=InstallDirtyInteractionHook();
+                    if(dirty.Result!=1||dirty.Installed!=1)
+                        throw new InvalidOperationException("Native dirty-interaction hook did not install.");
                 }
                 if(auto||autoPoolRestore||autoDispatchRestore)InstallAutomaticHook();
             }
@@ -282,6 +336,16 @@ namespace SuperchargedPatch.Authoring.Modules
             if((!module.automatic&&!module.automaticContactPoolRestore)||!NativeSessionBridge.KitchenReady)return;
             if(__1)
             {
+                if(!module.warpInProgress)
+                {
+                    try
+                    {
+                        module.FinalizePendingDirtyInteractionCapture();
+                        module.ValidatePendingDirtyInteractionRestore();
+                        module.failure=null;
+                    }
+                    catch(Exception error){module.failure=error.Message;throw;}
+                }
                 if(module.warpInProgress)module.warpInProgress=false;
                 return;
             }
@@ -317,6 +381,7 @@ namespace SuperchargedPatch.Authoring.Modules
             var module=active;
             if(module==null||!module.automaticContactPoolRestore)return;
             module.ObserveCoreRoundIdentity();
+            module.FinalizePendingDirtyInteractionCapture();
             module.warpInProgress=true;
             module.warpTargetFrame=__0==null?-1:__0.Frame;
             module.warpTargetRestoreEligible=module.checkpointSidecars.TryGetValue(
@@ -325,6 +390,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(!module.warpTargetRestoreEligible||core==null||
                 !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,core))
                 throw new InvalidOperationException("No exact physics-pool/Transform-dispatch sidecar exists for output frame "+module.warpTargetFrame+".");
+            ValidateDirtyInteractionState(module.warpTargetSidecar.DirtyInteractions);
         }
 
         public static void AfterRestoreComplete(NativeKitchenCheckpoint.RestorePlan __instance)
@@ -344,6 +410,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(module==null||!module.automaticContactPoolRestore)return;
             module.automaticRestorePending=false;module.warpTargetRestoreEligible=false;
             module.warpTargetSidecar=null;
+            module.CancelDirtyInteractionWork();
         }
 
         private object RebuildOne(Dictionary<string,object> args)
@@ -394,6 +461,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void RunContactPoolAction(int action,bool automaticAction)
         {
+            if(action==1)FinalizePendingDirtyInteractionCapture();
             RefreshObservedContactManagerContext();
             CheckpointSidecar selected=null;
             if(action==2)
@@ -441,7 +509,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=10||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
             RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
@@ -458,7 +526,11 @@ namespace SuperchargedPatch.Authoring.Modules
                     OrderHash=orderHash,ContactPoolOrder=capturedOrder,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
-                StoreCheckpointSidecar(captured);
+                // Do not publish a partially captured sidecar.  The native
+                // dirty-list sample completes on the next physics update and
+                // FinalizePendingDirtyInteractionCapture publishes the whole
+                // sidecar as one transaction.
+                ArmDirtyInteractionCapture(captured);
                 pendingContactPoolFrame=-1;pendingCoreSnapshot=null;contactPoolCaptures++;
             }
             else
@@ -471,6 +543,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 RunManifoldPoolAction(2,LargeManifoldPoolKind,selected.LargeManifoldPool,actionFrame);
                 RunManifoldPoolAction(2,SphereManifoldPoolKind,selected.SphereManifoldPool,actionFrame);
                 if(automaticTransformDispatchRestore)RunTransformDispatchAction(2,selected.TransformDispatch);
+                ArmDirtyInteractionRestore(selected.DirtyInteractions);
                 contactPoolRestores++;
                 if(automaticAction){warpTargetSidecar=null;warpTargetRestoreEligible=false;}
             }
@@ -529,7 +602,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ok==0||receipt.Result!=1)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
                     receipt.Result+", Win32/error="+receipt.LastError+".");
-            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=10||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
                 receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
@@ -715,6 +788,175 @@ namespace SuperchargedPatch.Authoring.Modules
             };
         }
 
+        private NativeDirtyInteractionReceipt CallDirtyInteractionAction(
+            NativeDirtyInteractionAction callback,string action,params uint[] acceptedResults)
+        {
+            if(callback==null)throw new InvalidOperationException("Native dirty-interaction export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeDirtyInteractionReceipt receipt;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                int ok=callback(new UIntPtr(unityPlayerBase),buffer);
+                receipt=(NativeDirtyInteractionReceipt)Marshal.PtrToStructure(buffer,typeof(NativeDirtyInteractionReceipt));
+                if(ok==0)throw new InvalidOperationException("Native dirty-interaction "+action+
+                    " failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateDirtyInteractionReceiptContract(receipt,size);
+            RecordDirtyInteractionReceipt(action,receipt);
+            if(acceptedResults!=null&&acceptedResults.Length!=0&&!acceptedResults.Contains(receipt.Result))
+                throw new InvalidOperationException("Native dirty-interaction "+action+
+                    " returned unexpected result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+            return receipt;
+        }
+
+        private NativeDirtyInteractionReceipt InstallDirtyInteractionHook()
+        {
+            if(installDirtyInteractionOrder==null)
+                throw new InvalidOperationException("Native dirty-interaction install export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeDirtyInteractionReceipt receipt;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                int ok=installDirtyInteractionOrder(new UIntPtr(unityPlayerBase),buffer);
+                // A nonzero native return means UnityPlayer has already been
+                // patched.  Claim ownership before unmarshalling or validating
+                // the receipt so activation cleanup can never unload a DLL
+                // whose hook is still live.
+                if(ok!=0)dirtyInteractionHookInstalled=true;
+                receipt=(NativeDirtyInteractionReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeDirtyInteractionReceipt));
+                if(ok==0)throw new InvalidOperationException("Native dirty-interaction install failed: result="+
+                    receipt.Result+", Win32/error="+receipt.LastError+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateDirtyInteractionReceiptContract(receipt,size);
+            RecordDirtyInteractionReceipt("install",receipt);
+            return receipt;
+        }
+
+        private void ArmDirtyInteractionCapture(CheckpointSidecar sidecar)
+        {
+            if(!dirtyInteractionHookInstalled||sidecar==null)
+                throw new InvalidOperationException("Dirty-interaction capture requires the installed hook and a checkpoint sidecar.");
+            NativeDirtyInteractionReceipt receipt=CallDirtyInteractionAction(
+                armDirtyInteractionCapture,"capture-arm",18);
+            if(receipt.Armed!=1||receipt.Action!=1)
+                throw new InvalidOperationException("Native dirty-interaction capture did not remain armed.");
+            pendingDirtyCaptureSidecar=sidecar;
+            pendingDirtyCaptureOrdinal=receipt.Captures+1;
+        }
+
+        private void FinalizePendingDirtyInteractionCapture()
+        {
+            if(pendingDirtyCaptureSidecar==null)return;
+            NativeDirtyInteractionReceipt status=CallDirtyInteractionAction(
+                statusDirtyInteractionOrder,"capture-status");
+            if(status.Result!=1||status.Armed!=0||status.Action!=0||
+                status.Captures!=pendingDirtyCaptureOrdinal)
+                throw new InvalidOperationException("Native dirty-interaction capture did not complete exactly once: result="+
+                    status.Result+", armed="+status.Armed+", captures="+status.Captures+".");
+            if(status.Count>MaximumDirtyInteractions)
+                throw new InvalidOperationException("Native dirty-interaction capture count exceeds the supported bound.");
+            int keySize=Marshal.SizeOf(typeof(NativeDirtyInteractionKey));
+            int receiptSize=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
+            IntPtr keysBuffer=Marshal.AllocHGlobal(Math.Max(1,(int)status.Count)*keySize);
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            NativeDirtyInteractionReceipt receipt;
+            NativeDirtyInteractionKey[] keys=new NativeDirtyInteractionKey[status.Count];
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=copyDirtyInteractionCapture(new UIntPtr(unityPlayerBase),keysBuffer,status.Count,receiptBuffer);
+                receipt=(NativeDirtyInteractionReceipt)Marshal.PtrToStructure(receiptBuffer,typeof(NativeDirtyInteractionReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native dirty-interaction capture-copy failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+                for(int i=0;i<keys.Length;i++)keys[i]=(NativeDirtyInteractionKey)Marshal.PtrToStructure(
+                    new IntPtr(keysBuffer.ToInt32()+i*keySize),typeof(NativeDirtyInteractionKey));
+            }
+            finally{Marshal.FreeHGlobal(receiptBuffer);Marshal.FreeHGlobal(keysBuffer);}
+            ValidateDirtyInteractionReceiptContract(receipt,receiptSize);
+            RecordDirtyInteractionReceipt("capture-copy",receipt);
+            var state=new DirtyInteractionState {NPhaseCore=receipt.NPhaseCore.ToUInt32(),
+                Entries=receipt.Entries.ToUInt32(),EntriesNext=receipt.EntriesNext.ToUInt32(),
+                Hash=receipt.Hash.ToUInt32(),EntriesCapacity=receipt.EntriesCapacity,
+                HashSize=receipt.HashSize,OrderHash=receipt.OrderHashAfter,Keys=keys};
+            ValidateDirtyInteractionState(state);
+            if(DirtyInteractionOrderHash(keys)!=receipt.OrderHashAfter)
+                throw new InvalidOperationException("Managed dirty-interaction order hash differs from native capture.");
+            pendingDirtyCaptureSidecar.DirtyInteractions=state;
+            StoreCheckpointSidecar(pendingDirtyCaptureSidecar);
+            pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
+            dirtyInteractionCaptures++;
+        }
+
+        private void ArmDirtyInteractionRestore(DirtyInteractionState state)
+        {
+            ValidateDirtyInteractionState(state);
+            int keySize=Marshal.SizeOf(typeof(NativeDirtyInteractionKey));
+            int receiptSize=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
+            IntPtr keysBuffer=Marshal.AllocHGlobal(Math.Max(1,state.Keys.Length)*keySize);
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            NativeDirtyInteractionReceipt receipt;
+            try
+            {
+                for(int i=0;i<state.Keys.Length;i++)Marshal.StructureToPtr(state.Keys[i],
+                    new IntPtr(keysBuffer.ToInt32()+i*keySize),false);
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=armDirtyInteractionRestore(new UIntPtr(unityPlayerBase),new UIntPtr(state.NPhaseCore),
+                    new UIntPtr(state.Entries),new UIntPtr(state.EntriesNext),new UIntPtr(state.Hash),
+                    state.EntriesCapacity,state.HashSize,keysBuffer,(uint)state.Keys.Length,receiptBuffer);
+                receipt=(NativeDirtyInteractionReceipt)Marshal.PtrToStructure(receiptBuffer,typeof(NativeDirtyInteractionReceipt));
+                if(ok==0||receipt.Result!=18)
+                    throw new InvalidOperationException("Native dirty-interaction restore-arm failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+            }
+            finally{Marshal.FreeHGlobal(receiptBuffer);Marshal.FreeHGlobal(keysBuffer);}
+            ValidateDirtyInteractionReceiptContract(receipt,receiptSize);
+            RecordDirtyInteractionReceipt("restore-arm",receipt);
+            if(receipt.Armed!=1||receipt.Action!=2||receipt.NPhaseCore.ToUInt32()!=state.NPhaseCore||
+                receipt.Count!=(uint)state.Keys.Length||receipt.OrderHashAfter!=state.OrderHash)
+                throw new InvalidOperationException("Native dirty-interaction restore arm differs from the selected sidecar.");
+            pendingDirtyRestoreState=state;pendingDirtyRestoreOrdinal=receipt.Restores+1;
+            dirtyRestorePendingValidation=true;
+        }
+
+        private void ValidatePendingDirtyInteractionRestore()
+        {
+            if(!dirtyRestorePendingValidation)return;
+            NativeDirtyInteractionReceipt receipt=CallDirtyInteractionAction(
+                statusDirtyInteractionOrder,"restore-status");
+            if(receipt.Result!=1||receipt.Armed!=0||receipt.Action!=0||
+                receipt.Restores!=pendingDirtyRestoreOrdinal||pendingDirtyRestoreState==null||
+                receipt.OrderHashAfter!=pendingDirtyRestoreState.OrderHash)
+                throw new InvalidOperationException("Native dirty-interaction restore did not complete exactly once: result="+
+                    receipt.Result+", armed="+receipt.Armed+", restores="+receipt.Restores+".");
+            dirtyInteractionRestores++;
+            dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
+        }
+
+        private void ValidateDirtyInteractionReceiptContract(NativeDirtyInteractionReceipt receipt,int size)
+        {
+            if(receipt.ApiVersion!=10||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+                throw new InvalidOperationException("Native dirty-interaction receipt contract differs.");
+        }
+
+        private void RecordDirtyInteractionReceipt(string action,NativeDirtyInteractionReceipt receipt)
+        {
+            dirtyInteractionReceipts.Add(new Dictionary<string,object>{{"action",action},
+                {"result",receipt.Result},{"lastError",receipt.LastError},{"nphaseCore",Hex(receipt.NPhaseCore)},
+                {"set",Hex(receipt.Set)},{"entries",Hex(receipt.Entries)},{"entriesNext",Hex(receipt.EntriesNext)},
+                {"hash",Hex(receipt.Hash)},{"entriesCapacity",receipt.EntriesCapacity},{"hashSize",receipt.HashSize},
+                {"count",receipt.Count},{"nativeAction",receipt.Action},{"captures",receipt.Captures},
+                {"restores",receipt.Restores},{"orderHashBefore","0x"+receipt.OrderHashBefore.ToString("X8")},
+                {"orderHashAfter","0x"+receipt.OrderHashAfter.ToString("X8")},
+                {"installed",receipt.Installed!=0},{"armed",receipt.Armed!=0}});
+            if(dirtyInteractionReceipts.Count>24)dirtyInteractionReceipts.RemoveAt(0);
+        }
+
         private NativeContextObserverReceipt RunContextObserver(NativeContextObserverAction callback,string action)
         {
             if(callback==null)throw new InvalidOperationException("Native context observer export is unavailable.");
@@ -729,7 +971,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=7||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=10||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -775,6 +1017,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ResetSceneOwnedCheckpointState(string reason,bool clearFailure)
         {
+            CancelDirtyInteractionWork();
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
@@ -782,6 +1025,14 @@ namespace SuperchargedPatch.Authoring.Modules
             sceneOwnedResets++;
             lastSceneOwnedReset=new Dictionary<string,object>{{"reason",reason},
                 {"generation",sceneMetadataGeneration},{"clearedFailure",clearFailure}};
+        }
+
+        private void CancelDirtyInteractionWork()
+        {
+            if(dirtyInteractionHookInstalled)
+                CallDirtyInteractionAction(cancelDirtyInteractionOrder,"cancel");
+            pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
+            dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
         }
 
         private static int CurrentCheckpointFrame()
@@ -840,6 +1091,48 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
         }
 
+        private static uint DirtyInteractionOrderHash(NativeDirtyInteractionKey[] values)
+        {
+            if(values==null)throw new ArgumentNullException("values");
+            uint hash=2166136261u;
+            foreach(NativeDirtyInteractionKey value in values)
+            {
+                hash^=value.ElementLow.ToUInt32();hash*=16777619u;
+                hash^=value.ElementHigh.ToUInt32();hash*=16777619u;
+                hash^=value.PrimaryVtable.ToUInt32();hash*=16777619u;
+                hash^=value.InteractionType;hash*=16777619u;
+            }
+            return hash;
+        }
+
+        private static void ValidateDirtyInteractionState(DirtyInteractionState value)
+        {
+            if(value==null||value.NPhaseCore==0||value.Entries==0||value.EntriesNext==0||
+                value.Hash==0||value.EntriesCapacity<1||value.EntriesCapacity>MaximumDirtyInteractions||
+                value.HashSize<1||(value.HashSize&(value.HashSize-1))!=0||value.Keys==null||
+                value.Keys.Length>value.EntriesCapacity||value.Keys.Length>MaximumDirtyInteractions||
+                value.OrderHash!=DirtyInteractionOrderHash(value.Keys))
+                throw new InvalidOperationException("The dirty-interaction checkpoint sidecar is incomplete.");
+            var identities=new HashSet<string>(StringComparer.Ordinal);
+            foreach(NativeDirtyInteractionKey key in value.Keys)
+            {
+                uint low=key.ElementLow.ToUInt32(),high=key.ElementHigh.ToUInt32(),vtable=key.PrimaryVtable.ToUInt32();
+                if(low==0||high==0||low>=high||vtable==0||key.InteractionType>5||
+                    !identities.Add(low.ToString("X8")+high.ToString("X8")+vtable.ToString("X8")+key.InteractionType))
+                    throw new InvalidOperationException("The dirty-interaction checkpoint contains an invalid or duplicate semantic key.");
+            }
+        }
+
+        private static object DescribeDirtyInteractionState(DirtyInteractionState value)
+        {
+            if(value==null)return null;
+            return new Dictionary<string,object>{{"nphaseCore","0x"+value.NPhaseCore.ToString("X8")},
+                {"entries","0x"+value.Entries.ToString("X8")},{"entriesNext","0x"+value.EntriesNext.ToString("X8")},
+                {"hash","0x"+value.Hash.ToString("X8")},{"entriesCapacity",value.EntriesCapacity},
+                {"hashSize",value.HashSize},{"count",value.Keys==null?0:value.Keys.Length},
+                {"orderHash","0x"+value.OrderHash.ToString("X8")}};
+        }
+
         private CheckpointSidecar LatestCheckpointSidecar()
         {
             return checkpointSidecars.Count==0?null:checkpointSidecars[checkpointSidecars.Keys.Max()];
@@ -853,6 +1146,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar is incomplete.");
             ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
             ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
+            ValidateDirtyInteractionState(value.DirtyInteractions);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar no longer owns the retained core snapshot.");
             CheckpointSidecar previous;
@@ -864,7 +1158,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
-                    SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch);
+                    SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
+                    SameDirtyInteractionSnapshot(previous.DirtyInteractions,value.DirtyInteractions);
                 if(!same)throw new InvalidOperationException("A differing physics-pool/Transform-dispatch sidecar already owns output frame "+value.Frame+".");
                 return;
             }
@@ -884,6 +1179,25 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(left==null||right==null)return left==right;
             return left.Array==right.Array&&left.Capacity==right.Capacity&&SameTransformDispatchState(left,right);
+        }
+
+        private static bool SameDirtyInteractionSnapshot(DirtyInteractionState left,DirtyInteractionState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.NPhaseCore==right.NPhaseCore&&left.Entries==right.Entries&&
+                left.EntriesNext==right.EntriesNext&&left.Hash==right.Hash&&
+                left.EntriesCapacity==right.EntriesCapacity&&left.HashSize==right.HashSize&&
+                left.OrderHash==right.OrderHash&&SameDirtyInteractionKeys(left.Keys,right.Keys);
+        }
+
+        private static bool SameDirtyInteractionKeys(NativeDirtyInteractionKey[] left,NativeDirtyInteractionKey[] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)
+                if(left[i].ElementLow!=right[i].ElementLow||left[i].ElementHigh!=right[i].ElementHigh||
+                    left[i].PrimaryVtable!=right[i].PrimaryVtable||left[i].InteractionType!=right[i].InteractionType)
+                    return false;
+            return true;
         }
 
         private void PruneCheckpointSidecarsAfter(int frame)
@@ -909,7 +1223,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
-                {"transformDispatchCaptured",found&&value.TransformDispatch!=null}};
+                {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
+                {"dirtyInteractions",found?DescribeDirtyInteractionState(value.DirtyInteractions):null}};
         }
 
         private object[] RebuildBodies(Rigidbody[] bodies,string reason)
@@ -945,7 +1260,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     var failed=native.FirstOrDefault(value=>value.Result!=1);
                     throw new InvalidOperationException("Native actor rebuild failed: result="+failed.Result+", Win32/error="+failed.LastError+".");
                 }
-                if(native.Any(value=>value.ApiVersion!=7||value.StructSize!=(uint)receiptSize||
+                if(native.Any(value=>value.ApiVersion!=10||value.StructSize!=(uint)receiptSize||
                     value.UnityBase.ToUInt32()!=unityPlayerBase))
                     throw new InvalidOperationException("Native actor rebuild receipt contract differs.");
             }
@@ -1064,7 +1379,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:7},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:10},
                 {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
@@ -1087,6 +1402,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"transformDispatchSnapshotFrame",latest==null||latest.TransformDispatch==null?-1:lastFrame},
                 {"transformDispatchCaptures",transformDispatchCaptures},{"transformDispatchRestores",transformDispatchRestores},
                 {"transformDispatchReceipts",transformDispatchReceipts.ToArray()},
+                {"dirtyInteractionHookInstalled",dirtyInteractionHookInstalled},
+                {"dirtyInteractionSnapshotCaptured",latest!=null&&latest.DirtyInteractions!=null},
+                {"dirtyInteractionSnapshot",latest==null?null:DescribeDirtyInteractionState(latest.DirtyInteractions)},
+                {"dirtyInteractionCapturePending",pendingDirtyCaptureSidecar!=null},
+                {"dirtyInteractionRestorePendingValidation",dirtyRestorePendingValidation},
+                {"dirtyInteractionCaptures",dirtyInteractionCaptures},{"dirtyInteractionRestores",dirtyInteractionRestores},
+                {"dirtyInteractionReceipts",dirtyInteractionReceipts.ToArray()},
                 {"warpInProgress",warpInProgress},{"warpTargetFrame",warpTargetFrame},{"warpTargetRestoreEligible",warpTargetRestoreEligible},
                 {"contactPoolCaptures",contactPoolCaptures},{"contactPoolRestores",contactPoolRestores},
                 {"contactPoolReceipts",contactPoolReceipts.ToArray()},
@@ -1098,6 +1420,11 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void Deactivate()
         {
+            if(dirtyInteractionHookInstalled)
+            {
+                CallDirtyInteractionAction(uninstallDirtyInteractionOrder,"uninstall",1);
+                dirtyInteractionHookInstalled=false;
+            }
             if(contextObserverInstalled)
             {
                 RunContextObserver(uninstallContextObserver,"uninstall");contextObserverInstalled=false;
@@ -1106,11 +1433,16 @@ namespace SuperchargedPatch.Authoring.Modules
             observeContactManagerContext=false;automaticContactPoolRestore=false;automaticTransformDispatchRestore=false;automaticRestorePending=false;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
+            dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
             captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
+            installDirtyInteractionOrder=null;statusDirtyInteractionOrder=null;armDirtyInteractionCapture=null;
+            copyDirtyInteractionCapture=null;armDirtyInteractionRestore=null;cancelDirtyInteractionOrder=null;
+            uninstallDirtyInteractionOrder=null;
             if(library!=IntPtr.Zero){FreeLibrary(library);library=IntPtr.Zero;}
             if(ReferenceEquals(active,this))active=null;
         }

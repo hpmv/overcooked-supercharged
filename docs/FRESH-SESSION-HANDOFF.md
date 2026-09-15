@@ -1,5 +1,50 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Dirty-interaction order restoration closes the f1045 physics drift
+> (2026-09-15, API 10):** the exact Story 1-1 second-delivery acceptance now
+> passes under the minimized/background v14 runtime. Evidence is
+> `artifacts/framework-migration/story11-dirty-order-v14-api10-live-r2/second-delivery-f1045-dirty-restore-r1/`;
+> `summary.json` SHA-256 is
+> `DBBB54A349B04F171639C7E3405FCFE619BBC03F16DA686511D6E3CA48957975`.
+> The restored f1045 checkpoint is exact, original and replay both perform the
+> same 28-to-56 delivery with input SHA-256
+> `35867d2f81e4579fd0d02346cfde731058b5fa3d9770ee887c2cda248decc687`,
+> and the endpoint is exact for all entities, native physics, Animator state,
+> round/orders, food, and clocks. In particular, chef 46 now ends at the same
+> Y `0.04039979` in both branches; there are no changed entity IDs.
+>
+> The actor sidecar captures the checkpoint's ordered 23-entry
+> `Sc::NPhaseCore::mDirtyInteractions` list by canonical `Element*` endpoint
+> pair, primary vtable, and interaction type. Immediately before the first
+> replay `updateDirtyInteractions`, the native one-shot resolves those keys to
+> the current pooled `CoreInteraction*` objects, rewrites the dense array, and
+> rebuilds the hash buckets and next chains. It does not retain stale pooled
+> pointers. The live receipt proves exactly one capture and one restore; the
+> replay order changed from `0x95704AA8` back to checkpoint hash `0x4C383350`.
+> Capture and restore were both dormant afterward. The contact-manager free
+> stack and Transform dispatch sidecars also remained exact.
+>
+> Native helper API 10 DLL:
+> `artifacts/native-rigidbody-rebuild-r17-dirty-order-cmake2/Oc2NativeRigidbodyRebuild.dll`,
+> SHA-256
+> `87DFD3E0C59D5DF14F70546A0CFCF052E3007B1FB47977BE2FD9BEEE7801E0AB`.
+> Managed actor module:
+> `framework-run/modules/RigidbodyActorRebuild-r14d-dirty-interaction-order-lifecycle-core-bg4-v14-r44i/`,
+> SHA-256
+> `A798D0C24522A7193A20BB3CBCAE06EFBDE0F58F194422815113EC87B60C500C`.
+> The native harness covers changed backing allocation/capacity/hash storage,
+> exact semantic membership, rejection paths, cancellation, and one-shot
+> dormancy. Python input/background suites pass 35 and 4 tests.
+>
+> **Scope/next:** this first restoration mode intentionally requires exact
+> dirty-interaction semantic membership. It proves and fixes the known exact
+> rewind/replay cell without touching ordinary forward gameplay. Before route
+> search, broaden rewind coverage and add a projection mode that preserves the
+> captured relative order of surviving checkpoint keys while permitting
+> legitimate alternate-input additions/removals. Also audit non-element dirty
+> interaction classes before claiming full-level generality. Search remains
+> disabled.
+
 > **Dirty-interaction order proved end to end (2026-09-15, native trace
 > r22):** fresh v14 live evidence is
 > `artifacts/framework-migration/story11-dirty-order-v14-live-r2/second-delivery-f1045-dirty-order-r2/`.
