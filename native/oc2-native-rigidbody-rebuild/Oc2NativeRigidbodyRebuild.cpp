@@ -411,6 +411,22 @@ struct KinematicTargetReceipt {
     uint32_t coreTargetValid;
     RigidPose target;
 };
+
+struct InvalidateKinematicTargetReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t rigidbody;
+    uintptr_t actor;
+    uintptr_t bodyCore;
+    uintptr_t simStateData;
+    uint32_t unityIsKinematic;
+    uint32_t simStateIsKinematic;
+    uint32_t targetValidBefore;
+    uint32_t targetValidAfter;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -419,6 +435,8 @@ static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
     "Unexpected Win32 dirty-interaction receipt ABI");
+static_assert(sizeof(InvalidateKinematicTargetReceipt) == 52,
+    "Unexpected Win32 kinematic-target invalidation receipt ABI");
 
 enum RebuildResult : uint32_t {
     RebuildOk = 1,
@@ -595,6 +613,18 @@ enum KinematicTargetResult : uint32_t {
     KinematicTargetNonfinite = 7
 };
 
+enum InvalidateKinematicTargetResult : uint32_t {
+    InvalidateKinematicTargetOk = 1,
+    InvalidateKinematicTargetBadArgument = 2,
+    InvalidateKinematicTargetUnreadableRigidbody = 3,
+    InvalidateKinematicTargetMissingActor = 4,
+    InvalidateKinematicTargetRevisionMismatch = 5,
+    InvalidateKinematicTargetNotKinematic = 6,
+    InvalidateKinematicTargetUnreadableState = 7,
+    InvalidateKinematicTargetNotValid = 8,
+    InvalidateKinematicTargetReadbackChanged = 9
+};
+
 static const uint32_t kApiVersion = 11;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
@@ -623,6 +653,7 @@ static const uint32_t kNpSetWakeCounterRva = 0xA15760;
 static const uint32_t kNpWakeUpRva = 0xA15E80;
 static const uint32_t kNpPutToSleepRva = 0xA12E80;
 static const uint32_t kNpGetKinematicTargetRva = 0xA12530;
+static const uint32_t kScBodyCoreInvalidateKinematicTargetRva = 0xA3A5A0;
 static const uint32_t kNpSetCMassLocalPoseInternalRva = 0xA13E90;
 static const uint32_t kNpSetMassSpaceInertiaTensorRva = 0xA14E80;
 static const uint32_t kNpShapeGetLocalPoseRva = 0xA0D2A0;
@@ -738,6 +769,9 @@ static const uint8_t kNpPutToSleepBytes[] = {
     0x83,0xC1,0x30,0xE9,0x08,0x00,0x00,0x00
 };
 static const uint8_t kNpGetKinematicTargetBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44,0xF7,0x81,0x1C,0x01,0x00,0x00,0x00,0x10,0x00,0x00};
+static const uint8_t kScBodyCoreInvalidateKinematicTargetBytes[] = {
+    0x8B,0x81,0x9C,0x00,0x00,0x00,0xC6,0x40,0x1C,0x00,0xC3
+};
 static const uint8_t kNpSetCMassLocalPoseInternalBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x48,0x53,0x8B,0xD9};
 static const uint8_t kNpSetMassSpaceInertiaTensorBytes[] = {0x55,0x8B,0xEC,0x8B,0x55,0x08,0x83,0xEC,0x0C};
 static const uint8_t kNpShapeGetLocalPoseBytes[] = {0x55,0x8B,0xEC,0xF6,0x41,0x24,0x04,0x56};
@@ -765,6 +799,7 @@ typedef void (__thiscall *NpShapeManagerMarkSceneQuery)(void* shapeManager,
     void* sceneQueryManager);
 typedef bool (__thiscall *NpRigidDynamicGetKinematicTarget)(void* self,
     PhysxTransform& pose);
+typedef void (__thiscall *ScBodyCoreInvalidateKinematicTarget)(void* self);
 typedef void (__thiscall *NpRigidBodySetCMassLocalPoseInternal)(void* self,
     const PhysxTransform& pose);
 typedef void (__thiscall *NpRigidBodySetMassSpaceInertiaTensor)(void* self,
@@ -924,6 +959,16 @@ static int FailKinematicTarget(KinematicTargetReceipt* receipt,
         receipt->result = result;
         receipt->lastError = error;
     }
+    return 0;
+}
+
+static int FailInvalidateKinematicTarget(InvalidateKinematicTargetReceipt* receipt,
+    InvalidateKinematicTargetResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    SetLastError(error);
     return 0;
 }
 
@@ -3374,6 +3419,81 @@ static int GetExistingActorKinematicTarget(uintptr_t unityBase,
     return 1;
 }
 
+// Unity's Transform pose dispatch can install a kinematic target even when a
+// sleeping actor was already moved natively to that exact pose. PhysX 3.3.3
+// exposes no public clear-target API. Sc::BodyCore::invalidateKinematicTarget
+// is the source operation used after target consumption and writes only the
+// KinematicTransform::targetValid byte. This helper deliberately does not call
+// deactivateKinematic, putToSleep, or any wake/island/list operation.
+static int InvalidateExistingActorKinematicTarget(uintptr_t unityBase,
+    uintptr_t rigidbody, InvalidateKinematicTargetReceipt* receipt) {
+    if (!receipt) return 0;
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(InvalidateKinematicTargetReceipt);
+    receipt->unityBase = unityBase;
+    receipt->rigidbody = rigidbody;
+    if (!unityBase || !rigidbody)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetBadArgument, ERROR_INVALID_PARAMETER);
+    if (!Readable(reinterpret_cast<const void*>(rigidbody), 0x55))
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetUnreadableRigidbody, ERROR_NOACCESS);
+    receipt->unityIsKinematic =
+        *reinterpret_cast<const uint8_t*>(rigidbody + 0x54);
+    if (receipt->unityIsKinematic != 1)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetNotKinematic, ERROR_INVALID_STATE);
+    receipt->actor = *reinterpret_cast<const uintptr_t*>(rigidbody + 0x34);
+    if (!receipt->actor ||
+        !Readable(reinterpret_cast<const void*>(receipt->actor), 0xE0) ||
+        *reinterpret_cast<const uintptr_t*>(receipt->actor) !=
+            unityBase + kNpRigidDynamicVtableRva)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetMissingActor, ERROR_INVALID_STATE);
+    receipt->bodyCore = receipt->actor + 0x40;
+    receipt->simStateData =
+        *reinterpret_cast<const uintptr_t*>(receipt->bodyCore + 0x9C);
+    if (!receipt->simStateData ||
+        !Readable(reinterpret_cast<const void*>(receipt->simStateData), 0x20))
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetUnreadableState, ERROR_NOACCESS);
+    receipt->simStateIsKinematic =
+        *reinterpret_cast<const uint8_t*>(receipt->simStateData + 0x1F) == 1 ? 1u : 0u;
+    receipt->targetValidBefore =
+        *reinterpret_cast<const uint8_t*>(receipt->simStateData + 0x1C) != 0 ? 1u : 0u;
+    if (receipt->simStateIsKinematic != 1 || receipt->targetValidBefore != 1)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetNotValid, ERROR_INVALID_STATE);
+    const void* address = reinterpret_cast<const void*>(
+        unityBase + kScBodyCoreInvalidateKinematicTargetRva);
+    if (!Readable(address, sizeof(kScBodyCoreInvalidateKinematicTargetBytes)) ||
+        !EqualBytes(address, kScBodyCoreInvalidateKinematicTargetBytes,
+            sizeof(kScBodyCoreInvalidateKinematicTargetBytes)))
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetRevisionMismatch, ERROR_REVISION_MISMATCH);
+
+    ScBodyCoreInvalidateKinematicTarget invalidateTarget =
+        reinterpret_cast<ScBodyCoreInvalidateKinematicTarget>(
+            unityBase + kScBodyCoreInvalidateKinematicTargetRva);
+    invalidateTarget(reinterpret_cast<void*>(receipt->bodyCore));
+
+    if (*reinterpret_cast<const uintptr_t*>(rigidbody + 0x34) != receipt->actor ||
+        *reinterpret_cast<const uintptr_t*>(receipt->bodyCore + 0x9C) !=
+            receipt->simStateData ||
+        *reinterpret_cast<const uint8_t*>(receipt->simStateData + 0x1F) != 1 ||
+        *reinterpret_cast<const uint8_t*>(rigidbody + 0x54) != 1)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetReadbackChanged, ERROR_WRITE_FAULT);
+    receipt->targetValidAfter =
+        *reinterpret_cast<const uint8_t*>(receipt->simStateData + 0x1C) != 0 ? 1u : 0u;
+    if (receipt->targetValidAfter != 0)
+        return FailInvalidateKinematicTarget(receipt,
+            InvalidateKinematicTargetReadbackChanged, ERROR_WRITE_FAULT);
+    receipt->result = InvalidateKinematicTargetOk;
+    return 1;
+}
+
 static int SetExistingActorMassFrame(uintptr_t unityBase, uintptr_t rigidbody,
     const RigidMassFrame* frame, SetMassFrameReceipt* receipt) {
     if (!receipt) return 0;
@@ -3774,6 +3894,12 @@ extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_restore_wake_state(
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_get_kinematic_target(
     uintptr_t unityBase, uintptr_t rigidbody, KinematicTargetReceipt* receipt) {
     return GetExistingActorKinematicTarget(unityBase, rigidbody, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_invalidate_kinematic_target(
+    uintptr_t unityBase, uintptr_t rigidbody,
+    InvalidateKinematicTargetReceipt* receipt) {
+    return InvalidateExistingActorKinematicTarget(unityBase, rigidbody, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_set_mass_frame(

@@ -33,6 +33,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> motionSideEffectRestores=new List<object>();
         private readonly List<object> nativeBody2WorldRestores=new List<object>();
         private readonly List<object> nativeWakeStateRestores=new List<object>();
+        private readonly List<object> nativeKinematicTargetInvalidations=new List<object>();
         private long restoreCall,discardedRotationRecords;
         private IDisposable registration;
         private IntPtr nativeLibrary;
@@ -44,6 +45,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeRestoreBody2World nativeRestoreBody2World;
         private NativeRestoreWakeState nativeRestoreWakeState;
         private NativeGetKinematicTarget nativeGetKinematicTarget;
+        private NativeInvalidateKinematicTarget nativeInvalidateKinematicTarget;
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private bool disposed;
         public string Name {get{return "body-native-auto-reset-v44-corrected-kinematic-lifecycle-receipt";}}
@@ -135,6 +137,13 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeRigidPose Target;
         }
         [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeInvalidateKinematicTargetReceipt
+        {
+            internal uint ApiVersion,StructSize,Result,LastError;
+            internal UIntPtr UnityBase,Rigidbody,Actor,BodyCore,SimStateData;
+            internal uint UnityIsKinematic,SimStateIsKinematic,TargetValidBefore,TargetValidAfter;
+        }
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeRigidMassFrame
         {
             internal float Cx,Cy,Cz,Qx,Qy,Qz,Qw,Ix,Iy,Iz;
@@ -162,6 +171,8 @@ namespace SuperchargedPatch.Authoring.Modules
             out NativeWakeStateRestoreReceipt receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeGetKinematicTarget(
             UIntPtr unityBase,UIntPtr rigidbody,out NativeKinematicTargetReceipt receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeInvalidateKinematicTarget(
+            UIntPtr unityBase,UIntPtr rigidbody,out NativeInvalidateKinematicTargetReceipt receipt);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Unicode)] private static extern IntPtr LoadLibrary(string path);
         [DllImport("kernel32",SetLastError=true)] private static extern bool FreeLibrary(IntPtr module);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Ansi)] private static extern IntPtr GetProcAddress(IntPtr module,string name);
@@ -194,6 +205,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"nativeMassFrameRestores",nativeMassFrameRestores.ToArray()},
                 {"motionSideEffectRestores",motionSideEffectRestores.ToArray()},
                 {"nativeBody2WorldRestores",nativeBody2WorldRestores.ToArray()},
+                {"nativeSleepingKinematicPoseRestores",nativeSleepingKinematicPoseRestores.ToArray()},
+                {"nativeKinematicTargetInvalidations",nativeKinematicTargetInvalidations.ToArray()},
                 {"nativeWakeStateRestores",nativeWakeStateRestores.ToArray()},
                 {"nativeBody2WorldCaptures",nativeBody2WorldCaptures.ToArray()},
                 {"nativeKinematicWakeMismatches",nativeKinematicWakeMismatches.ToArray()},
@@ -244,6 +257,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 nativeRestoreBody2World=Export<NativeRestoreBody2World>("oc2_rigidbody_restore_body2world");
                 nativeRestoreWakeState=Export<NativeRestoreWakeState>("oc2_rigidbody_restore_wake_state");
                 nativeGetKinematicTarget=Export<NativeGetKinematicTarget>("oc2_rigidbody_get_kinematic_target");
+                nativeInvalidateKinematicTarget=Export<NativeInvalidateKinematicTarget>(
+                    "oc2_rigidbody_invalidate_kinematic_target");
                 nativeCaptureShapePoses=Export<NativeCaptureShapePoses>("oc2_rigidbody_capture_shape_poses");
                 nativeRestoreShapePoses=Export<NativeRestoreShapePoses>("oc2_rigidbody_restore_shape_poses");
                 if(version()!=NativeHelperApiVersion)throw new InvalidOperationException("Native body pose/mass/shape-state helper API version mismatch.");
@@ -267,6 +282,7 @@ namespace SuperchargedPatch.Authoring.Modules
             nativeRestoreBody2World=null;
             nativeRestoreWakeState=null;
             nativeGetKinematicTarget=null;
+            nativeInvalidateKinematicTarget=null;
             nativeCaptureShapePoses=null;
             nativeRestoreShapePoses=null;
             if(nativeLibrary!=IntPtr.Zero){FreeLibrary(nativeLibrary);nativeLibrary=IntPtr.Zero;}
@@ -312,15 +328,20 @@ namespace SuperchargedPatch.Authoring.Modules
                 var velocity=row.Body.velocity;var angular=row.Body.angularVelocity;
                 bool kinematic=row.Body.isKinematic,gravity=row.Body.useGravity;
                 if(!Finite(velocity)||!Finite(angular))throw new InvalidOperationException("Nonfinite current native body velocity: "+row.EntityId);
-                // Unity Rigidbody and Transform expose distinct stored poses.
-                // Restore the observed local transform before assigning the body;
-                // do not infer either pose from the other or synchronize PhysX.
-                if (!Same(row.Transform.localPosition, row.LocalPosition)) row.Transform.localPosition = row.LocalPosition;
-                if (!Same(row.Transform.localRotation, row.LocalRotation)) row.Transform.localRotation = row.LocalRotation;
-                if (!Same(row.Body.position, row.BodyPosition)) {
-                    row.Body.position = row.BodyPosition;
-                    if(!Same(row.Body.position,row.BodyPosition)&&nativeSetGlobalPose!=null)
-                        RestoreExistingActorPose(row,null,velocity,angular,kinematic,gravity,"initial-position-fallback");
+                var sleepingKinematicPreimage=PrepareSleepingKinematicNativePoseRestore(row,nativeTarget);
+                bool restoredSleepingKinematicPose=TryRestoreSleepingKinematicPoseNatively(
+                    row,nativeTarget,sleepingKinematicPreimage,velocity,angular,kinematic,gravity,call);
+                if (!restoredSleepingKinematicPose) {
+                    // Unity Rigidbody and Transform expose distinct stored poses.
+                    // Restore the observed local transform before assigning the body;
+                    // do not infer either pose from the other or synchronize PhysX.
+                    if (!Same(row.Transform.localPosition, row.LocalPosition)) row.Transform.localPosition = row.LocalPosition;
+                    if (!Same(row.Transform.localRotation, row.LocalRotation)) row.Transform.localRotation = row.LocalRotation;
+                    if (!Same(row.Body.position, row.BodyPosition)) {
+                        row.Body.position = row.BodyPosition;
+                        if(!Same(row.Body.position,row.BodyPosition)&&nativeSetGlobalPose!=null)
+                            RestoreExistingActorPose(row,null,velocity,angular,kinematic,gravity,"initial-position-fallback");
+                    }
                 }
                 RestoreNativeShapePoses(row,nativeTarget,call,velocity,angular,kinematic,gravity);
                 int provisionalAssignments=0;
@@ -519,7 +540,8 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         private void RestoreCheckpointBody2World(Snapshot row,NativeShapeCheckpoint target,
-            Vector3 velocity,Vector3 angular,bool kinematic,bool gravity,string phase)
+            Vector3 velocity,Vector3 angular,bool kinematic,bool gravity,string phase,
+            bool requireTransformExact=true)
         {
             if(nativeRestoreBody2World==null||target==null)
                 throw new InvalidOperationException("Exact native body2World restore is unavailable: "+row.EntityId);
@@ -538,6 +560,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 ref actorPose,ref body2Actor,ref body2World,out receipt);
             var record=new Dictionary<string,object>{{"restoreCall",restoreCall},{"entityId",row.EntityId},
                 {"phase",phase},{"rigidbody",NativeHex(receipt.Rigidbody)},{"actor",NativeHex(receipt.Actor)},
+                {"requireTransformExact",requireTransformExact},
                 {"sceneBefore",NativeHex(receipt.SceneBefore)},{"sceneAfter",NativeHex(receipt.SceneAfter)},
                 {"apiScene",NativeHex(receipt.ApiScene)},{"controlStateBefore",receipt.ControlStateBefore},
                 {"controlStateAfter",receipt.ControlStateAfter},{"bodyBufferFlagsBefore",receipt.BodyBufferFlagsBefore},
@@ -594,8 +617,9 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateUnchanged(row,velocity,angular,kinematic,gravity);
             NativeBodyColliderCheckpoint.RequireRestored(row.Body,row.Colliders,true);
             if(!Same(row.Body.position,row.BodyPosition)||!Same(row.Body.rotation,row.BodyRotation)||
-                !Same(row.Transform.localPosition,row.LocalPosition)||!Same(row.Transform.localRotation,row.LocalRotation)||
-                !Same(row.Transform.position,row.WorldPosition)||!Same(row.Transform.rotation,row.WorldRotation))
+                (requireTransformExact&&(!Same(row.Transform.localPosition,row.LocalPosition)||
+                !Same(row.Transform.localRotation,row.LocalRotation)||!Same(row.Transform.position,row.WorldPosition)||
+                !Same(row.Transform.rotation,row.WorldRotation))))
                 throw new InvalidOperationException("Native exact body2World restore did not reconstruct every public pose: "+row.EntityId);
             record["sleepingBeforeAfter"]=sleeping;record["exact"]=true;
         }

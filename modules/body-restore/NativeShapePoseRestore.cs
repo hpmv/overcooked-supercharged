@@ -167,6 +167,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeCaptureShapePoses nativeCaptureShapePoses;
         private NativeRestoreShapePoses nativeRestoreShapePoses;
         private readonly List<object> nativeShapePoseRestores=new List<object>();
+        private readonly List<object> nativeSleepingKinematicPoseRestores=new List<object>();
         private readonly List<object> nativeShapeTopologyMismatches=new List<object>();
         private readonly List<object> nativeKinematicWakeMismatches=new List<object>();
         private readonly List<object> nativeKinematicStageObservations=new List<object>();
@@ -225,7 +226,8 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(nativeShapeCaptureHarmony!=null)return;
             if(nativeCaptureShapePoses==null||nativeRestoreShapePoses==null||nativeCaptureBody2World==null||
-                nativeRestoreBody2World==null||nativeRestoreWakeState==null||nativeGetKinematicTarget==null||cachedPtr==null)
+                nativeRestoreBody2World==null||nativeRestoreWakeState==null||nativeGetKinematicTarget==null||
+                nativeInvalidateKinematicTarget==null||cachedPtr==null)
                 throw new InvalidOperationException("Native shape/body-state capture requires the version-9 native helper.");
             if(nativeShapeCaptureOwner!=null)
                 throw new InvalidOperationException("Another native shape-pose capture module is active.");
@@ -967,6 +969,175 @@ namespace SuperchargedPatch.Authoring.Modules
         private static bool SameBits(NativeShapeGeometry a,NativeShapeGeometry b)
         {return a.Type==b.Type&&SameBits(a.Value0,b.Value0)&&SameBits(a.Value1,b.Value1)&&SameBits(a.Value2,b.Value2);}
 
+        private NativeShapeCheckpoint PrepareSleepingKinematicNativePoseRestore(
+            Snapshot row,NativeShapeCheckpoint target)
+        {
+            if(row==null||target==null||row.Body==null||!row.RawIsKinematic||!row.Body.isKinematic||
+                Same(row.Body.position,row.BodyPosition)||nativeRestoreBody2World==null||
+                !SameMassFrame(row.Invariants,CaptureInvariants(row.Body)))return null;
+            var current=CaptureNativeShapeCheckpoint(row.Body,row.Colliders);
+            if(!SameNativeShapeState(target,current)||
+                !SleepingTargetlessKinematic(target)||!SleepingTargetlessKinematic(current)||
+                !SameNativeKinematicTarget(target.KinematicTarget,current.KinematicTarget)||
+                !target.RigidbodyPointer.Equals(current.RigidbodyPointer)||
+                !target.Lifecycle.Actor.Equals(current.Lifecycle.Actor)||
+                !target.Lifecycle.BodySim.Equals(current.Lifecycle.BodySim)||
+                !target.Lifecycle.BodyCore.Equals(current.Lifecycle.BodyCore))return null;
+            // Whole-scene active/sleep/wake queues and dirty bitmap words can
+            // legitimately differ while preceding bodies in this restore pass
+            // are being processed. They are not an admission condition for
+            // moving this already stable, sleeping, targetless actor. The
+            // mutation checks below still require its complete current
+            // lifecycle receipt to remain bit-exact after every native/public
+            // pose step and after synthetic-target invalidation.
+            return current;
+        }
+
+        private bool TryRestoreSleepingKinematicPoseNatively(Snapshot row,NativeShapeCheckpoint target,
+            NativeShapeCheckpoint preTransform,Vector3 velocity,Vector3 angular,bool kinematic,
+            bool gravity,long call)
+        {
+            if(preTransform==null)return false;
+            var record=new Dictionary<string,object>{{"restoreCall",call},{"entityId",row.EntityId},
+                {"phase","initial-sleeping-kinematic-body2world"},{"exact",false},
+                {"preTransform",NativeBodyCheckpointDiagnostic(row,preTransform)}};
+            nativeSleepingKinematicPoseRestores.Add(record);
+            if(nativeSleepingKinematicPoseRestores.Count>128)
+                nativeSleepingKinematicPoseRestores.RemoveAt(0);
+            try {
+                // Move the targetless sleeping actor first. This can also make
+                // Unity's Transform storage exact without a public setter. If a
+                // setter is still required, Unity treats it as a new kinematic
+                // target and wakes the public view. Admit only those two exact
+                // outcomes and verify every native lifecycle field around them.
+                RestoreCheckpointBody2World(row,target,velocity,angular,kinematic,gravity,
+                    "initial-sleeping-kinematic-native-first",false);
+                var afterNative=CaptureNativeShapeCheckpoint(row.Body,row.Colliders);
+                record["afterNativePose"]=NativeBodyCheckpointDiagnostic(row,afterNative);
+                if(!SameNativeShapeState(target,afterNative)||
+                    !SameBits(target.ActorPose,afterNative.ActorPose)||
+                    !SameBits(target.Body2Actor,afterNative.Body2Actor)||
+                    !SameBits(target.Body2World,afterNative.Body2World)||
+                    target.WakeCounterBits!=afterNative.WakeCounterBits||
+                    target.BufferedIsSleeping!=afterNative.BufferedIsSleeping||
+                    target.BodySimActive!=afterNative.BodySimActive||
+                    !SameNativeKinematicTarget(preTransform.KinematicTarget,afterNative.KinematicTarget)||
+                    !SameNativeLifecycle(preTransform.Lifecycle,afterNative.Lifecycle))
+                    throw new InvalidOperationException("Native sleeping kinematic pose restore changed lifecycle state for "+row.EntityId+".");
+
+                if(!Same(row.Transform.localPosition,row.LocalPosition))row.Transform.localPosition=row.LocalPosition;
+                if(!Same(row.Transform.localRotation,row.LocalRotation))row.Transform.localRotation=row.LocalRotation;
+                // Capture target diagnostics even if Unity's public sleep view
+                // transiently differs; the explicit checks below remain strict.
+                var afterTransform=CaptureNativeShapeCheckpoint(row.Body,row.Colliders,false);
+                record["afterTransform"]=NativeBodyCheckpointDiagnostic(row,afterTransform);
+                bool publicSleepingAfterTransform=row.Body.IsSleeping();
+                bool transformTargetUnchanged=SameNativeKinematicTarget(
+                    afterNative.KinematicTarget,afterTransform.KinematicTarget);
+                bool syntheticTransformTarget=SyntheticTransformKinematicTargetOnly(
+                    afterNative.KinematicTarget,afterTransform.KinematicTarget,target.ActorPose);
+                bool transformStorageNoOp=transformTargetUnchanged&&publicSleepingAfterTransform;
+                bool transformStorageCreatedTarget=syntheticTransformTarget&&!publicSleepingAfterTransform;
+                record["transformStorageOutcome"]=transformStorageNoOp
+                    ?"already-exact-targetless-sleeping"
+                    :transformStorageCreatedTarget?"synthetic-target-created":"invalid";
+                if(!SameNativeShapeState(afterNative,afterTransform)||
+                    !SameBits(afterNative.ActorPose,afterTransform.ActorPose)||
+                    !SameBits(afterNative.Body2Actor,afterTransform.Body2Actor)||
+                    !SameBits(afterNative.Body2World,afterTransform.Body2World)||
+                    afterNative.WakeCounterBits!=afterTransform.WakeCounterBits||
+                    afterNative.BufferedIsSleeping!=afterTransform.BufferedIsSleeping||
+                    afterNative.BodySimActive!=afterTransform.BodySimActive||
+                    !SameNativeLifecycle(afterNative.Lifecycle,afterTransform.Lifecycle)||
+                    (!transformStorageNoOp&&!transformStorageCreatedTarget)||
+                    !Same(row.Body.position,row.BodyPosition)||!Same(row.Body.rotation,row.BodyRotation)||
+                    !Same(row.Transform.localPosition,row.LocalPosition)||
+                    !Same(row.Transform.localRotation,row.LocalRotation)||
+                    !Same(row.Transform.position,row.WorldPosition)||!Same(row.Transform.rotation,row.WorldRotation))
+                    throw new InvalidOperationException("Transform storage restore changed native-first sleeping kinematic state for "+row.EntityId+".");
+
+                if(transformStorageNoOp) {
+                    record["targetInvalidationSkipped"]="Transform storage was already exact and no synthetic kinematic target existed.";
+                    record["exact"]=true;return true;
+                }
+
+                NativeInvalidateKinematicTargetReceipt invalidate;
+                int invalidateOk=nativeInvalidateKinematicTarget(new UIntPtr(unityPlayerBase),
+                    target.RigidbodyPointer,out invalidate);
+                var invalidateRecord=new Dictionary<string,object>{{"restoreCall",call},{"entityId",row.EntityId},
+                    {"rigidbody",NativeHex(invalidate.Rigidbody)},{"actor",NativeHex(invalidate.Actor)},
+                    {"bodyCore",NativeHex(invalidate.BodyCore)},{"simStateData",NativeHex(invalidate.SimStateData)},
+                    {"unityIsKinematic",invalidate.UnityIsKinematic},
+                    {"simStateIsKinematic",invalidate.SimStateIsKinematic},
+                    {"targetValidBefore",invalidate.TargetValidBefore},
+                    {"targetValidAfter",invalidate.TargetValidAfter},{"result",invalidate.Result},
+                    {"lastError",invalidate.LastError},{"exact",false}};
+                nativeKinematicTargetInvalidations.Add(invalidateRecord);
+                if(nativeKinematicTargetInvalidations.Count>128)
+                    nativeKinematicTargetInvalidations.RemoveAt(0);
+                record["targetInvalidation"]=invalidateRecord;
+                if(invalidateOk!=1||invalidate.ApiVersion!=NativeHelperApiVersion||
+                    invalidate.StructSize!=(uint)Marshal.SizeOf(typeof(NativeInvalidateKinematicTargetReceipt))||
+                    invalidate.Result!=1||!invalidate.Rigidbody.Equals(target.RigidbodyPointer)||
+                    !invalidate.Actor.Equals(afterNative.Lifecycle.Actor)||
+                    !invalidate.BodyCore.Equals(afterNative.Lifecycle.BodyCore)||
+                    !invalidate.SimStateData.Equals(afterNative.KinematicTarget.SimStateData)||
+                    invalidate.UnityIsKinematic!=1||invalidate.SimStateIsKinematic!=1||
+                    invalidate.TargetValidBefore!=1||invalidate.TargetValidAfter!=0)
+                    throw new InvalidOperationException("Native synthetic kinematic-target invalidation failed for "+
+                        row.EntityId+": result="+invalidate.Result+" error="+invalidate.LastError+".");
+                var afterInvalidate=CaptureNativeShapeCheckpoint(row.Body,row.Colliders);
+                record["afterTargetInvalidation"]=NativeBodyCheckpointDiagnostic(row,afterInvalidate);
+                if(!SameNativeShapeState(afterNative,afterInvalidate)||
+                    !SameBits(afterNative.ActorPose,afterInvalidate.ActorPose)||
+                    !SameBits(afterNative.Body2Actor,afterInvalidate.Body2Actor)||
+                    !SameBits(afterNative.Body2World,afterInvalidate.Body2World)||
+                    afterNative.WakeCounterBits!=afterInvalidate.WakeCounterBits||
+                    afterNative.BufferedIsSleeping!=afterInvalidate.BufferedIsSleeping||
+                    afterNative.BodySimActive!=afterInvalidate.BodySimActive||
+                    !SameNativeKinematicTarget(afterNative.KinematicTarget,afterInvalidate.KinematicTarget)||
+                    !SameNativeLifecycle(afterNative.Lifecycle,afterInvalidate.Lifecycle)||!row.Body.IsSleeping())
+                    throw new InvalidOperationException("Native synthetic kinematic-target invalidation changed sleeping lifecycle for "+row.EntityId+".");
+                invalidateRecord["exact"]=true;
+                record["exact"]=true;return true;
+            }
+            catch(Exception error){record["error"]=error.ToString();throw;}
+        }
+
+        private static bool SleepingTargetlessKinematic(NativeShapeCheckpoint value)
+        {
+            return value!=null&&value.WakeCounterBits==0&&value.BufferedIsSleeping==1&&
+                value.BodySimActive==0&&value.KinematicTarget.UnityIsKinematic==1&&
+                value.KinematicTarget.PublicTargetValid==0&&value.KinematicTarget.ScbBodyBufferFlags==0&&
+                value.KinematicTarget.BufferedTargetValid==0&&value.KinematicTarget.SimStateIsKinematic==1&&
+                value.KinematicTarget.CoreTargetValid==0&&value.Lifecycle.LifecycleStable==1;
+        }
+
+        private static bool SyntheticTransformKinematicTargetOnly(NativeKinematicTargetReceipt before,
+            NativeKinematicTargetReceipt after,NativeRigidPose expectedTarget)
+        {
+            return before.UnityIsKinematic==1&&before.PublicTargetValid==0&&
+                before.ScbBodyBufferFlags==0&&before.BufferedTargetValid==0&&
+                before.SimStateIsKinematic==1&&before.CoreTargetValid==0&&
+                after.Actor.Equals(before.Actor)&&after.UnityIsKinematic==1&&
+                after.PublicTargetValid==1&&after.ScbBodyBufferFlags==0&&
+                after.BufferedTargetValid==0&&after.SimStateData.Equals(before.SimStateData)&&
+                after.SimStateIsKinematic==1&&after.CoreTargetValid==1&&
+                SameBits(after.Target,expectedTarget);
+        }
+
+        private static bool SameNativeShapeState(NativeShapeCheckpoint a,NativeShapeCheckpoint b)
+        {
+            if(a==null||b==null||a.Shapes==null||b.Shapes==null||a.Poses==null||b.Poses==null||
+                a.Geometries==null||b.Geometries==null||a.Shapes.Length!=b.Shapes.Length||
+                a.Poses.Length!=b.Poses.Length||a.Geometries.Length!=b.Geometries.Length||
+                a.Shapes.Length!=a.Poses.Length||a.Shapes.Length!=a.Geometries.Length)return false;
+            for(int i=0;i<a.Shapes.Length;i++)
+                if(!a.Shapes[i].Equals(b.Shapes[i])||!SameBits(a.Poses[i],b.Poses[i])||
+                    !SameBits(a.Geometries[i],b.Geometries[i]))return false;
+            return true;
+        }
+
         private void CaptureNativeShapeTargets(Snapshot[] snapshots)
         {
             if(snapshots==null)throw new ArgumentNullException("snapshots");
@@ -985,7 +1156,8 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         private NativeShapeCheckpoint CaptureNativeShapeCheckpoint(Rigidbody body,
-            SuperchargedPatch.NativeBodyColliderCheckpoint.Shape[] managedShapes)
+            SuperchargedPatch.NativeBodyColliderCheckpoint.Shape[] managedShapes,
+            bool requirePublicStateExact=true)
         {
             IntPtr bodyPointer=(IntPtr)cachedPtr.GetValue(body);
             if(bodyPointer==IntPtr.Zero)throw new InvalidOperationException("Native shape checkpoint Rigidbody pointer is null.");
@@ -1006,29 +1178,52 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"bufferedIsSleeping",bodyReceipt.BufferedIsSleeping},
                 {"bodySimActive",bodyReceipt.BodySimActive},{"publicIsSleeping",body.IsSleeping()},
                 {"lifecycle",NativeLifecycleDiagnostic(bodyReceipt)},
-                {"result",bodyReceipt.Result},{"lastError",bodyReceipt.LastError},{"exact",false}};
+                {"result",bodyReceipt.Result},{"lastError",bodyReceipt.LastError},
+                {"requirePublicStateExact",requirePublicStateExact},{"exact",false}};
             nativeBody2WorldCaptures.Add(bodyRecord);
             if(nativeBody2WorldCaptures.Count>128)nativeBody2WorldCaptures.RemoveAt(0);
             var publicPose=new NativeRigidPose {Px=body.position.x,Py=body.position.y,Pz=body.position.z,
                 Qx=body.rotation.x,Qy=body.rotation.y,Qz=body.rotation.z,Qw=body.rotation.w};
-            if(bodyOk!=1||bodyReceipt.ApiVersion!=NativeHelperApiVersion||
-                bodyReceipt.StructSize!=(uint)Marshal.SizeOf(typeof(NativeBody2WorldCaptureReceipt))||
-                bodyReceipt.Result!=1||!bodyReceipt.Rigidbody.Equals(nativePointer)||
-                bodyReceipt.ControlState!=2||bodyReceipt.BodyBufferFlags!=0||
-                bodyReceipt.SimulationRunning!=0||bodyReceipt.PhysicsBuffering!=0||
-                !SameBits(bodyReceipt.ActorPose,publicPose)||
-                !SameBits(bodyReceipt.BufferedBody2World,bodyReceipt.CoreBody2World)||
-                !Finite(bodyReceipt.ActorPose)||!Finite(bodyReceipt.Body2Actor)||
-                !Finite(bodyReceipt.BufferedBody2World)||bodyReceipt.BodySim.Equals(UIntPtr.Zero)||
-                bodyReceipt.WakeCounterBufferedBits!=bodyReceipt.WakeCounterCoreBits||
-                bodyReceipt.BufferedIsSleeping>1||bodyReceipt.BodySimActive>1||
-                bodyReceipt.BufferedIsSleeping==bodyReceipt.BodySimActive||
-                bodyReceipt.LifecycleStable!=1||bodyReceipt.BodyCore.Equals(UIntPtr.Zero)||
-                !bodyReceipt.BodyCoreBodySim.Equals(bodyReceipt.BodySim)||
-                (bodyReceipt.BodySimActive!=0&&!bodyReceipt.ActiveBodyAtSceneIndex.Equals(bodyReceipt.BodySim))||
-                (bodyReceipt.BufferedIsSleeping!=0)!=body.IsSleeping())
+            bodyRecord["publicPose"]=NativePoseDiagnostic(publicPose);
+            bodyRecord["publicPoseExact"]=SameBits(bodyReceipt.ActorPose,publicPose);
+            var captureProblems=new List<string>();
+            if(bodyOk!=1)captureProblems.Add("call-result="+bodyOk);
+            if(bodyReceipt.ApiVersion!=NativeHelperApiVersion)captureProblems.Add("api-version");
+            if(bodyReceipt.StructSize!=(uint)Marshal.SizeOf(typeof(NativeBody2WorldCaptureReceipt)))
+                captureProblems.Add("struct-size");
+            if(bodyReceipt.Result!=1)captureProblems.Add("native-result="+bodyReceipt.Result);
+            if(!bodyReceipt.Rigidbody.Equals(nativePointer))captureProblems.Add("rigidbody-identity");
+            if(bodyReceipt.ControlState!=2)captureProblems.Add("control-state="+bodyReceipt.ControlState);
+            if(bodyReceipt.BodyBufferFlags!=0)captureProblems.Add("body-buffer-flags="+bodyReceipt.BodyBufferFlags);
+            if(bodyReceipt.SimulationRunning!=0)captureProblems.Add("simulation-running");
+            if(bodyReceipt.PhysicsBuffering!=0)captureProblems.Add("physics-buffering");
+            if(requirePublicStateExact&&!SameBits(bodyReceipt.ActorPose,publicPose))
+                captureProblems.Add("public-pose");
+            if(!SameBits(bodyReceipt.BufferedBody2World,bodyReceipt.CoreBody2World))
+                captureProblems.Add("body2world-core");
+            if(!Finite(bodyReceipt.ActorPose))captureProblems.Add("actor-pose-nonfinite");
+            if(!Finite(bodyReceipt.Body2Actor))captureProblems.Add("body2actor-nonfinite");
+            if(!Finite(bodyReceipt.BufferedBody2World))captureProblems.Add("body2world-nonfinite");
+            if(bodyReceipt.BodySim.Equals(UIntPtr.Zero))captureProblems.Add("body-sim-null");
+            if(bodyReceipt.WakeCounterBufferedBits!=bodyReceipt.WakeCounterCoreBits)
+                captureProblems.Add("wake-counter-core");
+            if(bodyReceipt.BufferedIsSleeping>1)captureProblems.Add("buffered-sleep-range");
+            if(bodyReceipt.BodySimActive>1)captureProblems.Add("body-sim-active-range");
+            if(bodyReceipt.BufferedIsSleeping==bodyReceipt.BodySimActive)
+                captureProblems.Add("sleep-active-complement");
+            if(bodyReceipt.LifecycleStable!=1)captureProblems.Add("lifecycle-unstable");
+            if(bodyReceipt.BodyCore.Equals(UIntPtr.Zero))captureProblems.Add("body-core-null");
+            if(!bodyReceipt.BodyCoreBodySim.Equals(bodyReceipt.BodySim))
+                captureProblems.Add("body-core-body-sim");
+            if(bodyReceipt.BodySimActive!=0&&!bodyReceipt.ActiveBodyAtSceneIndex.Equals(bodyReceipt.BodySim))
+                captureProblems.Add("active-body-scene-slot");
+            bool publicSleeping=body.IsSleeping();
+            if(requirePublicStateExact&&(bodyReceipt.BufferedIsSleeping!=0)!=publicSleeping)
+                captureProblems.Add("public-sleep="+publicSleeping+" native-sleep="+bodyReceipt.BufferedIsSleeping);
+            if(captureProblems.Count!=0)
                 throw new InvalidOperationException("Native body2World capture failed: result="+
-                    bodyReceipt.Result+" error="+bodyReceipt.LastError);
+                    bodyReceipt.Result+" error="+bodyReceipt.LastError+" problems="+
+                    string.Join(",",captureProblems.ToArray()));
             NativeKinematicTargetReceipt kinematicTarget=default(NativeKinematicTargetReceipt);
             if(body.isKinematic)
             {

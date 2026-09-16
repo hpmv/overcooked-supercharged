@@ -1,5 +1,63 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Sleeping targetless kinematic rewind milestone (2026-09-15, BodyRestore
+> r44s / native API 11):** the previously failing committed-branch sequence is
+> now exact.  Fresh minimized/non-foreground evidence is under
+> `artifacts/framework-migration/story11-kinematic-native-v28-live-r1/`.
+> `second-delivery-f1045-r44s-exact-r1/summary.json` first proves the known
+> f1045 -> f1048 delivery cell unchanged: score 28 -> 56, orders/food/clocks,
+> all entities, native physics, Animator semantics, contact-pool order,
+> dirty-interaction order, and Transform dispatch all match.  The harness then
+> manually rewound to f1045, committed the exact replay prefix, advanced the
+> historical 30 neutral frames to f1077, rewound, and replayed.  The decisive
+> `neutral-reuse-f1045-r44s-r1/summary.json` passes every one of those same
+> comparisons with no changed entity IDs; its SHA-256 is
+> `08AE0EC2C0F3C1E84C6EDC1ABB1864C9F7211E32019AEC57AF54DAF9C9B7C79F`.
+> Both endpoint focus readings are false.
+>
+> Entity 49 was a stable, sleeping, targetless kinematic.  r44q's first
+> preflight incorrectly compared checkpoint-wide active/sleep/wake queues and
+> dirty bitmap words against the middle of the restore pass, although the
+> actor-local Rigidbody, actor, BodyCore, BodySim, island, target, sleep, mass,
+> and shape state all matched.  r44r removed only that whole-scene admission
+> test and retained bit-exact mutation checks.  The next live receipt proved
+> that native-first body2World restoration already made Unity's managed
+> Transform exact while preserving targetless/asleep state; the old code
+> nevertheless required the Transform step to create a synthetic target and
+> wake the actor.  r44s admits exactly two guarded outcomes: either storage is
+> already exact and the actor remains targetless/asleep, or Unity creates the
+> one expected synthetic target and the existing native invalidator clears it.
+> Every pose, shape, wake, lifecycle, target, identity, and managed Transform
+> postcondition remains strict.
+>
+> The successful BodyRestore receipt is
+> `body-status-after-r44s-neutral-reuse-pass-r1.json`, SHA-256
+> `4A80BFF891D50D3C2158A442E2EA96059DF025258B297346D330B6471186A798`.
+> It records one exact entity-49 restore at restore call 9 with outcome
+> `already-exact-targetless-sleeping`, explicitly skips target invalidation
+> because no target exists, and records no invalidation calls.  The retained
+> fallback uses the verified PhysX 3.3.3
+> `Sc::BodyCore::invalidateKinematicTarget` body at UnityPlayer RVA `0xA3A5A0`
+> only for an observed 1 -> 0 synthetic target.  Native helper DLL SHA-256 is
+> `E2A1569A586CA8488A110BAECD47865FA31C79F0923FB36FCB395D36AC4302A1`;
+> managed r44s DLL SHA-256 is
+> `F5913CB566A59703E37E48B91F504259ECC3B9D2839C5B5AC778E2C1BCD44482`.
+> The offline BodyRestore suite passes 248 checks.  These paths run only inside
+> an explicit paused authoring restore; ordinary forward physics, chef
+> animation attachment motion, dash/drop plate throwing, and synchronization
+> behavior are unchanged.
+>
+> The exact fixture is the prior 15 input prefixes plus a 90-frame neutral
+> settle.  Omitting that settle reaches f955, not f1045, and exercises a
+> different collider-ancestor checkpoint; preserve v26's diagnostic rather
+> than treating it as this cell.  At this writing the successful v28 game is
+> PID 41192 / UTC start ticks 639251153387417580 and the Story11 host is PID
+> 3212 / ticks 639251154025368021, paused and fenced after the f1077 replay.
+> Revalidate identities before reuse.  Search remains disabled.  The next
+> broader-parity target is the later delivery/destruction boundary whose
+> abandoned branch requires the already-known `[34,0,0] -> [2]` historical
+> factory transaction, followed by additional non-adjacent/repeated cells.
+
 > **Dirty-interaction projection milestone (2026-09-15, API 11):** the
 > checkpoint sidecar can now restore across legitimate alternate branches
 > whose live dirty-interaction membership differs.  Projection leaves every

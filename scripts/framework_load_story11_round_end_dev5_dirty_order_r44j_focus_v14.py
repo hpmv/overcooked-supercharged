@@ -10,7 +10,7 @@ loader.STACK = tuple(
     (slot,
      "RigidbodyActorRebuild-r14e-dirty-projection-core-bg4-v14-r44i"
      if slot == "rigidbody-actor-rebuild" else
-     "BodyRestore-r44k-api11-dirty-projection-core-bg4-v14"
+     "BodyRestore-r44s-sleeping-kinematic-noop-transform-core-bg4-v14"
      if slot == "body-restore" else revision,
      activation)
     for slot, revision, activation in loader.STACK
@@ -20,9 +20,9 @@ loader.NATIVE_OPTIONS = dict(loader.NATIVE_OPTIONS)
 loader.NATIVE_OPTIONS["actor"] = dict(loader.NATIVE_OPTIONS.get("actor", {}))
 loader.NATIVE_OPTIONS["actor"]["dirtyInteractionRestoreProjection"] = True
 native = (
-    Path("framework/artifacts/native-rigidbody-rebuild-r18-dirty-projection-cmake1/"
+    Path("framework/artifacts/native-rigidbody-rebuild-r19-target-invalidate-cmake2/"
          "Oc2NativeRigidbodyRebuild.dll"),
-    "C6E1525C4011B7A2606D5B7CCEE914291BD9B033C3E618235BA06C5FF3470BE3",
+    "E2A1569A586CA8488A110BAECD47865FA31C79F0923FB36FCB395D36AC4302A1",
 )
 loader.NATIVE["actor"] = native
 loader.NATIVE["body"] = native

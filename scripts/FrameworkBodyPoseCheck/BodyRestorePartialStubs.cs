@@ -25,6 +25,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeCaptureShapePoses nativeCaptureShapePoses;
         private NativeRestoreShapePoses nativeRestoreShapePoses;
         private readonly List<object> nativeShapePoseRestores=new List<object>();
+        private readonly List<object> nativeSleepingKinematicPoseRestores=new List<object>();
         private readonly List<object> nativeBody2WorldCaptures=new List<object>();
         private readonly List<object> nativeShapeTopologyMismatches=new List<object>();
         private readonly List<object> nativeKinematicWakeMismatches=new List<object>();
@@ -197,6 +198,11 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         private void RestoreNativeShapePoses(Snapshot row,NativeShapeCheckpoint target,long call,
             Vector3 velocity,Vector3 angular,bool kinematic,bool gravity) {}
+        private NativeShapeCheckpoint PrepareSleepingKinematicNativePoseRestore(
+            Snapshot row,NativeShapeCheckpoint target) {return null;}
+        private bool TryRestoreSleepingKinematicPoseNatively(Snapshot row,NativeShapeCheckpoint target,
+            NativeShapeCheckpoint preTransform,Vector3 velocity,Vector3 angular,bool kinematic,
+            bool gravity,long call) {return false;}
 
         private bool Finite(NativeRigidPose pose)
         {
