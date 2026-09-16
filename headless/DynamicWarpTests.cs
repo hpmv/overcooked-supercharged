@@ -191,6 +191,21 @@ public static class DynamicWarpTests
             sameDynamicRebranch["retainedHistoricalAncestorPaths"]!.AsArray().Any(path => path!.ToJsonString() == "[68,0]") &&
             sameDynamic.audit.RequireGraphMappings(sameDynamic.live, 20)["spawnedMappings"]!.AsArray().Count == 1,
             "same dynamic target without fresh registration retains the consumed native parent receipt");
+        var deeperHistory = Fixture();
+        deeperHistory.prepared.existed.ChangeTo(false, 30);
+        deeperHistory.live.Remove(124); deeperHistory.audit.ObserveRemoval(124);
+        var deeperHistoryRebranch = deeperHistory.audit.RebranchAfterSuccessfulWarp(deeperHistory.live, 30, new HashSet<int>());
+        Check(deeperHistoryRebranch["discardedFuturePaths"]!.AsArray().Count == 0,
+            "later fixed target does not discard mappings first observed on its retained history");
+        Check(deeperHistoryRebranch["retainedHistoricalPaths"]!.AsArray().Any(path => path!.ToJsonString() == "[68,0]") &&
+            deeperHistoryRebranch["retainedHistoricalPaths"]!.AsArray().Any(path => path!.ToJsonString() == "[68,0,0]"),
+            "later fixed target reports both consumed historical mappings as retained");
+        Check(deeperHistory.audit.RequireWarpPaths(deeperHistory.live, 30, 10, caps)["dynamicMappings"]!.AsArray().Count == 1,
+            "retained raw mapping admits a subsequent deeper rewind");
+        var preparedHistoryWarp = deeperHistory.audit.RequireWarpPaths(deeperHistory.live, 30, 20, caps);
+        Check(preparedHistoryWarp["dynamicMappings"]!.AsArray().Count == 1 &&
+            preparedHistoryWarp["dynamicMappings"]![0]!["spawnChain"]!.AsArray().Count == 3,
+            "retained consumed-parent receipt authenticates the prepared mapping's complete chain on a subsequent deeper rewind");
         sameDynamic.live.Remove(124);
         var fixedBaselineRebranch = sameDynamic.audit.RebranchAfterSuccessfulWarp(sameDynamic.live, 0, new HashSet<int>());
         Check(fixedBaselineRebranch["discardedFuturePaths"]!.AsArray().Any(path => path!.ToJsonString() == "[68,0]") &&

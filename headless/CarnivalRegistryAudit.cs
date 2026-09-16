@@ -240,10 +240,20 @@ public sealed class CarnivalRegistryAudit
         foreach (var entity in live.Values.Where(entity => entity.existed[frame]))
             for (var ancestor = entity.spawner; ancestor is not null; ancestor = ancestor.spawner)
                 if (ancestor.path.ids.Length > 1 && !ancestor.existed[frame]) retainedAncestors.Add(ancestor);
+        // A record absent at the target is not necessarily from the abandoned
+        // future: it may have existed and been consumed earlier on the retained
+        // branch.  Keep those receipts so a later non-adjacent rewind can still
+        // authenticate the historical spawn chain.  FirstFrame is the first
+        // actual native mapping observation for this logical record, so only a
+        // receipt first observed after the target can belong exclusively to the
+        // discarded future.
         var discarded = mappedReceipts.Where(pair => pair.Key.path.ids.Length > 1 && !pair.Key.existed[frame] &&
-                !retainedAncestors.Contains(pair.Key))
+                !retainedAncestors.Contains(pair.Key) && pair.Value.FirstFrame > frame)
             .Select(pair => pair.Key).ToArray();
         foreach (var entity in discarded) mappedReceipts.Remove(entity);
+        var retainedHistory = mappedReceipts.Where(pair => pair.Key.path.ids.Length > 1 && !pair.Key.existed[frame] &&
+                !retainedAncestors.Contains(pair.Key) && pair.Value.FirstFrame <= frame)
+            .Select(pair => pair.Key).ToArray();
         var rebased = new JsonArray();
         foreach (var (id, entity) in live.OrderBy(pair => pair.Key))
         {
@@ -270,12 +280,14 @@ public sealed class CarnivalRegistryAudit
         return new JsonObject { ["frame"] = frame, ["active"] = true,
             ["freshlyRegisteredIds"] = JsonSerializer.SerializeToNode(freshlyRegisteredIds.Order()),
             ["discardedFuturePaths"] = JsonSerializer.SerializeToNode(discarded.Select(entity => entity.path.ids)),
+            ["retainedHistoricalPaths"] = JsonSerializer.SerializeToNode(retainedHistory
+                .OrderBy(entity => string.Join(",", entity.path.ids)).Select(entity => entity.path.ids)),
             ["retainedHistoricalAncestorPaths"] = JsonSerializer.SerializeToNode(retainedAncestors
                 .Where(mappedReceipts.ContainsKey).OrderBy(entity => string.Join(",", entity.path.ids)).Select(entity => entity.path.ids)),
             ["rebasedCurrentMappings"] = rebased,
             ["fixedReincarnation"] = fixedReincarnationResult,
             ["nativeStateChanged"] = false,
-            ["scope"] = "Successful-warp controller bookkeeping only: receipts exclusive to the abandoned future are discarded; observed metadata for consumed ancestors of current target entities is retained; current dynamic mappings are rebased only from registry rows delivered by the verified warp acknowledgement. The Story 1-1 initial plate/container exception admits only the exact paired recreation metadata produced by the native restore." };
+            ["scope"] = "Successful-warp controller bookkeeping only: receipts first observed after the target and exclusive to the abandoned future are discarded; earlier historical receipts and observed metadata for consumed ancestors of current target entities are retained for later deeper rewinds; current dynamic mappings are rebased only from registry rows delivered by the verified warp acknowledgement. The Story 1-1 initial plate/container exception admits only the exact paired recreation metadata produced by the native restore." };
     }
     private JsonObject RebranchStory11InitialPlateReincarnation(IReadOnlyDictionary<int, GameEntityRecord> live, int frame,
         IReadOnlySet<int> freshlyRegisteredIds)

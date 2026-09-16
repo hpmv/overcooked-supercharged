@@ -1945,3 +1945,49 @@ so current evidence places this below Animator evaluation.  A clean process
 must install the read-only native physics tracer before the hooked rewind stack
 to compare the original and replay simulation calls; late installation
 correctly failed its entry-byte revision guard.  Search remains disabled.
+
+## 2026-09-15: sleeping-kinematic parity and persistent controller history
+
+Commit `356a675` closes the later f1045/f1077 sleeping targetless-kinematic
+drift.  BodyRestore r44s uses native API 11 to preserve the exact sleeping
+kinematic state; the working native helper is
+`artifacts/native-rigidbody-rebuild-r19-target-invalidate-cmake2/Oc2NativeRigidbodyRebuild.dll`
+(SHA-256 `E2A15632E0409AD6D034E7D0B51FF9442AFF8B13C638BE0F7E389ABF634302A1`).
+The managed r44s DLL SHA-256 is
+`F5913C7983A152DC7A91D507423FC03EE9A4A3A6D5D219581B42B7F684D44482`;
+the v14 core SHA-256 is
+`A4B50DB0CAF564CFCED075DADEA6109CA14F3A0C2D7C16A9310954D0C7DE960F`.
+
+The next non-adjacent rewind exposed a controller-only history bug.  A
+successful shallow rebranch to f1045 erased consumed dynamic spawn receipts
+whose objects were absent at that target even though they had first existed on
+the retained prefix.  The affected Story 1-1 paths were `[30,0]`, `[30,0,0]`,
+`[30,1]`, and `[30,1,0]`.  `CarnivalRegistryAudit` now discards an absent
+receipt only when its first native observation is later than the rewind target;
+earlier consumed receipts remain as authentication history for a subsequent
+deeper rewind.  This changes controller validation bookkeeping only and reports
+`nativeStateChanged=false`; it does not call or mutate the game.
+
+The fixed headless build is
+`artifacts/framework-headless-host-v12q9d-deep-history/Headless.dll`, SHA-256
+`B7544877DDF735D74B0EE6DD1624323387B5EEF4AC4A540F37781EBCB727B6B9`.
+Its broad offline selftest passed 391 checks.  The clean v31 live fixture
+`story11-kinematic-native-v31-live-r1/second-delivery-f1045-r44s-history-r1/summary.json`
+again proves the exact f1045-to-f1048 rewind/replay and reports all four paths
+under `retainedHistoricalPaths`.  The subsequent f1048-to-f444 request passed
+registry/controller preflight and entered native restore preparation, proving
+that the old missing-receipt failure is gone.  It then failed closed before any
+restore mutation in DeliveryFadeCheckpoint because f444 is inside the first
+plate's delivery fade.
+
+Read-only extraction from the retained r10k sidecar established the exact f444
+state: plate entity 2 has iterator `$PC=2`, progress `0.3`, `$current=null`, two
+disabled colliders, two fade-shader materials at alpha `0.733333349`, and a live
+detached `PFX_Delivery`.  At f1048 that first iterator is terminal while plate
+entity 1 is in a separate future fade.  The next parity implementation must
+therefore compose two inverse operations: cancel entity 1's future fade back to
+its ordinary f444 plate state, and recreate entity 2 through the proven native
+factory into the exact already-yielded fade state.  Native checkpoint preflight
+also requires a scoped temporary mask of the target snapshot's delivery-fade
+count, restored before its final exact-boundary capture.  Search remains
+disabled.
