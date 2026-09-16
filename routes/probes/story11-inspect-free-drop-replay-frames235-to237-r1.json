@@ -1,0 +1,9 @@
+[
+  {"target":"controller","request":{"command":"status"}},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-frame","args":{"frame":235}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-frame","args":{"frame":236}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-frame","args":{"frame":237}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

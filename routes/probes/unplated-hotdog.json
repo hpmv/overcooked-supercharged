@@ -1,0 +1,9 @@
+{"phases":[
+ {"actions":[{"type":"take","player":2,"station":"HotdogBun"}]},
+ {"actions":[{"type":"place","player":2,"station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"actions":[{"type":"chop","player":2,"station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"actions":[{"type":"take","player":0,"station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"actions":[{"type":"cook","player":0,"station":"pot:dlc08_utensil_pot_01@16.80,-10.80","timeoutFrames":900}]},
+ {"actions":[{"type":"combine","player":0,"station":"pot:dlc08_utensil_pot_01@16.80,-10.80","expectedIngredient":"Frankfurter"}]},
+ {"actions":[{"type":"place","player":0,"station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]}
+]}

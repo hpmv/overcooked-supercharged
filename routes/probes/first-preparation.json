@@ -1,0 +1,7 @@
+{"phases":[
+ {"name":"sausage-from-pantry","actions":[{"player":2,"type":"take","station":"Frankfurter"},{"player":0,"type":"navigate","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"}]},
+ {"name":"sausage-handoff","actions":[{"player":2,"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"}]},
+ {"name":"pot-and-bun","actions":[{"player":0,"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"},{"player":2,"type":"take","station":"HotdogBun"}]},
+ {"name":"start-boiling-and-chopping","actions":[{"player":0,"type":"place","station":"pot:dlc08_utensil_pot_01@16.80,-10.80"},{"player":2,"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"}]},
+ {"name":"chop-bun","actions":[{"player":2,"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"},{"player":0,"type":"take","station":"plate:equipment_plate_01@19.20,-15.60"}]}
+]}

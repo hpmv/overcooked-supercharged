@@ -20,8 +20,8 @@ public class EntityAuxMessage : Serialisable
 
     public void Serialise(BitStreamWriter writer)
     {
-        writer.Write((uint)m_auxEntityType, 8);
         m_entityHeader.Serialise(writer);
+        writer.Write((uint)m_auxEntityType, 8);
         m_payload.Serialise(writer);
     }
 
@@ -35,4 +35,6 @@ public enum AuxEntityType: byte
     ThrowableItemAux,
     PlateReturnControllerAux,
     RoundDataAux,
+    NativeCannonAux = 3,
+    PlateLifecycleAux = 4,
 }

@@ -1,0 +1,1591 @@
+[
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 3,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": -0.12253253906965256,
+            "y": 0.9924644231796265,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886784911155701,
+            "y": -0.45853084325790405,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": -0.12253271043300629,
+            "y": 0.9924644827842712,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886784911155701,
+            "y": -0.4585307836532593,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": true,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886784315109253,
+            "y": -0.4585309624671936,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886784315109253,
+            "y": -0.4585309624671936,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886783719062805,
+            "y": -0.45853114128112793,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886781930923462,
+            "y": -0.45853129029273987,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886781334877014,
+            "y": -0.4585314989089966,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886780738830566,
+            "y": -0.45853158831596375,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886780142784119,
+            "y": -0.4585316777229309,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886780738830566,
+            "y": -0.45853182673454285,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886779546737671,
+            "y": -0.45853191614151,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886778950691223,
+            "y": -0.45853203535079956,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886778354644775,
+            "y": -0.4585321843624115,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886777758598328,
+            "y": -0.4585323631763458,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886776566505432,
+            "y": -0.45853251218795776,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886774778366089,
+            "y": -0.4585326910018921,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886774182319641,
+            "y": -0.4585329294204712,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886772394180298,
+            "y": -0.4585331678390503,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886772990226746,
+            "y": -0.45853322744369507,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886773586273193,
+            "y": -0.45853298902511597,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886774778366089,
+            "y": -0.4585327208042145,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.888677716255188,
+            "y": -0.458532452583313,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.888677716255188,
+            "y": -0.4585324227809906,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.888677716255188,
+            "y": -0.4585323631763458,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886774778366089,
+            "y": -0.45853281021118164,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886771202087402,
+            "y": -0.458533376455307,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886767625808716,
+            "y": -0.45853424072265625,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886765241622925,
+            "y": -0.4585346579551697,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": -0.8886767625808716,
+            "y": -0.45853424072265625,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": true,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.211191788315773,
+            "y": 0.9774446487426758,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.20886240899562836,
+            "y": 0.9779450297355652,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.20886263251304626,
+            "y": 0.9779450297355652,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.08772609382867813,
+            "y": 0.996144711971283,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.07997779548168182,
+            "y": 0.9967966079711914,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0711808130145073,
+            "y": 0.9974634051322937,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0699755921959877,
+            "y": 0.9975486993789673,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06918960809707642,
+            "y": 0.9976035356521606,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06918950378894806,
+            "y": 0.9976035356521606,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06912245601415634,
+            "y": 0.9976082444190979,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06911624222993851,
+            "y": 0.9976086616516113,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0691087543964386,
+            "y": 0.9976091384887695,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06910689175128937,
+            "y": 0.9976092576980591,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 2,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06910549849271774,
+            "y": 0.9976093173027039,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.06910490989685059,
+            "y": 0.9976093769073486,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": true,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "44": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "45": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          },
+          "46": {
+            "x": 0.0,
+            "y": 0.0,
+            "pickup": false,
+            "interact": false,
+            "dash": false
+          }
+        }
+      }
+    ]
+  }
+]

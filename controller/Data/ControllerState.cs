@@ -27,6 +27,7 @@ namespace Hpmv {
         public TimeSpan pickupCooldown;
         public bool primaryButtonDown;
         public bool secondaryButtonDown;
+        public bool dashButtonDown;
         public TimeSpan buttonDownDurationLeft;
         public Vector2 axesVelocity;
         public Vector2 axesAcceleration;
@@ -167,7 +168,12 @@ namespace Hpmv {
             }
             output.primary.isDown = copy.primaryButtonDown;
             output.secondary.isDown = copy.secondaryButtonDown;
-            output.dash.justPressed = input.dash;
+            // Dash is a held logical button, like the native input provider.
+            // A requested edge without Down cannot be consumed by that provider.
+            output.dash.isDown = input.dash;
+            output.dash.justPressed = input.dash && !dashButtonDown;
+            output.dash.justReleased = !input.dash && dashButtonDown;
+            copy.dashButtonDown = input.dash;
             return (copy.AdvanceFrame(), output);
         }
 
@@ -178,6 +184,7 @@ namespace Hpmv {
                 PickupCooldown = pickupCooldown.TotalMilliseconds,
                 PrimaryButtonDown = primaryButtonDown,
                 SecondaryButtonDown = secondaryButtonDown,
+                DashButtonDown = dashButtonDown,
                 ButtonDownDurationLeft = buttonDownDurationLeft.TotalMilliseconds,
                 AxesVelocity = axesVelocity.ToProto(),
                 AxesAcceleration = axesAcceleration.ToProto(),
@@ -195,6 +202,7 @@ namespace Hpmv {
                 pickupCooldown = TimeSpan.FromMilliseconds(state.PickupCooldown),
                 primaryButtonDown = state.PrimaryButtonDown,
                 secondaryButtonDown = state.SecondaryButtonDown,
+                dashButtonDown = state.DashButtonDown,
                 buttonDownDurationLeft = TimeSpan.FromMilliseconds(state.ButtonDownDurationLeft),
                 axesVelocity = state.AxesVelocity?.FromProto() ?? default,
                 axesAcceleration = state.AxesAcceleration?.FromProto() ?? default,

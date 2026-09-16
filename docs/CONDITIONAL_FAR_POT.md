@@ -1,0 +1,9 @@
+# Optional far-pot supply candidate
+
+`--conditional-far-pot` is off by default. It permits an ordinary ingredient throw only for the Carnival 3-4 lane demonstrated in `artifacts/empty-lane-far-pot-a-proof.json`: chef 2 near `(13.6, -12.2)`, native throw force 18/inclination 12, one sausage occupying the nearer pot, the farther pot empty, and the upper-left onion board empty. Stations are resolved from their observed roles, coordinates, native attachment links, and observation ordinals. IDs from the recorded example are not runtime selectors.
+
+The job reserves the ingredient crate, both pots and their stove homes, the onion board, and the upper-left fallback counter until native arrival or ordinary fallback placement completes. Other planner jobs cannot consume or refill these resources during flight. The staged unplated-resource option does not release this job's leases.
+
+The action checks the same observations immediately before its native arming and release edges. A changed lane before arming changes the action to ordinary placement on its still-valid, reserved counter; the existing addressed relay retains the exact far-pot destination. An unavailable fallback fails before arming. A changed lane after an unsuppressed arming edge, including the suppression-cleared transition, fails the candidate explicitly. Neutral error cleanup may release the ingredient; this is not a cancellation or food-retention guarantee.
+
+After release, the existing vessel observer requires source consumption and an exact ingredient-multiset increase in the selected vessel. The candidate does not modify native velocity, collision geometry, timers, or food. The mechanism has one successful native probe. The optional planner route and its throughput benefit still require native trials. Offline captured-state and synthetic barrier tests cover blocked lanes, identity changes, ownership, prearm fallback, suppression edges, release failures, and exact catch completion.

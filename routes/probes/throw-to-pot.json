@@ -1,0 +1,1 @@
+{"phases":[{"name":"native-sausage-catch","actions":[{"type":"throw","player":2,"targetEntityId":2,"timeoutFrames":180}]}]}

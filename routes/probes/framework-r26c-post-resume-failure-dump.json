@@ -1,0 +1,10 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-resume-ready-public-state","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-resume-ready-native-state","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-resume-ready-owner-state","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-live-owner-graph","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r10a-complete-owner-diagnostic-build\\Oc2NativeAnimatorCheckpoint.r10a.dll","sha256":"21155B99A0AB1BD0DE979908F5447AEE1D18D5E04C455A3600DC06C1A8CD5FF0"}}},
+  {"target":"controller","request":{"command":"status"}}
+]

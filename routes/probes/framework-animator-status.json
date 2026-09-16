@@ -1,0 +1,3 @@
+[
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

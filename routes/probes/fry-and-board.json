@@ -1,0 +1,1 @@
+{"phases":[{"name":"transfer-dough-and-board","actions":[{"type":"combine","player":3,"station":"basket:dlc08_frierbasket@24.00,-21.60"},{"type":"board-cannon","player":1,"cannon":"right"}]}]}

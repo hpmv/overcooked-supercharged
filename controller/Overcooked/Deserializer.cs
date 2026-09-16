@@ -58,7 +58,7 @@ namespace Hpmv {
             // SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.HordeEnemy, default(HordeEnemyMessage));
             // SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.HordeLockable, new HordeLockableMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.PickupItemSwitcher, () => new PickupItemSwitcherMessage());
-            SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.Cannon, () => new CannonModMessage());  // MODDED
+            SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.Cannon, () => new CannonMessage());  // Exact native wire format.
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.PilotRotation, () => new PilotRotationMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.TriggerColourCycle, () => new TriggerColourCycleMessage());
             SerialisationRegistry<EntityType>.RegisterMessageType(EntityType.MultiTriggerDisable, () => new TriggerDisableMessage());
@@ -66,6 +66,8 @@ namespace Hpmv {
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.ThrowableItemAux, () => new ThrowableItemAuxMessage());
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.PlateReturnControllerAux, () => new PlateReturnControllerAuxMessage());  // MODDED
             SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.RoundDataAux, () => new RoundDataAuxMessage());
+            SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.NativeCannonAux, () => new NativeCannonAuxMessage());
+            SerialisationRegistry<AuxEntityType>.RegisterMessageType(AuxEntityType.PlateLifecycleAux, () => new PlateLifecycleAuxMessage());
 
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntitySynchronisation, () => new EntitySynchronisationMessage());
             SerialisationRegistry<MessageType>.RegisterMessageType(MessageType.EntityEvent, () => new EntityEventMessage());

@@ -7,20 +7,25 @@ using UnityEngine;
 public class CannonMessage : Serialisable {
 	// Token: 0x0600141A RID: 5146 RVA: 0x0006DED4 File Offset: 0x0006C2D4
 	public void Serialise(BitStreamWriter writer) {
-		throw new NotImplementedException();
+		writer.Write((uint)m_state, m_stateBits);
+		writer.Write(m_angle);
+		writer.Write(m_loadedObject > 0);
+		if (m_loadedObject > 0) new EntityMessageHeader { m_uEntityID = (uint)m_loadedObject }.Serialise(writer);
 	}
 
 	// Token: 0x0600141B RID: 5147 RVA: 0x0006DF2C File Offset: 0x0006C32C
 	public bool Deserialise(BitStreamReader reader) {
+		if (reader.RemainingBits < 35) return false;
 		this.m_state = (CannonMessage.CannonState) reader.ReadUInt32(2);
 		this.m_angle = reader.ReadFloat32();
 		if (reader.ReadBit()) {
+			if (reader.RemainingBits < 10) return false;
 			this.m_entityHeader.Deserialise(reader);
 			this.m_loadedObject = (int) this.m_entityHeader.m_uEntityID;
 		} else {
 			this.m_loadedObject = -1;
 		}
-		return true;
+		return m_state <= CannonState.Unload && !float.IsNaN(m_angle) && !float.IsInfinity(m_angle);
 	}
 
 	// Token: 0x04000F7F RID: 3967

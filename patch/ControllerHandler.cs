@@ -9,6 +9,7 @@ namespace SuperchargedPatch
     public static class ControllerHandler
     {
         public static MultiplayerController MultiplayerController;
+        public static long CaptureCount, CaptureTicks, LastCaptureTicks;
 
         public static void LateUpdate()
         {
@@ -16,6 +17,15 @@ namespace SuperchargedPatch
             // is done as part of MultiplayerController.LateUpdate(), but we're also executing in
             // LateUpdate so the order is not deterministic.
             MultiplayerController?.FlushAllPendingBatchedMessages();
+
+            // While paused, a missing RPC reply must not block Unity or create
+            // another accepted frame. Preserve native messages for the reply.
+            Hpmv.InputData pausedInput;
+            if (Helpers.IsPaused() && !Injector.Server.TryGetCurrentInput(out pausedInput))
+            {
+                Injector.Server.SkipPausedCallback();
+                return;
+            }
 
             if (Helpers.IsPaused())
             {
@@ -29,20 +39,29 @@ namespace SuperchargedPatch
                     ActiveStateCollector.NotifyFrame(Injector.Server.CurrentInput.NextFrame);
                 }
             }
+            long captureStart = System.Diagnostics.Stopwatch.GetTimestamp();
             ActiveStateCollector.CollectDataForFrame(data);
+            LastCaptureTicks = System.Diagnostics.Stopwatch.GetTimestamp() - captureStart;
+            CaptureTicks += LastCaptureTicks;
+            CaptureCount++;
             data.LastFramePaused = Helpers.IsPaused();
-            if (Injector.Server.CurrentInput.RequestPause)
+            bool terminalPauseApplied = NativeRoundEndLatch.ApplyPendingPause();
+            if (!terminalPauseApplied)
             {
-                Helpers.Pause();
-            }
-            else if (Injector.Server.CurrentInput.RequestResume)
-            {
-                Helpers.Resume();
+                if (Injector.Server.CurrentInput.RequestPause)
+                {
+                    Helpers.Pause();
+                }
+                else if (Injector.Server.CurrentInput.RequestResume)
+                {
+                    Helpers.Resume();
+                }
             }
             StateInvalidityManager.PreventInvalidState = Injector.Server.CurrentInput.PreventInvalidState;
 
             data.NextFramePaused = TimeManager.IsPaused(TimeManager.PauseLayer.Main);
             Injector.Server.CommitFrame();
+            NativeRoundEndLatch.CommitCapabilityPublication();
         }
 
         public static void FixedUpdate()
@@ -113,8 +132,9 @@ namespace SuperchargedPatch
     public static class PatchServerFlowControllerBaseChangeGameState
     {
         [HarmonyPostfix]
-        public static void Postfix(GameState state)
+        public static void Postfix(ServerFlowControllerBase __instance, GameState state)
         {
+            NativeRoundEndLatch.AfterServerStateChange(__instance, state);
             if (state == GameState.InLevel)
             {
                 Console.WriteLine("At game start, physics phase shift is " + ControllerHandler.FramesSinceLastNoPhysicsFrame);

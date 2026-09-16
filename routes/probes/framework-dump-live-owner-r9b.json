@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-live-owner-graph","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r9b-end-transition-byte-a4-build\\Oc2NativeAnimatorCheckpoint.r9b.dll","sha256":"80D7466BC22DEC97604A27281D2213B884321322C6717C8409405FF507B32F31"}}}
+]

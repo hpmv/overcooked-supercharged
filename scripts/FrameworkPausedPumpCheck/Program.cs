@@ -1,0 +1,78 @@
+using System.Diagnostics;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
+using Hpmv;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
+using SuperchargedPatch;
+
+var checks=new List<string>();void Check(bool value,string name){if(!value)throw new Exception(name);checks.Add(name);}
+var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+object Get(object value,string name)=>value.GetType().GetField(name,flags)!.GetValue(value);
+void Set(object value,string name,object next)=>value.GetType().GetField(name,flags)!.SetValue(value,next);
+object Invoke(object value,string name,params object[] args)=>value.GetType().GetMethod(name,flags)!.Invoke(value,args);
+object Dequeue(object q)=>q.GetType().GetMethod("Dequeue")!.Invoke(q,new object[]{TimeSpan.Zero});
+void Reply(InjectorServer server,object observation,InputData input,bool controller=true)=>Invoke(server,"PublishReply",observation,input,controller);
+long Counter(InjectorServer server,string key)=>(long)((Dictionary<string,object>)server.Diagnostics())[key];
+var queue=new BlockingQueue<string>();
+Check(!queue.TryDequeue(out var empty)&&empty==null,"empty queue polling returns immediately without a fabricated item");
+queue.Enqueue("first");queue.Enqueue("second");Check(queue.PeekSize()==2&&queue.TryDequeue(out var one)&&one=="first"&&queue.Dequeue(TimeSpan.Zero)=="second","queue preserves FIFO and locked count");
+try{queue.Dequeue(TimeSpan.Zero);throw new Exception("accepted");}catch(TimeoutException){checks.Add("empty zero-time blocking dequeue rejects");}
+var producer=new Thread(()=>{for(int i=0;i<1000;i++)queue.Enqueue(i.ToString());});producer.Start();for(int i=0;i<1000;i++)Check(queue.Dequeue(TimeSpan.FromSeconds(1))==i.ToString(),"concurrent FIFO item "+i);producer.Join();
+Check(queue.PeekSize()==0,"concurrent producer/consumer leaves no phantom count");
+var server=new InjectorServer();Injector.Server=server;Helpers.Paused=true;ControllerHandler.MultiplayerController=new();
+ControllerHandler.LateUpdate();
+Check(Counter(server,"publishedObservations")==1&&Counter(server,"pendingExchange")==1,"bootstrap publishes exactly one actual observation");
+object original=Dequeue(Get(server,"output"));var originalData=(OutputData)Get(original,"Value");
+int captures=ActiveStateCollector.CapturedPhysics.Count,warps=WarpHandler.Calls,applied=TASLogicalButton.Applied.Count;
+var waitingData=server.CurrentFrameData;waitingData.ServerMessages.Add("native-event-a");waitingData.EntityRegistry.Add("native-registration");
+for(int i=0;i<4;i++) {
+ if(i%2==0)ControllerHandler.FixedUpdate();ControllerHandler.Update();ControllerHandler.LateUpdate();
+ Check(server.CurrentFrameData.PhysicsFramesElapsed==0,"paused missing reply resets only this callback physics count "+i);
+}
+Check(ControllerHandler.FramesSinceLastNoPhysicsFrame==0,"Update no-physics phase is based on actual current callback, not accumulated wait");
+Check(ReferenceEquals(waitingData,server.CurrentFrameData)&&waitingData.ServerMessages.SequenceEqual(new[]{"native-event-a"})&&waitingData.EntityRegistry.Count==1,"paused wait retains exact pending native messages and registration order");
+Check(ActiveStateCollector.CapturedPhysics.Count==captures&&WarpHandler.Calls==warps&&TASLogicalButton.Applied.Count==applied,"missing reply performs no capture, warp, or logical input acceptance");
+Check(Counter(server,"publishedObservations")==1&&Counter(server,"pendingExchange")==1,"missing reply never publishes a duplicate observation");
+var watch=Stopwatch.StartNew();for(int i=0;i<1000;i++)Check(!server.TryGetCurrentInput(out _),"nonblocking missing poll "+i);watch.Stop();
+Check(server.CurrentInput.RequestPause&&!server.CurrentInput.__isset.nextFrame&&server.CurrentInput.Warp==null&&Counter(server,"runningBlockingWaits")==0,"paused diagnostic fallback has no frame/warp and enters no timed wait");
+try{server.CommitFrame();throw new Exception("unaccepted commit");}catch(InvalidOperationException){checks.Add("unaccepted paused input cannot commit");}
+var resume=new InputData{RequestResume=true,NextFrame=32,__isset=new(){nextFrame=true}};Reply(server,original,resume);
+ControllerHandler.FixedUpdate();ControllerHandler.Update();ControllerHandler.LateUpdate();
+Check(!Helpers.Paused&&Counter(server,"controllerRepliesConsumed")==1&&TASLogicalButton.Applied.Count==applied+1,"one real reply is consumed exactly once through paused warp/capture/resume readers");
+object second=Dequeue(Get(server,"output"));var secondData=(OutputData)Get(second,"Value");
+Check(secondData.LastFramePaused&&!secondData.NextFramePaused&&secondData.PhysicsFramesElapsed==1,"pause/resume output flags and current physics count retain original ordering");
+Check(secondData.ServerMessages.SequenceEqual(new[]{"native-event-a"})&&secondData.EntityRegistry.Count==1,"waiting messages are published once with the next real capture");
+Check(originalData.ServerMessages.Count==0,"previous sealed observation was not mutated during pause waiting");
+var running=new InputData{NextFrame=33,__isset=new(){nextFrame=true}};Reply(server,second,running);ControllerHandler.FixedUpdate();ControllerHandler.Update();ControllerHandler.LateUpdate();
+Check(ActiveStateCollector.Notified.Last()==33&&Counter(server,"controllerRepliesConsumed")==2,"running ready input retains native NotifyFrame scheduling");
+object third=Dequeue(Get(server,"output"));Helpers.Paused=true;
+Reply(server,third,new InputData{RequestResume=true,NextFrame=999,Warp="old",__isset=new(){nextFrame=true}});
+long epoch=(long)Get(server,"connectionEpoch");Set(server,"connectionEpoch",epoch+1);
+Check(server.TryGetCurrentInput(out var transition)&&transition.RequestPause&&!transition.RequestResume&&!transition.__isset.nextFrame&&transition.Warp==null,"replacement fences already queued old resume/warp with a control-only pause");
+server.CommitFrame();object replacement=Dequeue(Get(server,"output"));
+Reply(server,third,new InputData{RequestResume=true,NextFrame=1000,__isset=new(){nextFrame=true}});
+var current=new InputData{NextFrame=34,__isset=new(){nextFrame=true}};Reply(server,replacement,current);
+Check(server.TryGetCurrentInput(out var got)&&ReferenceEquals(got,current)&&Counter(server,"controllerRepliesConsumed")==3,"only matching connection epoch and outstanding exchange can deliver new input");
+Check(Counter(server,"staleRepliesDiscarded")>=2,"both queued and late old-controller replies are explicitly discarded");
+var newEndpoint=new Interceptor.Client(null);Set(server,"client",newEndpoint);Invoke(server,"FailConnection",epoch,new Interceptor.Client(null),null);
+Check(ReferenceEquals(Get(server,"client"),newEndpoint)&&(long)Get(server,"connectionEpoch")==epoch+1,"old RPC failure cannot clear or advance replacement controller generation");
+server.CommitFrame();object failed=Dequeue(Get(server,"output"));Invoke(server,"FailConnection",epoch+1,newEndpoint,null);
+Check(server.TryGetCurrentInput(out var failure)&&failure.RequestPause&&!failure.__isset.nextFrame,"current-controller failure yields no invented tagged frame");
+server.CommitFrame();object noClient=Dequeue(Get(server,"output"));Reply(server,noClient,new InputData{RequestPause=true},false);
+long actualReplies=Counter(server,"controllerRepliesConsumed");Check(server.TryGetCurrentInput(out var absent)&&absent.RequestPause&&Counter(server,"controllerRepliesConsumed")==actualReplies,"controller absence uses separately counted pause control, not an accepted controller reply");
+string path=args.Length>0?args[0]:"artifacts/framework-paused-pump-check/SuperchargedPatch.dll";
+using var old=AssemblyDefinition.ReadAssembly("artifacts/framework-component-batch-check/SuperchargedPatch.dll");using var candidate=AssemblyDefinition.ReadAssembly(path);
+TypeDefinition T(AssemblyDefinition a,string n)=>a.MainModule.Types.Single(t=>t.Name==n);
+MethodDefinition M(TypeDefinition t,string n)=>t.Methods.Single(m=>m.Name==n);
+string[] IL(MethodDefinition m)=>m.Body.Instructions.Select(i=>i.OpCode.Code+":"+i.Operand).ToArray();
+foreach(var name in new[]{"FixedUpdate","Update"})Check(IL(M(T(old,"ControllerHandler"),name)).SequenceEqual(IL(M(T(candidate,"ControllerHandler"),name))),"compiled "+name+" physics/phase accounting remains byte-for-byte instruction-equivalent");
+var pump=T(candidate,"InjectorServer");
+Check(!M(pump,"TryGetCurrentInput").Body.Instructions.Any(i=>i.Operand is MethodReference r&&(r.Name=="Dequeue"||r.Name=="Sleep"||r.Name=="Wait")),"compiled paused try-acquire calls no blocking queue/wait/sleep");
+var late=M(T(candidate,"ControllerHandler"),"LateUpdate").Body.Instructions;
+int tryIndex=late.ToList().FindIndex(i=>i.Operand is MethodReference r&&r.Name=="TryGetCurrentInput");int captureIndex=late.ToList().FindIndex(i=>i.Operand is MethodReference r&&r.Name=="CollectDataForFrame");
+Check(tryIndex>=0&&late.Skip(tryIndex).Take(captureIndex-tryIndex).Any(i=>i.OpCode.Code==Code.Ret),"compiled paused miss returns before warp/capture/commit");
+Check(M(pump,"SkipPausedCallback").Body.Instructions.Where(i=>i.OpCode.Code==Code.Callvirt&&i.Operand is MethodReference r&&r.Name.StartsWith("set_")).All(i=>((MethodReference)i.Operand).Name=="set_PhysicsFramesElapsed"),"skip resets only per-callback physics scalar, not native event lists or frame tags");
+string Hash(string p)=>Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p))).ToLowerInvariant();
+Console.WriteLine(JsonSerializer.Serialize(new{ok=true,checks=checks.Count,names=checks.Where(x=>!x.StartsWith("concurrent FIFO item ")&&!x.StartsWith("nonblocking missing poll ")),fifoItems=1000,missingReplyPolls=1000,missingReplyPollMilliseconds=watch.Elapsed.TotalMilliseconds,candidateSha256=Hash(path),scope="Actual queue/server/handler source with native/network surfaces stubbed; no socket opened, no game or running-controller schedule changed by this fixture. Native phase/continuation proof remains pending."}));

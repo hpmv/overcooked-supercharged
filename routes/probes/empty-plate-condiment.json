@@ -1,0 +1,11 @@
+{
+  "description": "Bounded native experiment: determine whether an original empty clean plate can accept mustard before food assembly. No success or recipe compatibility is assumed.",
+  "timeoutFrames": 900,
+  "jobs": [{"id":"empty-plate-native-mustard-probe","player":0,"dependencies":[],"resources":["initial-clean-plate","native-condiment-dispenser","output"],
+    "actions":[
+      {"type":"switch-condiment","index":0,"timeoutFrames":240},
+      {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":240},
+      {"type":"apply","station":"72","expectedIngredientId":17094,"maxRetries":1,"timeoutFrames":300},
+      {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@19.20,-10.80","timeoutFrames":240}
+    ]}]
+}

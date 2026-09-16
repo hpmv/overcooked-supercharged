@@ -1,0 +1,3 @@
+[
+  {"target":"bridge","request":{"command":"hot-load","slot":"rigidbody-actor-rebuild","path":"M:\\projects\\game-test-2\\framework-run\\modules\\RigidbodyActorRebuild-r13k-reset-after-held-r12-contact-pool\\RigidbodyActorRebuild.r13k-reset-after-held-r12-contact-pool.dll","type":"SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule","sha256":"A5AE2FC3E7A9451AB3E310516FD3B0BBB113D967155F6C8C5DF73F20432AC907","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}}
+]

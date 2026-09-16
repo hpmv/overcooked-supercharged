@@ -1,0 +1,6 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-resume-ready-owner-state","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-live-owner-graph","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r15g-target-null-dirty-idempotent-build\\Oc2NativeAnimatorCheckpoint.r15g.dll","sha256":"47289E66C80AA34BE65A44A5FF7BCBDE5A8C40ADF6C2C13EFAAFC108032D4480"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}}
+]

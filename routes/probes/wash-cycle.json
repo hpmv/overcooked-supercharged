@@ -1,0 +1,9 @@
+{"phases":[
+ {"name":"return-bowl-collect-dirty","actions":[{"type":"place","player":3,"station":"mix-station:dlc08_workstation_mixer@24.00,-10.80"},{"type":"take","player":0,"station":"dirty-return"}]},
+ {"name":"wash-launch-and-transfer","actions":[{"type":"fire-cannon","player":3,"cannon":"right","passengerPlayer":1,"destinationRegion":"lower-left"},{"type":"place","player":0,"station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40"}]},
+ {"name":"collect-stack-and-plate","actions":[{"type":"take","player":1,"station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40"},{"type":"take","player":3,"station":"plate:equipment_plate_01@21.60,-16.80"}]},
+ {"name":"sink-and-donut","actions":[{"type":"place","player":1,"station":"sink"},{"type":"cook","player":3,"station":"basket:dlc08_frierbasket@24.00,-21.60","timeoutFrames":900}]},
+ {"name":"native-wash-and-plate","actions":[{"type":"wash","player":1,"station":"sink","count":1},{"type":"combine","player":3,"station":"basket:dlc08_frierbasket@24.00,-21.60","expectedRecipeId":228996}]},
+ {"name":"clean-plate-transfer-and-meal","actions":[{"type":"take","player":1,"station":"drying"},{"type":"place","player":3,"station":"counter:dlc08_countertop_01_standard_circus@25.20,-20.40"}]},
+ {"name":"clean-plate-back-to-center","actions":[{"type":"place","player":1,"station":"counter:dlc08_countertop_01_standard_circus@15.60,-20.40"}]}
+]}

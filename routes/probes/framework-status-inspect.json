@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"status"}},
+  {"target":"controller","request":{"command":"status"}}
+]

@@ -1,0 +1,34 @@
+{
+  "description": "Corrected experiment with TWO changes from A: move start backward to12.8,-12.4 AND first move the target counter's original plate to the observed empty top counter19.2,-10.8. A/B incorrectly assumed the intended target empty; B remains an unexecuted draft. Indexed wait guards are pinned to the observed initial station IDs/names and fail closed if this native array mapping changes; action targets resolve scene properties. Assert target empty after legal clearing and immediately before throwing. No native force, inclination, progress or score changes.",
+  "timeoutFrames": 1600,
+  "jobs": [
+    {"id":"B00-clear-original-target-plate","player":0,"dependencies":[],"resources":["center-counter19.2,-15.6","plate-staging19.2,-10.8"],"actions":[
+      {"type":"wait","path":"entities.37.id","equals":38,"timeoutFrames":2},
+      {"type":"wait","path":"entities.37.name","equals":"DLC08_countertop_01_standard_circus (11)","timeoutFrames":2},
+      {"type":"wait","path":"entities.37.attachedEntityId","equals":10,"timeoutFrames":2},
+      {"type":"wait","path":"entities.31.id","equals":32,"timeoutFrames":2},
+      {"type":"wait","path":"entities.31.name","equals":"DLC08_countertop_01_standard_circus (1)","timeoutFrames":2},
+      {"type":"wait","path":"entities.31.attachedEntityId","equals":0,"timeoutFrames":2},
+      {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":300},
+      {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@19.20,-10.80","timeoutFrames":300},
+      {"type":"wait","path":"entities.37.attachedEntityId","equals":0,"timeoutFrames":2},
+      {"type":"wait","path":"entities.31.attachedEntityId","equals":10,"timeoutFrames":2}
+    ]},
+    {"id":"B01-clear-central-left","player":0,"dependencies":["B00-clear-original-target-plate"],"resources":["left-chef-clear-point"],"actions":[{"type":"navigate","target":{"x":20.4,"z":-19.2},"timeoutFrames":360}]},
+    {"id":"B02-clear-central-right","player":3,"dependencies":[],"resources":["right-chef-clear-point"],"actions":[{"type":"navigate","target":{"x":23.8,"z":-19.2},"timeoutFrames":360}]},
+    {"id":"B03-chop-and-land-bun","player":2,"dependencies":["B01-clear-central-left","B02-clear-central-right"],"resources":["bun-crate","left-bun-board","center-counter19.2,-15.6","native-left-flight-lane"],"actions":[
+      {"type":"take","station":"HotdogBun","timeoutFrames":300},
+      {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+      {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+      {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":240},
+      {"type":"navigate","target":{"x":12.8,"z":-12.4},"timeoutFrames":240},
+      {"type":"wait","path":"entities.37.id","equals":38,"timeoutFrames":2},
+      {"type":"wait","path":"entities.37.attachedEntityId","equals":0,"timeoutFrames":2},
+      {"type":"throw","target":{"x":19.2,"z":-15.6},"landingBounds":{"minX":18.65,"maxX":19.75,"minZ":-16.15,"maxZ":-15.05},"landingStableFrames":6,"flightTimeoutFrames":240,"timeoutFrames":360}
+    ]},
+    {"id":"B04-confirm-native-counter-pickup","player":0,"dependencies":["B03-chop-and-land-bun"],"resources":["center-counter19.2,-15.6"],"actions":[
+      {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":360},
+      {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":180}
+    ]}
+  ]
+}

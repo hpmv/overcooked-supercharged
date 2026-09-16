@@ -1,0 +1,1 @@
+{"phases":[{"name":"fire-native-cannon","actions":[{"player":0,"type":"pulse","button":"use","requireTargetId":78}]},{"name":"wait-for-native-flight","actions":[{"player":0,"type":"wait","durationFrames":100}]}]}

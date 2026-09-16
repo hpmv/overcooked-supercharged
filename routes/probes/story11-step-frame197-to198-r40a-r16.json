@@ -1,0 +1,11 @@
+[
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"step","frames":1}},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":198},
+    {"path":"requestPending","equals":false}
+  ]},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"inspect","full":true}},
+  {"target":"bridge","request":{"command":"pause"}}
+]

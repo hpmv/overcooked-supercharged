@@ -8,6 +8,6 @@ namespace Hpmv {
         public bool primaryUp;
         public bool secondaryDown;
         public bool secondaryUp;
-        public bool dash;
+        public bool dash; // Current held state; ControllerState derives rise/fall edges.
     }
 }

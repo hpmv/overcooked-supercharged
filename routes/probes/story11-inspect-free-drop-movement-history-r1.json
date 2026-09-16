@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-movement-history-checkpoint","operation":"status","args":{}}}
+]

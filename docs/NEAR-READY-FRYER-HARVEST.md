@@ -1,0 +1,15 @@
+# Optional direct harvest before native frying completes
+
+`NearReadyFryerHarvest` / `--near-ready-fryer` defaults to false. The common heat scheduler may select this path for an assigned donut basket at observed native cooking progress9..<10 seconds. It takes a clean plate, walks to the original stove, waits with ordinary neutral input for native `Cooked`, combines into that same plate, then stages the finished recipe at the existing selected output. The basket remains on its original stove throughout. The independent19-second native heat guard remains active.
+
+Admission requires the exact complete Mixed dough for its recipe, original basket/stove identities, a FIFO-allocatable clean plate, an empty existing meal output, all free resources, and an available central chef. Both collision-checked walking legs, remaining native cook time and a conservative two-second input allowance must fit before the19-second guard. The final output route must also fit the twelve-second transaction bound. Failure to admit uses the existing offheat rescue; no native timers or food state are changed.
+
+The ordinary assembly Work owns the exact plate, basket, home and output until verified completion. The source counter is reusable after the native plate pickup, so a washer successor can use44 without the original job releasing its leases. Per-frame observations require native Cooked before the basket empties into the same held plate, native recipe validation on the plate, unchanged original-home attachment, and the same finished plate at the selected output. Missing observations, changed identities, competing ownership or exceeded bounds fail the candidate with its ordinary trace.
+
+Evidence:
+
+- `artifacts/near-ready-fryer-v15-gf2409.json` is a recorded production opportunity: basket5/ordinal4 at9.700024 seconds, recipe index7/Raspberry, exact clean plate170 on44, output49 free. Explicit reconstruction of emitted controller ownership leaves P0 available while preserving P3's active head assembly. `near-ready-fryer-v15-gf2409-path-proof.json` measures4.9085 seconds for both walking legs, remaining native cooking and input allowance versus9.3000 seconds to the guard.
+- The separate native mechanism probe is pinned by `artifacts/near-ready-fryer-a-proof.json`:355 neutral held-plate observations, Cooked1710, basket5→same plate10 consumption1718, output49 completion1742. Basket5 remains on home15 and is never held. Its7.41655-second recorded cooking wait starts earlier than this policy's admission window; it proves the input mechanism, not the adaptive policy's performance.
+- `NearReadyFryerSelfTest` uses the recorded production admission, explicit state mutations, actual native mechanism snapshots and the real ordinary assembly completion callback. It checks incorrect recipe multisets, homes/incarnations, competing leases, FIFO plate capacity, travel budgets, missing Cooked evidence, wrong catcher, source reuse, original-home retention and deadline failures.
+
+The policy has offline fixture and native mechanism evidence. A full native planner trial and an exact replay remain separate gates. This feature does not establish a≥5000 run.

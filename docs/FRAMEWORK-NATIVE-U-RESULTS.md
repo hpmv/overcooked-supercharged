@@ -1,0 +1,9 @@
+# Native U verification
+
+The closed U trace has 741 exactly matching advancing replay frames: three 240-frame idle continuations, a 10-frame movement continuation, and an 11-frame movement-plus-pickup-input continuation. Every recorded pose, chef state, physics phase, logical input, native message byte and auxiliary message byte/order matches in those selected intervals. Settled endpoint receipts also match native private clocks, food and round state.
+
+The 11-frame continuation did **not** actually pick up the plate. Plate12 remained on counter41 and chef103 remained empty in both executions. Native Q has the same outcome gap. S did achieve the pickup, but its rollback failed. These runs therefore do not establish successful pickup replay. Their supplementary `requested-outcome-audit.json` files preserve the original receipts and distinguish outcome from replay equality. The input probe now requires the fixture's explicit two-sided pickup outcome before attempting a qualifying replay; five tests include these native positive and negative witnesses.
+
+U's plate search failed its first candidate with a bounded pickup timeout. Its subsequent authoring rollback failed when chef103's native inertiaTensorRotation changed from `(0,0,0,1)` to `(0,0,-1.78814062e-7,1)` during restoration. The exact phase causing that change remains under investigation. No tolerance was used. Full rewind parity and an optimized/replayed search winner remain unproved.
+
+Evidence: `artifacts/framework-migration/native-u/offline-exact-frames/summary.json`, `prefix-provenance.json`, `plate-search/summary.json`, and `search-failure-native.json`. The original closed trace SHA256 is `A0669DD72268660893A806E028E880D48F4007A083566D8065E1E60B41BA8054`. The exact-frame proof uses an unmodified byte prefix through the successful input-continuation interval; the later native restart and failed search remain preserved in the full trace. No fresh score qualification follows.

@@ -1,0 +1,41 @@
+[
+  {
+    "target": "controller",
+    "request": {"command": "status"},
+    "until": {"all": [
+      {"path": "state", "equals": "Paused"},
+      {"path": "frame", "equals": 487},
+      {"path": "requestPending", "equals": false}
+    ]},
+    "timeoutSeconds": 10
+  },
+  {"target": "bridge", "request": {"command": "pause"}},
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "chef-managed-mutation-tracer",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\ChefManagedMutationTracer-r8-attachment-scale-chain\\ChefManagedMutationTracer.r8-attachment-scale-chain.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.ChefManagedMutationTracerModule",
+      "sha256": "CA786F2F4B14B72DBEB7223C0028A5A00286867F5128E14EB86B90CD56A47D37",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "chef-managed-mutation-tracer", "operation": "activate", "args": {}}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "chef-managed-mutation-tracer", "operation": "clear", "args": {}}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "chef-managed-mutation-tracer", "operation": "mark", "args": {"label": "diagnostic-warp"}}},
+  {"target": "bridge", "request": {"command": "arm"}},
+  {"target": "controller", "request": {"command": "warp", "frame": 425, "development": true}},
+  {
+    "target": "controller",
+    "request": {"command": "status"},
+    "until": {"all": [
+      {"path": "state", "equals": "Paused"},
+      {"path": "frame", "equals": 425},
+      {"path": "requestPending", "equals": false}
+    ]},
+    "timeoutSeconds": 30
+  },
+  {"target": "bridge", "request": {"command": "pause"}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "chef-managed-mutation-tracer", "operation": "status", "args": {}}}
+]

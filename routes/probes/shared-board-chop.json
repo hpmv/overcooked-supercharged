@@ -1,0 +1,44 @@
+{
+  "description": "Native pantry-side shared-board chopping probe for a fresh Carnival 3-4 four-player round. Requires observed native interaction and prepared ingredient replacement for all four ingredients; this is not a score route.",
+  "timeoutFrames": 2200,
+  "jobs": [
+    {
+      "id": "L01-pantry-chop-bun", "player": 2,
+      "dependencies": [], "resources": ["bun-crate", "upper-left-lower-board"],
+      "actions": [
+        {"type": "take", "station": "HotdogBun", "timeoutFrames": 420},
+        {"type": "place", "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40", "timeoutFrames": 420},
+        {"type": "chop", "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40", "timeoutFrames": 420}
+      ]
+    },
+    {
+      "id": "L02-pantry-chop-onion", "player": 2,
+      "dependencies": ["L01-pantry-chop-bun"], "resources": ["onion-crate", "upper-left-upper-board"],
+      "actions": [
+        {"type": "take", "station": "Onion", "timeoutFrames": 420},
+        {"type": "place", "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00", "timeoutFrames": 420},
+        {"type": "chop", "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00", "timeoutFrames": 420}
+      ]
+    },
+    {
+      "id": "R01-pantry-chop-chocolate", "player": 1,
+      "dependencies": [], "resources": ["chocolate-crate", "upper-right-lower-board", "upper-right-handoff"],
+      "actions": [
+        {"type": "take", "station": "Chocolate", "timeoutFrames": 420},
+        {"type": "place", "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40", "timeoutFrames": 420},
+        {"type": "chop", "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40", "timeoutFrames": 420},
+        {"type": "take", "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40", "timeoutFrames": 420},
+        {"type": "place", "station": "counter:dlc08_countertop_01_standard_circus@25.20,-13.20", "timeoutFrames": 420}
+      ]
+    },
+    {
+      "id": "R02-pantry-chop-raspberry", "player": 1,
+      "dependencies": ["R01-pantry-chop-chocolate"], "resources": ["raspberry-crate", "upper-right-lower-board"],
+      "actions": [
+        {"type": "take", "station": "Raspberry", "timeoutFrames": 420},
+        {"type": "place", "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40", "timeoutFrames": 420},
+        {"type": "chop", "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40", "timeoutFrames": 420}
+      ]
+    }
+  ]
+}

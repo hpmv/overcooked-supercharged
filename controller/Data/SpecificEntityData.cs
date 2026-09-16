@@ -19,6 +19,8 @@ namespace Hpmv
         public List<(GameEntityRecord station, TimeSpan timer)> plateRespawns;
         public SpecificEntityData_ThrowableItem throwableItem;
         public byte[] rawGameEntityData;
+        public byte[] rawNativeCannonAux;
+        public byte[] rawPlateLifecycle;
         public GameEntityRecord sessionInteracter;
         public float pilotRotationAngle;
         public int switchingIndex;
@@ -37,6 +39,8 @@ namespace Hpmv
                 ItemBeingChopped = itemBeingChopped?.path?.ToProto(),
                 ThrowableItem = throwableItem.ToProto(),
                 RawGameEntityData = rawGameEntityData == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawGameEntityData),
+                RawNativeCannonAux = rawNativeCannonAux == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawNativeCannonAux),
+                RawPlateLifecycle = rawPlateLifecycle == null ? Google.Protobuf.ByteString.Empty : Google.Protobuf.ByteString.CopyFrom(rawPlateLifecycle),
                 SessionInteracter = sessionInteracter?.path?.ToProto(),
                 InteractingWith = interactingWith?.path?.ToProto(),
                 PilotRotationAngle = pilotRotationAngle,
@@ -108,6 +112,8 @@ namespace Hpmv
                     data.PlateRespawns.Select(timer => (context.GetRootRecord(timer.PlateReturnStation), TimeSpan.FromMilliseconds(timer.Timer))).ToList(),
                 throwableItem = data.ThrowableItem?.FromProto(context) ?? default,
                 rawGameEntityData = data.RawGameEntityData.IsEmpty ? null : data.RawGameEntityData.ToByteArray(),
+                rawNativeCannonAux = data.RawNativeCannonAux.IsEmpty ? null : data.RawNativeCannonAux.ToByteArray(),
+                rawPlateLifecycle = data.RawPlateLifecycle.IsEmpty ? null : data.RawPlateLifecycle.ToByteArray(),
                 sessionInteracter = data.SessionInteracter.FromProtoRef(context),
                 pilotRotationAngle = data.PilotRotationAngle,
                 switchingIndex = data.SwitchingIndex,

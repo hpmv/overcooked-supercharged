@@ -1,0 +1,56 @@
+{
+  "format": "oc2-input-movie-manifest",
+  "version": 1,
+  "source": "M:\\projects\\game-test-2\\artifacts\\combined-probe-composed-v2.jsonl.gz",
+  "sourceFileSha256": "69a95372e9794686c472788fd472cd8c57e80bcf5b0ab31b54a46c25ece4a02d",
+  "sourceSizeBytes": 81248739,
+  "sourceHeaders": [
+    {
+      "kind": "header",
+      "format": "continuous-recording-composition",
+      "sources": [
+        {
+          "path": "M:\\projects\\game-test-2\\artifacts\\combined-probe-a.jsonl.gz",
+          "sha256": "9db0e41605df62d2f7c78c3bd974e95989ea0c9f504273dc31047592e328043d"
+        },
+        {
+          "path": "M:\\projects\\game-test-2\\artifacts\\combined-probe-dash-tail.jsonl.gz",
+          "sha256": "104c6b7aa9191ee4af765bc3fa45c2283ee063aa7128997ae4977e6cc9320d86"
+        }
+      ]
+    }
+  ],
+  "originalCanonicalRequestsSha256": "1dc71bde74e8f3717ed7fd3e816ccd4e9ce5a4c3a1bc2f342d67b57612b06709",
+  "output": "M:\\projects\\game-test-2\\routes\\probes\\complete-probe-inputs.jsonl.gz",
+  "outputFileSha256": "e8314bbb2d29d8f02a56c5882f2681f0b60092518e0c2ae6eec3f11aa6a83c0c",
+  "outputCanonicalRequestsSha256": "1dc71bde74e8f3717ed7fd3e816ccd4e9ce5a4c3a1bc2f342d67b57612b06709",
+  "originalRequests": 2736,
+  "outputRequests": 2736,
+  "totalSteppedFrames": 2733,
+  "commands": {
+    "restart": 1,
+    "inspect": 2,
+    "step": 2733
+  },
+  "skippedMetadata": {
+    "header": 1
+  },
+  "starts": [
+    {
+      "sourceRequestIndex": 0,
+      "request": {
+        "version": 1,
+        "command": "restart",
+        "seed": 0,
+        "isolateRecipeRandom": true
+      }
+    }
+  ],
+  "requestBoundariesPreserved": true,
+  "allInputsAndOtherRequestFieldsPreserved": true,
+  "expansionRequested": false,
+  "expandedBoundaries": [],
+  "expansionAudit": null,
+  "hashEncoding": "Source/outputFile are exact file bytes; canonical requests are sorted-key compact UTF-8 JSON with LF, before compression",
+  "replayNote": "Input-only movie: execute record --script MOVIE --out TRACE, or replay --file MOVIE --no-compare. It contains no expected responses."
+}

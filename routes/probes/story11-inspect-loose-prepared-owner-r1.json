@@ -1,0 +1,52 @@
+[
+  {"target": "bridge", "request": {"command": "pause"}},
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "inspection",
+      "operation": "batch",
+      "args": {
+        "operations": [
+          {"operation": "inspect", "args": {"entityId": 53, "component": "PhysicalAttachment", "members": [
+            {"kind": "field", "name": "m_container", "declaringType": "PhysicalAttachment"},
+            {"kind": "field", "name": "m_meshLerper", "declaringType": "PhysicalAttachment"},
+            {"kind": "field", "name": "m_fakeMeshActive", "declaringType": "PhysicalAttachment"}
+          ]}},
+          {"operation": "inspect", "args": {"entityId": 53, "component": "ServerPhysicalAttachment", "members": [
+            {"kind": "field", "name": "m_isHeld", "declaringType": "ServerPhysicalAttachment"},
+            {"kind": "field", "name": "m_bIsClientSidePredicted", "declaringType": "ServerPhysicalAttachment"},
+            {"kind": "field", "name": "m_transform", "declaringType": "ServerPhysicalAttachment"},
+            {"kind": "field", "name": "m_rigidbodyTransform", "declaringType": "ServerPhysicalAttachment"}
+          ]}},
+          {"operation": "inspect", "args": {"entityId": 53, "component": "ClientPhysicalAttachment", "members": [
+            {"kind": "field", "name": "m_isHeld", "declaringType": "ClientPhysicalAttachment"},
+            {"kind": "field", "name": "m_Parent", "declaringType": "ClientPhysicalAttachment"},
+            {"kind": "field", "name": "m_bClientSidePredicted", "declaringType": "ClientPhysicalAttachment"},
+            {"kind": "field", "name": "m_Prediction", "declaringType": "ClientPhysicalAttachment"}
+          ]}},
+          {"operation": "inspect", "args": {"entityId": 53, "component": "ServerWorldObjectSynchroniser", "members": [
+            {"kind": "field", "name": "m_CachedParentTransform", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_LastUnreliableActiveSend", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bSentReliableRestPosition", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bStartedSynchronising", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bSleepAllowed", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bActive", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bSyncPositions", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bParentChanged", "declaringType": "ServerWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bPaused", "declaringType": "ServerWorldObjectSynchroniser"}
+          ]}},
+          {"operation": "inspect", "args": {"entityId": 53, "component": "ClientWorldObjectSynchroniser", "members": [
+            {"kind": "field", "name": "m_Parent", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_ParentEntityID", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bHasParent", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_ServerPosition", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bPaused", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_PendingResumeData", "declaringType": "ClientWorldObjectSynchroniser"},
+            {"kind": "field", "name": "m_bHasEverReceived", "declaringType": "ClientWorldObjectSynchroniser"}
+          ]}}
+        ]
+      }
+    }
+  }
+]

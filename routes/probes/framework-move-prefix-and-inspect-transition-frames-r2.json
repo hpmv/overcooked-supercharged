@@ -1,0 +1,19 @@
+[
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"raw-input","segments":[
+    {"frames":4,"chefs":{
+      "43":{"x":1,"y":0,"pickup":false,"interact":false,"dash":false},
+      "44":{"x":1,"y":0,"pickup":false,"interact":false,"dash":false},
+      "45":{"x":-1,"y":0,"pickup":false,"interact":false,"dash":false},
+      "46":{"x":0,"y":-1,"pickup":false,"interact":false,"dash":false}
+    }}
+  ]}},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":5}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":6}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":7}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":8}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":9}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-history-frame","args":{"frame":10}}}
+]

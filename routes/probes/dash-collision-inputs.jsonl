@@ -1,0 +1,111 @@
+{"version": 1, "command": "inspect"}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1, "dash": true}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "y": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1, "dash": true}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0, "x": 1}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}
+{"version": 1, "command": "step", "steps": 1, "inputs": [{"player": 0}]}

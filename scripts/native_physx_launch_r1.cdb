@@ -1,0 +1,4 @@
+.sympath C:\Program Files\Unity\Hub\Editor\2017.4.8f1\Editor\Data\PlaybackEngines\windowsstandalonesupport\Variations\win32_nondevelopment_mono
+.reload /f UnityPlayer.dll
+.echo OC2TRACE_LAUNCHED_UNDER_CDB
+g

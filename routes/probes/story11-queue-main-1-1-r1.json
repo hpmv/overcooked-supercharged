@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}}
+]

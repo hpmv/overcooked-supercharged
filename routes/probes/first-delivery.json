@@ -1,0 +1,9 @@
+{"phases":[
+ {"name":"set-meal-down-for-aiming","actions":[{"player":2,"type":"place","station":"counter:dlc08_countertop_01_standard_circus@9.60,-10.80","timeoutFrames":240},{"player":0,"type":"navigate","station":"cannon-switch:p_dlc08_button_01@15.60,-16.81","timeoutFrames":240}]},
+ {"name":"aim-service-cannon","actions":[{"player":2,"type":"aim-cannon","cannon":"left","timeoutFrames":300}]},
+ {"name":"recover-meal","actions":[{"player":2,"type":"take","station":"counter:dlc08_countertop_01_standard_circus@9.60,-10.80","timeoutFrames":240}]},
+ {"name":"board-service-cannon","actions":[{"player":2,"type":"board-cannon","cannon":"left","timeoutFrames":300}]},
+ {"name":"launch-to-service","actions":[{"player":0,"type":"fire-cannon","cannon":"left","passengerPlayer":2,"destinationRegion":"lower-right","timeoutFrames":300}]},
+ {"name":"serve-first-order","actions":[{"player":2,"type":"place","station":"delivery","timeoutFrames":240}]},
+ {"name":"portal-return-to-pantry","actions":[{"player":2,"type":"portal","station":"portal","destinationRegion":"upper-left","timeoutFrames":300}]}
+]}

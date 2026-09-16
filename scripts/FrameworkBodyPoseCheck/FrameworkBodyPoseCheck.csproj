@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+ <ItemGroup><Compile Include="../../patch/NativeBodyPoseCheckpoint.cs" Link="NativeBodyPoseCheckpoint.cs" />
+ <Compile Include="../../patch/NativeBodyColliderCheckpoint.cs" Link="NativeBodyColliderCheckpoint.cs" />
+ <Compile Include="../../patch/NativeBodyMassMode.cs" Link="NativeBodyMassMode.cs" /></ItemGroup>
+ <ItemGroup><Compile Include="../../patch/IBodyRestoreStrategy.cs" Link="IBodyRestoreStrategy.cs" />
+ <Compile Include="../../patch/NativeBodyRestoreDispatch.cs" Link="NativeBodyRestoreDispatch.cs" />
+ <Compile Include="../../patch/Authoring/IAuthoringModule.cs" Link="IAuthoringModule.cs" />
+ <Compile Include="../../modules/body-restore/BodyRestoreModule.cs" Link="BodyRestoreModule.cs" /></ItemGroup>
+ <ItemGroup><Compile Include="../../modules/body-restore/EmptyProxyResetProbe.cs" Link="EmptyProxyResetProbe.cs" /></ItemGroup>
+ <ItemGroup><Compile Include="../../modules/body-restore/EmptyProxyRestore.cs" Link="EmptyProxyRestore.cs" /></ItemGroup>
+</Project>

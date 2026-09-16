@@ -1,0 +1,4 @@
+[
+  {"target":"bridge","request":{"command":"window","mode":"show"}},
+  {"target":"bridge","request":{"command":"status"}}
+]

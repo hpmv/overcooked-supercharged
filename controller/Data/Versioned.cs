@@ -17,7 +17,9 @@ namespace Hpmv {
             } else if (changes.Count > 0 && changes[changes.Count - 1].time == time) {
                 changes[changes.Count - 1] = (time, value);
                 return;
-            } else if (time == 0) {
+            } else if (time == 0 && changes.Count == 0) {
+                // Negative-frame setup entries must remain older than an actual
+                // frame-zero observation; otherwise they shadow initialValue.
                 this.initialValue = value;
                 return;
             }

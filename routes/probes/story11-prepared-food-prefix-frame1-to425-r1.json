@@ -1,0 +1,64 @@
+[
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 28,
+        "chefs": {
+          "43": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "44": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "45": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "46": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false}
+        }
+      }
+    ]
+  },
+  {"include": "story11-food-prefix-frame31-to90-r1.json"},
+  {"include": "story11-food-chop-frame90-to215-r1.json"},
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 180,
+        "chefs": {
+          "43": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "44": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "45": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "46": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false}
+        }
+      }
+    ]
+  },
+  {
+    "command": "raw-input",
+    "segments": [
+      {
+        "frames": 5,
+        "chefs": {
+          "43": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "44": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "45": {"x": 0.0, "y": 1.0, "pickup": false, "interact": false, "dash": false},
+          "46": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false}
+        }
+      },
+      {
+        "frames": 1,
+        "chefs": {
+          "43": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "44": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "45": {"x": 0.0, "y": 0.0, "pickup": true, "interact": false, "dash": false},
+          "46": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false}
+        }
+      },
+      {
+        "frames": 20,
+        "chefs": {
+          "43": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "44": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "45": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false},
+          "46": {"x": 0.0, "y": 0.0, "pickup": false, "interact": false, "dash": false}
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-managed-mutation-tracer","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefManagedMutationTracer-r6-unpaused-playercontrols-phase\\ChefManagedMutationTracer.r6-unpaused-playercontrols-phase.dll","type":"SuperchargedPatch.Authoring.Modules.ChefManagedMutationTracerModule","sha256":"25F0056DAEE79C746DFF389E936C9BCCE15499BAF9FD83CC879EE5A67BF9832E","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-managed-mutation-tracer","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-managed-mutation-tracer","operation":"clear","args":{}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"native-physics-trace","path":"M:\\projects\\game-test-2\\framework-run\\modules\\NativePhysicsTrace-r8ab-physics-only\\NativePhysicsTrace.r8ab-physics-only.dll","type":"SuperchargedPatch.Authoring.Modules.NativePhysicsTraceModule","sha256":"5FEC21B8110D7165DD7C19BCB57937B5C191D92F34263C44E45F53B9EE684017","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-physics-trace-r20-transition-lifecycle-build6\\Oc2NativePhysicsTrace.r20.dll","sha256":"DA1C470819FE4017468C3D104F8CBD254D713BFA63BCEC5AD0E2ABAEA2BC1171","mask":8}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"native-physics-trace","operation":"clear","args":{}}}
+]

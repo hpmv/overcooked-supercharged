@@ -182,11 +182,12 @@ namespace Hpmv
         {
             if (prefab != null && prefab.IsCannon)
             {
-                var rawData = data[frame].rawGameEntityData;
-                if (rawData != null)
-                {
-                    return new CannonModMessage().FromBytes(rawData).m_state == CannonModMessage.CannonState.Loading;
-                }
+                var rawData = data[frame].rawNativeCannonAux;
+                // No inference from a stale native loaded ID or an old modded
+                // state byte. Authoring warp requires the explicit native audit.
+                if (rawData == null) return true;
+                var observation = new NativeCannonAuxMessage();
+                return !observation.Deserialise(new BitStream.BitStreamReader(rawData)) || !observation.IsSettled;
             }
             return false;
         }

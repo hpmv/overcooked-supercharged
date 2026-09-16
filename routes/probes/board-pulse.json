@@ -1,0 +1,1 @@
+{"phases":[{"name":"board-native-cannon","actions":[{"player":2,"type":"pulse","button":"pickup","requireTargetId":84,"targetField":"placementTargetId"}]},{"name":"wait-for-native-board","actions":[{"player":2,"type":"wait","durationFrames":45}]}]}

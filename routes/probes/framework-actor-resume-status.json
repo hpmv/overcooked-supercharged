@@ -1,0 +1,6 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

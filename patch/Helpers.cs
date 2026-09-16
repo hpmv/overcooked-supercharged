@@ -28,11 +28,13 @@ namespace SuperchargedPatch
         public static void Pause()
         {
             CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, true, timeManagerPauseArbitration);
+            UnrealTimePatch.SetAuthoringPause(true);
         }
 
         public static void Resume()
         {
             CurrentTimeManager.SetPaused(TimeManager.PauseLayer.Main, false, timeManagerPauseArbitration);
+            UnrealTimePatch.SetAuthoringPause(false);
         }
 
         public static GameObject GetSpawnableEntityByIndex(this SpawnableEntityCollection collection, int index)

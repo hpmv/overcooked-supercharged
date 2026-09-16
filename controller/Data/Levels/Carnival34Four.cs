@@ -385,10 +385,12 @@ namespace Hpmv {
                 return d;
             });
 
-            var BUTTON = new PrefabRecord("Button", "button") { CanUse = true };
+            var BUTTON = new PrefabRecord("Button", "button") { CanUse = true, IsAttachStation = true };
             entityRecords.RegisterKnownObject(77, BUTTON);
             entityRecords.RegisterKnownObject(78, BUTTON);
-            entityRecords.RegisterKnownObject(79, BUTTON);
+            entityRecords.RegisterKnownObject(79, new PrefabRecord("Condiment Button", "button") { CanUse = true, IsAttachStation = true, HasTriggerColorCycle = true });
+            entityRecords.RegisterKnownObject(72, new PrefabRecord("Condiment Dispenser", "condiment-dispenser") { IsPickupItemSwitcher = true });
+            entityRecords.RegisterKnownObject(80, new PrefabRecord("Bin", "bin") { IsAttachStation = true });
 
             var BOARD = new PrefabRecord("Board", "board") { CanUse = true, IsBoard = true, IsAttachStation = true };
             entityRecords.RegisterKnownObject(56, BOARD);
@@ -412,7 +414,9 @@ namespace Hpmv {
 
 
             var MIXER = new PrefabRecord("Mixer", "mixer") { MaxProgress = 12, CanContainIngredients = true, IsMixer = true, IsCookingHandler = true, CanBeAttached = true };
-            var MIXER_STATION = new PrefabRecord("Mixer Station", "mixer-station") { IsAttachStation = true, IsCookingStation = true }; 
+            // Native ServerMixingStation is not a ServerCookingStation subclass.
+            // Its on/off state follows native attachment/content callbacks.
+            var MIXER_STATION = new PrefabRecord("Mixer Station", "mixer-station") { IsAttachStation = true }; 
             entityRecords.AttachInitialObjectTo(
                 entityRecords.RegisterKnownObject(3, MIXER),
                 entityRecords.RegisterKnownObject(14, MIXER_STATION));
@@ -447,18 +451,19 @@ namespace Hpmv {
                 entityRecords.RegisterKnownObject(16, HEAT_STATION));
             
             var DIRTY_PLATE = new PrefabRecord("Dirty Plate", "dirty plate"){ CanBeAttached = true };
-            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner");
+            var DIRTY_PLATE_SPAWNER = new PrefabRecord("Dirty Plate Spawner", "dirty-plate-spawner") { IsAttachStation = true, IsPlateReturnStation = true };
             DIRTY_PLATE_SPAWNER.Spawns.Add(new PrefabRecord("Dirty Plate Stack", "dirty-plate-stack"){ CanBeAttached = true });
             DIRTY_PLATE_SPAWNER.Spawns[0].Spawns.Add(DIRTY_PLATE);
-            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner");
+            var CLEAN_PLATE_SPAWNER = new PrefabRecord("Clean Plate Spawner", "clean-plate-spawner") { IsAttachStation = true, IsPlateReturnStation = true };
             CLEAN_PLATE_SPAWNER.Spawns.Add(new PrefabRecord("Clean Plate Stack", "clean-plate-stack"){ CanBeAttached = true });
             CLEAN_PLATE_SPAWNER.Spawns[0].Spawns.Add(PLATE);
-            var WASHING_PART = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true };
+            // Native-d WashingPart75 also owns Server/ClientAttachStation.
+            var WASHING_PART = new PrefabRecord("Sink", "sink") { CanUse = true, MaxProgress = 3, IsWashingStation = true, IsAttachStation = true };
             entityRecords.RegisterKnownObject(75, WASHING_PART);
             entityRecords.RegisterKnownObject(76, CLEAN_PLATE_SPAWNER);
             entityRecords.RegisterKnownObject(74, DIRTY_PLATE_SPAWNER);
 
-            var SERVE = new PrefabRecord("Serve", "serve") { OccupiedGridPoints = new Vector2[] { new Vector2(0, -0.6f), new Vector2(0, 0.6f) } };
+            var SERVE = new PrefabRecord("Serve", "serve") { IsAttachStation = true, OccupiedGridPoints = new Vector2[] { new Vector2(0, -0.6f), new Vector2(0, 0.6f) } };
             entityRecords.RegisterKnownObject(73, SERVE);
 
             var TERMINAL = new PrefabRecord("Terminal", "terminal") { CanUse = true, IsTerminal = true };
@@ -468,11 +473,18 @@ namespace Hpmv {
             var FIRE_EXTINGUISHER = new PrefabRecord("Fire Extinguisher", "fire-extinguisher") { CanBeAttached = true };
             entityRecords.RegisterKnownObject(1, FIRE_EXTINGUISHER);
 
+            // Native-d registry: entity107 is FlowManager with both native
+            // CampaignFlowControllers (sync type31). The runtime registry validator
+            // must confirm this role; omitting it silently omits clocks/orders/RNG
+            // from a generated authoring warp.
+            var FLOW_CONTROLLER = new PrefabRecord("Flow Controller", "flow-controller") { IsKitchenFlowController = true };
+            entityRecords.RegisterKnownObject(107, FLOW_CONTROLLER);
+
             var IGNORE = new PrefabRecord("", "") { Ignore = true };
             for (var i = 95; i <= 102; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
-            for (var i = 107; i <= 122; i++) {
+            for (var i = 108; i <= 122; i++) {
                 entityRecords.RegisterKnownObject(i, IGNORE);
             }
 

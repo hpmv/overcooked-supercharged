@@ -1,0 +1,20 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1f\\ResumePhase.r1f.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"19FC2645FD13703B9D3C68FF803846DEEDC42A883A0E92246CCC2E384E2673EE","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[
+    {"path":"bridge.loadComplete","equals":true},
+    {"path":"bridge.loading","equals":false},
+    {"path":"bridge.session.scene","equals":"s_sushi_1_1"}
+  ]},"timeoutSeconds":155},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"requestPending","equals":false},
+    {"path":"freshLevelLoadObserved","equals":true}
+  ]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

@@ -1,0 +1,36 @@
+{
+  "description": "Native mechanism probe: carry the same clean plate through an aimed left cannon; finish the fire action only on its observed native launch, then move the firing chef while the passenger remains neutral for native arrival. This plan does not itself exercise the bot's separate arrival lease; that ownership is tested in CannonFlightSelfTest and needs the later opt-in bot trial.",
+  "timeoutFrames": 1500,
+  "jobs": [
+    {
+      "id": "aim-left-down", "player": 2, "dependencies": [], "resources": ["left-cannon"],
+      "actions": [{"type": "aim-cannon", "cannon": "left", "dash": false, "timeoutFrames": 360}]
+    },
+    {
+      "id": "stage-clean-plate", "player": 0, "dependencies": [], "resources": ["left-pass"],
+      "actions": [
+        {"type": "take", "station": "plate:equipment_plate_01@19.20,-15.60", "dash": false, "timeoutFrames": 240},
+        {"type": "place", "station": "counter:dlc08_countertop_01_standard_circus@15.60,-13.20", "dash": false, "timeoutFrames": 240}
+      ]
+    },
+    {
+      "id": "board-with-original-plate", "player": 2, "dependencies": ["aim-left-down", "stage-clean-plate"], "resources": ["left-cannon", "left-pass"],
+      "actions": [
+        {"type": "take", "station": "counter:dlc08_countertop_01_standard_circus@15.60,-13.20", "dash": false, "timeoutFrames": 240},
+        {"type": "board-cannon", "cannon": "left", "dash": false, "timeoutFrames": 360}
+      ]
+    },
+    {
+      "id": "fire-until-native-launch", "player": 0, "dependencies": ["board-with-original-plate"], "resources": ["left-cannon", "left-fire-button"],
+      "actions": [{"type": "fire-cannon", "cannon": "left", "passengerPlayer": 2, "destinationRegion": "lower-right", "completeOnLaunch": true, "dash": false, "timeoutFrames": 240}]
+    },
+    {
+      "id": "firer-moves-during-flight", "player": 0, "dependencies": ["fire-until-native-launch"], "resources": ["top-right-center-approach"],
+      "actions": [{"type": "navigate", "station": "counter:dlc08_countertop_01_standard_circus@21.60,-10.80", "dash": false, "timeoutFrames": 240}]
+    },
+    {
+      "id": "observe-neutral-passenger", "player": 2, "dependencies": ["fire-until-native-launch"], "resources": ["left-cannon", "lower-right-landing"],
+      "actions": [{"type": "wait", "durationFrames": 90, "timeoutFrames": 100}]
+    }
+  ]
+}

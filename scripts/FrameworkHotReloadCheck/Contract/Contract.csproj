@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><TargetFramework>net10.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+ <ItemGroup>
+  <Compile Include="../../../framework/patch/Authoring/IAuthoringModule.cs" />
+  <Compile Include="../../../framework/patch/Authoring/AuthoringModuleHost.cs" />
+ </ItemGroup>
+</Project>

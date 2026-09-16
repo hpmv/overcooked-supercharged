@@ -1,0 +1,265 @@
+{
+  "description": "Native fryer off-heat storage probe: cook chocolate dough, park the same basket on an ordinary counter for thirteen native seconds, plate its unchanged cooked contents, then restore the original empty basket to its original fryer. Diagnostic only; no score target.",
+  "timeoutFrames": 4800,
+  "jobs": [
+    {
+      "id": "M01-supply-flour",
+      "player": 1,
+      "dependencies": [],
+      "resources": [
+        "flour-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "M02-supply-egg",
+      "player": 1,
+      "dependencies": [
+        "M01-supply-flour"
+      ],
+      "resources": [
+        "egg-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Egg",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "M03-chop-chocolate",
+      "player": 1,
+      "dependencies": [
+        "M02-supply-egg"
+      ],
+      "resources": [
+        "chocolate-crate",
+        "upper-right-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Chocolate",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "M04-mix-and-park",
+      "player": 3,
+      "dependencies": [
+        "M03-chop-chocolate"
+      ],
+      "resources": [
+        "upper-right-board",
+        "near-bowl",
+        "original-mixer",
+        "offmix-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "mix",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "take",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-10.80",
+          "timeoutFrames": 240
+        }
+      ]
+    },
+    {
+      "id": "M06-fry-and-restore",
+      "player": 3,
+      "dependencies": [
+        "M04-mix-and-park"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-mixer",
+        "offmix-counter",
+        "chocolate-fryer"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-10.80",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "combine",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "cook",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 900
+        }
+      ]
+    },
+    {
+      "id": "F01-park-cooked-basket",
+      "player": 3,
+      "dependencies": [
+        "M06-fry-and-restore"
+      ],
+      "resources": [
+        "chocolate-fryer",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-21.60",
+          "timeoutFrames": 240
+        }
+      ]
+    },
+    {
+      "id": "F02-observe-thirteen-native-seconds",
+      "player": 3,
+      "dependencies": [
+        "F01-park-cooked-basket"
+      ],
+      "resources": [
+        "chocolate-fryer",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "durationFrames": 780,
+          "timeoutFrames": 800
+        }
+      ]
+    },
+    {
+      "id": "F03-plate-parked-donut",
+      "player": 3,
+      "dependencies": [
+        "F02-observe-thirteen-native-seconds"
+      ],
+      "resources": [
+        "chocolate-fryer",
+        "offheat-counter",
+        "plate",
+        "service-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "plate:equipment_plate_01@21.60,-16.80",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "combine",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-21.60",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@25.20,-20.40",
+          "timeoutFrames": 300
+        }
+      ]
+    },
+    {
+      "id": "F04-restore-original-empty-basket",
+      "player": 3,
+      "dependencies": [
+        "F03-plate-parked-donut"
+      ],
+      "resources": [
+        "chocolate-fryer",
+        "offheat-counter"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@21.60,-21.60",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "fryer-station:fryingstation@22.80,-21.60",
+          "timeoutFrames": 300
+        }
+      ]
+    }
+  ]
+}

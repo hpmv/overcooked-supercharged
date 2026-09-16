@@ -1,0 +1,13 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"body-restore","path":"M:\\projects\\game-test-2\\framework-run\\modules\\BodyRestore-r19-collider-enabled-premass-envelope\\BodyRestore.r19-collider-enabled-premass-envelope.dll","type":"SuperchargedPatch.Authoring.Modules.BodyRestoreModule","sha256":"D5AE768447B5902B7181D279B73F4E0B60E85AFFA73882002EC0E37844DDA751","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-rigidbody-rebuild-r9-shape-pose-build1\\Oc2NativeRigidbodyRebuild.r9.dll","sha256":"28DC85C0CE62B303636828947D58A3686298B493F368C662F61E91479C328088"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"frame","equals":1},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"actions-clear"}},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

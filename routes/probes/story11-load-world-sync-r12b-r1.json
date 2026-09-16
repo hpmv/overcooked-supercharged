@@ -1,0 +1,16 @@
+[
+  {"target": "bridge", "request": {"command": "pause"}},
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "world-sync-cache",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\WorldSyncCache-r12b-dynamic-paused-transform\\WorldSyncCache.r12b-dynamic-paused-transform.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule",
+      "sha256": "D6EF7A12E515C908451C10B6DB1CA3E20E3A987AD29AB8FE72FCFED9764A1DAC",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "world-sync-cache", "operation": "activate", "args": {}}},
+  {"target": "bridge", "request": {"command": "hot-call", "slot": "world-sync-cache", "operation": "status", "args": {}}}
+]

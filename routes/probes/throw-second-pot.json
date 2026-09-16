@@ -1,0 +1,5 @@
+{"phases":[
+ {"actions":[{"type":"take","player":2,"station":"Frankfurter"}]},
+ {"actions":[{"type":"navigate","player":2,"target":{"x":13.6,"z":-12.2}}]},
+ {"actions":[{"type":"throw","player":2,"targetEntityId":2,"timeoutFrames":180}]}
+]}

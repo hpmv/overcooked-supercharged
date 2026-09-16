@@ -27,5 +27,7 @@ namespace SuperchargedPatch
         ThrowableItemAux,
         PlateReturnControllerAux,
         RoundDataAux,
+        NativeCannonAux,
+        PlateLifecycleAux,
     }
 }

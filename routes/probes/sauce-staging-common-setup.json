@@ -1,0 +1,46 @@
+{
+  "description": "New identical legal-input setup after exact V11 prefix+one explicit neutral step. Let P3 dash settle, park held bowl6 on ordinary33, pick up bowl3 from mixer, then keep holding it. Observe both native offmixer identities/progress; do not assume Mixed. Other chefs neutral. No game-state restoration.",
+  "timeoutFrames": 360,
+  "jobs": [
+    {
+      "id": "S00-neutral-and-offmixer-setup",
+      "player": 3,
+      "dependencies": [],
+      "resources": [
+        "bowl6",
+        "bowl3",
+        "ordinary33"
+      ],
+      "actions": [
+        {
+          "type": "wait",
+          "timeoutFrames": 300,
+          "dash": false,
+          "shortDash": false,
+          "durationFrames": 18
+        },
+        {
+          "type": "place",
+          "timeoutFrames": 300,
+          "dash": false,
+          "shortDash": false,
+          "station": "33"
+        },
+        {
+          "type": "take",
+          "timeoutFrames": 300,
+          "dash": false,
+          "shortDash": false,
+          "station": "3"
+        },
+        {
+          "type": "wait",
+          "timeoutFrames": 300,
+          "dash": false,
+          "shortDash": false,
+          "durationFrames": 2
+        }
+      ]
+    }
+  ]
+}

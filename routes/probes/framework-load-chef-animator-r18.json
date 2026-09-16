@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r18\\ChefAnimatorCheckpoint.r18.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"51D5927BEFFE1CF35ED6759ED2E044F02A825A904D8EF7D8796279D4A4A1C0FB","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r7-mixer-restore-build2\\Oc2NativeAnimatorCheckpoint.r7.dll","sha256":"07A1C5137B3620F8DDFB5D7691DA343647A85CD716788FC035877E818EE7252C"}}}
+]

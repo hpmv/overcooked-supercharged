@@ -1,0 +1,505 @@
+{
+  "timeoutFrames": 4200,
+  "jobs": [
+    {
+      "id": "L01-sausage",
+      "player": 2,
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter"
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          }
+        },
+        {
+          "type": "throw",
+          "targetEntityId": 7
+        }
+      ],
+      "dependencies": [],
+      "resources": []
+    },
+    {
+      "id": "L02-boil",
+      "player": 0,
+      "actions": [
+        {
+          "type": "navigate",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"
+        }
+      ],
+      "dependencies": [
+        "L01-sausage"
+      ],
+      "resources": []
+    },
+    {
+      "id": "L03-bun",
+      "player": 2,
+      "actions": [
+        {
+          "type": "take",
+          "station": "HotdogBun"
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"
+        },
+        {
+          "type": "aim-cannon",
+          "cannon": "left"
+        }
+      ],
+      "dependencies": [
+        "L01-sausage"
+      ],
+      "resources": []
+    },
+    {
+      "id": "L04-plate",
+      "player": 0,
+      "actions": [
+        {
+          "type": "take",
+          "station": "plate:equipment_plate_01@19.20,-15.60"
+        },
+        {
+          "type": "assemble",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-14.40"
+        },
+        {
+          "type": "cook",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "timeoutFrames": 1000
+        },
+        {
+          "type": "combine",
+          "station": "pot:dlc08_utensil_pot_01@16.80,-10.80",
+          "expectedIngredient": "Frankfurter"
+        },
+        {
+          "type": "apply",
+          "station": "condiment",
+          "expectedIngredient": "Mustard",
+          "expectedRecipeId": 158500
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"
+        }
+      ],
+      "dependencies": [
+        "L02-boil",
+        "L03-bun"
+      ],
+      "resources": []
+    },
+    {
+      "id": "L05-board",
+      "player": 2,
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@15.60,-12.00"
+        },
+        {
+          "type": "board-cannon",
+          "cannon": "left",
+          "timeoutFrames": 400
+        }
+      ],
+      "dependencies": [
+        "L04-plate"
+      ],
+      "resources": []
+    },
+    {
+      "id": "L06-fire",
+      "player": 0,
+      "actions": [
+        {
+          "type": "fire-cannon",
+          "cannon": "left",
+          "passengerPlayer": 2,
+          "destinationRegion": "lower-right"
+        }
+      ],
+      "dependencies": [
+        "L05-board"
+      ],
+      "resources": []
+    },
+    {
+      "id": "L07-serve-return",
+      "player": 2,
+      "actions": [
+        {
+          "type": "place",
+          "station": "delivery"
+        },
+        {
+          "type": "portal",
+          "station": "portal",
+          "destinationRegion": "upper-left"
+        }
+      ],
+      "dependencies": [
+        "L06-fire"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R01-flour",
+      "player": 1,
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour"
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-12.00"
+        }
+      ],
+      "dependencies": [],
+      "resources": []
+    },
+    {
+      "id": "R02-add-flour",
+      "player": 3,
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-12.00"
+        },
+        {
+          "type": "place",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99"
+        }
+      ],
+      "dependencies": [
+        "R01-flour"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R03-egg",
+      "player": 1,
+      "actions": [
+        {
+          "type": "take",
+          "station": "Egg"
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-12.00"
+        }
+      ],
+      "dependencies": [
+        "R02-add-flour"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R04-add-egg",
+      "player": 3,
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-12.00"
+        },
+        {
+          "type": "place",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99"
+        }
+      ],
+      "dependencies": [
+        "R03-egg"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R05-chocolate",
+      "player": 1,
+      "actions": [
+        {
+          "type": "take",
+          "station": "Chocolate"
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40"
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40"
+        }
+      ],
+      "dependencies": [
+        "R03-egg"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R06-mix",
+      "player": 3,
+      "actions": [
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40"
+        },
+        {
+          "type": "place",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99"
+        },
+        {
+          "type": "mix",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99",
+          "timeoutFrames": 1000
+        }
+      ],
+      "dependencies": [
+        "R04-add-egg",
+        "R05-chocolate"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R07-board",
+      "player": 1,
+      "actions": [
+        {
+          "type": "aim-cannon",
+          "cannon": "right"
+        },
+        {
+          "type": "board-cannon",
+          "cannon": "right"
+        }
+      ],
+      "dependencies": [
+        "R06-mix"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R08-fry",
+      "player": 3,
+      "actions": [
+        {
+          "type": "take",
+          "station": "bowl:dlc08_utensil_mixer_01@23.99,-10.99"
+        },
+        {
+          "type": "combine",
+          "station": "basket:dlc08_frierbasket@24.00,-21.60"
+        },
+        {
+          "type": "place",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80"
+        }
+      ],
+      "dependencies": [
+        "R06-mix"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R09-fire",
+      "player": 3,
+      "actions": [
+        {
+          "type": "fire-cannon",
+          "cannon": "right",
+          "passengerPlayer": 1,
+          "destinationRegion": "lower-left"
+        }
+      ],
+      "dependencies": [
+        "R07-board",
+        "R08-fry"
+      ],
+      "resources": []
+    },
+    {
+      "id": "W01-dirty-transfer",
+      "player": 0,
+      "actions": [
+        {
+          "type": "wait",
+          "path": "gameplayFrame",
+          "atLeast": 2100,
+          "timeoutFrames": 1500
+        },
+        {
+          "type": "take",
+          "station": "dirty-return"
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@15.60,-20.40"
+        }
+      ],
+      "dependencies": [
+        "L06-fire"
+      ],
+      "resources": []
+    },
+    {
+      "id": "W02-wash",
+      "player": 1,
+      "actions": [
+        {
+          "type": "take",
+          "station": "counter:dlc08_countertop_01_standard_circus@15.60,-20.40"
+        },
+        {
+          "type": "place",
+          "station": "sink"
+        },
+        {
+          "type": "wash",
+          "station": "sink",
+          "count": 1
+        }
+      ],
+      "dependencies": [
+        "R09-fire",
+        "W01-dirty-transfer"
+      ],
+      "resources": []
+    },
+    {
+      "id": "W03-clean",
+      "player": 1,
+      "actions": [
+        {
+          "type": "take",
+          "station": "drying"
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@15.60,-20.40"
+        }
+      ],
+      "dependencies": [
+        "W02-wash"
+      ],
+      "resources": []
+    },
+    {
+      "id": "R10-plate-donut",
+      "player": 3,
+      "actions": [
+        {
+          "type": "take",
+          "station": "plate:equipment_plate_01@21.60,-16.80"
+        },
+        {
+          "type": "cook",
+          "station": "basket:dlc08_frierbasket@24.00,-21.60",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "combine",
+          "station": "basket:dlc08_frierbasket@24.00,-21.60",
+          "expectedRecipeId": 228996
+        },
+        {
+          "type": "place",
+          "station": "counter:dlc08_countertop_01_standard_circus@25.20,-20.40"
+        }
+      ],
+      "dependencies": [
+        "R09-fire"
+      ],
+      "resources": []
+    },
+    {
+      "id": "T01-throw-stage",
+      "player": 2,
+      "actions": [
+        {
+          "type": "take",
+          "station": "Frankfurter"
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          }
+        }
+      ],
+      "dependencies": [
+        "W03-clean",
+        "L07-serve-return"
+      ],
+      "resources": []
+    },
+    {
+      "id": "T02-catch-stage",
+      "player": 0,
+      "actions": [
+        {
+          "type": "navigate",
+          "target": {
+            "x": 17.9,
+            "z": -13.2
+          }
+        },
+        {
+          "type": "face",
+          "target": {
+            "x": 13.6,
+            "z": -12.2
+          },
+          "durationFrames": 8
+        }
+      ],
+      "dependencies": [
+        "W03-clean"
+      ],
+      "resources": []
+    },
+    {
+      "id": "T03-throw-catch",
+      "player": 2,
+      "actions": [
+        {
+          "type": "throw",
+          "recipientPlayer": 0,
+          "timeoutFrames": 180
+        }
+      ],
+      "dependencies": [
+        "T01-throw-stage",
+        "T02-catch-stage"
+      ],
+      "resources": []
+    },
+    {
+      "id": "T04-caught-sausage",
+      "player": 0,
+      "actions": [
+        {
+          "type": "place",
+          "station": "pot:dlc08_utensil_pot_01@18.00,-10.80"
+        }
+      ],
+      "dependencies": [
+        "T03-throw-catch"
+      ],
+      "resources": []
+    }
+  ]
+}

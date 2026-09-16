@@ -1,0 +1,8 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"path":"state","equals":"Paused"},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-movement-history-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefMovementHistoryCheckpoint-r3\\ChefMovementHistoryCheckpoint.r3.dll","type":"SuperchargedPatch.Authoring.Modules.ChefMovementHistoryCheckpointModule","sha256":"199327E0CA511651BF06B25788458A4A378959FF35B8AE38CA653203BCEF8165","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-movement-history-checkpoint","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-movement-history-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

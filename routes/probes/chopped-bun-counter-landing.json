@@ -1,0 +1,20 @@
+{
+  "description": "Experimental ordinary chopped-bun landing on an empty native center counter. The counter can attach a throwable only after native flight ends; no airborne vessel catch is assumed. A missed landing must fail the bounded throw action. Two center chefs first clear the observed lane. P2 chops and throws; P0 then takes and replaces the exact landed item from the counter. No recipe, score, physics or position mutation.",
+  "timeoutFrames": 1600,
+  "jobs": [
+    {"id":"B01-clear-central-left","player":0,"dependencies":[],"resources":["left-chef-clear-point"],"actions":[{"type":"navigate","target":{"x":20.4,"z":-19.2},"timeoutFrames":360}]},
+    {"id":"B02-clear-central-right","player":3,"dependencies":[],"resources":["right-chef-clear-point"],"actions":[{"type":"navigate","target":{"x":23.8,"z":-19.2},"timeoutFrames":360}]},
+    {"id":"B03-chop-and-land-bun","player":2,"dependencies":["B01-clear-central-left","B02-clear-central-right"],"resources":["bun-crate","left-bun-board","center-counter19.2,-15.6","native-left-flight-lane"],"actions":[
+      {"type":"take","station":"HotdogBun","timeoutFrames":300},
+      {"type":"place","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+      {"type":"chop","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":300},
+      {"type":"take","station":"chop:dlc08_countertop_01_chopping_circus@15.60,-14.40","timeoutFrames":240},
+      {"type":"navigate","target":{"x":14.4,"z":-13.2},"timeoutFrames":240},
+      {"type":"throw","target":{"x":19.2,"z":-15.6},"landingBounds":{"minX":18.65,"maxX":19.75,"minZ":-16.15,"maxZ":-15.05},"landingStableFrames":6,"flightTimeoutFrames":240,"timeoutFrames":360}
+    ]},
+    {"id":"B04-confirm-native-counter-pickup","player":0,"dependencies":["B03-chop-and-land-bun"],"resources":["center-counter19.2,-15.6"],"actions":[
+      {"type":"take","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":360},
+      {"type":"place","station":"counter:dlc08_countertop_01_standard_circus@19.20,-15.60","timeoutFrames":180}
+    ]}
+  ]
+}

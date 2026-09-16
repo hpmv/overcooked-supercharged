@@ -1,0 +1,17 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r33-selective-target-null-weight\\ChefAnimatorCheckpoint.r33-selective-target-null-weight.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"F67B95C4116A96F7BDCC94E98DF851E31C95439645D2AE7185328BBF29533A23","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r15i-selective-target-null-weight-build\\Oc2NativeAnimatorCheckpoint.r15i.dll","sha256":"D2DB2C7AEF8842AE59A92E95968A8BBD9C01745FBC841C4A25EA4655844F7CBD"}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"rigidbody-actor-rebuild","path":"M:\\projects\\game-test-2\\framework-run\\modules\\RigidbodyActorRebuild-r13i-reset-after-r32-failure\\RigidbodyActorRebuild.r13i-reset-after-r32-failure.dll","type":"SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule","sha256":"864982593D6C57233132A8D826B13B215BB32CF94E244205C3F23DE780AB23C0","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-rigidbody-rebuild-r6b-context-auto-build\\Oc2NativeRigidbodyRebuild.r6b.dll","sha256":"E8522017323090709415FCEFCBCEA9F1668275DF5E02715E9EF3DBBDF1CFD933","automaticChefs":false,"automaticGroundCollider":false,"observeContactManagerContext":true,"automaticContactPoolRestore":true,"automaticTransformDispatchRestore":true}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1y-reset-after-r32-failure\\ResumePhase.r1y-reset-after-r32-failure.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"162DF73ECE267F624AD968B0E121C04E60684C7447B1FF1C13B0EE1CAD960976","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":155},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"rigidbody-actor-rebuild","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

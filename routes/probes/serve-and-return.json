@@ -1,0 +1,27 @@
+{
+  "phases": [
+    {
+      "name": "serve-first-order",
+      "actions": [
+        {
+          "player": 2,
+          "type": "place",
+          "station": "delivery",
+          "timeoutFrames": 240
+        }
+      ]
+    },
+    {
+      "name": "portal-return-to-pantry",
+      "actions": [
+        {
+          "player": 2,
+          "type": "portal",
+          "station": "portal",
+          "destinationRegion": "upper-left",
+          "timeoutFrames": 300
+        }
+      ]
+    }
+  ]
+}

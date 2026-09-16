@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"animator-checkpoint-inspector","path":"M:\\projects\\game-test-2\\framework-run\\modules\\AnimatorCheckpointInspector-r8\\AnimatorCheckpointInspector.r8.dll","type":"SuperchargedPatch.Authoring.Modules.AnimatorCheckpointInspectorModule","sha256":"836C6BAB76C480652B40ED8401D02BED18BFB046848155B6E50930441906DDAD","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"animator-checkpoint-inspector","operation":"dump-live-owner-graph","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r9-owner-graph-observer-build4\\Oc2NativeAnimatorCheckpoint.r9.dll","sha256":"A98CA668A38D1C32A6013F17DFBDADD8FD98ED74171EF782B2C2253BB605754B"}}}
+]

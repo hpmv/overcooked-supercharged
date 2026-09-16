@@ -1,0 +1,22 @@
+[
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "animator-checkpoint-inspector",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\AnimatorCheckpointInspector-r13\\AnimatorCheckpointInspector.r13.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.AnimatorCheckpointInspectorModule",
+      "sha256": "622DA57BDCFBBD95394C264740770D39D8F37C487C83E10B56D33A92D2834E23",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "dump-resume-ready-public-state",
+      "args": {}
+    }
+  }
+]

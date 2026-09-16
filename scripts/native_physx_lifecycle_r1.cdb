@@ -1,0 +1,19 @@
+.sympath C:\Program Files\Unity\Hub\Editor\2017.4.8f1\Editor\Data\PlaybackEngines\windowsstandalonesupport\Variations\win32_nondevelopment_mono
+.reload /f UnityPlayer.dll
+.echo OC2TRACE_READY lifecycle-r1
+bp UnityPlayer+0x481B50 ".printf \"OC2EV AwakeFromLoad rb=%p mode=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); gc"
+bp UnityPlayer+0x482510 ".printf \"OC2EV Create rb=%p arg=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); gc"
+bp UnityPlayer+0x4840D0 ".printf \"OC2EV SetIsKinematic rb=%p value=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); gc"
+bp UnityPlayer+0xA1F0C0 ".printf \"OC2EV AddRigidBody scene=%p body=%p value=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp+8), poi(@esp); gc"
+bp UnityPlayer+0xA20290 ".printf \"OC2EV RemoveRigidBody scene=%p body=%p arg1=%x arg2=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp+8), poi(@esp+c), poi(@esp); gc"
+bp UnityPlayer+0xA141E0 ".printf \"OC2EV SetBodyFlags body=%p flags=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); gc"
+bp UnityPlayer+0xA143D0 ".printf \"OC2EV SetGlobalPose actor=%p pose=%p wake=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp+8), poi(@esp); dd poi(@esp+4) L7; gc"
+bp UnityPlayer+0xA136D0 ".printf \"OC2EV SetBody2WorldScb body=%p pose=%p wake=%x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp+8), poi(@esp); dd poi(@esp+4) L7; gc"
+bp UnityPlayer+0xA149E0 ".printf \"OC2EV SetKinematicTarget actor=%p pose=%p ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); dd poi(@esp+4) L7; gc"
+bp UnityPlayer+0xA15E80 ".printf \"OC2EV WakeUp actor=%p ret=%p\\n\", @ecx, poi(@esp); gc"
+bp UnityPlayer+0xA12E80 ".printf \"OC2EV PutToSleep actor=%p ret=%p\\n\", @ecx, poi(@esp); gc"
+bp UnityPlayer+0xA15760 ".printf \"OC2EV SetWakeCounter actor=%p value=%08x ret=%p\\n\", @ecx, poi(@esp+4), poi(@esp); gc"
+bp UnityPlayer+0xA15780 ".printf \"OC2EV SwitchFromNoSim actor=%p ret=%p\\n\", @ecx, poi(@esp); gc"
+bp UnityPlayer+0xA157A0 ".printf \"OC2EV SwitchToNoSim actor=%p ret=%p\\n\", @ecx, poi(@esp); gc"
+.echo OC2TRACE_ARMED lifecycle-r1
+g

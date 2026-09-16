@@ -1,0 +1,43 @@
+[
+  {
+    "target": "bridge",
+    "request": { "command": "pause" }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-load",
+      "slot": "rigidbody-actor-rebuild",
+      "path": "M:\\projects\\game-test-2\\framework-run\\modules\\RigidbodyActorRebuild-r13w-scene-owned-pool-reset\\RigidbodyActorRebuild.r13w-scene-owned-pool-reset.dll",
+      "type": "SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule",
+      "sha256": "AFC4ED68F143A00503E50CA4E66689C1636058F0D596DBB2B00D983A5C398D8A",
+      "coreSha256": "391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "rigidbody-actor-rebuild",
+      "operation": "activate",
+      "args": {
+        "nativePath": "M:\\projects\\game-test-2\\artifacts\\native-rigidbody-rebuild-r6b-context-auto-build\\Oc2NativeRigidbodyRebuild.r6b.dll",
+        "sha256": "E8522017323090709415FCEFCBCEA9F1668275DF5E02715E9EF3DBBDF1CFD933",
+        "automaticChefs": false,
+        "automaticGroundCollider": false,
+        "observeContactManagerContext": true,
+        "automaticContactPoolRestore": true,
+        "automaticTransformDispatchRestore": true
+      }
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "rigidbody-actor-rebuild",
+      "operation": "status",
+      "args": {}
+    }
+  }
+]

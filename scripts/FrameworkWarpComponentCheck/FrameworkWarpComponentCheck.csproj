@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Headless"><HintPath>../../artifacts/framework-headless-warp-ack-check/Headless.dll</HintPath></Reference>
+    <Reference Include="Google.Protobuf"><HintPath>../../artifacts/framework-headless-warp-ack-check/Google.Protobuf.dll</HintPath></Reference>
+    <Reference Include="Clipper2Lib"><HintPath>../../artifacts/framework-headless-warp-ack-check/Clipper2Lib.dll</HintPath></Reference>
+    <Compile Include="../../framework/controller/Data/Levels/Carnival34Four.cs" Link="Carnival34Four.cs" />
+  </ItemGroup>
+</Project>

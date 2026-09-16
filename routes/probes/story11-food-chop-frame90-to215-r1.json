@@ -1,0 +1,71 @@
+{
+  "command": "raw-input",
+  "segments": [
+    {
+      "frames": 1,
+      "chefs": {
+        "43": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        },
+        "44": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        },
+        "45": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": true,
+          "dash": false
+        },
+        "46": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        }
+      }
+    },
+    {
+      "frames": 122,
+      "chefs": {
+        "43": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        },
+        "44": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        },
+        "45": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        },
+        "46": {
+          "x": 0.0,
+          "y": 0.0,
+          "pickup": false,
+          "interact": false,
+          "dash": false
+        }
+      }
+    }
+  ]
+}

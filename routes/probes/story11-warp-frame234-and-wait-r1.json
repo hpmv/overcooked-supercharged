@@ -1,0 +1,10 @@
+[
+  {"target":"bridge","request":{"command":"arm"}},
+  {"target":"controller","request":{"command":"warp","frame":234,"development":true}},
+  {"target":"controller","request":{"command":"status"},"until":{"all":[
+    {"path":"state","equals":"Paused"},
+    {"path":"frame","equals":234},
+    {"path":"requestPending","equals":false}
+  ]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}}
+]

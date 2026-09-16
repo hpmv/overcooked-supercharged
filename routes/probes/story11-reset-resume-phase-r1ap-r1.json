@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1ap-reset-after-stale-pool\\ResumePhase.r1ap-reset-after-stale-pool.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"6B74346FD00FF9361D87E3186EBCAF52A69B36F464D2CB80D662B049B1F04C22","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}}
+]

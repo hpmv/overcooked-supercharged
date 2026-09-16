@@ -1,0 +1,8 @@
+{"version":1,"command":"restart","seed":0,"isolateRecipeRandom":true}
+{"version":1,"command":"step","steps":1,"inputs":[]}
+{"version":1,"command":"step","steps":15,"inputs":[{"player":0,"x":-1,"y":0},{"player":1,"x":0,"y":-1},{"player":2,"x":1,"y":0},{"player":3,"x":0,"y":1}]}
+{"version":1,"command":"step","steps":15,"inputs":[{"player":0,"x":1,"y":0},{"player":1,"x":0,"y":1},{"player":2,"x":-1,"y":0},{"player":3,"x":0,"y":-1}]}
+{"version":1,"command":"step","steps":30,"inputs":[]}
+{"version":1,"command":"step","steps":1,"inputs":[{"player":0,"x":0,"y":1,"dash":true},{"player":1,"x":-1,"y":0,"dash":true},{"player":2,"x":-1,"y":0,"dash":true},{"player":3,"x":0,"y":1,"dash":true}]}
+{"version":1,"command":"step","steps":24,"inputs":[{"player":0,"x":0,"y":1},{"player":1,"x":-1,"y":0},{"player":2,"x":-1,"y":0},{"player":3,"x":0,"y":1}]}
+{"version":1,"command":"step","steps":60,"inputs":[]}

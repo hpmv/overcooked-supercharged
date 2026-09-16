@@ -1,0 +1,5 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

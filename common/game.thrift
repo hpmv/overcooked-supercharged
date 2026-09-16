@@ -76,6 +76,17 @@ struct ServerMessage {
     2: binary message,
 }
 
+// Capability advertisement only; every authoring restore still runs the
+// installed native checkpoint and observed spawn-chain preflight.
+struct NativeWarpCapabilities {
+    1: i32 version,
+    // Version1 bit0: observed dynamic spawn/delete/respawn preflight support.
+    // Version1 bit1: pristine RunLevelOutro checkpoint latch is held.
+    // Version1 bit2: this callback acknowledges a restored InLevel lifecycle.
+    // Version1 bit3: round-end authoring failed; only diagnostics and a full process restart are safe.
+    2: i32 features,
+}
+
 struct OutputData {
     1: map<i32, ChefSpecificData> chefs,
     2: map<i32, ItemData> items,
@@ -87,6 +98,7 @@ struct OutputData {
     9: optional string invalidStateReason,
     10: i32 physicsFramesElapsed,
     11: i32 framesSinceLastNoPhysicsFrame,
+    12: optional NativeWarpCapabilities nativeWarpCapabilities,
 }
 
 struct EntityIdOrRef {

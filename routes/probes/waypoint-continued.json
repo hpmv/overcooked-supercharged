@@ -1,0 +1,59 @@
+{
+  "description": "Native held-plate center circuit around measured geometry; optional intermediate-waypoint continuation continued. Final station approaches retain settled native interactions. No dash, food or score changes.",
+  "timeoutFrames": 3000,
+  "jobs": [
+    {
+      "id": "native-held-plate-center-circuit",
+      "player": 0,
+      "dependencies": [],
+      "resources": [
+        "initial-plate",
+        "central-navigation-circuit"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "38",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "navigate",
+          "station": "72",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "navigate",
+          "station": "49",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "navigate",
+          "station": "74",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "navigate",
+          "station": "48",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "navigate",
+          "station": "32",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        },
+        {
+          "type": "place",
+          "station": "38",
+          "continuousWaypoints": true,
+          "timeoutFrames": 600
+        }
+      ]
+    }
+  ]
+}

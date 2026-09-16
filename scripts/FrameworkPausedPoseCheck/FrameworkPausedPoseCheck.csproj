@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><HeadlessDirectory Condition="'$(HeadlessDirectory)' == ''">../../artifacts/framework-paused-pose-check</HeadlessDirectory></PropertyGroup>
+ <ItemGroup>
+  <Reference Include="Headless"><HintPath>$(HeadlessDirectory)/Headless.dll</HintPath></Reference>
+  <Reference Include="Google.Protobuf"><HintPath>$(HeadlessDirectory)/Google.Protobuf.dll</HintPath></Reference>
+  <Reference Include="Thrift"><HintPath>$(HeadlessDirectory)/Thrift.dll</HintPath></Reference>
+  <Reference Include="Clipper2Lib"><HintPath>$(HeadlessDirectory)/Clipper2Lib.dll</HintPath></Reference>
+ </ItemGroup>
+</Project>

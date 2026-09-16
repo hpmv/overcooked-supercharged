@@ -11,9 +11,16 @@ namespace Hpmv
             Dictionary<int, GameEntityRecord> currentEntityIdToRecord,
             GameEntityRecords records,
             int originalFrame,
-            int desiredFrame
+            int desiredFrame,
+            ISet<GameEntityRecord> observedPhysicsContainers = null
         )
         {
+            var kitchenFlows = records.GenAllEntities()
+                .Where(e => e.existed[desiredFrame] && e.prefab.IsKitchenFlowController).ToArray();
+            if (kitchenFlows.Length != 1 || kitchenFlows[0].prefab.Ignore)
+                throw new InvalidOperationException("Authoring warp requires exactly one non-ignored native-validated kitchen flow mapping; clocks/orders/RNG cannot be omitted.");
+            if (!currentEntityIdToRecord.Values.Contains(kitchenFlows[0]))
+                throw new InvalidOperationException("Authoring warp cannot recreate or omit the live native kitchen flow.");
             var warpSpec = new WarpSpec()
             {
                 EntitiesToDelete = new List<int>(),
@@ -83,6 +90,15 @@ namespace Hpmv
                     };
                 }
                 var data = record.data[desiredFrame];
+                if (observedPhysicsContainers?.Contains(record) == true)
+                {
+                    if (record.path.ids.Length != 1 || !currentRecordToEntityId.ContainsKey(record))
+                        throw new InvalidOperationException("Observed fixed physics container cannot be recreated through an invented spawn path.");
+                    spec.Position = record.position[desiredFrame].ToThrift();
+                    spec.Rotation = record.rotation[desiredFrame].ToThrift();
+                    spec.Velocity = record.velocity[desiredFrame].ToThrift();
+                    spec.AngularVelocity = record.angularVelocity[desiredFrame].ToThrift();
+                }
                 if (record.prefab.CanBeAttached)
                 {
                     if (data.attachmentParent == null)
@@ -328,7 +344,13 @@ namespace Hpmv
                 {
                     spec.PlateReturnStation = new PlateReturnStationWarpData
                     {
-                        Stack = data.plateReturnStationStack == null ? null : getEntityIdOrRef(data.plateReturnStationStack),
+                        // Historical/imported traces may predate the simulator's
+                        // OnItemRemoved lifecycle fix.  A stack that does not
+                        // exist at the target frame is native-null and must not
+                        // become an unbindable logical-path reference.
+                        Stack = data.plateReturnStationStack == null ||
+                                !data.plateReturnStationStack.existed[desiredFrame]
+                            ? null : getEntityIdOrRef(data.plateReturnStationStack),
                     };
                 }
 
@@ -340,6 +362,8 @@ namespace Hpmv
             }
             warpSpec.Frame = desiredFrame;
             warpSpec.InvalidStateReason = records.InvalidStateReason[desiredFrame];
+            if (warpSpec.Entities.Count(e => e.KitchenController != null && e.PlateReturnController != null) != 1)
+                throw new InvalidOperationException("Authoring warp omitted its kitchen clock/order/RNG state.");
             // Console.WriteLine("WarpSpec dump:");
             // Console.WriteLine(JsonConvert.SerializeObject(warpSpec));
             return warpSpec;

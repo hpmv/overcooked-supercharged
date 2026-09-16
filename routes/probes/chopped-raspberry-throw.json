@@ -1,0 +1,156 @@
+{
+  "description": "Fresh four-chef native raspberry throw probe. P1 chops the flavor, takes that exact prepared item and throws it from the previously measured right pantry lane into the original bowl on the mixer at24,-10.8. P3 then observes native mixing, pours into the original fryer and restores the empty bowl. No planner feature or score claim.",
+  "timeoutFrames": 3000,
+  "jobs": [
+    {
+      "id": "T01-supply-flour",
+      "player": 1,
+      "dependencies": [],
+      "resources": [
+        "flour-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "T02-supply-egg",
+      "player": 1,
+      "dependencies": [
+        "T01-supply-flour"
+      ],
+      "resources": [
+        "egg-crate",
+        "near-bowl",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Egg",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "T03-chop-and-throw-flavor",
+      "player": 1,
+      "dependencies": [
+        "T02-supply-egg"
+      ],
+      "resources": [
+        "raspberry-crate",
+        "upper-right-board",
+        "near-bowl",
+        "original-mixer",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Raspberry",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 240
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "T04-mix-fry-and-restore",
+      "player": 3,
+      "dependencies": [
+        "T03-chop-and-throw-flavor"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-mixer",
+        "finished-donut-fryer"
+      ],
+      "actions": [
+        {
+          "type": "mix",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 900
+        },
+        {
+          "type": "take",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "combine",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "place",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 420
+        },
+        {
+          "type": "cook",
+          "station": "basket:dlc08_frierbasket@22.80,-21.60",
+          "timeoutFrames": 900
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "probe-normalize-retained-target",
+      "args": {
+        "nativePath": "M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r9e-pending-visit-container-diagnostic-build\\Oc2NativeAnimatorCheckpoint.r9e.dll",
+        "sha256": "F95288F2191DB420B5699D84C54696281D46E5B27EA411117D7D5CBCAA8CDB72",
+        "animatorPath": "Chefs/Player 2/Chef",
+        "acknowledgeSacrificialProcess": true
+      }
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "dump-resume-ready-owner-state",
+      "args": {}
+    }
+  },
+  {
+    "target": "bridge",
+    "request": {
+      "command": "hot-call",
+      "slot": "animator-checkpoint-inspector",
+      "operation": "dump-resume-ready-native-state",
+      "args": {}
+    }
+  }
+]

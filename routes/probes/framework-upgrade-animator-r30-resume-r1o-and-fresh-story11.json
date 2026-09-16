@@ -1,0 +1,15 @@
+[
+  {"target":"controller","request":{"command":"status"},"until":{"path":"connected","equals":true},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r30a-target-null-stage-a\\ChefAnimatorCheckpoint.r30a-target-null-stage-a.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"AF9AC174D1766E6F083408B142935F60B433AB6888C41853327466917FCE2FEA","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r15b-post-override-target-null-build\\Oc2NativeAnimatorCheckpoint.r15b.dll","sha256":"F98522F90E8138EF9BFEAE3F4ED82F72C4D611E04202971820FB8B0D332988BD"}}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1o-reset\\ResumePhase.r1o-reset.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"45EEFCB2C3430FA273144027A88200BABE5D844B130EA1F4E94968A08065F2DE","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":155},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

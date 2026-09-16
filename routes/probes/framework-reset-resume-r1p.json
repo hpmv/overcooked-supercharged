@@ -1,0 +1,7 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"resume-phase","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ResumePhase-r1p-reset\\ResumePhase.r1p-reset.dll","type":"SuperchargedPatch.Authoring.Modules.ResumePhaseModule","sha256":"4A65D9110D05FCE8B6B7A45EADE2549BEF204C43D8AD309B9C6F3BCB1A796913","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"activate","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]

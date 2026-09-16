@@ -1,0 +1,161 @@
+{
+  "description": "Native B mechanism experiment: identical full near-bowl kit and final Flour target as A, with only final throw staging changed to the geometrically reachable upper pantry point28.8,-11.3. This aims to bypass the upper board59 catch seen in A; physical passage past full near bowl6 remains unproved. No other chef actions.",
+  "timeoutFrames": 1800,
+  "jobs": [
+    {
+      "id": "FB01-near-flour",
+      "player": 1,
+      "dependencies": [],
+      "resources": [
+        "near-bowl",
+        "original-near-mixer",
+        "original-far-mixer",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "FB02-near-egg",
+      "player": 1,
+      "dependencies": [
+        "FB01-near-flour"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-near-mixer",
+        "original-far-mixer",
+        "right-throw-lane"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Egg",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 300
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "FB03-near-prepared-chocolate",
+      "player": 1,
+      "dependencies": [
+        "FB02-near-egg"
+      ],
+      "resources": [
+        "near-bowl",
+        "original-near-mixer",
+        "original-far-mixer",
+        "right-throw-lane",
+        "right-chop-board"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Chocolate",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "place",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "chop",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 300
+        },
+        {
+          "type": "take",
+          "station": "chop:dlc08_countertop_01_chopping_circus@25.20,-14.40",
+          "timeoutFrames": 240
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 27.2,
+            "z": -12.2
+          },
+          "timeoutFrames": 240
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@24.00,-10.80",
+          "timeoutFrames": 180
+        }
+      ]
+    },
+    {
+      "id": "FB04-far-flour-full-near",
+      "player": 1,
+      "dependencies": [
+        "FB03-near-prepared-chocolate"
+      ],
+      "resources": [
+        "near-bowl",
+        "far-bowl",
+        "original-near-mixer",
+        "original-far-mixer",
+        "right-throw-lane",
+        "right-upper-board",
+        "right-pass"
+      ],
+      "actions": [
+        {
+          "type": "take",
+          "station": "Flour",
+          "timeoutFrames": 180
+        },
+        {
+          "type": "navigate",
+          "target": {
+            "x": 28.8,
+            "z": -11.3
+          },
+          "timeoutFrames": 180
+        },
+        {
+          "type": "throw",
+          "station": "mix-station:dlc08_workstation_mixer@22.80,-10.80",
+          "timeoutFrames": 120,
+          "flightTimeoutFrames": 90
+        },
+        {
+          "type": "wait",
+          "durationFrames": 2,
+          "timeoutFrames": 4
+        }
+      ]
+    }
+  ]
+}

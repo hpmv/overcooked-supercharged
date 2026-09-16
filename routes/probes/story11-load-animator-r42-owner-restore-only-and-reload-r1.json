@@ -1,0 +1,15 @@
+[
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-load","slot":"chef-animator-checkpoint","path":"M:\\projects\\game-test-2\\framework-run\\modules\\ChefAnimatorCheckpoint-r42-owner-restore-only\\ChefAnimatorCheckpoint.r42-owner-restore-only.dll","type":"SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule","sha256":"E7D9013E55A63BFC0F447DC776041C382BCB893E76F57A0FF112F8F360427DDF","coreSha256":"391F6265321AE57C7924E723ECB0C3EC3F9F9C91BAADD42AAC2521EC624BD746"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"activate","args":{"nativePath":"M:\\projects\\game-test-2\\artifacts\\native-animator-checkpoint-r16c-animation-mixer-oob-canonical-build\\Oc2NativeAnimatorCheckpoint.r16c.dll","sha256":"5B73BB0C7A8FD6E6F026CDC8703D5C8B51B1803FB17A89F94937478216ACBF07"}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"level-session","operation":"load-main-1-1","args":{"seed":0}}},
+  {"target":"bridge","request":{"command":"status"},"until":{"all":[{"path":"bridge.loadComplete","equals":true},{"path":"bridge.loading","equals":false},{"path":"bridge.session.scene","equals":"s_sushi_1_1"}]},"timeoutSeconds":165},
+  {"target":"controller","request":{"command":"inspect","full":true},"until":{"all":[{"path":"state","equals":"Paused"},{"path":"frame","equals":1},{"path":"requestPending","equals":false},{"path":"freshLevelLoadObserved","equals":true}]},"timeoutSeconds":30},
+  {"target":"controller","request":{"command":"actions-clear"}},
+  {"target":"bridge","request":{"command":"pause"}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"body-restore","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"world-sync-cache","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"resume-phase","operation":"status","args":{}}},
+  {"target":"bridge","request":{"command":"hot-call","slot":"chef-animator-checkpoint","operation":"status","args":{}}},
+  {"target":"controller","request":{"command":"status"}}
+]
