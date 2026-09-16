@@ -40,6 +40,22 @@ namespace SuperchargedPatch.Authoring.Modules
             internal Material[] MaterialsBeforeMoveNext;
             internal readonly HashSet<Material> OwnedMaterials=new HashSet<Material>();
             internal bool MaterialOwnershipComplete;
+            internal int EntityId;
+            internal IEnumerator SchedulerIterator;
+            internal Coroutine SchedulerCoroutine;
+        }
+
+        private sealed class SequenceFrameState
+        {
+            internal Sequence Source;
+            internal int EntityId,Pc;
+            internal bool Disposing,Errored,CurrentIsNull,CurrentIsStationWait;
+            internal float Progress;
+            internal Collider[] Colliders;
+            internal Rigidbody Body;
+            internal MeshRenderer[] Renderers;
+            internal GameObject Pfx;
+            internal bool PfxAlive,PfxDetached;
         }
 
         private sealed class PlateState
@@ -115,6 +131,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal object CoreSnapshot;
             internal int PendingFades;
             internal object[] Sequences;
+            internal SequenceFrameState[] SequenceStates;
             internal PlateState[] Plates;
         }
 
@@ -133,6 +150,24 @@ namespace SuperchargedPatch.Authoring.Modules
             internal int[] DestroyedMaterialIds;
             internal int[] DiscardedReturnEntityIds;
             internal object Receipt;
+            internal bool ActiveTargetComposite;
+            internal Sequence CancelCurrent;
+            internal PlateState CancelTargetPlate;
+            internal SequenceFrameState TargetSequence;
+            internal GameObject CancelPfx;
+            internal Sequence ReboundActive;
+            internal int[] ReboundHistoryFrames;
+            internal int[] DiscardedIncompatibleHistoryFrames;
+            internal object[] DiscardedIncompatibleHistory;
+        }
+
+        private sealed class Entity2HistoryRebind
+        {
+            internal int Frame;
+            internal PlateState Plate;
+            internal RendererState[] Renderers;
+            internal ColliderState[] Colliders;
+            internal SequenceFrameState[] Sequences;
         }
 
         private sealed class ForcedPresentationStart
@@ -148,19 +183,23 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<Sequence> sequences = new List<Sequence>();
         private readonly SortedDictionary<int,FrameState> history = new SortedDictionary<int,FrameState>();
         private Harmony harmony;
-        private FieldInfo coreHistory, coreRoundIdentity, delivered, planSnapshot, stationTrigger, attachedContainer, ingredientContentUiInstance;
+        private FieldInfo coreHistory, coreRoundIdentity, delivered, planSnapshot, coreDeliveryFades, stationTrigger, attachedContainer, ingredientContentUiInstance;
         private FieldInfo mealContainer,mealOrderDefinition,mealRendererInfo,comboPrefabLookup;
-        private MethodInfo comboStart;
+        private MethodInfo comboStart,deliveryFactory;
         private object observedRoundIdentity;
         private int lastFrame = -1;
         private long factories, captures, duplicates, resets, restores, historyRestores;
         private bool prepareMask, completeInProgress, admissionObserverRemoved;
+        private object maskedCoreSnapshot;
+        private int maskedDeliveryFadeCount;
         private GameObject admissionPlate;
         private int admissionInstance;
         private RestoreCandidate preparing, pending;
         private FrameState preparingHistory, pendingHistory;
         private PlateState resumePresentationTarget;
         private Sequence resumePresentationCurrent;
+        private Sequence resumeActiveSequence;
+        private Dictionary<string,object> resumeActiveReceipt;
         private object lastResumePresentationRestore;
         private readonly List<object> restoreReceipts=new List<object>();
         private readonly List<ForcedPresentationStart> suppressedNaturalPresentationStarts=new List<ForcedPresentationStart>();
@@ -172,7 +211,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object lastRendererMaterialFailure;
         private bool disposed;
 
-        public string Name { get { return "delivery-fade-checkpoint-r10k-persistent-backward-history"; } }
+        public string Name { get { return "delivery-fade-checkpoint-r10m-source-safety"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation, Dictionary<string,object> args)
@@ -210,10 +249,12 @@ namespace SuperchargedPatch.Authoring.Modules
             coreRoundIdentity = typeof(NativeKitchenCheckpoint).GetField("roundIdentity",Static);
             delivered = typeof(NativePlateLifecycle).GetField("delivered",Static);
             planSnapshot=typeof(NativeKitchenCheckpoint.RestorePlan).GetField("snapshot",Instance);
+            coreDeliveryFades=planSnapshot==null?null:planSnapshot.FieldType.GetField("DeliveryFades",Instance);
             stationTrigger=typeof(PlateStation).GetField("m_onFoodDeliveredTrigger",Instance);
             attachedContainer=FindField(typeof(ClientAttachedOrderCosmeticDecisions),"m_container");
             ingredientContentUiInstance=FindField(typeof(ClientIngredientContentGUI),"m_uiInstance");
             comboStart=AccessTools.DeclaredMethod(typeof(ComboCosmeticDecisions),"Start",Type.EmptyTypes);
+            deliveryFactory=factory;
             mealContainer=FindField(typeof(MealCosmeticDecisions),"m_container");
             mealOrderDefinition=FindField(typeof(MealCosmeticDecisions),"m_iOrderDefinition");
             mealRendererInfo=FindField(typeof(MealCosmeticDecisions),"m_rendererSceneInfo");
@@ -223,7 +264,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 || complete==null || captureBoundary==null || restoreFailure==null || resume==null || resume.ReturnType!=typeof(void)
                 || coreHistory == null || !typeof(IDictionary).IsAssignableFrom(coreHistory.FieldType)
                 || coreRoundIdentity == null || delivered == null || !typeof(IDictionary).IsAssignableFrom(delivered.FieldType)
-                || planSnapshot==null || stationTrigger==null || stationTrigger.FieldType!=typeof(string)
+                || planSnapshot==null || coreDeliveryFades==null || coreDeliveryFades.FieldType!=typeof(int)
+                || stationTrigger==null || stationTrigger.FieldType!=typeof(string)
                 || attachedContainer==null || attachedContainer.FieldType!=typeof(GameObject)
                 || ingredientContentUiInstance==null
                 || !typeof(UnityEngine.Object).IsAssignableFrom(ingredientContentUiInstance.FieldType)
@@ -340,7 +382,7 @@ namespace SuperchargedPatch.Authoring.Modules
         public static void BeforePrepare(Hpmv.WarpSpec __0)
         {
             var module=active;if(module==null)return;
-            module.prepareMask=false;module.preparing=null;module.preparingHistory=null;
+            module.RestoreTargetDeliveryFadeMask();module.preparing=null;module.preparingHistory=null;
             if(__0==null)return;
             int current=NativePlateLifecycle.PendingDeliveryFades;
             FrameState target;
@@ -351,6 +393,13 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 if(module.TargetPlatesRemainExact(target))return;
                 module.preparing=module.PrepareDestroyedTarget(__0,target);
+                return;
+            }
+            if(current==1&&target.PendingFades==1)
+            {
+                module.preparing=module.PrepareActiveDestroyedTarget(__0,target);
+                module.MaskTargetDeliveryFade(target);
+                module.TemporarilyRemoveAdmissionObserver();
                 return;
             }
             if(target.PendingFades!=0)
@@ -379,7 +428,7 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             finally
             {
-                module.RestoreAdmissionObserver();module.prepareMask=false;
+                module.RestoreTargetDeliveryFadeMask();module.RestoreAdmissionObserver();
                 module.preparing=null;module.preparingHistory=null;
             }
         }
@@ -389,8 +438,9 @@ namespace SuperchargedPatch.Authoring.Modules
             var module=active;
             if(module!=null)
             {
+                module.RestoreTargetDeliveryFadeMask();
                 module.RestoreAdmissionObserver();
-                module.prepareMask=false;module.preparing=null;module.preparingHistory=null;
+                module.preparing=null;module.preparingHistory=null;
                 if(__exception!=null){module.pending=null;module.pendingHistory=null;}
             }
             return __exception;
@@ -425,9 +475,12 @@ namespace SuperchargedPatch.Authoring.Modules
                     if(module.completeInProgress)
                         throw new InvalidOperationException("Native checkpoint completion did not reach its delivery lifecycle verification capture.");
                     module.VerifyRestored(module.pending);
-                    if(module.resumePresentationTarget!=null)
+                    if(module.resumePresentationTarget!=null||module.resumeActiveSequence!=null||module.resumeActiveReceipt!=null)
                         throw new InvalidOperationException("A prior delivery presentation restore is still pending at the resume boundary.");
                     module.resumePresentationTarget=module.pending.TargetPlate;
+                    module.resumeActiveSequence=module.pending.ActiveTargetComposite?module.pending.ReboundActive:null;
+                    module.resumeActiveReceipt=module.pending.ActiveTargetComposite
+                        ?module.pending.Receipt as Dictionary<string,object>:null;
                     module.restores++;
                 }
                 module.PruneAfter(module.pendingHistory.Frame);
@@ -448,6 +501,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     module.failure=__exception.ToString();module.pending=null;
                     module.pendingHistory=null;
                     module.resumePresentationTarget=null;module.resumePresentationCurrent=null;
+                    module.resumeActiveSequence=null;module.resumeActiveReceipt=null;
                 }
             }
             return __exception;
@@ -456,9 +510,10 @@ namespace SuperchargedPatch.Authoring.Modules
         public static void AfterRestoreFailure()
         {
             var module=active;if(module==null)return;
-            module.prepareMask=false;module.completeInProgress=false;module.preparing=null;module.pending=null;
+            module.RestoreTargetDeliveryFadeMask();module.completeInProgress=false;module.preparing=null;module.pending=null;
             module.preparingHistory=null;module.pendingHistory=null;
             module.resumePresentationTarget=null;module.resumePresentationCurrent=null;
+            module.resumeActiveSequence=null;module.resumeActiveReceipt=null;
             module.RestoreAdmissionObserver();
         }
 
@@ -498,7 +553,30 @@ namespace SuperchargedPatch.Authoring.Modules
                 module.VerifyExternalUi(module.resumePresentationTarget.ExternalUi);
                 var receipt=module.lastResumePresentationRestore as Dictionary<string,object>;
                 if(receipt!=null)receipt["verifiedAfterResume"]=true;
-                module.resumePresentationTarget=null;module.resumePresentationCurrent=null;module.failure=null;
+                if(module.resumeActiveSequence!=null)
+                {
+                    var sequence=module.resumeActiveSequence;
+                    if(sequence.SchedulerIterator!=null||sequence.SchedulerCoroutine!=null)
+                        throw new InvalidOperationException("Restored delivery iterator is already scheduled.");
+                    var relay=new DeliveryFadeResumeRelay(sequence.Iterator);
+                    var coroutine=sequence.Station.StartCoroutine(relay);
+                    if(!relay.Primed||coroutine==null||IteratorPc(sequence)!=2
+                        ||IteratorProgress(sequence)!=.3f||Field(sequence.Iterator.GetType(),"$current").GetValue(sequence.Iterator)!=null)
+                    {
+                        sequence.Station.StopCoroutine(relay);
+                        throw new InvalidOperationException("Restored delivery relay did not prime without advancing the PC2 iterator.");
+                    }
+                    sequence.SchedulerIterator=relay;sequence.SchedulerCoroutine=coroutine;
+                    if(receipt!=null)receipt["activeIteratorRelayScheduled"]=true;
+                    if(module.resumeActiveReceipt!=null)
+                    {
+                        module.resumeActiveReceipt["activeIteratorRelayScheduled"]=true;
+                        module.resumeActiveReceipt["iteratorPcAtSchedule"]=IteratorPc(sequence);
+                        module.resumeActiveReceipt["iteratorProgressAtSchedule"]=IteratorProgress(sequence);
+                    }
+                }
+                module.resumePresentationTarget=null;module.resumePresentationCurrent=null;
+                module.resumeActiveSequence=null;module.resumeActiveReceipt=null;module.failure=null;
             }
             catch(Exception error){module.failure=error.ToString();throw;}
         }
@@ -514,9 +592,11 @@ namespace SuperchargedPatch.Authoring.Modules
             var renderers=ComponentsRecursive<MeshRenderer>(plate.transform);
             var owner=plate.GetComponent<ClientAttachedOrderCosmeticDecisions>();
             var container=GetPresentationContainer(owner);
+            var entry=EntitySerialisationRegistry.GetEntry(plate.gameObject);
+            int entityId=entry==null?0:(int)entry.m_Header.m_uEntityID;
             sequences.Add(new Sequence { Station=station,Plate=plate,Effects=effects,Iterator=iterator,
                 PlateObject=plate.gameObject,StationId=station.GetInstanceID(),PlateId=plate.GetInstanceID(),
-                PlateObjectId=plate.gameObject.GetInstanceID(),IteratorType=type.FullName,
+                PlateObjectId=plate.gameObject.GetInstanceID(),EntityId=entityId,IteratorType=type.FullName,
                 FactoryPreimage=ObservePlate(plate.gameObject),
                 PresentationOwner=owner,PresentationOwnerId=owner==null?0:owner.GetInstanceID(),
                 PresentationContainer=container,PresentationContainerId=Alive(container)?container.GetInstanceID():0,
@@ -544,9 +624,30 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 duplicates++;return;
             }
+            var plates=CapturePlates();
             var state=new FrameState { Frame=frame,CoreSnapshot=core,PendingFades=NativePlateLifecycle.PendingDeliveryFades,
-                Sequences=sequences.Select(ObserveSequence).ToArray(),Plates=CapturePlates() };
+                Sequences=sequences.Select(ObserveSequence).ToArray(),SequenceStates=sequences.Select(CaptureSequenceState).ToArray(),Plates=plates };
             history[frame]=state;lastFrame=Math.Max(lastFrame,frame);captures++;
+        }
+
+        private SequenceFrameState CaptureSequenceState(Sequence sequence)
+        {
+            Type type=sequence.Iterator.GetType();RequireIteratorLayout(type);
+            object current=Field(type,"$current").GetValue(sequence.Iterator);
+            var pfx=Field(type,"<pfx>__1").GetValue(sequence.Iterator) as GameObject;
+            return new SequenceFrameState {
+                Source=sequence,EntityId=sequence.EntityId,
+                Pc=Convert.ToInt32(Field(type,"$PC").GetValue(sequence.Iterator)),
+                Disposing=Convert.ToBoolean(Field(type,"$disposing").GetValue(sequence.Iterator)),
+                Errored=Convert.ToBoolean(Field(type,"<errored>__0").GetValue(sequence.Iterator)),
+                CurrentIsNull=current==null,
+                CurrentIsStationWait=Alive(sequence.Station)&&ReferenceEquals(current,StationWait(sequence.Station)),
+                Progress=Convert.ToSingle(Field(type,"<progress>__0").GetValue(sequence.Iterator)),
+                Colliders=Field(type,"<colliders>__0").GetValue(sequence.Iterator) as Collider[],
+                Body=Field(type,"<rigidBody>__0").GetValue(sequence.Iterator) as Rigidbody,
+                Renderers=Field(type,"<allRenderers>__0").GetValue(sequence.Iterator) as MeshRenderer[],
+                Pfx=pfx,PfxAlive=Alive(pfx),PfxDetached=Alive(pfx)&&pfx.transform.parent==null
+            };
         }
 
         private PlateState[] CapturePlates()
@@ -778,6 +879,114 @@ namespace SuperchargedPatch.Authoring.Modules
                 DiscardedReturnEntityIds=discardedReturnEntityIds };
         }
 
+        private RestoreCandidate PrepareActiveDestroyedTarget(Hpmv.WarpSpec warp,FrameState target)
+        {
+            if(NativePlateLifecycle.PendingDeliveryFades!=1||DeliveredCount()!=1||target.PendingFades!=1)
+                throw new InvalidOperationException("Active destroyed-delivery restore requires one current and one target fade.");
+            if(NativePlateLifecycle.LastObservationError.Length!=0)
+                throw new InvalidOperationException("Native plate lifecycle observation is incomplete: "+NativePlateLifecycle.LastObservationError);
+            if(warp.Entities==null||!DeliveryFadeReincarnationContract.IsDisjointFutureDeletionSet(
+                warp.EntitiesToDelete,target.Plates==null?null:target.Plates.Select(value=>value.EntityId).ToArray()))
+                throw new InvalidOperationException("Active destroyed-delivery restore requires distinct future-only deletions.");
+            var spawned=warp.Entities.Where(value=>value!=null&&!value.__isset.entityId
+                &&value.SpawningPath!=null&&value.SpawningPath.Count!=0).ToArray();
+            if(spawned.Length!=1||!spawned[0].__isset.entityPathReference||spawned[0].EntityPathReference==null
+                ||spawned[0].EntityPathReference.Ids==null||spawned[0].EntityPathReference.Ids.Count!=1
+                ||!DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(spawned[0].SpawningPath,
+                    spawned[0].EntityPathReference.Ids,spawned[0].EntityPathReference.Ids[0])
+                ||spawned[0].EntityPathReference.Ids[0]!=2||spawned[0].IngredientContainer==null)
+                throw new InvalidOperationException("Active destroyed-delivery restore requires exact Story 1-1 plate entity 2 recreation.");
+            var targets=target.Plates.Where(value=>value.EntityId==2).ToArray();
+            if(targets.Length!=1)throw new InvalidOperationException("Active delivery target lacks historical plate entity 2.");
+            var targetPlate=targets[0];
+            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Object)
+                ||!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Plate)
+                ||EntitySerialisationRegistry.GetEntry((uint)2)!=null||Alive(targetPlate.Object)||Alive(targetPlate.Plate))
+                throw new InvalidOperationException("Active delivery target plate entity 2 is not destroyed in the current world.");
+            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Parent)||!Alive(targetPlate.Parent)
+                ||targetPlate.Parent.GetInstanceID()!=targetPlate.ParentId)
+                throw new InvalidOperationException("Active delivery target attachment parent is absent or stale.");
+            foreach(var other in target.Plates.Where(value=>!ReferenceEquals(value,targetPlate)))
+                ValidatePlateIncarnation(other,other.Plate);
+
+            var targetSequences=(target.SequenceStates??new SequenceFrameState[0]).Where(value=>value.EntityId==2).ToArray();
+            if(targetSequences.Length!=1)throw new InvalidOperationException("Active delivery target lacks one entity 2 iterator snapshot.");
+            var targetSequence=targetSequences[0];var source=targetSequence.Source;
+            if(source==null||source.EntityId!=2)throw new InvalidOperationException("Active delivery target iterator lineage is absent.");
+            ValidateTerminalSequenceForActiveTarget(source,targetPlate);ValidateStory11Station(source);
+            ValidateExactActiveTarget(targetSequence,targetPlate);
+            ValidatePfxGameplayFree(source.Effects.m_deliverPFXPrefab);
+
+            var map=(IDictionary)delivered.GetValue(null);
+            var current=sequences.Where(value=>Alive(value.Station)&&Alive(value.Plate)
+                &&value.EntityId==1&&map.Contains(value.Plate.gameObject)).ToArray();
+            if(current.Length!=1)throw new InvalidOperationException("Exactly one current entity 1 fade must be canceled.");
+            var cancel=current[0];ValidateLiveSequenceSelf(cancel);ValidateStory11Station(cancel);
+            int instance=Convert.ToInt32(map[cancel.Plate.gameObject]);
+            if(instance!=cancel.Plate.gameObject.GetInstanceID())
+                throw new InvalidOperationException("Current delivery observer incarnation differs.");
+            var cancelTargets=target.Plates.Where(value=>value.EntityId==1).ToArray();
+            if(cancelTargets.Length!=1)throw new InvalidOperationException("Active delivery target lacks inactive plate entity 1.");
+            ValidatePlateIncarnation(cancelTargets[0],cancel.Plate);
+            if(ReferenceEquals(cancel,source)||cancel.EntityId==source.EntityId)
+                throw new InvalidOperationException("Canceled and recreated delivery lineages overlap.");
+            return new RestoreCandidate { Frame=warp.Frame,CoreSnapshot=target.CoreSnapshot,Target=target,
+                TargetPlate=targetPlate,Current=source,Pfx=IteratorPfx(source),DestroyedRoot=true,
+                ActiveTargetComposite=true,CancelCurrent=cancel,CancelTargetPlate=cancelTargets[0],
+                TargetSequence=targetSequence,CancelPfx=IteratorPfx(cancel),
+                DiscardedReturnEntityIds=warp.EntitiesToDelete.OrderBy(value=>value).ToArray() };
+        }
+
+        private void ValidateExactActiveTarget(SequenceFrameState state,PlateState plate)
+        {
+            if(state==null||state.Source==null||plate==null||plate.Colliders==null||plate.Renderers==null
+                ||state.Colliders==null||state.Renderers==null
+                ||!DeliveryFadeReincarnationContract.IsExactStory11ActiveFadeState(
+                    state.EntityId,state.Pc,state.Disposing,state.Errored,state.CurrentIsNull,state.CurrentIsStationWait,
+                    state.Progress,state.PfxAlive,state.PfxDetached,state.Source.Effects.m_pfxToFadeDelayTime,
+                    state.Source.Effects.m_fadeTime,plate.Colliders.Select(value=>value.Enabled).ToArray(),
+                    plate.Renderers.SelectMany(value=>value.HasAlpha.Select((has,index)=>has?value.Alpha[index]:Single.NaN)).ToArray()))
+                throw new InvalidOperationException("Target is not the exact proven Story 1-1 entity 2 PC2 fade state.");
+            if(state.Body!=null||state.Colliders.Length!=plate.Colliders.Length||state.Renderers.Length!=plate.Renderers.Length
+                ||!ExactReferenceMembership(state.Colliders,plate.Colliders.Select(value=>value.Collider).ToArray())
+                ||!ExactReferenceMembership(state.Renderers,plate.Renderers.Select(value=>value.Renderer).ToArray())
+                ||!ReferenceEquals(state.Pfx,IteratorPfx(state.Source))
+                ||state.Source.Effects.m_fadeOutShader==null)
+                throw new InvalidOperationException("Target active delivery iterator membership differs.");
+            foreach(var renderer in plate.Renderers)
+                for(int i=0;i<renderer.Materials.Length;i++)
+                    if(renderer.Materials[i]==null||!ReferenceEquals(renderer.Materials[i].shader,state.Source.Effects.m_fadeOutShader)
+                        ||!state.Source.OwnedMaterials.Contains(renderer.Materials[i]))
+                        throw new InvalidOperationException("Target active delivery material is not an owned fade material.");
+        }
+
+        private void ValidateLiveSequenceSelf(Sequence sequence)
+        {
+            Type type=sequence.Iterator.GetType();RequireIteratorLayout(type);
+            int pc=IteratorPc(sequence);float progress=IteratorProgress(sequence);
+            var obj=sequence.Plate.gameObject;
+            var colliders=ComponentsRecursive<Collider>(obj.transform);
+            var iteratorColliders=Field(type,"<colliders>__0").GetValue(sequence.Iterator) as Collider[];
+            var renderers=ComponentsRecursive<MeshRenderer>(obj.transform);
+            var iteratorRenderers=Field(type,"<allRenderers>__0").GetValue(sequence.Iterator) as MeshRenderer[];
+            if(pc!=2||!Finite(progress)||progress<0f||progress>=1f
+                ||Convert.ToBoolean(Field(type,"$disposing").GetValue(sequence.Iterator))
+                ||Convert.ToBoolean(Field(type,"<errored>__0").GetValue(sequence.Iterator))
+                ||Field(type,"$current").GetValue(sequence.Iterator)!=null
+                ||Field(type,"<rigidBody>__0").GetValue(sequence.Iterator)!=null
+                ||!sequence.MaterialOwnershipComplete||!Alive(IteratorPfx(sequence))
+                ||iteratorColliders==null||iteratorRenderers==null
+                ||!ExactReferenceMembership(iteratorColliders,colliders)
+                ||!ExactReferenceMembership(iteratorRenderers,renderers)
+                ||colliders.Any(value=>value.enabled)||renderers.Length!=sequence.PresentationRenderers.Length)
+                throw new InvalidOperationException("Current entity 1 delivery is not one exact live PC2 fade.");
+            foreach(var renderer in renderers)
+                foreach(var material in renderer.sharedMaterials)
+                    if(material==null||!ReferenceEquals(material.shader,sequence.Effects.m_fadeOutShader)
+                        ||!sequence.OwnedMaterials.Contains(material))
+                        throw new InvalidOperationException("Current entity 1 fade material ownership differs.");
+        }
+
         private void ValidateTerminalSequence(Sequence sequence,PlateState target)
         {
             Type type=sequence.Iterator.GetType();RequireIteratorLayout(type);
@@ -820,6 +1029,43 @@ namespace SuperchargedPatch.Authoring.Modules
                     if(DeliveryFadeReincarnationContract.HasManagedReference(renderer.Materials[i])!=(renderer.MaterialIds[i]!=0)
                         ||DeliveryFadeReincarnationContract.HasManagedReference(renderer.Materials[i])&&!Alive(renderer.Materials[i]))
                         throw new InvalidOperationException("A target plate material required for reincarnation is no longer live.");
+            }
+        }
+
+        private void ValidateTerminalSequenceForActiveTarget(Sequence sequence,PlateState target)
+        {
+            Type type=sequence.Iterator.GetType();RequireIteratorLayout(type);
+            if(!Alive(sequence.Station)||Alive(sequence.Plate)||Alive(sequence.PlateObject)
+                ||!ReferenceEquals(Field(type,"plate").GetValue(sequence.Iterator),target.Plate)
+                ||!ReferenceEquals(Field(type,"$this").GetValue(sequence.Iterator),sequence.Station)
+                ||!ReferenceEquals(Field(type,"deliveryFx").GetValue(sequence.Iterator),sequence.Effects)
+                ||Convert.ToBoolean(Field(type,"$disposing").GetValue(sequence.Iterator))
+                ||Convert.ToBoolean(Field(type,"<errored>__0").GetValue(sequence.Iterator))
+                ||IteratorPc(sequence)!=-1||Field(type,"$current").GetValue(sequence.Iterator)!=null
+                ||!DeliveryFadeReincarnationContract.IsTerminalFadeProgress(IteratorProgress(sequence))
+                ||Field(type,"<rigidBody>__0").GetValue(sequence.Iterator)!=null
+                ||!sequence.MaterialOwnershipComplete||sequence.MaterialsBeforeMoveNext!=null)
+                throw new InvalidOperationException("Entity 2 source is not its exact successful terminal delivery sequence.");
+            var iteratorColliders=Field(type,"<colliders>__0").GetValue(sequence.Iterator) as Collider[];
+            var iteratorRenderers=Field(type,"<allRenderers>__0").GetValue(sequence.Iterator) as MeshRenderer[];
+            if(sequence.PresentationRenderers==null||sequence.PresentationRenderers.Length!=target.Renderers.Length
+                ||!ExactReferenceMembership(iteratorColliders,target.Colliders.Select(value=>value.Collider).ToArray())
+                ||!ExactReferenceMembership(iteratorRenderers,sequence.PresentationRenderers.Select(value=>value.Renderer).ToArray())
+                ||!ReferenceEquals(sequence.PresentationOwner,target.PresentationOwner)
+                ||sequence.PresentationOwnerId!=target.PresentationOwnerId
+                ||sequence.PresentationContainerKey!=target.PresentationContainerKey
+                ||!sequence.PresentationContainerPhysicsFree)
+                throw new InvalidOperationException("Entity 2 terminal delivery membership differs from active target lineage.");
+            foreach(var collider in target.Colliders)
+                if(!DeliveryFadeReincarnationContract.HasManagedReference(collider.Collider)||Alive(collider.Collider))
+                    throw new InvalidOperationException("Active target collider wrapper is absent or unexpectedly live.");
+            foreach(var renderer in target.Renderers)
+            {
+                if(!DeliveryFadeReincarnationContract.HasManagedReference(renderer.Renderer)||Alive(renderer.Renderer))
+                    throw new InvalidOperationException("Active target renderer wrapper is absent or unexpectedly live.");
+                foreach(var material in renderer.Materials)
+                    if(!DeliveryFadeReincarnationContract.HasManagedReference(material)||!Alive(material))
+                        throw new InvalidOperationException("Active target fade material is no longer live.");
             }
         }
 
@@ -879,6 +1125,31 @@ namespace SuperchargedPatch.Authoring.Modules
             if(nativeStation==null||!ReferenceEquals(nativeStation.m_deliveryEffects,sequence.Effects)
                 ||(string)stationTrigger.GetValue(nativeStation)!=String.Empty)
                 throw new InvalidOperationException("Only the unchanged Story 1-1 delivery station with no follow-up trigger is supported.");
+        }
+
+        private static void ValidatePfxGameplayFree(GameObject root)
+        {
+            if(!Alive(root))throw new InvalidOperationException("Story 1-1 delivery PFX prefab is absent.");
+            var systems=ComponentsRecursive<ParticleSystem>(root.transform);
+            if(systems.Length!=6)throw new InvalidOperationException("Story 1-1 delivery PFX particle topology differs.");
+            foreach(var system in systems)
+                if(system.collision.enabled||system.trigger.enabled)
+                    throw new InvalidOperationException("Delivery PFX particle collision/trigger behavior is outside mechanical rewind scope.");
+            var autoDestructs=ComponentsRecursive<Component>(root.transform)
+                .Where(component=>component!=null&&component.GetType().FullName=="AutoDestructParticleSystem").ToArray();
+            if(autoDestructs.Length!=2)
+                throw new InvalidOperationException("Story 1-1 delivery PFX auto-destruction topology differs.");
+            foreach(var component in ComponentsRecursive<Component>(root.transform))
+                if(component==null||(!(component is Transform)&&!(component is ParticleSystem)
+                    &&!(component is ParticleSystemRenderer)&&component.GetType().FullName!="AutoDestructParticleSystem"))
+                    throw new InvalidOperationException("Delivery PFX contains a gameplay-capable or missing component: "
+                        +(component==null?"<missing>":component.GetType().FullName));
+            if(ComponentsRecursive<Collider>(root.transform).Length!=0
+                ||ComponentsRecursive<Rigidbody>(root.transform).Length!=0
+                ||ComponentsRecursive<Animator>(root.transform).Length!=0
+                ||ComponentsRecursive<ServerWorldObjectSynchroniser>(root.transform).Length!=0
+                ||ComponentsRecursive<ClientWorldObjectSynchroniser>(root.transform).Length!=0)
+                throw new InvalidOperationException("Delivery PFX is not mechanically inert.");
         }
 
         private RestoreCandidate PrepareInactiveTarget(int frame,FrameState target,int currentFades)
@@ -1011,6 +1282,11 @@ namespace SuperchargedPatch.Authoring.Modules
         private void ApplyRestore(RestoreCandidate candidate)
         {
             if(candidate.Applied)throw new InvalidOperationException("Delivery fade restore was invoked twice.");
+            if(candidate.ActiveTargetComposite)
+            {
+                ApplyActiveDestroyedRestore(candidate);
+                return;
+            }
             if(candidate.DestroyedRoot)
             {
                 ApplyDestroyedRestore(candidate);
@@ -1040,6 +1316,254 @@ namespace SuperchargedPatch.Authoring.Modules
             candidate.DestroyedMaterialIds=destroyed.OrderBy(value=>value).ToArray();candidate.Applied=true;
             receipt["pcAfterStop"]=IteratorPc(candidate.Current);receipt["destroyedMaterialIds"]=candidate.DestroyedMaterialIds;
             receipt["pfxAliveAfter"]=Alive(candidate.Pfx);receipt["pendingFadesAfter"]=NativePlateLifecycle.PendingDeliveryFades;
+        }
+
+        private void ApplyActiveDestroyedRestore(RestoreCandidate candidate)
+        {
+            if(candidate.CancelCurrent==null||candidate.CancelTargetPlate==null||candidate.TargetSequence==null)
+                throw new InvalidOperationException("Active delivery composite restore plan is incomplete.");
+            var cancel=candidate.CancelCurrent;
+            ValidateActiveCancellationPreimage(candidate);
+            StopSequence(cancel);
+            if(Alive(candidate.CancelPfx))UnityEngine.Object.DestroyImmediate(candidate.CancelPfx);
+
+            // Native restore has already returned entity 1 to its target logical
+            // contents. Map that exact live presentation instead of trusting the
+            // now-stale renderer array retained by the canceled fade iterator.
+            var cancelPresentation=CaptureCurrentPresentation(candidate.CancelTargetPlate);
+            RestorePlatePresentation(candidate.CancelTargetPlate,cancelPresentation,true);
+            RebindLiveExternalUi(candidate.CancelTargetPlate,
+                ValidateLiveExternalUi(candidate.CancelTargetPlate,candidate.CancelTargetPlate.Object));
+            var observer=(IDictionary)delivered.GetValue(null);
+            if(observer.Count!=1||!observer.Contains(candidate.CancelTargetPlate.Object)
+                ||Convert.ToInt32(observer[candidate.CancelTargetPlate.Object])!=candidate.CancelTargetPlate.ObjectId)
+                throw new InvalidOperationException("Entity 1 delivery observer changed before composite cancellation.");
+            observer.Remove(candidate.CancelTargetPlate.Object);
+            var destroyedCancelMaterials=DestroyUnreferencedOwnedMaterials(cancel,new HashSet<Material>());
+
+            ValidateTerminalSequenceForActiveTarget(candidate.Current,candidate.TargetPlate);
+            var entry=EntitySerialisationRegistry.GetEntry((uint)candidate.TargetPlate.EntityId);
+            var obj=entry==null?null:entry.m_GameObject;
+            var plate=Alive(obj)?obj.GetComponent<ClientPlate>():null;
+            if(entry==null||plate==null)throw new InvalidOperationException("Native factory did not recreate active historical plate entity 2.");
+            var current=CapturePlate(entry,plate);
+            ValidateRecreatedPlatePrefix(candidate.TargetPlate,current);
+            if(DeliveryFadeReincarnationContract.ExactUniqueKeyMap(
+                candidate.TargetPlate.Renderers.Select(value=>value.HierarchyKey).ToArray(),
+                current.Renderers.Select(value=>value.HierarchyKey).ToArray())==null)
+            {
+                candidate.ForcedPresentationStartComponentId=CompleteExactVirginSushiPresentation(candidate.TargetPlate,current);
+                current=CapturePlate(entry,plate);
+            }
+            var mappedRenderers=ValidateRecreatedActivePlateTopology(candidate.TargetPlate,current);
+            var mappedColliders=MapColliders(candidate.TargetPlate.Colliders,current.Colliders);
+
+            int beforeFactories=sequences.Count;
+            var iterator=deliveryFactory.Invoke(candidate.Current.Station,
+                new object[]{plate,candidate.Current.Effects}) as IEnumerator;
+            if(iterator==null||sequences.Count!=beforeFactories+1)
+                throw new InvalidOperationException("Pure delivery iterator factory did not produce one observed sequence.");
+            var rebound=sequences.Single(value=>ReferenceEquals(value.Iterator,iterator));
+            if(rebound.EntityId!=2||!ReferenceEquals(rebound.Plate,plate)||!ReferenceEquals(rebound.Station,candidate.Current.Station))
+                throw new InvalidOperationException("Recreated active delivery iterator identity differs.");
+            if(!iterator.MoveNext()||IteratorPc(rebound)!=1||!ReferenceEquals(iterator.Current,StationWait(rebound.Station)))
+                throw new InvalidOperationException("Recreated delivery iterator did not reach its zero-delay wait boundary.");
+            if(rebound.Effects.m_pfxToFadeDelayTime!=0f||!iterator.MoveNext()||IteratorPc(rebound)!=2||iterator.Current!=null)
+                throw new InvalidOperationException("Recreated delivery iterator did not reach PC2 under the zero-delay contract.");
+            var newPfx=IteratorPfx(rebound);ValidatePfxGameplayFree(newPfx);
+            if(!Alive(newPfx)||newPfx.transform.parent!=null)
+                throw new InvalidOperationException("Recreated delivery PFX is not live and detached.");
+
+            var preservedMaterials=new HashSet<Material>(candidate.TargetPlate.Renderers
+                .SelectMany(value=>value.Materials).Where(DeliveryFadeReincarnationContract.HasManagedReference));
+            var freshFadeMaterials=ValidateFreshFadeMaterialOwnership(rebound,mappedRenderers,
+                candidate.TargetPlate,preservedMaterials);
+            for(int i=0;i<mappedRenderers.Length;i++)
+            {
+                var saved=candidate.TargetPlate.Renderers[i];var renderer=mappedRenderers[i].Renderer;
+                if(!Same(renderer.transform.localScale,saved.LocalScale))renderer.transform.localScale=saved.LocalScale;
+                renderer.sharedMaterials=saved.Materials;renderer.enabled=saved.Enabled;
+                for(int j=0;j<saved.Materials.Length;j++)
+                {
+                    var material=saved.Materials[j];
+                    if(saved.HasMode[j])material.SetFloat("_Mode",saved.Mode[j]);
+                    if(saved.HasAlpha[j])material.SetFloat("_Alpha",saved.Alpha[j]);
+                }
+            }
+            for(int i=0;i<mappedColliders.Length;i++)
+            {
+                var saved=candidate.TargetPlate.Colliders[i];var collider=mappedColliders[i].Collider;
+                if(collider.isTrigger!=saved.Trigger)collider.isTrigger=saved.Trigger;
+                if(collider.enabled!=saved.Enabled)collider.enabled=saved.Enabled;
+            }
+            foreach(var material in freshFadeMaterials.Where(value=>!preservedMaterials.Contains(value)).ToArray())
+            {
+                if(!rebound.OwnedMaterials.Remove(material))
+                    throw new InvalidOperationException("Fresh replacement fade material ownership disappeared before destruction.");
+                if(MaterialReferenced(material))throw new InvalidOperationException("Fresh replacement fade material remained referenced.");
+                UnityEngine.Object.DestroyImmediate(material);
+            }
+            foreach(var material in preservedMaterials)rebound.OwnedMaterials.Add(material);
+            foreach(var material in preservedMaterials)
+                if(!candidate.Current.OwnedMaterials.Remove(material))
+                    throw new InvalidOperationException("Historical target fade material ownership disappeared before transfer.");
+            var destroyedSourceMaterials=DestroyUnreferencedOwnedMaterials(candidate.Current,preservedMaterials);
+
+            Type iteratorType=iterator.GetType();
+            Field(iteratorType,"<progress>__0").SetValue(iterator,candidate.TargetSequence.Progress);
+            Field(iteratorType,"<errored>__0").SetValue(iterator,candidate.TargetSequence.Errored);
+            Field(iteratorType,"$disposing").SetValue(iterator,false);
+            Field(iteratorType,"$current").SetValue(iterator,null);
+            Field(iteratorType,"$PC").SetValue(iterator,2);
+            if(observer.Count!=0)throw new InvalidOperationException("Delivery observer was not empty before active target rebind.");
+            observer.Add(obj,obj.GetInstanceID());
+
+            var restored=CapturePlate(entry,plate);
+            RebindRetainedEntity2History(candidate,restored,rebound,newPfx);
+            candidate.Rebound=CaptureCurrentPresentation(candidate.TargetPlate);
+            candidate.ReboundActive=rebound;candidate.Pfx=newPfx;candidate.Applied=true;
+            var receipt=Map("frame",candidate.Frame,"mode","active-composite","canceledEntityId",1,
+                "recreatedEntityId",2,"targetPc",2,"targetProgress",candidate.TargetSequence.Progress,
+                "targetAlpha",candidate.TargetPlate.Renderers.SelectMany(value=>value.Alpha).ToArray(),
+                "destroyedCancelMaterialIds",destroyedCancelMaterials,
+                "destroyedSourceMaterialIds",destroyedSourceMaterials,
+                "reboundHistoryFrames",candidate.ReboundHistoryFrames,
+                "discardedIncompatibleHistoryFrames",candidate.DiscardedIncompatibleHistoryFrames,
+                "discardedIncompatibleHistory",candidate.DiscardedIncompatibleHistory,
+                "forcedPresentationStartComponentId",candidate.ForcedPresentationStartComponentId,
+                "pfxMechanicallyInert",true,"pfxVisualStateExact",false,
+                "activeIteratorRelayScheduled",false,"verified",false,
+                "scope","Authoring-only Story 1-1 entity1 fade cancellation plus entity2 PC2 mechanical reincarnation; particle playback is recreated, not pixel-exact.");
+            restoreReceipts.Add(receipt);if(restoreReceipts.Count>64)restoreReceipts.RemoveAt(0);
+            candidate.Receipt=receipt;
+        }
+
+        private static HashSet<Material> ValidateFreshFadeMaterialOwnership(Sequence sequence,
+            RendererState[] mappedRenderers,PlateState target,HashSet<Material> preserved)
+        {
+            Type type=sequence.Iterator.GetType();var iteratorRenderers=Field(type,"<allRenderers>__0").GetValue(sequence.Iterator) as MeshRenderer[];
+            if(!sequence.MaterialOwnershipComplete||sequence.MaterialsBeforeMoveNext!=null
+                ||iteratorRenderers==null||mappedRenderers==null||target==null||target.Renderers==null
+                ||mappedRenderers.Length!=target.Renderers.Length
+                ||!ExactReferenceMembership(iteratorRenderers,mappedRenderers.Select(value=>value.Renderer).ToArray()))
+                throw new InvalidOperationException("Fresh delivery iterator material ownership proof is incomplete.");
+            var slots=new List<Material>();float? alpha=null;
+            for(int i=0;i<mappedRenderers.Length;i++)
+            {
+                var materials=mappedRenderers[i].Renderer.sharedMaterials;var saved=target.Renderers[i];
+                if(materials.Length!=saved.Materials.Length)
+                    throw new InvalidOperationException("Fresh fade material slot count differs at "+saved.HierarchyKey+".");
+                for(int j=0;j<materials.Length;j++)
+                {
+                    var material=materials[j];
+                    if(!Alive(material)||preserved.Contains(material)||!sequence.OwnedMaterials.Contains(material)
+                        ||!ReferenceEquals(material.shader,sequence.Effects.m_fadeOutShader)
+                        ||!material.HasProperty("_Alpha")||material.HasProperty("_Mode")!=saved.HasMode[j]
+                        ||saved.HasMode[j]&&material.GetFloat("_Mode")!=saved.Mode[j])
+                        throw new InvalidOperationException("Fresh fade material is not an exact owned replacement at "
+                            +saved.HierarchyKey+", slot "+j+".");
+                    float value=material.GetFloat("_Alpha");
+                    if(!Finite(value)||value<0f||value>1f||(alpha.HasValue&&value!=alpha.Value))
+                        throw new InvalidOperationException("Fresh fade material alpha state differs across the recreated plate.");
+                    alpha=value;slots.Add(material);
+                }
+            }
+            var result=new HashSet<Material>(slots);
+            if(!DeliveryFadeReincarnationContract.IsNonEmptyDistinctSubset(
+                    result.Select(MaterialId).ToArray(),sequence.OwnedMaterials.Where(Alive).Select(MaterialId).ToArray())
+                ||result.Any(material=>!sequence.OwnedMaterials.Contains(material)))
+                throw new InvalidOperationException("Fresh fade material set is not a nonempty subset of iterator ownership.");
+            return result;
+        }
+
+        private void ValidateActiveCancellationPreimage(RestoreCandidate candidate)
+        {
+            var sequence=candidate.CancelCurrent;var obj=sequence==null?null:sequence.PlateObject;
+            var observer=(IDictionary)delivered.GetValue(null);
+            bool contains=sequence!=null&&Alive(obj)&&observer.Contains(obj);
+            int observed=contains?Convert.ToInt32(observer[obj]):0;
+            if(sequence==null||!Alive(obj)||!Alive(sequence.Plate)||sequence.EntityId!=1
+                ||!ReferenceEquals(sequence.Plate.gameObject,obj)||obj.GetInstanceID()!=sequence.PlateObjectId
+                ||sequence.Plate.GetInstanceID()!=sequence.PlateId
+                ||!DeliveryFadeReincarnationContract.IsExactObserverEntry(
+                    observer.Count,contains,observed,sequence.PlateObjectId))
+                throw new InvalidOperationException("Current entity 1 observer/incarnation changed before destructive cancellation.");
+            var entry=EntitySerialisationRegistry.GetEntry((uint)1);
+            Type type=sequence.Iterator.GetType();RequireIteratorLayout(type);
+            var iteratorColliders=Field(type,"<colliders>__0").GetValue(sequence.Iterator) as Collider[];
+            var iteratorRenderers=Field(type,"<allRenderers>__0").GetValue(sequence.Iterator) as MeshRenderer[];
+            var pfx=IteratorPfx(sequence);
+            if(entry==null||!ReferenceEquals(entry.m_GameObject,obj)
+                ||!Alive(sequence.Station)||sequence.Station.GetInstanceID()!=sequence.StationId
+                ||!ReferenceEquals(Field(type,"plate").GetValue(sequence.Iterator),sequence.Plate)
+                ||!ReferenceEquals(Field(type,"$this").GetValue(sequence.Iterator),sequence.Station)
+                ||!ReferenceEquals(Field(type,"deliveryFx").GetValue(sequence.Iterator),sequence.Effects)
+                ||IteratorPc(sequence)!=2||!Finite(IteratorProgress(sequence))
+                ||IteratorProgress(sequence)<0f||IteratorProgress(sequence)>=1f
+                ||Convert.ToBoolean(Field(type,"$disposing").GetValue(sequence.Iterator))
+                ||Convert.ToBoolean(Field(type,"<errored>__0").GetValue(sequence.Iterator))
+                ||Field(type,"$current").GetValue(sequence.Iterator)!=null
+                ||Field(type,"<rigidBody>__0").GetValue(sequence.Iterator)!=null
+                ||iteratorColliders==null||iteratorRenderers==null
+                ||!ExactReferenceMembership(iteratorColliders,ComponentsRecursive<Collider>(obj.transform))
+                ||!sequence.MaterialOwnershipComplete||sequence.MaterialsBeforeMoveNext!=null
+                ||!ReferenceEquals(pfx,candidate.CancelPfx)||!Alive(pfx)||pfx.transform.parent!=null)
+                throw new InvalidOperationException("Current entity 1 iterator source changed before destructive cancellation.");
+            ValidateStory11Station(sequence);
+            ValidatePfxGameplayFree(sequence.Effects.m_deliverPFXPrefab);
+            ValidatePfxGameplayFree(pfx);
+            var owned=sequence.OwnedMaterials.ToArray();
+            if(owned.Length==0||owned.Any(material=>!Alive(material)
+                    ||!ReferenceEquals(material.shader,sequence.Effects.m_fadeOutShader)
+                    ||!material.HasProperty("_Alpha")||!Finite(material.GetFloat("_Alpha"))
+                    ||material.GetFloat("_Alpha")<0f||material.GetFloat("_Alpha")>1f)
+                ||owned.Select(material=>material.GetFloat("_Alpha")).Distinct().Count()!=1)
+                throw new InvalidOperationException("Current entity 1 fade material ownership/state changed before cancellation.");
+            foreach(var renderer in iteratorRenderers.Where(Alive))
+                foreach(var material in renderer.sharedMaterials)
+                    if(!Alive(material)||!sequence.OwnedMaterials.Contains(material)
+                        ||!ReferenceEquals(material.shader,sequence.Effects.m_fadeOutShader)
+                        ||!material.HasProperty("_Alpha"))
+                        throw new InvalidOperationException("Current entity 1 live renderer no longer uses its owned fade material.");
+            ValidateOwnedMaterialIsolation(sequence,candidate.CancelTargetPlate,pfx);
+        }
+
+        private static void StopSequence(Sequence sequence)
+        {
+            var scheduled=sequence.SchedulerIterator??sequence.Iterator;
+            sequence.Station.StopCoroutine(scheduled);
+            sequence.SchedulerIterator=null;sequence.SchedulerCoroutine=null;
+        }
+
+        private static int[] DestroyUnreferencedOwnedMaterials(Sequence sequence,HashSet<Material> preserve)
+        {
+            var destroyed=new List<int>();
+            foreach(var material in sequence.OwnedMaterials.Where(Alive).ToArray())
+            {
+                if(preserve!=null&&preserve.Contains(material))continue;
+                if(MaterialReferenced(material))throw new InvalidOperationException("Delivery-owned material remains referenced during composite cleanup.");
+                destroyed.Add(material.GetInstanceID());UnityEngine.Object.DestroyImmediate(material);
+            }
+            return destroyed.OrderBy(value=>value).ToArray();
+        }
+
+        private RendererState[] ValidateRecreatedActivePlateTopology(PlateState target,PlateState current)
+        {
+            ValidateRecreatedPlatePrefix(target,current);
+            var mapped=MapRenderers(target.Renderers,current.Renderers);
+            for(int i=0;i<mapped.Length;i++)
+            {
+                var saved=target.Renderers[i];var value=mapped[i];
+                if(value.HierarchyKey!=saved.HierarchyKey||value.InPresentationContainer!=saved.InPresentationContainer
+                    ||value.PresentationKey!=saved.PresentationKey||value.SharedMeshId!=saved.SharedMeshId
+                    ||!Same(value.LocalPosition,saved.LocalPosition)||!Same(value.LocalRotation,saved.LocalRotation)
+                    ||(!Same(value.LocalScale,saved.LocalScale)&&!BoundedScaleResidual(value.LocalScale,saved.LocalScale))
+                    ||value.ActiveSelf!=saved.ActiveSelf||value.ActiveInHierarchy!=saved.ActiveInHierarchy
+                    ||value.Layer!=saved.Layer||value.Enabled!=saved.Enabled
+                    ||value.Materials.Length!=saved.Materials.Length)
+                    throw new InvalidOperationException("Recreated active delivered plate renderer topology differs at "+saved.HierarchyKey+".");
+            }
+            return mapped;
         }
 
         private void ApplyDestroyedRestore(RestoreCandidate candidate)
@@ -1350,6 +1874,163 @@ namespace SuperchargedPatch.Authoring.Modules
             return result;
         }
 
+        private void RebindRetainedEntity2History(RestoreCandidate candidate,PlateState current,
+            Sequence rebound,GameObject newPfx)
+        {
+            var plans=new List<Entity2HistoryRebind>();var discarded=new List<int>();var discardReasons=new List<object>();
+            GameObject oldObject=candidate.TargetPlate.Object;ClientPlate oldPlate=candidate.TargetPlate.Plate;
+            int oldObjectId=candidate.TargetPlate.ObjectId,oldComponentId=candidate.TargetPlate.ComponentId;
+            foreach(var pair in history.Where(value=>value.Key<=candidate.Frame).ToArray())
+            {
+                FrameState frame=pair.Value;
+                var plates=(frame.Plates??new PlateState[0]).Where(value=>value.EntityId==2).ToArray();
+                var sequenceStates=(frame.SequenceStates??new SequenceFrameState[0]).Where(value=>value.EntityId==2).ToArray();
+                try
+                {
+                    if(plates.Length==0)
+                    {
+                        if(sequenceStates.Length!=0)throw new InvalidOperationException("Entity 2 iterator exists without its plate snapshot.");
+                        continue;
+                    }
+                    if(plates.Length!=1||sequenceStates.Length>1)
+                        throw new InvalidOperationException("Entity 2 historical cardinality differs.");
+                    var saved=plates[0];
+                    if(!ReferenceEquals(saved.Object,oldObject)||!ReferenceEquals(saved.Plate,oldPlate)
+                        ||saved.ObjectId!=oldObjectId||saved.ComponentId!=oldComponentId)
+                        throw new InvalidOperationException("Entity 2 history refers to an unknown incarnation.");
+                    RendererState[] renderers;ColliderState[] colliders;
+                    ValidateHistoricalEntity2PlateMapping(saved,current,out renderers,out colliders);
+                    foreach(var state in sequenceStates)
+                        ValidateHistoricalEntity2SequenceMapping(state,saved,candidate.Current);
+                    plans.Add(new Entity2HistoryRebind { Frame=pair.Key,Plate=saved,
+                        Renderers=renderers,Colliders=colliders,Sequences=sequenceStates });
+                }
+                catch(Exception error)
+                {
+                    if(pair.Key==candidate.Frame)
+                        throw new InvalidOperationException("Target entity 2 history cannot be rebound safely.",error);
+                    discarded.Add(pair.Key);
+                    discardReasons.Add(Map("frame",pair.Key,"reason",error.Message,"type",error.GetType().FullName));
+                }
+            }
+            var targetPlan=plans.SingleOrDefault(value=>value.Frame==candidate.Frame);
+            if(targetPlan==null||!ReferenceEquals(targetPlan.Plate,candidate.TargetPlate)
+                ||targetPlan.Sequences.Length!=1||!ReferenceEquals(targetPlan.Sequences[0],candidate.TargetSequence))
+                throw new InvalidOperationException("Exact target entity 2 history rebind plan is absent.");
+
+            Type iteratorType=rebound.Iterator.GetType();
+            var reboundColliders=Field(iteratorType,"<colliders>__0").GetValue(rebound.Iterator) as Collider[];
+            var reboundRenderers=Field(iteratorType,"<allRenderers>__0").GetValue(rebound.Iterator) as MeshRenderer[];
+            var reboundBody=Field(iteratorType,"<rigidBody>__0").GetValue(rebound.Iterator) as Rigidbody;
+            if(reboundColliders==null||reboundRenderers==null||reboundBody!=null
+                ||!ExactReferenceMembership(reboundColliders,current.Colliders.Select(value=>value.Collider).ToArray())
+                ||!ExactReferenceMembership(reboundRenderers,current.Renderers.Select(value=>value.Renderer).ToArray()))
+                throw new InvalidOperationException("Rebound entity 2 iterator component membership differs.");
+
+            foreach(int frame in discarded.Distinct().OrderBy(value=>value).ToArray())history.Remove(frame);
+            foreach(var plan in plans)
+            {
+                RebindHistoricalPlateIdentity(plan.Plate,current,plan.Renderers,plan.Colliders);
+                foreach(var state in plan.Sequences)
+                {
+                    state.Source=rebound;
+                    state.Colliders=state.Colliders==null?null:reboundColliders;
+                    state.Body=null;
+                    state.Renderers=state.Renderers==null?null:reboundRenderers;
+                    state.Pfx=state.PfxAlive?newPfx:null;
+                }
+            }
+            candidate.ReboundHistoryFrames=plans.Select(value=>value.Frame).OrderBy(value=>value).ToArray();
+            candidate.DiscardedIncompatibleHistoryFrames=discarded.Distinct().OrderBy(value=>value).ToArray();
+            candidate.DiscardedIncompatibleHistory=discardReasons.OrderBy(value=>Convert.ToInt32(((Dictionary<string,object>)value)["frame"])).ToArray();
+        }
+
+        private static void ValidateHistoricalEntity2PlateMapping(PlateState saved,PlateState current,
+            out RendererState[] renderers,out ColliderState[] colliders)
+        {
+            if(saved==null||current==null||saved.EntityId!=2||current.EntityId!=2
+                ||!Alive(current.Object)||!Alive(current.Plate)||ReferenceEquals(saved.Object,current.Object)
+                ||ReferenceEquals(saved.Plate,current.Plate)||saved.Name!=current.Name
+                ||!DeliveryFadeReincarnationContract.IsExactRecreatedComponentTopology(saved.ComponentTypes,current.ComponentTypes)
+                ||!saved.ServerSynchroniserTypes.SequenceEqual(current.ServerSynchroniserTypes)
+                ||!saved.ClientSynchroniserTypes.SequenceEqual(current.ClientSynchroniserTypes)
+                ||!DeliveryFadeReincarnationContract.HasManagedReference(saved.PresentationOwner)
+                ||!Alive(current.PresentationOwner)||ReferenceEquals(saved.PresentationOwner,current.PresentationOwner)
+                ||!DeliveryFadeReincarnationContract.HasManagedReference(saved.PresentationContainer)
+                ||!Alive(current.PresentationContainer)||ReferenceEquals(saved.PresentationContainer,current.PresentationContainer)
+                ||saved.PresentationContainerKey!=current.PresentationContainerKey
+                ||saved.PresentationCompositionFingerprint!=current.PresentationCompositionFingerprint
+                ||!saved.PresentationContainerPhysicsFree||!current.PresentationContainerPhysicsFree)
+                throw new InvalidOperationException("Historical entity 2 root/presentation topology is not logically compatible.");
+            var rendererMap=DeliveryFadeReincarnationContract.ExactUniqueKeyMap(
+                saved.Renderers.Select(value=>value.HierarchyKey).ToArray(),
+                current.Renderers.Select(value=>value.HierarchyKey).ToArray());
+            if(rendererMap==null)throw new InvalidOperationException("Historical entity 2 renderer keys differ.");
+            renderers=rendererMap.Select(value=>current.Renderers[value]).ToArray();
+            for(int i=0;i<renderers.Length;i++)
+                if(renderers[i].SharedMeshId!=saved.Renderers[i].SharedMeshId
+                    ||renderers[i].InPresentationContainer!=saved.Renderers[i].InPresentationContainer
+                    ||renderers[i].PresentationKey!=saved.Renderers[i].PresentationKey
+                    ||renderers[i].Materials.Length!=saved.Renderers[i].Materials.Length)
+                    throw new InvalidOperationException("Historical entity 2 renderer structure differs at "+saved.Renderers[i].HierarchyKey+".");
+            var colliderMap=DeliveryFadeReincarnationContract.ExactUniqueKeyMap(
+                saved.Colliders.Select(value=>value.HierarchyKey).ToArray(),
+                current.Colliders.Select(value=>value.HierarchyKey).ToArray());
+            if(colliderMap==null)throw new InvalidOperationException("Historical entity 2 collider keys differ.");
+            colliders=colliderMap.Select(value=>current.Colliders[value]).ToArray();
+            for(int i=0;i<colliders.Length;i++)
+                if(colliders[i].TypeName!=saved.Colliders[i].TypeName)
+                    throw new InvalidOperationException("Historical entity 2 collider type differs at "+saved.Colliders[i].HierarchyKey+".");
+            ValidateHistoricalExternalUiMapping(saved.ExternalUi,current.ExternalUi);
+        }
+
+        private static void ValidateHistoricalExternalUiMapping(ExternalUiState saved,ExternalUiState current)
+        {
+            if(saved==null||current==null||!DeliveryFadeReincarnationContract.HasManagedReference(saved.Controller)
+                ||!DeliveryFadeReincarnationContract.HasManagedReference(saved.Instance)
+                ||!DeliveryFadeReincarnationContract.HasManagedReference(saved.Object)
+                ||!Alive(current.Controller)||!Alive(current.Instance)||!Alive(current.Object)
+                ||ReferenceEquals(saved.Controller,current.Controller)||ReferenceEquals(saved.Instance,current.Instance)
+                ||ReferenceEquals(saved.Object,current.Object)||saved.ControllerType!=current.ControllerType
+                ||saved.InstanceType!=current.InstanceType||saved.Name!=current.Name
+                ||!ReferenceEquals(saved.Parent,current.Parent)||saved.ParentId!=current.ParentId
+                ||saved.ComponentTypes==null||current.ComponentTypes==null
+                ||!saved.ComponentTypes.SequenceEqual(current.ComponentTypes))
+                throw new InvalidOperationException("Historical entity 2 external UI topology is not logically compatible.");
+        }
+
+        private static void ValidateHistoricalEntity2SequenceMapping(SequenceFrameState state,PlateState plate,Sequence source)
+        {
+            if(state==null||state.Source==null||!ReferenceEquals(state.Source,source)||state.EntityId!=2
+                ||state.Disposing||state.Errored||state.Body!=null||!Finite(state.Progress))
+                throw new InvalidOperationException("Historical entity 2 iterator source is not logically compatible.");
+            var plateColliders=plate.Colliders.Select(value=>value.Collider).ToArray();
+            var plateRenderers=plate.Renderers.Select(value=>value.Renderer).ToArray();
+            if(state.Colliders!=null&&!ExactReferenceMembership(state.Colliders,plateColliders)
+                ||state.Renderers!=null&&!ExactReferenceMembership(state.Renderers,plateRenderers))
+                throw new InvalidOperationException("Historical entity 2 iterator component membership differs.");
+            if(!DeliveryFadeReincarnationContract.IsRebindableDeliveryPhase(
+                state.Pc,state.CurrentIsNull,state.CurrentIsStationWait,state.Progress,
+                state.Colliders!=null,state.Renderers!=null,state.PfxAlive,state.PfxDetached,
+                DeliveryFadeReincarnationContract.HasManagedReference(state.Pfx)))
+                throw new InvalidOperationException("Historical entity 2 iterator phase cannot be rebound safely.");
+        }
+
+        private static void RebindHistoricalPlateIdentity(PlateState saved,PlateState current,
+            RendererState[] renderers,ColliderState[] colliders)
+        {
+            saved.Object=current.Object;saved.ObjectId=current.ObjectId;saved.Plate=current.Plate;saved.ComponentId=current.ComponentId;
+            saved.PresentationOwner=current.PresentationOwner;saved.PresentationOwnerId=current.PresentationOwnerId;
+            saved.PresentationContainer=current.PresentationContainer;saved.PresentationContainerId=current.PresentationContainerId;
+            for(int i=0;i<saved.Renderers.Length;i++)
+            { saved.Renderers[i].Renderer=renderers[i].Renderer;saved.Renderers[i].InstanceId=renderers[i].InstanceId; }
+            for(int i=0;i<saved.Colliders.Length;i++)
+            { saved.Colliders[i].Collider=colliders[i].Collider;saved.Colliders[i].InstanceId=colliders[i].InstanceId; }
+            saved.ExternalUi.Controller=current.ExternalUi.Controller;saved.ExternalUi.ControllerId=current.ExternalUi.ControllerId;
+            saved.ExternalUi.Instance=current.ExternalUi.Instance;saved.ExternalUi.InstanceId=current.ExternalUi.InstanceId;
+            saved.ExternalUi.Object=current.ExternalUi.Object;saved.ExternalUi.ObjectId=current.ExternalUi.ObjectId;
+        }
+
         private static void RebindPlateState(PlateState target,PlateState current,RendererState[] renderers,ColliderState[] colliders)
         {
             target.Object=current.Object;target.ObjectId=current.ObjectId;target.Plate=current.Plate;target.ComponentId=current.ComponentId;
@@ -1393,6 +2074,11 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void VerifyRestored(RestoreCandidate candidate)
         {
+            if(candidate.ActiveTargetComposite)
+            {
+                VerifyActiveCompositeRestored(candidate);
+                return;
+            }
             if(!candidate.Applied||NativePlateLifecycle.PendingDeliveryFades!=0||DeliveredCount()!=0||Alive(candidate.Pfx))
                 throw new InvalidOperationException("Delivered plate coroutine/PFX/observer was not fully retired by rewind.");
             VerifyPlate(candidate.TargetPlate,candidate.DestroyedRoot?candidate.Rebound:candidate.Current);
@@ -1402,6 +2088,41 @@ namespace SuperchargedPatch.Authoring.Modules
             var receipt=candidate.Receipt as Dictionary<string,object>;
             if(receipt!=null){receipt["verified"]=true;receipt["platePresentationExact"]=true;
                 if(candidate.DestroyedRoot)receipt["externalUiReboundExact"]=true;}
+        }
+
+        private void VerifyActiveCompositeRestored(RestoreCandidate candidate)
+        {
+            if(!candidate.Applied||candidate.ReboundActive==null||candidate.Rebound==null
+                ||NativePlateLifecycle.PendingDeliveryFades!=1||DeliveredCount()!=1
+                ||Alive(candidate.CancelPfx)||!Alive(candidate.Pfx)||candidate.Pfx.transform.parent!=null)
+                throw new InvalidOperationException("Active delivery composite lifecycle did not restore exactly.");
+            var map=(IDictionary)delivered.GetValue(null);
+            if(map.Count!=1||!map.Contains(candidate.TargetPlate.Object)
+                ||Convert.ToInt32(map[candidate.TargetPlate.Object])!=candidate.TargetPlate.ObjectId)
+                throw new InvalidOperationException("Active delivery target observer did not rebind exactly.");
+            var canceled=CaptureCurrentPresentation(candidate.CancelTargetPlate);
+            VerifyPlate(candidate.CancelTargetPlate,canceled);
+            VerifyExternalUi(candidate.CancelTargetPlate.ExternalUi);
+            VerifyPlate(candidate.TargetPlate,candidate.Rebound);
+            VerifyExternalUi(candidate.TargetPlate.ExternalUi);
+            var sequence=candidate.ReboundActive;Type type=sequence.Iterator.GetType();
+            if(sequence.SchedulerIterator!=null||sequence.SchedulerCoroutine!=null
+                ||IteratorPc(sequence)!=2||IteratorProgress(sequence)!=candidate.TargetSequence.Progress
+                ||Convert.ToBoolean(Field(type,"$disposing").GetValue(sequence.Iterator))
+                ||Convert.ToBoolean(Field(type,"<errored>__0").GetValue(sequence.Iterator))
+                ||Field(type,"$current").GetValue(sequence.Iterator)!=null
+                ||!ReferenceEquals(IteratorPfx(sequence),candidate.Pfx))
+                throw new InvalidOperationException("Recreated active delivery iterator state differs from f444.");
+            ValidateExactActiveTarget(candidate.TargetSequence,candidate.TargetPlate);
+            ValidatePfxGameplayFree(candidate.Pfx);
+            foreach(var material in candidate.CancelCurrent.OwnedMaterials)
+                if(Alive(material))throw new InvalidOperationException("Canceled entity 1 fade material survived composite rewind.");
+            foreach(var material in candidate.Current.OwnedMaterials)
+                if(Alive(material)&&!sequence.OwnedMaterials.Contains(material))
+                    throw new InvalidOperationException("Old entity 2 delivery material survived outside the rebound sequence.");
+            var receipt=candidate.Receipt as Dictionary<string,object>;
+            if(receipt!=null){receipt["verified"]=true;receipt["platePresentationExact"]=true;
+                receipt["externalUiReboundExact"]=true;receipt["pendingFadesAfter"]=1;}
         }
 
         private void VerifyPlate(PlateState saved,Sequence sequence)
@@ -1638,7 +2359,11 @@ namespace SuperchargedPatch.Authoring.Modules
         private void PruneAfter(int frame)
         {
             foreach(int key in history.Keys.Where(value=>value>frame).ToArray())history.Remove(key);
-            if(pending!=null)sequences.Remove(pending.Current);
+            if(pending!=null)
+            {
+                sequences.Remove(pending.Current);
+                if(pending.ActiveTargetComposite)sequences.Remove(pending.CancelCurrent);
+            }
             lastFrame=frame;
         }
 
@@ -1665,7 +2390,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object Status(string operation)
         {
             return Map("name",Name,"operation",operation,"active",ReferenceEquals(active,this),"readOnlyDuringForwardPlay",true,
-                "restoreScope","Authoring-only one live pre-destruction fade, or one exact terminal Story 1-1 destroyed plate recreated through factory [34,0,0] at historical path [2], optionally combined with scheduler-verified future-only return-tree deletions. Root components, server/client synchronisers, attachment pose, renderer topology/mesh/pose/layer/active state, materials and external ingredient UI fail closed; mid-fade targets reject.",
+                "restoreScope","Authoring-only one live pre-destruction fade, one exact terminal Story 1-1 destroyed plate recreated through factory [34,0,0] at historical path [2], or the proven Story 1-1 f1048-to-f444 composite (cancel entity 1 and recreate entity 2 at PC2/progress 0.3). Other mid-fade targets reject. Compatible retained entity 2 histories through the target frame are rebound to the fresh incarnation; incompatible earlier sidecars are discarded fail-closed with per-frame reasons in the restore receipt. Root components, server/client synchronisers, attachment pose, renderer topology/mesh/pose/layer/active state, materials and external ingredient UI fail closed; recreated particle playback is mechanically guarded but not pixel-exact.",
                 "factories",factories,"captures",captures,"duplicates",duplicates,"resets",resets,"restores",restores,
                 "historyRestores",historyRestores,"lastFrame",lastFrame,
                 "historyFrames",history.Keys.ToArray(),"trackedSequences",sequences.Count,"pendingNativeDeliveryFades",NativePlateLifecycle.PendingDeliveryFades,
@@ -1699,11 +2424,48 @@ namespace SuperchargedPatch.Authoring.Modules
         private void TemporarilyRemoveAdmissionObserver()
         {
             if(preparing==null||admissionObserverRemoved)throw new InvalidOperationException("Delivery admission observer state is invalid.");
-            var obj=preparing.Current.Plate.gameObject;var map=(IDictionary)delivered.GetValue(null);
+            var sequence=preparing.CancelCurrent??preparing.Current;
+            var obj=sequence.Plate.gameObject;var map=(IDictionary)delivered.GetValue(null);
             if(map.Count!=1||!map.Contains(obj)||Convert.ToInt32(map[obj])!=obj.GetInstanceID())
                 throw new InvalidOperationException("Delivery admission observer identity changed.");
             admissionPlate=obj;admissionInstance=obj.GetInstanceID();map.Remove(obj);admissionObserverRemoved=true;
             if(map.Count!=0)throw new InvalidOperationException("Delivery admission observer did not become temporarily empty.");
+        }
+
+        private void MaskTargetDeliveryFade(FrameState target)
+        {
+            if(prepareMask||maskedCoreSnapshot!=null||target==null||target.PendingFades!=1
+                ||!ReferenceEquals(target.CoreSnapshot,CoreSnapshot(target.Frame))
+                ||Convert.ToInt32(coreDeliveryFades.GetValue(target.CoreSnapshot))!=1)
+                throw new InvalidOperationException("Delivery-fade target mask preimage differs.");
+            maskedCoreSnapshot=target.CoreSnapshot;maskedDeliveryFadeCount=1;
+            coreDeliveryFades.SetValue(maskedCoreSnapshot,0);prepareMask=true;
+            if(Convert.ToInt32(coreDeliveryFades.GetValue(maskedCoreSnapshot))!=0)
+                throw new InvalidOperationException("Delivery-fade target mask did not apply.");
+        }
+
+        private void RestoreTargetDeliveryFadeMask()
+        {
+            if(!prepareMask)
+            {
+                if(maskedCoreSnapshot!=null)throw new InvalidOperationException("Delivery-fade target mask bookkeeping is inconsistent.");
+                return;
+            }
+            var snapshot=maskedCoreSnapshot;int value=maskedDeliveryFadeCount;
+            try
+            {
+                if(snapshot==null)throw new InvalidOperationException("Delivery-fade target mask snapshot is absent.");
+                int before=Convert.ToInt32(coreDeliveryFades.GetValue(snapshot));
+                coreDeliveryFades.SetValue(snapshot,value);
+                if(Convert.ToInt32(coreDeliveryFades.GetValue(snapshot))!=value)
+                    throw new InvalidOperationException("Delivery-fade target mask did not restore.");
+                if(before!=0)
+                    throw new InvalidOperationException("Delivery-fade target mask changed before restoration; the original value was restored.");
+            }
+            finally
+            {
+                prepareMask=false;maskedCoreSnapshot=null;maskedDeliveryFadeCount=0;
+            }
         }
 
         private void RestoreAdmissionObserver()
@@ -1884,10 +2646,13 @@ namespace SuperchargedPatch.Authoring.Modules
             suppressedNaturalPresentationStarts.RemoveAll(value=>!Alive(value.Component));
             if(suppressedNaturalPresentationStarts.Count!=0)
                 throw new InvalidOperationException("Cannot clear while an exact Unity presentation Start suppression is pending.");
+            RestoreTargetDeliveryFadeMask();
+            RestoreAdmissionObserver();
             history.Clear();sequences.Clear();restoreReceipts.Clear();lastFrame=-1;failure=null;
-            prepareMask=false;completeInProgress=false;preparing=null;pending=null;
+            completeInProgress=false;preparing=null;pending=null;
             preparingHistory=null;pendingHistory=null;
-            resumePresentationTarget=null;resumePresentationCurrent=null;lastResumePresentationRestore=null;
+            resumePresentationTarget=null;resumePresentationCurrent=null;
+            resumeActiveSequence=null;resumeActiveReceipt=null;lastResumePresentationRestore=null;
             lastPresentationLifecycleCompletion=null;lastRendererMapFailure=null;lastRendererMaterialFailure=null;
         }
 
@@ -1902,11 +2667,13 @@ namespace SuperchargedPatch.Authoring.Modules
             suppressedNaturalPresentationStarts.RemoveAll(value=>!Alive(value.Component));
             if(suppressedNaturalPresentationStarts.Count!=0)
                 throw new InvalidOperationException("Cannot deactivate while an exact Unity presentation Start suppression is pending.");
+            RestoreTargetDeliveryFadeMask();
+            RestoreAdmissionObserver();
             if(harmony!=null)harmony.UnpatchSelf();harmony=null;
             if(ReferenceEquals(active,this))active=null;
-            history.Clear();sequences.Clear();lastFrame=-1;prepareMask=false;completeInProgress=false;preparing=null;pending=null;
+            history.Clear();sequences.Clear();lastFrame=-1;completeInProgress=false;preparing=null;pending=null;
             preparingHistory=null;pendingHistory=null;
-            resumePresentationTarget=null;resumePresentationCurrent=null;
+            resumePresentationTarget=null;resumePresentationCurrent=null;resumeActiveSequence=null;resumeActiveReceipt=null;
         }
 
         public void Dispose()

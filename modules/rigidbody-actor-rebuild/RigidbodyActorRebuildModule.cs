@@ -200,6 +200,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private bool dirtyInteractionHookInstalled,dirtyRestorePendingValidation;
         private int pendingContactPoolAction;
         private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
+        private int scheduledContactPoolCaptureFrame=-1,scheduledContactPoolLastObservedFrame=-1;
         private object pendingCoreSnapshot;
         private object coreRoundIdentity;
         private int sceneMetadataGeneration=-1;
@@ -217,6 +218,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object lastContextObserverReceipt,lastSceneOwnedReset;
         private readonly List<object> dirtyInteractionReceipts=new List<object>();
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
+        private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
         public string Name { get { return "authoring-rigidbody-actor-rebuild-v1"; } }
         public int ApiVersion { get { return 1; } }
@@ -229,11 +231,12 @@ namespace SuperchargedPatch.Authoring.Modules
             if(operation=="activate")Activate(args);
             else if(operation=="rebuild")result=RebuildOne(args);
             else if(operation=="capture-contact-pool-next")result=ArmContactPoolAction(args,1);
+            else if(operation=="capture-contact-pool-at-frame")result=ArmContactPoolCaptureAtFrame(args);
             else if(operation=="restore-contact-pool-next")result=ArmContactPoolAction(args,2);
             else if(operation=="cancel-contact-pool-next")result=CancelContactPoolAction(args);
             else if(operation=="checkpoint-status")result=CheckpointStatus(args);
             else if(operation=="deactivate")Deactivate();
-            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, status or deactivate.");
+            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, capture-contact-pool-at-frame, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, status or deactivate.");
             else RequireNoArgs(args);
             return Status(operation,result);
         }
@@ -327,11 +330,19 @@ namespace SuperchargedPatch.Authoring.Modules
                 var complete=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint.RestorePlan),"Complete",Type.EmptyTypes);
                 var failureMethod=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint),"RecordRestoreFailure",
                     new[]{typeof(int),typeof(Exception),typeof(bool)});
-                if(prepare==null||complete==null||failureMethod==null)
+                var capture=AccessTools.DeclaredMethod(typeof(NativeKitchenCheckpoint),"CaptureFrame",new[]{typeof(int)});
+                if(prepare==null||complete==null||failureMethod==null||capture==null||capture.ReturnType!=typeof(void))
                     throw new InvalidOperationException("Installed native checkpoint lifecycle contract differs.");
                 harmony.Patch(prepare,prefix:new HarmonyMethod(GetType().GetMethod("BeforePrepare",BindingFlags.Public|BindingFlags.Static)));
                 harmony.Patch(complete,postfix:new HarmonyMethod(GetType().GetMethod("AfterRestoreComplete",BindingFlags.Public|BindingFlags.Static)));
                 harmony.Patch(failureMethod,postfix:new HarmonyMethod(GetType().GetMethod("AfterRestoreFailure",BindingFlags.Public|BindingFlags.Static)));
+                // Run after the ordinary core and module capture postfixes.  The
+                // original CaptureFrame has already published its exact snapshot,
+                // and Priority.Last prevents this targeted native observation from
+                // preceding default-priority delivery/history observers.
+                var capturePostfix=new HarmonyMethod(GetType().GetMethod("AfterCaptureFrame",BindingFlags.Public|BindingFlags.Static));
+                capturePostfix.priority=Priority.Last;
+                harmony.Patch(capture,postfix:capturePostfix);
             }
         }
 
@@ -421,6 +432,27 @@ namespace SuperchargedPatch.Authoring.Modules
             module.CancelDirtyInteractionWork();
         }
 
+        public static void AfterCaptureFrame(int __0)
+        {
+            var module=active;
+            if(module==null||!module.automaticContactPoolRestore||module.scheduledContactPoolCaptureFrame<0)return;
+            try
+            {
+                module.ObserveSceneGeneration();
+                module.ObserveCoreRoundIdentity();
+                // Either observer may have recognized a new scene/round and
+                // transactionally cancelled scene-owned scheduled work.
+                if(module.scheduledContactPoolCaptureFrame<0)return;
+                module.CaptureContactPoolAtScheduledFrame(__0);
+                module.failure=null;
+            }
+            catch(Exception error)
+            {
+                module.failure=error.ToString();
+                throw;
+            }
+        }
+
         private object RebuildOne(Dictionary<string,object> args)
         {
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
@@ -444,7 +476,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Contact-pool action requires an active module and an observed or explicit context.");
             }
             ObserveCoreRoundIdentity();
-            if(pendingContactPoolAction!=0)throw new InvalidOperationException("A contact-pool action is already pending.");
+            if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0)
+                throw new InvalidOperationException("A contact-pool action is already pending or scheduled.");
             if(action==2&&checkpointSidecars.Count==0)
                 throw new InvalidOperationException("No physics-pool snapshot has been captured.");
             if(action==1)
@@ -461,13 +494,94 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"context","0x"+contactManagerContext.ToString("X8")},{"frame",action==1?(object)pendingContactPoolFrame:latest.Frame}};
         }
 
-        private object CancelContactPoolAction(Dictionary<string,object> args)
+        private object ArmContactPoolCaptureAtFrame(Dictionary<string,object> args)
         {
-            RequireNoArgs(args);int prior=pendingContactPoolAction;pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
-            return new Dictionary<string,object>{{"cancelled",prior==0?"none":prior==1?"capture":"restore"}};
+            if(args.Count!=1||!args.ContainsKey("frame")||args["frame"]==null||args["frame"].GetType()!=typeof(int))
+                throw new ArgumentException("capture-contact-pool-at-frame requires exactly frame:int.");
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Scheduled contact-pool capture requires the authoring pause fence.");
+            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore)
+                throw new InvalidOperationException("Scheduled contact-pool capture requires the active automatic contact-pool restore module.");
+            ObserveSceneGeneration();
+            ObserveCoreRoundIdentity();
+            RefreshObservedContactManagerContext();
+            if(!ReferenceEquals(active,this)||contactManagerContext==0)
+                throw new InvalidOperationException("Scheduled contact-pool capture requires an active observed or explicit context.");
+            if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0||
+                pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar!=null||
+                dirtyRestorePendingValidation||automaticRestorePending||warpInProgress)
+                throw new InvalidOperationException("Another contact-pool capture, restore, or dirty-interaction action is pending or scheduled.");
+            int target=(int)args["frame"];
+            int current=CurrentCheckpointFrame();
+            if(target<=current)
+                throw new InvalidOperationException("Scheduled contact-pool capture target must be after current checkpoint frame "+current+".");
+            scheduledContactPoolCaptureFrame=target;
+            scheduledContactPoolLastObservedFrame=current;
+            scheduledContactPoolCaptureArms++;
+            return new Dictionary<string,object>{{"pending","scheduled-capture"},
+                {"context","0x"+contactManagerContext.ToString("X8")},{"currentFrame",current},{"frame",target}};
         }
 
-        private void RunContactPoolAction(int action,bool automaticAction)
+        private void CaptureContactPoolAtScheduledFrame(int observedFrame)
+        {
+            int target=scheduledContactPoolCaptureFrame;
+            if(target<0)return;
+            scheduledContactPoolLastObservedFrame=observedFrame;
+            if(observedFrame<target)return;
+            if(observedFrame>target)
+                throw new InvalidOperationException("Scheduled contact-pool capture skipped exact output frame "+target+
+                    "; next observed frame was "+observedFrame+".");
+            if(pendingContactPoolAction!=0||pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||
+                pendingDirtyCaptureSidecar!=null||dirtyRestorePendingValidation||automaticRestorePending||warpInProgress)
+                throw new InvalidOperationException("Scheduled contact-pool capture reached its target while another native checkpoint action was pending.");
+
+            RefreshObservedContactManagerContext();
+            if(scheduledContactPoolCaptureFrame!=target)return;
+            if(contactManagerContext==0)
+                throw new InvalidOperationException("Scheduled contact-pool capture reached its target without an observed context.");
+            if(CurrentCheckpointFrame()!=target)
+                throw new InvalidOperationException("Native checkpoint output-frame watermark differs from scheduled contact-pool target "+target+".");
+            object core=CoreCheckpointSnapshot(target);
+            if(core==null)
+                throw new InvalidOperationException("Scheduled contact-pool capture target has no retained exact core snapshot.");
+
+            pendingContactPoolFrame=target;
+            pendingCoreSnapshot=core;
+            try
+            {
+                RunContactPoolAction(1,false,true);
+                if(pendingContactPoolFrame!=-1||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar==null||
+                    pendingDirtyCaptureSidecar.Frame!=target||
+                    !ReferenceEquals(pendingDirtyCaptureSidecar.CoreSnapshot,core)||
+                    pendingDirtyCaptureSidecar.TransformDispatch==null)
+                    throw new InvalidOperationException("Scheduled contact-pool capture did not stage one complete exact-frame sidecar transaction.");
+                // Clear only after all synchronous read-only captures succeeded
+                // and the matching dirty-interaction sample was armed.
+                scheduledContactPoolCaptureFrame=-1;
+                scheduledContactPoolCaptureTriggers++;
+            }
+            catch
+            {
+                pendingContactPoolFrame=-1;
+                pendingCoreSnapshot=null;
+                // Admission guarantees no unrelated dirty work existed, so an
+                // arm that failed after touching native hook state is safe to
+                // cancel without disturbing another transaction.
+                CancelDirtyInteractionWork();
+                throw;
+            }
+        }
+
+        private object CancelContactPoolAction(Dictionary<string,object> args)
+        {
+            RequireNoArgs(args);int prior=pendingContactPoolAction;int scheduled=scheduledContactPoolCaptureFrame;
+            pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
+            return new Dictionary<string,object>{{"cancelled",scheduled>=0?"scheduled-capture":prior==0?"none":prior==1?"capture":"restore"},
+                {"frame",scheduled>=0?(object)scheduled:null}};
+        }
+
+        private void RunContactPoolAction(int action,bool automaticAction,bool requireTransformCapture=false)
         {
             if(action==1)FinalizePendingDirtyInteractionCapture();
             RefreshObservedContactManagerContext();
@@ -527,7 +641,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
-                TransformDispatchState dispatch=automaticTransformDispatchRestore
+                TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
                     ?RunTransformDispatchAction(1,null):null;
                 var captured=new CheckpointSidecar {Frame=actionFrame,
                     Context=contactManagerContext,FreeArray=receipt.FreeArray.ToUInt32(),
@@ -1041,6 +1155,7 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             CancelDirtyInteractionWork();
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
             if(clearFailure)failure=null;
@@ -1418,6 +1533,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
                 {"sphereManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.SphereManifoldPool)},
                 {"pendingContactPoolAction",pendingContactPoolAction==0?"none":pendingContactPoolAction==1?"capture":"restore"},
+                {"scheduledContactPoolCapturePending",scheduledContactPoolCaptureFrame>=0},
+                {"scheduledContactPoolCaptureFrame",scheduledContactPoolCaptureFrame},
+                {"scheduledContactPoolLastObservedFrame",scheduledContactPoolLastObservedFrame},
+                {"scheduledContactPoolCaptureArms",scheduledContactPoolCaptureArms},
+                {"scheduledContactPoolCaptureTriggers",scheduledContactPoolCaptureTriggers},
                 {"automaticContactPoolRestore",automaticContactPoolRestore},{"automaticRestorePending",automaticRestorePending},
                 {"automaticTransformDispatchRestore",automaticTransformDispatchRestore},
                 {"transformDispatchSnapshotCaptured",latest!=null&&latest.TransformDispatch!=null},
@@ -1438,7 +1558,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactPoolReceipts",contactPoolReceipts.ToArray()},
                 {"manifoldPoolCaptures",manifoldPoolCaptures},{"manifoldPoolRestores",manifoldPoolRestores},
                 {"manifoldPoolReceipts",manifoldPoolReceipts.ToArray()},
-                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager, large-manifold and sphere-manifold free-list orders plus TransformChangeDispatch and PhysX dirty-interaction order for each exact core checkpoint object. A successful rewind prunes only future sidecars; the next replay unpause restores the selected pool state and projects surviving dirty interactions into checkpoint-relative order while preserving current-only slots when explicitly enabled. Forward game data, score and input are not rewritten."}};
+                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager, large-manifold and sphere-manifold free-list orders plus TransformChangeDispatch and PhysX dirty-interaction order for each exact core checkpoint object. One pause-fenced command may schedule the same read-only capture transaction at an exact future NativeKitchenCheckpoint output boundary without splitting input; it binds the already-published exact core snapshot, never runs early or late, and fails closed if that output frame is skipped. A successful rewind prunes only future sidecars; the next replay unpause restores the selected pool state and projects surviving dirty interactions into checkpoint-relative order while preserving current-only slots when explicitly enabled. Forward game data, score and input are not rewritten."}};
             if(result!=null)value.Add("result",result);return value;
         }
 
@@ -1458,6 +1578,7 @@ namespace SuperchargedPatch.Authoring.Modules
             dirtyInteractionRestoreMode=DirtyInteractionRestoreExact;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+            scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;

@@ -4,8 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../framework/modules/delivery-fade-checkpoint/DeliveryFadeReincarnationContract.cs" Link="DeliveryFadeReincarnationContract.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="../../modules/delivery-fade-checkpoint/DeliveryFadeReincarnationContract.cs" Link="DeliveryFadeReincarnationContract.cs" />
   </ItemGroup>
 </Project>

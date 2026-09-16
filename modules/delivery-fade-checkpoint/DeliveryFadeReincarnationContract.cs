@@ -1,9 +1,36 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace SuperchargedPatch.Authoring.Modules
 {
+    // StartCoroutine advances its IEnumerator synchronously.  This one-yield
+    // relay lets authoring resume schedule an already-advanced native iterator
+    // without consuming its restored frame before normal Unity scheduling.
+    internal sealed class DeliveryFadeResumeRelay : IEnumerator
+    {
+        internal readonly IEnumerator Inner;
+        internal bool Primed;
+        private object current;
+
+        internal DeliveryFadeResumeRelay(IEnumerator inner)
+        {
+            if(inner==null)throw new ArgumentNullException("inner");
+            Inner=inner;
+        }
+
+        public object Current { get { return current; } }
+
+        public bool MoveNext()
+        {
+            if(!Primed){Primed=true;current=null;return true;}
+            bool result=Inner.MoveNext();current=result?Inner.Current:null;return result;
+        }
+
+        public void Reset() { throw new NotSupportedException(); }
+    }
+
     // Pure admission helpers shared with the offline contract check.  Keeping
     // these rules free of Unity state makes the fail-closed edge cases
     // independently executable without loading the game.
@@ -62,6 +89,44 @@ namespace SuperchargedPatch.Authoring.Modules
         internal static bool IsTerminalFadeProgress(float value)
         {
             return !Single.IsNaN(value)&&!Single.IsInfinity(value)&&value>=1f&&value<=1.00001f;
+        }
+
+        internal static bool IsExactStory11ActiveFadeState(int entityId,int pc,bool disposing,bool errored,
+            bool currentIsNull,bool currentIsStationWait,float progress,bool pfxAlive,bool pfxDetached,
+            float pfxDelay,float fadeTime,IList<bool> colliderEnabled,IList<float> materialAlpha)
+        {
+            return entityId==2&&pc==2&&!disposing&&!errored&&currentIsNull&&!currentIsStationWait
+                &&progress==.3f&&pfxAlive&&pfxDetached&&pfxDelay==0f&&fadeTime==.5f
+                &&colliderEnabled!=null&&colliderEnabled.Count==2&&colliderEnabled.All(value=>!value)
+                &&materialAlpha!=null&&materialAlpha.Count==2
+                &&materialAlpha.All(value=>value==.733333349f);
+        }
+
+        internal static bool IsExactObserverEntry(int count,bool containsExpected,int observedInstanceId,int expectedInstanceId)
+        {
+            return count==1&&containsExpected&&observedInstanceId>0&&observedInstanceId==expectedInstanceId;
+        }
+
+        internal static bool IsNonEmptyDistinctSubset(IList<int> values,IList<int> ownerValues)
+        {
+            if(values==null||ownerValues==null||values.Count==0)return false;
+            var valuesSet=new HashSet<int>();
+            foreach(int value in values)if(value<=0||!valuesSet.Add(value))return false;
+            var ownerSet=new HashSet<int>();
+            foreach(int value in ownerValues)if(value<=0||!ownerSet.Add(value))return false;
+            return valuesSet.IsSubsetOf(ownerSet);
+        }
+
+        internal static bool IsRebindableDeliveryPhase(int pc,bool currentIsNull,bool currentIsStationWait,
+            float progress,bool hasColliders,bool hasRenderers,bool pfxAlive,bool pfxDetached,bool pfxReferenced)
+        {
+            if(!Finite(progress))return false;
+            return pc==0&&currentIsNull&&!currentIsStationWait&&progress==0f
+                    &&!hasColliders&&!hasRenderers&&!pfxAlive&&!pfxDetached
+                ||pc==1&&!currentIsNull&&currentIsStationWait&&progress==0f
+                    &&hasColliders&&!hasRenderers&&!pfxAlive&&!pfxDetached
+                ||pc==2&&currentIsNull&&!currentIsStationWait&&progress>=0f&&progress<1f
+                    &&hasColliders&&hasRenderers&&pfxAlive&&pfxDetached&&pfxReferenced;
         }
 
         internal static bool IsBoundedPresentationScale(float cx,float cy,float cz,float tx,float ty,float tz)
