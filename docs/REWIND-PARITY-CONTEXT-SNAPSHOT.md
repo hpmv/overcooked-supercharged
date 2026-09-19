@@ -6,6 +6,28 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — pending PhysX sleep notification is an admitted intermediate
+
+BodyRestore r49 clears the fresh v91 entity-49 restore failure.  The automatic
+empty-proxy mass reset can consume `BF_KINEMATIC_SETTLING` and leave the body in
+PhysX 3.3.3's exact queued sleep-notification phase before scene maintenance
+clears it.  The new admission is intentionally narrow: the actor, scene,
+BodySim/BodyCore, island node, storage, pose and mass frame must remain exact;
+the actor must be inactive in the sleeping island, present exactly once in the
+sleep list, absent from the wake list, and differ only by the documented sleep
+notification/list flags and not-ready change bit.  The existing post-
+maintenance comparator still requires complete target convergence.
+
+The semantic suite passes 254 checks.  Managed r49 SHA-256 is
+`31A046ABD53237FE554EB5940B539EABCB28382654CE1108EB8B9FD9197680F4`.
+Fresh v92 evidence is under
+`framework/artifacts/live-v92-sleep-notify-joint-body-animator-resolver-f1048-to-f444-r1/`.
+The run gets past the v91 mass/lifecycle boundary and reaches the already known
+contact-pool topology gap: the target owns 12 active managers, while all 256
+slots are free before the first replay maintenance.  No replay frame ran.
+Next reconstruct the checkpoint's manager/manifold ownership at the correct
+PhysX creation phase; do not relax pool membership checks or start search.
+
 ## Latest result — all 12 f444 contact managers have semantic owners
 
 Managed RigidbodyActorRebuild r14k and native helper r20 add a strictly

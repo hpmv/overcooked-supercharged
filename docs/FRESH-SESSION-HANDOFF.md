@@ -1,5 +1,29 @@
 # Fresh-session handoff — 2026-09-08
 
+> **PhysX pending-sleep restore milestone (2026-09-19, BodyRestore r49):**
+> the fresh v92 f1048 -> f444 replay no longer fails at entity 49's automatic
+> mass-frame reset.  PhysX 3.3.3 advances that targetless kinematic from
+> `BF_KINEMATIC_SETTLING` into one exact pre-dispatch state where the actor is
+> already inactive in its sleeping island and appears once in `mSleepBodies`
+> with `BF_SLEEP_NOTIFY | BF_IS_IN_SLEEP_LIST`.  r49 admits only that
+> source-defined intermediate before the existing final maintenance check;
+> actor/scene/body/island identities, exact mass frame and pose, bitmap bits,
+> list membership, and the absence of a wake-list entry all remain strict.
+> Ordinary forward play is unchanged.
+>
+> The BodyRestore semantic suite passes 254 checks.  Managed r49 is
+> `framework-run/modules/BodyRestore-r49-sleep-notification-intermediate-core-bg4-v27/BodyRestore.r49-sleep-notification-intermediate-core-bg4-v27.dll`,
+> SHA-256
+> `31A046ABD53237FE554EB5940B539EABCB28382654CE1108EB8B9FD9197680F4`.
+> Fresh evidence is
+> `framework/artifacts/live-v92-sleep-notify-joint-body-animator-resolver-f1048-to-f444-r1/`.
+> That run advances beyond the v91 `Deferred mass-changing targetless
+> kinematic state differs for 49` boundary and next stops, before any replay
+> frame, at the independent contact-pool reconstruction gate: f444 has 244
+> free / 12 active managers while the restored pre-maintenance pool has all
+> 256 free.  Continue with semantic contact-manager/manifold reconstruction;
+> do not weaken the final body-maintenance comparator and do not search.
+
 > **Contact-manager owner diagnostic milestone (2026-09-19, managed r14k /
 > native r20):** the read-only PhysX walker now identifies all 12 managers
 > active at the scheduled f444 checkpoint.  They occupy pool slots 0..11 and

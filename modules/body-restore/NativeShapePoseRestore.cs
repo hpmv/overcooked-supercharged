@@ -1654,8 +1654,16 @@ namespace SuperchargedPatch.Authoring.Modules
             NativeShapeCheckpoint preTransform,long call)
         {
             var current=CaptureNativeShapeCheckpoint(row.Body,row.Colliders);
+            bool settlingExact=SettlingTargetlessKinematic(current,row.RawUseGravity)&&
+                preTransform.WakeCounterBits==current.WakeCounterBits&&
+                preTransform.BufferedIsSleeping==current.BufferedIsSleeping&&
+                preTransform.BodySimActive==current.BodySimActive&&
+                SameNativeLifecycle(preTransform.Lifecycle,current.Lifecycle);
+            bool notificationPending=PendingSleepNotificationTargetlessKinematic(
+                target,current,row.RawUseGravity);
             var receipt=new Dictionary<string,object>{{"restoreCall",call},{"entityId",row.EntityId},
                 {"phase","await-one-final-maintenance-step"},{"exact",false},
+                {"intermediate",notificationPending?"sleep-notification-pending":"settling"},
                 {"target",NativeBodyCheckpointDiagnostic(row,target)},
                 {"preTransform",NativeBodyCheckpointDiagnostic(row,preTransform)},
                 {"current",NativeBodyCheckpointDiagnostic(row,current)}};
@@ -1663,16 +1671,14 @@ namespace SuperchargedPatch.Authoring.Modules
             if(nativeSleepingKinematicPoseRestores.Count>128)
                 nativeSleepingKinematicPoseRestores.RemoveAt(0);
             if(!SleepingTargetlessKinematic(target)||
-                !SettlingTargetlessKinematic(current,row.RawUseGravity)||
+                (!settlingExact&&!notificationPending)||
                 !SameNativeShapeState(target,current)||
                 !SameBits(target.ActorPose,current.ActorPose)||
                 !SameBits(target.Body2Actor,current.Body2Actor)||
                 !SameBits(target.Body2World,current.Body2World)||
                 !SameNativeKinematicTarget(target.KinematicTarget,current.KinematicTarget)||
-                preTransform.WakeCounterBits!=current.WakeCounterBits||
-                preTransform.BufferedIsSleeping!=current.BufferedIsSleeping||
-                preTransform.BodySimActive!=current.BodySimActive||
-                !SameNativeLifecycle(preTransform.Lifecycle,current.Lifecycle))
+                !target.RigidbodyPointer.Equals(current.RigidbodyPointer)||
+                !SameMassFrame(row.Invariants,CaptureInvariants(row.Body)))
                 throw new InvalidOperationException("Deferred targetless kinematic pre-maintenance state differs for "+row.EntityId+".");
             deferredKinematicSleepEntities.Add(row.EntityId);
             receipt["exact"]=true;
@@ -1694,12 +1700,16 @@ namespace SuperchargedPatch.Authoring.Modules
             nativeSleepingKinematicPoseRestores.Add(receipt);
             if(nativeSleepingKinematicPoseRestores.Count>128)
                 nativeSleepingKinematicPoseRestores.RemoveAt(0);
+            bool settlingExact=SettlingTargetlessKinematic(current,row.RawUseGravity)&&
+                current.WakeCounterBits==preimage.WakeCounterBits&&
+                current.BufferedIsSleeping==preimage.BufferedIsSleeping&&
+                current.BodySimActive==preimage.BodySimActive;
+            bool notificationPending=PendingSleepNotificationTargetlessKinematic(
+                target,current,row.RawUseGravity);
+            receipt["intermediate"]=notificationPending?"sleep-notification-pending":"settling";
             if(!SleepingTargetlessKinematic(target)||
                 !SettlingTargetlessKinematic(preimage,row.RawUseGravity)||
-                !SettlingTargetlessKinematic(current,row.RawUseGravity)||
-                current.WakeCounterBits!=preimage.WakeCounterBits||
-                current.BufferedIsSleeping!=preimage.BufferedIsSleeping||
-                current.BodySimActive!=preimage.BodySimActive||
+                (!settlingExact&&!notificationPending)||
                 !SameNativeShapeState(target,current)||
                 !SameBits(target.ActorPose,current.ActorPose)||
                 !SameBits(target.Body2Actor,current.Body2Actor)||
@@ -1720,6 +1730,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException(
                     "Deferred mass-changing targetless kinematic state differs for "+row.EntityId+".");
             receipt["exact"]=true;
+        }
+
+        private static bool PendingSleepNotificationTargetlessKinematic(
+            NativeShapeCheckpoint target,NativeShapeCheckpoint current,bool rawUseGravity)
+        {
+            return SleepingTargetlessKinematic(target)&&SleepingTargetlessKinematic(current)&&
+                PendingSleepNotificationLifecycle(target.Lifecycle,current.Lifecycle,rawUseGravity);
         }
 
         private static bool SyntheticTransformKinematicTargetOnly(NativeKinematicTargetReceipt before,

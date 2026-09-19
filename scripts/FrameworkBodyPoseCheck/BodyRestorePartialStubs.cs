@@ -58,6 +58,37 @@ namespace SuperchargedPatch.Authoring.Modules
         public int NativeWakeStateRestoreReceiptSize { get { return System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeWakeStateRestoreReceipt)); } }
         public int NativeKinematicTargetReceiptSize { get { return System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeKinematicTargetReceipt)); } }
 
+        public bool PendingSleepNotificationLifecycleFixture(string mode)
+        {
+            var target=new NativeBody2WorldCaptureReceipt {
+                Actor=new UIntPtr(1),Scene=new UIntPtr(2),ControlState=2,
+                SimulationRunning=0,PhysicsBuffering=0,BodySim=new UIntPtr(3),
+                BodyCore=new UIntPtr(4),BodyCoreBodySim=new UIntPtr(3),BodyCoreFlags=5,
+                SimStateData=new UIntPtr(6),InteractionScene=new UIntPtr(7),ScScene=new UIntPtr(8),
+                SceneArrayIndex=uint.MaxValue-1,VelocityModState=1,IslandHook=9,
+                ActiveBodiesData=new UIntPtr(10),ActiveBodiesCapacity=64,
+                IslandManager=new UIntPtr(11),IslandNodeData=new UIntPtr(12),
+                IslandNodeOwner=new UIntPtr(3),IslandNodeIslandId=13,IslandNodeFlags=0x11,
+                KinematicBitmap=new UIntPtr(14),KinematicChangeBitmap=new UIntPtr(15),
+                NotReadyBitmap=new UIntPtr(16),NotReadyChangeBitmap=new UIntPtr(17),
+                KinematicBitmapMap=new UIntPtr(18),KinematicChangeBitmapMap=new UIntPtr(19),
+                NotReadyBitmapMap=new UIntPtr(20),NotReadyChangeBitmapMap=new UIntPtr(21),
+                KinematicBitmapWordCount=8,KinematicChangeBitmapWordCount=8,
+                NotReadyBitmapWordCount=8,NotReadyChangeBitmapWordCount=8,
+                KinematicBitmapBit=1,KinematicChangeBitmapBit=0,
+                NotReadyBitmapBit=0,NotReadyChangeBitmapBit=0,LifecycleStable=1
+            };
+            var current=target;current.BodySimInternalFlags=0x50;
+            current.NotReadyChangeBitmapBit=1;current.SleepBodiesCount=3;
+            current.SleepBodiesIndex=2;current.WokeBodiesIndex=uint.MaxValue;
+            if(mode=="flags")current.BodySimInternalFlags=0x10;
+            if(mode=="sleep-index")current.SleepBodiesIndex=uint.MaxValue;
+            if(mode=="not-ready-change")current.NotReadyChangeBitmapBit=0;
+            if(mode=="identity")current.BodyCore=new UIntPtr(22);
+            if(mode=="wake-index")current.WokeBodiesIndex=1;
+            return PendingSleepNotificationLifecycle(target,current,true);
+        }
+
         public void ConfigureNativePoseFixture(Rigidbody body,
             Func<int, Vector3, Quaternion, KeyValuePair<Vector3, Quaternion>> roundtrip)
         {

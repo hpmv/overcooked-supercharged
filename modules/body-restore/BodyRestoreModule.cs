@@ -312,6 +312,63 @@ namespace SuperchargedPatch.Authoring.Modules
             return a.Mass==b.Mass&&Same(a.CenterOfMass,b.CenterOfMass)&&Same(a.InertiaTensor,b.InertiaTensor)
                 &&Same(a.InertiaTensorRotation,b.InertiaTensorRotation);
         }
+        private static bool PendingSleepNotificationLifecycle(
+            NativeBody2WorldCaptureReceipt target,NativeBody2WorldCaptureReceipt current,
+            bool rawUseGravity)
+        {
+            // PhysX Sc::BodySim::deactivateKinematic consumes
+            // BF_KINEMATIC_SETTLING by calling notifyPutToSleep. Before the
+            // scene dispatches/clears that notification, the actor is already
+            // inactive and in its sleeping island but is present once in
+            // mSleepBodies with BF_SLEEP_NOTIFY|BF_IS_IN_SLEEP_LIST. This is a
+            // one-maintenance intermediate, not a replacement checkpoint.
+            uint gravityFlag=rawUseGravity?0u:1u;
+            return target.Actor.Equals(current.Actor)&&target.Scene.Equals(current.Scene)&&
+                target.ControlState==current.ControlState&&
+                target.BodyBufferFlags==current.BodyBufferFlags&&
+                target.SimulationRunning==0&&current.SimulationRunning==0&&
+                target.PhysicsBuffering==0&&current.PhysicsBuffering==0&&
+                target.BodySim.Equals(current.BodySim)&&target.BodyCore.Equals(current.BodyCore)&&
+                target.BodyCoreBodySim.Equals(current.BodyCoreBodySim)&&
+                target.BodyCoreFlags==current.BodyCoreFlags&&
+                target.SimStateData.Equals(current.SimStateData)&&
+                target.SimStateTargetValid==0&&current.SimStateTargetValid==0&&
+                target.InteractionScene.Equals(current.InteractionScene)&&
+                target.ScScene.Equals(current.ScScene)&&
+                target.SceneArrayIndex==uint.MaxValue-1&&
+                current.SceneArrayIndex==uint.MaxValue-1&&
+                target.BodySimInternalFlags==gravityFlag&&
+                current.BodySimInternalFlags==(0x50u|gravityFlag)&&
+                target.VelocityModState==current.VelocityModState&&
+                target.IslandHook==current.IslandHook&&
+                target.ActiveBodiesData.Equals(current.ActiveBodiesData)&&
+                target.ActiveBodiesCapacity==current.ActiveBodiesCapacity&&
+                current.ActiveBodyAtSceneIndex.Equals(UIntPtr.Zero)&&
+                target.IslandManager.Equals(current.IslandManager)&&
+                target.IslandNodeData.Equals(current.IslandNodeData)&&
+                target.IslandNodeOwner.Equals(current.IslandNodeOwner)&&
+                target.IslandNodeIslandId==current.IslandNodeIslandId&&
+                target.IslandNodeFlags==0x11u&&current.IslandNodeFlags==0x11u&&
+                target.KinematicBitmap.Equals(current.KinematicBitmap)&&
+                target.KinematicChangeBitmap.Equals(current.KinematicChangeBitmap)&&
+                target.NotReadyBitmap.Equals(current.NotReadyBitmap)&&
+                target.NotReadyChangeBitmap.Equals(current.NotReadyChangeBitmap)&&
+                target.KinematicBitmapMap.Equals(current.KinematicBitmapMap)&&
+                target.KinematicChangeBitmapMap.Equals(current.KinematicChangeBitmapMap)&&
+                target.NotReadyBitmapMap.Equals(current.NotReadyBitmapMap)&&
+                target.NotReadyChangeBitmapMap.Equals(current.NotReadyChangeBitmapMap)&&
+                target.KinematicBitmapWordCount==current.KinematicBitmapWordCount&&
+                target.KinematicChangeBitmapWordCount==current.KinematicChangeBitmapWordCount&&
+                target.NotReadyBitmapWordCount==current.NotReadyBitmapWordCount&&
+                target.NotReadyChangeBitmapWordCount==current.NotReadyChangeBitmapWordCount&&
+                target.KinematicBitmapBit==1&&current.KinematicBitmapBit==1&&
+                target.KinematicChangeBitmapBit==0&&current.KinematicChangeBitmapBit==0&&
+                target.NotReadyBitmapBit==0&&current.NotReadyBitmapBit==0&&
+                target.NotReadyChangeBitmapBit==0&&current.NotReadyChangeBitmapBit==1&&
+                current.SleepBodiesIndex!=uint.MaxValue&&
+                current.SleepBodiesIndex<current.SleepBodiesCount&&
+                current.WokeBodiesIndex==uint.MaxValue&&current.LifecycleStable==1;
+        }
         private void ValidateInvariants(Snapshot row,bool requireMassFrame=false)
         {
             var a=row.Invariants;var b=CaptureInvariants(row.Body);

@@ -492,7 +492,16 @@ foreach(var mode in new[]{"captured-linear-residual","nonfinite","shrinking-no-e
  }
  module.Dispose();
 }
-var productionPaths=new[]{"framework/patch/NativeBodyPoseCheckpoint.cs","framework/patch/NativeBodyColliderCheckpoint.cs","framework/patch/NativeBodyMassMode.cs","framework/patch/NativeKitchenCheckpoint.cs", "framework/patch/IBodyRestoreStrategy.cs","framework/patch/NativeBodyRestoreDispatch.cs","framework/modules/body-restore/BodyRestoreModule.cs","framework/modules/body-restore/EmptyProxyResetProbe.cs","framework/modules/body-restore/EmptyProxyRestore.cs"};
+{
+ var module=new SuperchargedPatch.Authoring.Modules.BodyRestoreModule();
+ Check(module.PendingSleepNotificationLifecycleFixture("success"),
+  "Deferred mass restore admits the exact PhysX sleep-notification intermediate");
+ foreach(var rejection in new[]{"flags","sleep-index","not-ready-change","identity","wake-index"})
+  Check(!module.PendingSleepNotificationLifecycleFixture(rejection),
+   "Deferred mass restore rejects altered sleep-notification lifecycle: "+rejection);
+ module.Dispose();
+}
+var productionPaths=new[]{"framework/patch/NativeBodyPoseCheckpoint.cs","framework/patch/NativeBodyColliderCheckpoint.cs","framework/patch/NativeBodyMassMode.cs","framework/patch/NativeKitchenCheckpoint.cs", "framework/patch/IBodyRestoreStrategy.cs","framework/patch/NativeBodyRestoreDispatch.cs","framework/modules/body-restore/BodyRestoreModule.cs","framework/modules/body-restore/NativeShapePoseRestore.cs","framework/modules/body-restore/EmptyProxyResetProbe.cs","framework/modules/body-restore/EmptyProxyRestore.cs"};
 var sourcePath=Path.GetFullPath("framework/patch/NativeBodyPoseCheckpoint.cs");
 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{passed=true,checks=checks.Count,names=checks,
  sourceSha256=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(sourcePath))),
