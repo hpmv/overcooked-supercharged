@@ -20,14 +20,23 @@ templates and ordinary forward gameplay are unchanged.  The focused semantic
 suite passes 25 tests.
 
 The next failure is no longer Animator state.  Before the first replay physics
-frame, RigidbodyActorRebuild rejects contact-manager pool restoration because
-the f444 free-list contains 244 managers and the post-warp live count differs
-(the exact live count is pending the r14i diagnostic).  This is a
-real hidden-physics-history boundary: the existing helper can reorder an exact
-membership set but deliberately cannot invent or discard active/free contact
-managers.  The next run uses a read-only diagnostic that records both pool
-views, after which the fix must preserve allocation semantics rather than
-merely skip the check.  Search remains disabled.
+frame, RigidbodyActorRebuild rejects contact-manager pool restoration.  Fresh
+v86 with managed r14j proves that the f444 checkpoint has 244 free / 12 active
+managers, while restored f444 has all 256 free.  The live free set equals the
+complete checkpoint free set plus exactly 12 pointers; there are zero
+checkpoint-only free pointers.  Therefore the rewind has lost the entire
+checkpoint-active contact-manager topology, not merely one plate manager.
+This is a real hidden-physics-history boundary: the existing helper can reorder
+an exact membership set but deliberately cannot invent active SIP ownership.
+
+PhysX 3.3.3 source puts dirty-interaction processing before broadphase; newly
+restored overlaps, shape-instance pairs, contact managers, and manifolds appear
+during `finishBroadPhase`.  The next read-only diagnostic must map those 12
+checkpoint-active manager pointers to their SIP endpoints and touch/cache/
+manifold summaries, then trace their first-replay recreation.  The eventual
+fix must reconstruct allocation ownership and any required persistent state at
+the correct broadphase phase rather than skip the gate.  Search remains
+disabled.
 
 Evidence and binaries:
 
@@ -37,6 +46,12 @@ Evidence and binaries:
   `0213C9005F4AA00B62A82F913380B3A8FF4D1BFFD3ED4A8C328CF20C1EA88A59`;
 - native Animator r17f SHA-256
   `4E4407C84EB97A2CBCB338433F928E22E7888AB73FDFA17B5AEA5EA09C45430C`.
+- read-only membership diagnostic r14j SHA-256
+  `2BE2E8D9F083328954C5638903D94B7A0C681176A2A48C92E18ADBB748CE741C`.
+- fresh v86 summary SHA-256
+  `7583AD1436A7836988496709F9531AB1788062571596E641641AA336E96CEC04`;
+- preserved v86 player log SHA-256
+  `827231943E56CA0EDC31867AAC7A13EB195428DFD99D39B7AC7DB4B0272CE7D4`.
 
 ## Latest result — f1045 warp succeeds; one dynamic sleep bit remains
 

@@ -631,13 +631,25 @@ namespace SuperchargedPatch.Authoring.Modules
                     string liveTop=string.Join(",",(receipt.Top??new UIntPtr[0]).Select(Hex).ToArray());
                     string expectedTop=selected==null?"":string.Join(",",selected.ContactPoolOrder
                         .Take(16).Select(value=>"0x"+value.ToString("X8")).ToArray());
+                    RecordContactPoolReceipt(action,actionFrame,receipt);
+                    string membershipDifference="";
+                    if(action==2&&selected!=null)
+                    {
+                        try{membershipDifference=DescribeContactPoolMembershipDifference(selected);}
+                        catch(Exception diagnosticError)
+                        {
+                            membershipDifference=", membershipDiagnosticFailure="+
+                                diagnosticError.GetType().Name+": "+diagnosticError.Message;
+                        }
+                    }
                     throw new InvalidOperationException("Native contact-pool action failed: result="+receipt.Result+
                         ", Win32/error="+receipt.LastError+", liveCount="+receipt.FreeCount+
                         ", expectedCount="+capacity+", liveArray="+Hex(receipt.FreeArray)+
                         ", expectedArray="+(selected==null?"":("0x"+selected.FreeArray.ToString("X8")))+
                         ", liveHash=0x"+receipt.OrderHashBefore.ToString("X8")+
                         ", expectedHash="+(selected==null?"":("0x"+selected.OrderHash.ToString("X8")))+
-                        ", liveTop=["+liveTop+"], expectedTop=["+expectedTop+"].");
+                        ", liveTop=["+liveTop+"], expectedTop=["+expectedTop+"]"+
+                        membershipDifference+".");
                 }
                 if(action==1)
                 {
@@ -686,6 +698,53 @@ namespace SuperchargedPatch.Authoring.Modules
                 ArmDirtyInteractionRestore(selected.DirtyInteractions);
                 contactPoolRestores++;
                 if(automaticAction){warpTargetSidecar=null;warpTargetRestoreEligible=false;}
+            }
+        }
+
+        private string DescribeContactPoolMembershipDifference(CheckpointSidecar expected)
+        {
+            if(expected==null||expected.ContactPoolOrder==null)
+                throw new InvalidOperationException("The expected contact-pool sidecar is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeContactPoolReceipt));
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr orderBuffer=Marshal.AllocHGlobal(MaximumContactManagers*IntPtr.Size);
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureContactPoolSnapshot(new UIntPtr(contactManagerContext),orderBuffer,
+                    MaximumContactManagers,receiptBuffer);
+                var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeContactPoolReceipt));
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=11||
+                    receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
+                    receipt.FreeArray.ToUInt32()!=expected.FreeArray||
+                    receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
+                    throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
+                        receipt.Result+", error="+receipt.LastError+", count="+receipt.FreeCount+".");
+
+                var live=new uint[receipt.FreeCount];
+                for(int i=0;i<live.Length;i++)live[i]=unchecked((uint)Marshal.ReadInt32(
+                    orderBuffer,i*IntPtr.Size));
+                if(live.Any(pointer=>pointer==0)||live.Distinct().Count()!=live.Length||
+                    ContactPoolOrderHash(live)!=receipt.OrderHashBefore||
+                    receipt.OrderHashAfter!=receipt.OrderHashBefore)
+                    throw new InvalidOperationException("Read-only live contact-pool capture returned an invalid ordered set.");
+
+                var liveSet=new HashSet<uint>(live);
+                var expectedSet=new HashSet<uint>(expected.ContactPoolOrder);
+                uint[] liveOnly=live.Where(pointer=>!expectedSet.Contains(pointer)).ToArray();
+                uint[] expectedOnly=expected.ContactPoolOrder.Where(pointer=>!liveSet.Contains(pointer)).ToArray();
+                string liveOnlyText=string.Join(",",liveOnly.Take(16)
+                    .Select(pointer=>"0x"+pointer.ToString("X8")).ToArray());
+                string expectedOnlyText=string.Join(",",expectedOnly.Take(16)
+                    .Select(pointer=>"0x"+pointer.ToString("X8")).ToArray());
+                return ", liveOnlyCount="+liveOnly.Length+", checkpointOnlyCount="+expectedOnly.Length+
+                    ", liveOnly=["+liveOnlyText+"], checkpointOnly=["+expectedOnlyText+"]";
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(orderBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
             }
         }
 

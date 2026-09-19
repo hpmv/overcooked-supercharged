@@ -2101,6 +2101,21 @@ the first replay frame because the contact-manager free-list count has changed.
 That later `ContactPoolCountChanged` failure does not invalidate the completed
 Animator boundary, but full rewind/replay parity is not yet claimed.
 
+Fresh v86 with managed RigidbodyActorRebuild r14j characterizes that later
+physics failure exactly.  The f444 checkpoint contains 244 free managers, so
+12 are active.  Restored f444 contains all 256 managers in the free pool.  A
+caller-owned read-only capture proves the live free set is the complete
+checkpoint free set plus exactly 12 pointers, with no checkpoint-only free
+pointer.  Thus rewind has lost all checkpoint-active contact-manager/SIP
+ownership before replay begins; this is not merely a free-list order problem
+or a one-manager plate special case.  No replay physics frame ran.  Evidence is
+`artifacts/live-v86-contact-membership-f1048-to-f444-r1/summary.json` and the
+preserved player log under
+`artifacts/framework-migration/story11-contact-membership-v86-story11/`.
+The next investigation maps those 12 manager pointers to semantic shape-pair,
+touch/cache, manifold, and island-edge state and observes their natural
+recreation during first-replay `finishBroadPhase`.
+
 Evidence:
 
 - `framework/artifacts/live-v85-midfade-f1048-to-f444-r1/summary.json`, SHA-256

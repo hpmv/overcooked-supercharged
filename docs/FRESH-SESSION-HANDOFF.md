@@ -30,14 +30,34 @@
 > This is an Animator milestone, not full replay parity.  The released resume
 > callback proceeds past Animator finalization and next fails closed in the
 > physics sidecar: the f444 contact-manager free-stack snapshot contains 244
-> free managers, while the restored live pool has a different count (the exact
-> live count is pending the r14i diagnostic)
+> free managers, while the restored live pool contains all 256 managers
 > (`ContactPoolCountChanged`, native result 10 / `ERROR_INVALID_STATE`).  No
-> replay physics frame ran.  A read-only r14i diagnostic is built to report the
-> live/checkpoint counts, storage, hashes, and leading entries on the next clean
-> run.  Determine whether restored dirty-interaction topology converges one
-> phase too late or whether active contact-manager membership/state must also be
-> checkpointed.  Do not weaken the exact free-stack gate and do not search.
+> replay physics frame ran.  Managed r14j followed the failed restore with one
+> caller-owned read-only capture and proved an exact set relation: the live
+> free set is the checkpoint free set plus 12 pointers, with zero
+> checkpoint-only pointers.  Thus all 12 contact managers active at f444 are
+> free after rewind; this is not a one-manager plate special case.
+>
+> Fresh v86 evidence is
+> `framework/artifacts/live-v86-contact-membership-f1048-to-f444-r1/summary.json`
+> (SHA-256
+> `7583AD1436A7836988496709F9531AB1788062571596E641641AA336E96CEC04`)
+> plus
+> `artifacts/framework-migration/story11-contact-membership-v86-story11/player-log-after-v54-failure.log`
+> (SHA-256
+> `827231943E56CA0EDC31867AAC7A13EB195428DFD99D39B7AC7DB4B0272CE7D4`).
+> The diagnostic module SHA-256 is
+> `2BE2E8D9F083328954C5638903D94B7A0C681176A2A48C92E18ADBB748CE741C`.
+>
+> PhysX 3.3.3 source proves that dirty-interaction processing happens before
+> broadphase, while new overlaps, shape-instance pairs, contact managers, and
+> their manifolds are created during `finishBroadPhase`.  The next read-only
+> diagnostic must map the 12 checkpoint-active manager pointers to their SIP
+> shape endpoints and capture their touch/cache/manifold summaries, then trace
+> their first-replay recreation.  A correct repair must reconstruct active
+> ownership and any required persistent manager/manifold state at the proper
+> broadphase phase; it must not weaken the exact free-stack gate.  Search
+> remains disabled.
 >
 > **Sleeping targetless kinematic rewind milestone (2026-09-15, BodyRestore
 > r44s / native API 11):** the previously failing committed-branch sequence is
