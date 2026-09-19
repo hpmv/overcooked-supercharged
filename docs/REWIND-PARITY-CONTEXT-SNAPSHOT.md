@@ -6,6 +6,33 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — all 12 f444 contact managers have semantic owners
+
+Managed RigidbodyActorRebuild r14k and native helper r20 add a strictly
+read-only, fail-closed owner walk for the shipped PhysX 3.3.3 contact-manager
+pool.  The f444 checkpoint's 12 active managers are exactly slots 0..11.  All
+are chef-capsule/static-box pairs: four chefs against
+`Design/Colliders/Collider`, four against `Ceiling`, and four extra Player 4
+pairs against nearby counter/crate boxes.  No delivery plate, fish, or dynamic
+container participates.  Each manager is non-touching with zero contacts and
+owns a 240-byte capsule/box manifold at this boundary.
+
+The walker validates pool membership and bitmaps, free-list complement,
+manager/SIP backlinks, shape endpoints and exact shipped PxShape vtables,
+geometry types, transform-cache IDs, and stable manager/SIP/manifold hashes.
+It performs no game or PhysX writes.  Native SHA-256 is
+`9069543CC915CB7BDFFC8D87B8F742BBB9B3145EC2FCC838172DDDA29DF19633`;
+managed SHA-256 is
+`6ECBACE2F95DE9D535DCBDE1453EF2CF9842230F12B6EEE32CB95E919B2CEB4F`.
+Evidence is under
+`framework/artifacts/live-v87-contact-owner-f1048-to-f444-r1/`.
+
+The v87 run stopped before contact-pool restoration at an earlier strict
+WorldSync boundary: restoring held fish 55's local owner pose changed an
+unspecified field of its container Rigidbody 56.  Next make that guard report
+the exact per-field before/after difference, then correct the authoring restore
+ordering/state without weakening the invariant.  Search remains disabled.
+
 ## Latest result — f1048 -> f444 Animator resume boundary is exact
 
 Managed Animator r57 with native r17f now restores all four chefs across the

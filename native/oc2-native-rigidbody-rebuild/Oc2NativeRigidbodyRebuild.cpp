@@ -55,6 +55,41 @@ static uint32_t OrderHash(const uintptr_t* values, uint32_t count) {
     return hash;
 }
 
+static uint32_t WordHash(const uint32_t* values, uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= values[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static uint32_t ByteHash(const void* value, uint32_t count) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(value);
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= bytes[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static uint32_t AppendByteHash(uint32_t hash, const void* value,
+    uint32_t count) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(value);
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= bytes[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static uint32_t BitCount32(uint32_t value) {
+    value = value - ((value >> 1) & 0x55555555u);
+    value = (value & 0x33333333u) + ((value >> 2) & 0x33333333u);
+    return (((value + (value >> 4)) & 0x0F0F0F0Fu) * 0x01010101u) >> 24;
+}
+
 static uint32_t PointerIndex(const uintptr_t* values, uint32_t count,
     uintptr_t target) {
     for (uint32_t i = 0; i < count; ++i)
@@ -86,6 +121,94 @@ struct ContactPoolReceipt {
     uint32_t orderHashBefore;
     uint32_t orderHashAfter;
     uintptr_t top[16];
+};
+
+// A read-only semantic view of one pool-used PxsContactManager.  The fields
+// are intentionally scalar: this ABI can be consumed by the managed
+// authoring module without compiling any PhysX headers into the shipped game.
+struct ContactManagerOwnerRecord {
+    uint32_t slot;
+    uint32_t membership;
+    uintptr_t manager;
+    uintptr_t sip;
+    uintptr_t primaryVtable;
+    uintptr_t secondaryVtable;
+    uintptr_t shapeSim0;
+    uintptr_t shapeSim1;
+    uintptr_t pxsShapeCore0;
+    uintptr_t pxsShapeCore1;
+    uintptr_t pxShape0;
+    uintptr_t pxShape1;
+    uintptr_t rigidBody0;
+    uintptr_t rigidBody1;
+    uintptr_t rigidCore0;
+    uintptr_t rigidCore1;
+    uintptr_t manifold;
+    uintptr_t cachePointer;
+    uint32_t pairData;
+    uint32_t transformCache0;
+    uint32_t transformCache1;
+    uint32_t managerFlags;
+    uint32_t sipFlags;
+    uintptr_t actorPair;
+    uint32_t managerHash;
+    uint32_t sipHash;
+    uint32_t manifoldHash;
+    uint32_t manifoldBytes;
+    uint32_t cacheHash;
+    uint16_t cacheSize;
+    uint16_t contactCount;
+    uint16_t workUnitFlags;
+    uint16_t statusFlags;
+    uint8_t interactionType;
+    uint8_t interactionFlags;
+    uint8_t geomType0;
+    uint8_t geomType1;
+    uint8_t disableResponse;
+    uint8_t disableCcd;
+    uint16_t validationFlags;
+};
+
+struct ContactManagerOwnerReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t context;
+    uintptr_t pool;
+    uintptr_t freeArray;
+    uintptr_t slabs;
+    uintptr_t useBitmap;
+    uintptr_t activeBitmap;
+    uintptr_t touchBitmap;
+    uintptr_t modifiableBitmap;
+    uint32_t elementsPerSlab;
+    uint32_t maximumSlabs;
+    uint32_t slabCount;
+    uint32_t log2ElementsPerSlab;
+    uint32_t freeCount;
+    uint32_t useWordCount;
+    uint32_t activeWordCount;
+    uint32_t touchWordCount;
+    uint32_t modifiableWordCount;
+    uint32_t totalSlots;
+    uint32_t usedCount;
+    uint32_t activeCount;
+    uint32_t touchCount;
+    uint32_t modifiableCount;
+    uint32_t recordsRequired;
+    uint32_t recordsWritten;
+    uint32_t freeOrderHash;
+    uint32_t freeIndexOrderHash;
+    uint32_t useBitmapHash;
+    uint32_t activeBitmapHash;
+    uint32_t touchBitmapHash;
+    uint32_t modifiableBitmapHash;
+    uint32_t ownerHash;
+    uint32_t consistencyFlags;
+    uint32_t invalidSlot;
+    uint32_t detail;
 };
 
 struct ContactContextObserverReceipt {
@@ -431,6 +554,10 @@ struct InvalidateKinematicTargetReceipt {
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
     "Unexpected Win32 manifold-pool receipt ABI");
+static_assert(sizeof(ContactManagerOwnerRecord) == 132,
+    "Unexpected Win32 contact-manager owner record ABI");
+static_assert(sizeof(ContactManagerOwnerReceipt) == 156,
+    "Unexpected Win32 contact-manager owner receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -465,6 +592,23 @@ enum ContactPoolResult : uint32_t {
     ContactPoolMembershipChanged = 11,
     ContactPoolArrayNotWritable = 12,
     ContactPoolWriteVerificationFailed = 13
+};
+
+enum ContactManagerOwnerResult : uint32_t {
+    ContactManagerOwnerOk = 1,
+    ContactManagerOwnerBadArgument = 2,
+    ContactManagerOwnerRevisionMismatch = 3,
+    ContactManagerOwnerUnreadablePool = 4,
+    ContactManagerOwnerInvalidPool = 5,
+    ContactManagerOwnerUnreadableBitmap = 6,
+    ContactManagerOwnerInvalidFreeEntry = 7,
+    ContactManagerOwnerMembershipMismatch = 8,
+    ContactManagerOwnerCapacityTooSmall = 9,
+    ContactManagerOwnerUnreadableManager = 10,
+    ContactManagerOwnerInvalidManager = 11,
+    ContactManagerOwnerInvalidSip = 12,
+    ContactManagerOwnerInvalidShape = 13,
+    ContactManagerOwnerUnstable = 14
 };
 
 enum ContactContextObserverResult : uint32_t {
@@ -639,6 +783,8 @@ static const uint32_t kCleanupRva = 0x481ED0;
 static const uint32_t kCreateRva = 0x482510;
 static const uint32_t kGetShapesRva = 0xA10740;
 static const uint32_t kCreateContactManagerRva = 0xA69E80;
+static const uint32_t kInitContactManagerRva = 0xA7E5F0;
+static const uint32_t kShapeInstancePairCreateManagerRva = 0xA54430;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
@@ -669,10 +815,38 @@ static const uint32_t kNpShapeGetCapsuleGeometryRva = 0xA0D0F0;
 static const uint32_t kNpShapeGetSphereGeometryRva = 0xA0DC50;
 static const uint32_t kNpShapeSetGeometryRva = 0xA0E340;
 static const uint32_t kNpShapeVtableRva = 0xEF9A04;
+static const uint32_t kContactManagerSize = 0x80;
 static const uint8_t kCleanupBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x74,0x53,0x8B,0xD9,0x56,0x57};
 static const uint8_t kCreateBytes[] = {0x55,0x8B,0xEC,0x81,0xEC,0x90,0x00,0x00,0x00,0x53,0x8B,0xD9};
 static const uint8_t kGetShapesBytes[] = {0x55,0x8B,0xEC,0x83,0xC1,0x14,0x5D,0xE9};
 static const uint8_t kCreateContactManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
+static const uint8_t kCreateContactManagerPoolBytes[] = {
+    0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
+};
+static const uint8_t kCreateContactManagerPopBytes[] = {
+    0xFF,0x4E,0x14,0x8B,0x4E,0x14,0x8B,0x46,0x10,0x57,0xFF,0x75,
+    0x0C,0x8B,0x3C,0x88,0x8B,0x46,0x20,0xFF,0x75,0x08,0x8B,0x57,
+    0x4C,0x8B,0xCA,0xC1,0xE9,0x05,0x83,0xE2,0x1F,0x8D,0x0C,0x88,
+    0x8B,0x01,0x0F,0xAB,0xD0,0x89,0x01,0x8B
+};
+static const uint8_t kInitContactManagerBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x8B,0x75,0x08,0x8B,0x46,0x0C,0x89,0x01
+};
+static const uint8_t kInitContactManagerUserDataBytes[] = {
+    0x8B,0x06,0x89,0x41,0x0C,0x33,0xC0,0x66,0x89,0x41,0x72,
+    0x66,0x89,0x41,0x24
+};
+static const uint8_t kCreateSipBytes[] = {
+    0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00,0x53,0x8B,0xD9,
+    0x56,0x89,0x5D,0xC8,0x8B,0x4B,0x20,0xE8,0xA8,0x3A,0xFF,0xFF,
+    0x8B,0x73,0x20,0x89,0x45,0xEC,0x8B,0x43,0x24,0x89,0x45,0xFC,
+    0x8B
+};
+static const uint8_t kCreateSipShapeCoreBytes[] = {
+    0x8B,0x46,0x1C,0x83,0xC0,0x20,0x89,0x45,0x80,0x8B,0x43,0x1C,
+    0x83,0xC0,0x20,0x89,0x7D,0xB4,0x83
+};
+static const uint8_t kNpShapeGetTypeBytes[] = {0x8B,0x41,0x74,0xC3};
 static const uint8_t kUpdateDirtyInteractionsBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x34};
 // These exact UnityPlayer 2017.4.8f1 Win32 instructions prove both the
 // PxsContext member offsets and the intrusive Ps::Pool bookkeeping layout.
@@ -874,6 +1048,18 @@ static int FailContactPool(ContactPoolReceipt* receipt, ContactPoolResult result
     if (receipt) {
         receipt->result = result;
         receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailContactManagerOwner(ContactManagerOwnerReceipt* receipt,
+    ContactManagerOwnerResult result, uint32_t error, uint32_t slot,
+    uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidSlot = slot;
+        receipt->detail = detail;
     }
     return 0;
 }
@@ -1626,6 +1812,17 @@ static void InitializeContactPoolReceipt(ContactPoolReceipt* receipt, uintptr_t 
     receipt->apiVersion = kApiVersion;
     receipt->structSize = sizeof(ContactPoolReceipt);
     receipt->context = context;
+}
+
+static void InitializeContactManagerOwnerReceipt(
+    ContactManagerOwnerReceipt* receipt, uintptr_t unityBase,
+    uintptr_t context) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(ContactManagerOwnerReceipt);
+    receipt->unityBase = unityBase;
+    receipt->context = context;
+    receipt->invalidSlot = 0xFFFFFFFFu;
 }
 
 static void InitializeContactContextObserverReceipt(ContactContextObserverReceipt* receipt,
@@ -2439,6 +2636,430 @@ static int UninstallContactManagerContextObserver(uintptr_t unityBase,
     if (trampoline) VirtualFree(trampoline, 0, MEM_RELEASE);
     InitializeContactContextObserverReceipt(receipt, unityBase);
     receipt->result = ContactContextObserverOk;
+    return 1;
+}
+
+static bool ContactManagerOwnerRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* createPool = reinterpret_cast<const void*>(
+        unityBase + kCreateContactManagerRva + 0x06);
+    const void* createPop = reinterpret_cast<const void*>(
+        unityBase + kCreateContactManagerRva + 0x29);
+    const void* initialize = reinterpret_cast<const void*>(
+        unityBase + kInitContactManagerRva);
+    const void* initializeUserData = reinterpret_cast<const void*>(
+        unityBase + kInitContactManagerRva + 0x172);
+    const void* createSip = reinterpret_cast<const void*>(
+        unityBase + kShapeInstancePairCreateManagerRva);
+    const void* createSipShapeCore = reinterpret_cast<const void*>(
+        unityBase + kShapeInstancePairCreateManagerRva + 0x1E6);
+    const void* getType = reinterpret_cast<const void*>(
+        unityBase + kNpShapeGetGeometryTypeRva);
+    return Readable(createPool, sizeof(kCreateContactManagerPoolBytes)) &&
+        EqualBytes(createPool, kCreateContactManagerPoolBytes,
+            sizeof(kCreateContactManagerPoolBytes)) &&
+        Readable(createPop, sizeof(kCreateContactManagerPopBytes)) &&
+        EqualBytes(createPop, kCreateContactManagerPopBytes,
+            sizeof(kCreateContactManagerPopBytes)) &&
+        Readable(initialize, sizeof(kInitContactManagerBytes)) &&
+        EqualBytes(initialize, kInitContactManagerBytes,
+            sizeof(kInitContactManagerBytes)) &&
+        Readable(initializeUserData,
+            sizeof(kInitContactManagerUserDataBytes)) &&
+        EqualBytes(initializeUserData, kInitContactManagerUserDataBytes,
+            sizeof(kInitContactManagerUserDataBytes)) &&
+        Readable(createSip, sizeof(kCreateSipBytes)) &&
+        EqualBytes(createSip, kCreateSipBytes, sizeof(kCreateSipBytes)) &&
+        Readable(createSipShapeCore, sizeof(kCreateSipShapeCoreBytes)) &&
+        EqualBytes(createSipShapeCore, kCreateSipShapeCoreBytes,
+            sizeof(kCreateSipShapeCoreBytes)) &&
+        Readable(getType, sizeof(kNpShapeGetTypeBytes)) &&
+        EqualBytes(getType, kNpShapeGetTypeBytes,
+            sizeof(kNpShapeGetTypeBytes));
+}
+
+static bool ReadContactBitmap(uintptr_t bitmap, uint32_t totalSlots,
+    uintptr_t& map, uint32_t& wordCount) {
+    if (!Readable(reinterpret_cast<const void*>(bitmap), 8)) return false;
+    map = *reinterpret_cast<const uintptr_t*>(bitmap);
+    wordCount = *reinterpret_cast<const uint32_t*>(bitmap + 4) & 0x7FFFFFFFu;
+    const uint32_t requiredWords = (totalSlots + 31u) >> 5;
+    return map && wordCount >= requiredWords && wordCount <= 0x20000u &&
+        Readable(reinterpret_cast<const void*>(map), requiredWords * 4);
+}
+
+static uint32_t ContactBitmapCount(uintptr_t map, uint32_t totalSlots) {
+    const uint32_t words = (totalSlots + 31u) >> 5;
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < words; ++i) {
+        uint32_t value = *reinterpret_cast<const uint32_t*>(map + i * 4);
+        if (i + 1 == words && (totalSlots & 31u) != 0)
+            value &= (1u << (totalSlots & 31u)) - 1u;
+        count += BitCount32(value);
+    }
+    return count;
+}
+
+static bool ContactBitmapTest(uintptr_t map, uint32_t slot) {
+    return (*reinterpret_cast<const uint32_t*>(
+        map + (slot >> 5) * 4) & (1u << (slot & 31u))) != 0;
+}
+
+static uint32_t ContactBitmapHash(uintptr_t map, uint32_t totalSlots) {
+    return WordHash(reinterpret_cast<const uint32_t*>(map),
+        (totalSlots + 31u) >> 5);
+}
+
+static bool ReadContactManagerOwner(uintptr_t unityBase, uintptr_t manager,
+    uint32_t slot, uint32_t membership, ContactManagerOwnerRecord& record,
+    ContactManagerOwnerReceipt* receipt) {
+    record = {};
+    record.slot = slot;
+    record.membership = membership;
+    record.manager = manager;
+    if (!Readable(reinterpret_cast<const void*>(manager),
+            kContactManagerSize)) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerUnreadableManager,
+            ERROR_NOACCESS, slot, 1);
+        return false;
+    }
+    if (*reinterpret_cast<const uint32_t*>(manager + 0x4C) != slot) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidManager,
+            ERROR_INVALID_DATA, slot, 2);
+        return false;
+    }
+
+    record.rigidBody0 = *reinterpret_cast<const uintptr_t*>(manager + 0x00);
+    record.rigidBody1 = *reinterpret_cast<const uintptr_t*>(manager + 0x04);
+    record.managerFlags = *reinterpret_cast<const uint32_t*>(manager + 0x08);
+    record.sip = *reinterpret_cast<const uintptr_t*>(manager + 0x0C);
+    record.contactCount = *reinterpret_cast<const uint16_t*>(manager + 0x24);
+    record.workUnitFlags = *reinterpret_cast<const uint16_t*>(manager + 0x26);
+    record.manifold = *reinterpret_cast<const uintptr_t*>(manager + 0x3C);
+    record.pairData = *reinterpret_cast<const uint32_t*>(manager + 0x40);
+    record.cachePointer = *reinterpret_cast<const uintptr_t*>(manager + 0x44);
+    record.cacheSize = *reinterpret_cast<const uint16_t*>(manager + 0x48);
+    record.rigidCore0 = *reinterpret_cast<const uintptr_t*>(manager + 0x50);
+    record.rigidCore1 = *reinterpret_cast<const uintptr_t*>(manager + 0x54);
+    record.pxsShapeCore0 = *reinterpret_cast<const uintptr_t*>(manager + 0x58);
+    record.pxsShapeCore1 = *reinterpret_cast<const uintptr_t*>(manager + 0x5C);
+    record.geomType0 = *reinterpret_cast<const uint8_t*>(manager + 0x70);
+    record.geomType1 = *reinterpret_cast<const uint8_t*>(manager + 0x71);
+    record.statusFlags = *reinterpret_cast<const uint16_t*>(manager + 0x72);
+    record.transformCache0 = *reinterpret_cast<const uint32_t*>(manager + 0x74);
+    record.transformCache1 = *reinterpret_cast<const uint32_t*>(manager + 0x78);
+    record.disableResponse = *reinterpret_cast<const uint8_t*>(manager + 0x22);
+    record.disableCcd = *reinterpret_cast<const uint8_t*>(manager + 0x23);
+
+    if (!record.sip || !Readable(reinterpret_cast<const void*>(record.sip),
+            0x44)) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidSip,
+            ERROR_NOACCESS, slot, 3);
+        return false;
+    }
+    record.primaryVtable = *reinterpret_cast<const uintptr_t*>(record.sip);
+    record.secondaryVtable = *reinterpret_cast<const uintptr_t*>(record.sip + 8);
+    record.interactionType = *reinterpret_cast<const uint8_t*>(record.sip + 0x1C);
+    record.interactionFlags = *reinterpret_cast<const uint8_t*>(record.sip + 0x1D);
+    record.shapeSim0 = *reinterpret_cast<const uintptr_t*>(record.sip + 0x20);
+    record.shapeSim1 = *reinterpret_cast<const uintptr_t*>(record.sip + 0x24);
+    record.sipFlags = *reinterpret_cast<const uint32_t*>(record.sip + 0x2C);
+    record.actorPair = *reinterpret_cast<const uintptr_t*>(record.sip + 0x30);
+    const uintptr_t backlink = *reinterpret_cast<const uintptr_t*>(record.sip + 0x38);
+    if (!record.primaryVtable || !record.secondaryVtable || !record.actorPair ||
+        backlink != manager || record.interactionType != 0 ||
+        (record.interactionFlags & 0x11u) != 0x11u || !record.shapeSim0 ||
+        !record.shapeSim1 || record.shapeSim0 == record.shapeSim1 ||
+        !Readable(reinterpret_cast<const void*>(record.shapeSim0), 0x20) ||
+        !Readable(reinterpret_cast<const void*>(record.shapeSim1), 0x20)) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidSip,
+            ERROR_INVALID_DATA, slot, 4);
+        return false;
+    }
+
+    const uintptr_t scShapeCore0 = *reinterpret_cast<const uintptr_t*>(
+        record.shapeSim0 + 0x1C);
+    const uintptr_t scShapeCore1 = *reinterpret_cast<const uintptr_t*>(
+        record.shapeSim1 + 0x1C);
+    if (!scShapeCore0 || !scShapeCore1 || scShapeCore0 > UINTPTR_MAX - 0x20 ||
+        scShapeCore1 > UINTPTR_MAX - 0x20 ||
+        scShapeCore0 + 0x20 != record.pxsShapeCore0 ||
+        scShapeCore1 + 0x20 != record.pxsShapeCore1 ||
+        record.transformCache0 != *reinterpret_cast<const uint32_t*>(
+            record.shapeSim0 + 0x18) ||
+        record.transformCache1 != *reinterpret_cast<const uint32_t*>(
+            record.shapeSim1 + 0x18) || record.pxsShapeCore0 < 0x50 ||
+        record.pxsShapeCore1 < 0x50) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidShape,
+            ERROR_INVALID_DATA, slot, 5);
+        return false;
+    }
+    record.pxShape0 = record.pxsShapeCore0 - 0x50;
+    record.pxShape1 = record.pxsShapeCore1 - 0x50;
+    if (!Readable(reinterpret_cast<const void*>(record.pxShape0), 0x78) ||
+        !Readable(reinterpret_cast<const void*>(record.pxShape1), 0x78) ||
+        *reinterpret_cast<const uintptr_t*>(record.pxShape0) !=
+            unityBase + kNpShapeVtableRva ||
+        *reinterpret_cast<const uintptr_t*>(record.pxShape1) !=
+            unityBase + kNpShapeVtableRva ||
+        static_cast<uint8_t>(*reinterpret_cast<const uint32_t*>(
+            record.pxShape0 + 0x74)) != record.geomType0 ||
+        static_cast<uint8_t>(*reinterpret_cast<const uint32_t*>(
+            record.pxShape1 + 0x74)) != record.geomType1) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidShape,
+            ERROR_INVALID_DATA, slot, 6);
+        return false;
+    }
+
+    record.managerHash = ByteHash(reinterpret_cast<const void*>(manager),
+        kContactManagerSize);
+    record.sipHash = ByteHash(reinterpret_cast<const void*>(record.sip), 0x44);
+    if (record.manifold > 1 && (record.manifold & 1u) == 0) {
+        record.manifoldBytes = record.geomType0 && record.geomType1 &&
+            record.geomType0 <= 4 && record.geomType1 <= 4 ? 0xF0u : 0x60u;
+        if (!Readable(reinterpret_cast<const void*>(record.manifold),
+                record.manifoldBytes)) {
+            FailContactManagerOwner(receipt, ContactManagerOwnerInvalidManager,
+                ERROR_NOACCESS, slot, 7);
+            return false;
+        }
+        record.manifoldHash = ByteHash(
+            reinterpret_cast<const void*>(record.manifold),
+            record.manifoldBytes);
+    }
+    if (record.cacheSize) {
+        if (!record.cachePointer || record.cacheSize > 16384u ||
+            !Readable(reinterpret_cast<const void*>(record.cachePointer),
+                record.cacheSize)) {
+            FailContactManagerOwner(receipt, ContactManagerOwnerInvalidManager,
+                ERROR_NOACCESS, slot, 8);
+            return false;
+        }
+        record.cacheHash = ByteHash(
+            reinterpret_cast<const void*>(record.cachePointer),
+            record.cacheSize);
+    }
+    record.validationFlags = 0x007Fu;
+    return true;
+}
+
+static int CaptureContactManagerActiveOwners(uintptr_t unityBase,
+    uintptr_t context, ContactManagerOwnerRecord* records, uint32_t capacity,
+    ContactManagerOwnerReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeContactManagerOwnerReceipt(receipt, unityBase, context);
+    if (!unityBase || !context || (!records && capacity))
+        return FailContactManagerOwner(receipt, ContactManagerOwnerBadArgument,
+            ERROR_INVALID_PARAMETER, 0xFFFFFFFFu, 1);
+    if (!ContactManagerOwnerRevisionMatches(unityBase))
+        return FailContactManagerOwner(receipt,
+            ContactManagerOwnerRevisionMismatch, ERROR_REVISION_MISMATCH,
+            0xFFFFFFFFu, 2);
+
+    const uintptr_t pool = context + 0x2B8;
+    receipt->pool = pool;
+    if (!Readable(reinterpret_cast<const void*>(pool), 0x2C))
+        return FailContactManagerOwner(receipt,
+            ContactManagerOwnerUnreadablePool, ERROR_NOACCESS,
+            0xFFFFFFFFu, 3);
+    receipt->elementsPerSlab = *reinterpret_cast<const uint32_t*>(pool + 0x00);
+    receipt->maximumSlabs = *reinterpret_cast<const uint32_t*>(pool + 0x04);
+    receipt->slabCount = *reinterpret_cast<const uint32_t*>(pool + 0x08);
+    receipt->log2ElementsPerSlab = *reinterpret_cast<const uint32_t*>(pool + 0x0C);
+    receipt->freeArray = *reinterpret_cast<const uintptr_t*>(pool + 0x10);
+    receipt->freeCount = *reinterpret_cast<const uint32_t*>(pool + 0x14);
+    receipt->slabs = *reinterpret_cast<const uintptr_t*>(pool + 0x18);
+    const uintptr_t argument = *reinterpret_cast<const uintptr_t*>(pool + 0x1C);
+    if (receipt->elementsPerSlab != 256u || receipt->maximumSlabs != 4096u ||
+        !receipt->slabCount || receipt->log2ElementsPerSlab != 8u ||
+        argument != context || receipt->slabCount >
+            kMaximumContactManagers / receipt->elementsPerSlab) {
+        return FailContactManagerOwner(receipt, ContactManagerOwnerInvalidPool,
+            ERROR_INVALID_DATA, 0xFFFFFFFFu, 4);
+    }
+    receipt->totalSlots = receipt->slabCount * receipt->elementsPerSlab;
+    if (receipt->freeCount > receipt->totalSlots || !receipt->freeArray ||
+        !receipt->slabs ||
+        !Readable(reinterpret_cast<const void*>(receipt->slabs),
+            receipt->slabCount * sizeof(uintptr_t)) ||
+        !Readable(reinterpret_cast<const void*>(receipt->freeArray),
+            receipt->freeCount * sizeof(uintptr_t))) {
+        return FailContactManagerOwner(receipt, ContactManagerOwnerInvalidPool,
+            ERROR_NOACCESS, 0xFFFFFFFFu, 5);
+    }
+
+    if (!ReadContactBitmap(pool + 0x20, receipt->totalSlots,
+            receipt->useBitmap, receipt->useWordCount) ||
+        !ReadContactBitmap(context + 0x534, receipt->totalSlots,
+            receipt->activeBitmap, receipt->activeWordCount) ||
+        !ReadContactBitmap(context + 0x540, receipt->totalSlots,
+            receipt->touchBitmap, receipt->touchWordCount) ||
+        !ReadContactBitmap(context + 0x16D0, receipt->totalSlots,
+            receipt->modifiableBitmap, receipt->modifiableWordCount)) {
+        return FailContactManagerOwner(receipt,
+            ContactManagerOwnerUnreadableBitmap, ERROR_NOACCESS,
+            0xFFFFFFFFu, 6);
+    }
+
+    uint8_t freeSlots[kMaximumContactManagers] = {};
+    uint32_t freeIndexHash = 2166136261u;
+    for (uint32_t i = 0; i < receipt->slabCount; ++i) {
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(
+            receipt->slabs)[i];
+        if (!slab || !Readable(reinterpret_cast<const void*>(slab),
+                receipt->elementsPerSlab * kContactManagerSize))
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerInvalidPool, ERROR_NOACCESS,
+                i << 8, 7);
+    }
+    for (uint32_t i = 0; i < receipt->freeCount; ++i) {
+        const uintptr_t manager = reinterpret_cast<const uintptr_t*>(
+            receipt->freeArray)[i];
+        if (!manager || !Readable(reinterpret_cast<const void*>(manager + 0x4C), 4))
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerInvalidFreeEntry, ERROR_NOACCESS,
+                0xFFFFFFFFu, 8);
+        const uint32_t slot = *reinterpret_cast<const uint32_t*>(manager + 0x4C);
+        if (slot >= receipt->totalSlots || freeSlots[slot])
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerInvalidFreeEntry, ERROR_INVALID_DATA,
+                slot, 9);
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(
+            receipt->slabs)[slot >> 8];
+        if (manager != slab + (slot & 0xFFu) * kContactManagerSize)
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerInvalidFreeEntry, ERROR_INVALID_DATA,
+                slot, 10);
+        freeSlots[slot] = 1;
+        freeIndexHash ^= slot;
+        freeIndexHash *= 16777619u;
+    }
+
+    receipt->freeOrderHash = OrderHash(
+        reinterpret_cast<const uintptr_t*>(receipt->freeArray),
+        receipt->freeCount);
+    receipt->freeIndexOrderHash = freeIndexHash;
+    receipt->useBitmapHash = ContactBitmapHash(receipt->useBitmap,
+        receipt->totalSlots);
+    receipt->activeBitmapHash = ContactBitmapHash(receipt->activeBitmap,
+        receipt->totalSlots);
+    receipt->touchBitmapHash = ContactBitmapHash(receipt->touchBitmap,
+        receipt->totalSlots);
+    receipt->modifiableBitmapHash = ContactBitmapHash(
+        receipt->modifiableBitmap, receipt->totalSlots);
+    receipt->usedCount = ContactBitmapCount(receipt->useBitmap,
+        receipt->totalSlots);
+    receipt->activeCount = ContactBitmapCount(receipt->activeBitmap,
+        receipt->totalSlots);
+    receipt->touchCount = ContactBitmapCount(receipt->touchBitmap,
+        receipt->totalSlots);
+    receipt->modifiableCount = ContactBitmapCount(receipt->modifiableBitmap,
+        receipt->totalSlots);
+    receipt->recordsRequired = receipt->usedCount;
+    if (capacity < receipt->recordsRequired ||
+        (receipt->recordsRequired && !records) ||
+        (records && !Writable(records,
+            receipt->recordsRequired * sizeof(ContactManagerOwnerRecord))))
+        return FailContactManagerOwner(receipt,
+            ContactManagerOwnerCapacityTooSmall, ERROR_INSUFFICIENT_BUFFER,
+            0xFFFFFFFFu, 11);
+    if (receipt->freeCount + receipt->usedCount != receipt->totalSlots ||
+        receipt->activeCount != receipt->usedCount)
+        return FailContactManagerOwner(receipt,
+            ContactManagerOwnerMembershipMismatch, ERROR_INVALID_STATE,
+            0xFFFFFFFFu, 12);
+
+    uint32_t ownerHash = 2166136261u;
+    for (uint32_t slot = 0; slot < receipt->totalSlots; ++slot) {
+        const bool used = ContactBitmapTest(receipt->useBitmap, slot);
+        const bool active = ContactBitmapTest(receipt->activeBitmap, slot);
+        const bool touch = ContactBitmapTest(receipt->touchBitmap, slot);
+        const bool modifiable = ContactBitmapTest(
+            receipt->modifiableBitmap, slot);
+        if (used == (freeSlots[slot] != 0) || active != used ||
+            (touch && !active) || (modifiable && !active))
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerMembershipMismatch, ERROR_INVALID_STATE,
+                slot, 13);
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(
+            receipt->slabs)[slot >> 8];
+        const uintptr_t manager = slab +
+            (slot & 0xFFu) * kContactManagerSize;
+        if (!Readable(reinterpret_cast<const void*>(manager + 0x4C), 4) ||
+            *reinterpret_cast<const uint32_t*>(manager + 0x4C) != slot)
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerInvalidManager, ERROR_INVALID_DATA,
+                slot, 14);
+        if (!used) continue;
+        const bool managerModifiable =
+            (*reinterpret_cast<const uint32_t*>(manager + 0x08) & 1u) != 0;
+        if (managerModifiable != modifiable)
+            return FailContactManagerOwner(receipt,
+                ContactManagerOwnerMembershipMismatch, ERROR_INVALID_STATE,
+                slot, 15);
+        const uint32_t membership = 1u | 2u | (touch ? 4u : 0u) |
+            (modifiable ? 8u : 0u);
+        ContactManagerOwnerRecord& record = records[receipt->recordsWritten];
+        if (!ReadContactManagerOwner(unityBase, manager, slot, membership,
+                record, receipt))
+            return 0;
+        ownerHash = AppendByteHash(ownerHash, &record, sizeof(record));
+        ++receipt->recordsWritten;
+    }
+    receipt->ownerHash = ownerHash;
+
+    // Repeat every externally mutable header/hash and every active owner read.
+    // A diagnostic sample is rejected rather than mixing two physics phases.
+    if (*reinterpret_cast<const uint32_t*>(pool + 0x00) !=
+            receipt->elementsPerSlab ||
+        *reinterpret_cast<const uint32_t*>(pool + 0x04) !=
+            receipt->maximumSlabs ||
+        *reinterpret_cast<const uint32_t*>(pool + 0x08) != receipt->slabCount ||
+        *reinterpret_cast<const uint32_t*>(pool + 0x0C) !=
+            receipt->log2ElementsPerSlab ||
+        *reinterpret_cast<const uintptr_t*>(pool + 0x10) != receipt->freeArray ||
+        *reinterpret_cast<const uint32_t*>(pool + 0x14) != receipt->freeCount ||
+        *reinterpret_cast<const uintptr_t*>(pool + 0x18) != receipt->slabs ||
+        OrderHash(reinterpret_cast<const uintptr_t*>(receipt->freeArray),
+            receipt->freeCount) != receipt->freeOrderHash ||
+        ContactBitmapHash(receipt->useBitmap, receipt->totalSlots) !=
+            receipt->useBitmapHash ||
+        ContactBitmapHash(receipt->activeBitmap, receipt->totalSlots) !=
+            receipt->activeBitmapHash ||
+        ContactBitmapHash(receipt->touchBitmap, receipt->totalSlots) !=
+            receipt->touchBitmapHash ||
+        ContactBitmapHash(receipt->modifiableBitmap, receipt->totalSlots) !=
+            receipt->modifiableBitmapHash)
+        return FailContactManagerOwner(receipt, ContactManagerOwnerUnstable,
+            ERROR_RETRY, 0xFFFFFFFFu, 16);
+
+    uint32_t secondHash = 2166136261u;
+    uint32_t secondCount = 0;
+    for (uint32_t slot = 0; slot < receipt->totalSlots; ++slot) {
+        if (!ContactBitmapTest(receipt->useBitmap, slot)) continue;
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(
+            receipt->slabs)[slot >> 8];
+        const uintptr_t manager = slab +
+            (slot & 0xFFu) * kContactManagerSize;
+        const bool touch = ContactBitmapTest(receipt->touchBitmap, slot);
+        const bool modifiable = ContactBitmapTest(
+            receipt->modifiableBitmap, slot);
+        ContactManagerOwnerRecord check = {};
+        const uint32_t membership = 1u | 2u | (touch ? 4u : 0u) |
+            (modifiable ? 8u : 0u);
+        if (!ReadContactManagerOwner(unityBase, manager, slot, membership,
+                check, receipt))
+            return 0;
+        secondHash = AppendByteHash(secondHash, &check, sizeof(check));
+        ++secondCount;
+    }
+    if (secondCount != receipt->recordsWritten ||
+        secondHash != receipt->ownerHash)
+        return FailContactManagerOwner(receipt, ContactManagerOwnerUnstable,
+            ERROR_RETRY, 0xFFFFFFFFu, 17);
+
+    receipt->consistencyFlags = 0x00FFu;
+    receipt->result = ContactManagerOwnerOk;
     return 1;
 }
 
@@ -4080,6 +4701,14 @@ extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_pool_restore_sn
     uint32_t count, ContactPoolReceipt* receipt) {
     return RestoreContactPoolSnapshot(context, expectedFreeArray, snapshot,
         count, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_active_owners(
+    uintptr_t unityBase, uintptr_t context,
+    ContactManagerOwnerRecord* records, uint32_t capacity,
+    ContactManagerOwnerReceipt* receipt) {
+    return CaptureContactManagerActiveOwners(unityBase, context, records,
+        capacity, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_manifold_pool_capture_snapshot(

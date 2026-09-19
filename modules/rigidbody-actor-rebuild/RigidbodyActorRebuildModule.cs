@@ -50,6 +50,34 @@ namespace SuperchargedPatch.Authoring.Modules
             [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] Top;
         }
 
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeContactManagerOwnerRecord
+        {
+            public uint Slot,Membership;
+            public UIntPtr Manager,Sip,PrimaryVtable,SecondaryVtable,ShapeSim0,ShapeSim1;
+            public UIntPtr PxsShapeCore0,PxsShapeCore1,PxShape0,PxShape1;
+            public UIntPtr RigidBody0,RigidBody1,RigidCore0,RigidCore1,Manifold,CachePointer;
+            public uint PairData,TransformCache0,TransformCache1,ManagerFlags,SipFlags;
+            public UIntPtr ActorPair;
+            public uint ManagerHash,SipHash,ManifoldHash,ManifoldBytes,CacheHash;
+            public ushort CacheSize,ContactCount,WorkUnitFlags,StatusFlags;
+            public byte InteractionType,InteractionFlags,GeomType0,GeomType1,DisableResponse,DisableCcd;
+            public ushort ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeContactManagerOwnerReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,Context,Pool,FreeArray,Slabs,UseBitmap,ActiveBitmap,TouchBitmap,ModifiableBitmap;
+            public uint ElementsPerSlab,MaximumSlabs,SlabCount,Log2ElementsPerSlab,FreeCount;
+            public uint UseWordCount,ActiveWordCount,TouchWordCount,ModifiableWordCount;
+            public uint TotalSlots,UsedCount,ActiveCount,TouchCount,ModifiableCount;
+            public uint RecordsRequired,RecordsWritten,FreeOrderHash,FreeIndexOrderHash;
+            public uint UseBitmapHash,ActiveBitmapHash,TouchBitmapHash,ModifiableBitmapHash,OwnerHash;
+            public uint ConsistencyFlags,InvalidSlot,Detail;
+        }
+
         [StructLayout(LayoutKind.Sequential, Pack=8)]
         private struct NativeManifoldPoolReceipt
         {
@@ -96,6 +124,8 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr context,IntPtr snapshot,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactPoolRestoreSnapshot(
             UIntPtr context,UIntPtr expectedFreeArray,IntPtr snapshot,uint count,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactManagerActiveOwners(
+            UIntPtr unityBase,UIntPtr context,IntPtr records,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeManifoldPoolCaptureSnapshot(
             UIntPtr unityBase,UIntPtr context,uint poolKind,IntPtr snapshot,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeManifoldPoolRestoreSnapshot(
@@ -162,11 +192,19 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeDirtyInteractionKey[] Keys;
         }
 
+        private sealed class ContactManagerOwnerState
+        {
+            internal NativeContactManagerOwnerReceipt Receipt;
+            internal NativeContactManagerOwnerRecord[] Records;
+            internal string[] ShapeOwners0,ShapeOwners1;
+        }
+
         private sealed class CheckpointSidecar
         {
             internal int Frame;
             internal uint Context,FreeArray,OrderHash;
             internal uint[] ContactPoolOrder;
+            internal ContactManagerOwnerState ContactManagerOwners;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -184,6 +222,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeActorShapes actorShapes;
         private NativeContactPoolCaptureSnapshot captureContactPoolSnapshot;
         private NativeContactPoolRestoreSnapshot restoreContactPoolSnapshot;
+        private NativeContactManagerActiveOwners captureContactManagerActiveOwners;
         private NativeManifoldPoolCaptureSnapshot captureManifoldPoolSnapshot;
         private NativeManifoldPoolRestoreSnapshot restoreManifoldPoolSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
@@ -279,6 +318,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 actorShapes=Export<NativeActorShapes>("oc2_rigidbody_actor_shapes");
                 captureContactPoolSnapshot=Export<NativeContactPoolCaptureSnapshot>("oc2_contact_manager_pool_capture_snapshot");
                 restoreContactPoolSnapshot=Export<NativeContactPoolRestoreSnapshot>("oc2_contact_manager_pool_restore_snapshot");
+                captureContactManagerActiveOwners=Export<NativeContactManagerActiveOwners>("oc2_contact_manager_active_owners");
                 captureManifoldPoolSnapshot=Export<NativeManifoldPoolCaptureSnapshot>("oc2_manifold_pool_capture_snapshot");
                 restoreManifoldPoolSnapshot=Export<NativeManifoldPoolRestoreSnapshot>("oc2_manifold_pool_restore_snapshot");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
@@ -602,7 +642,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 ValidateManifoldPoolState(selected.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
             }
             if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null||
-                captureManifoldPoolSnapshot==null||restoreManifoldPoolSnapshot==null)
+                captureContactManagerActiveOwners==null||captureManifoldPoolSnapshot==null||
+                restoreManifoldPoolSnapshot==null)
                 throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
@@ -669,6 +710,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 uint orderHash=ContactPoolOrderHash(capturedOrder);
                 if(orderHash!=receipt.OrderHashBefore||receipt.OrderHashAfter!=receipt.OrderHashBefore)
                     throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
+                ContactManagerOwnerState owners=CaptureContactManagerOwners(actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -676,6 +718,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 var captured=new CheckpointSidecar {Frame=actionFrame,
                     Context=contactManagerContext,FreeArray=receipt.FreeArray.ToUInt32(),
                     OrderHash=orderHash,ContactPoolOrder=capturedOrder,
+                    ContactManagerOwners=owners,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 // Do not publish a partially captured sidecar.  The native
@@ -746,6 +789,136 @@ namespace SuperchargedPatch.Authoring.Modules
                 Marshal.FreeHGlobal(orderBuffer);
                 Marshal.FreeHGlobal(receiptBuffer);
             }
+        }
+
+        private ContactManagerOwnerState CaptureContactManagerOwners(int frame)
+        {
+            int receiptSize=Marshal.SizeOf(typeof(NativeContactManagerOwnerReceipt));
+            int recordSize=Marshal.SizeOf(typeof(NativeContactManagerOwnerRecord));
+            if(recordSize!=132||receiptSize!=156)
+                throw new InvalidOperationException("Managed contact-manager owner ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr recordBuffer=Marshal.AllocHGlobal(MaximumContactManagers*recordSize);
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureContactManagerActiveOwners(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(contactManagerContext),recordBuffer,MaximumContactManagers,receiptBuffer);
+                var receipt=(NativeContactManagerOwnerReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeContactManagerOwnerReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native contact-manager owner capture failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+", invalidSlot="+
+                        receipt.InvalidSlot+", detail="+receipt.Detail+".");
+                if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)receiptSize||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.Context.ToUInt32()!=contactManagerContext||receipt.TotalSlots<1||
+                    receipt.TotalSlots>MaximumContactManagers||receipt.RecordsRequired!=receipt.UsedCount||
+                    receipt.RecordsWritten!=receipt.RecordsRequired||
+                    receipt.FreeCount+receipt.UsedCount!=receipt.TotalSlots||
+                    receipt.ActiveCount!=receipt.UsedCount||receipt.ConsistencyFlags!=0xFFu)
+                    throw new InvalidOperationException("Native contact-manager owner receipt contract differs at frame "+frame+".");
+                var records=new NativeContactManagerOwnerRecord[receipt.RecordsWritten];
+                for(int i=0;i<records.Length;i++)records[i]=(NativeContactManagerOwnerRecord)
+                    Marshal.PtrToStructure(new IntPtr(recordBuffer.ToInt64()+i*recordSize),
+                        typeof(NativeContactManagerOwnerRecord));
+                if(records.Any(value=>value.Slot>=receipt.TotalSlots||
+                        (value.Membership&3u)!=3u||value.Manager==UIntPtr.Zero||
+                        value.Sip==UIntPtr.Zero||value.ValidationFlags!=0x7Fu)||
+                    records.Select(value=>value.Slot).Distinct().Count()!=records.Length)
+                    throw new InvalidOperationException("Native contact-manager owner records failed the managed set contract.");
+                Dictionary<uint,string> colliders=CurrentColliderShapeOwners();
+                string[] owners0=records.Select(value=>ColliderOwner(colliders,value.PxShape0)).ToArray();
+                string[] owners1=records.Select(value=>ColliderOwner(colliders,value.PxShape1)).ToArray();
+                return new ContactManagerOwnerState {Receipt=receipt,Records=records,
+                    ShapeOwners0=owners0,ShapeOwners1=owners1};
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(recordBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+        }
+
+        private Dictionary<uint,string> CurrentColliderShapeOwners()
+        {
+            var result=new Dictionary<uint,string>();
+            foreach(Collider collider in UnityEngine.Object.FindObjectsOfType(typeof(Collider)))
+            {
+                if(collider==null)continue;
+                IntPtr native=(IntPtr)cachedPtr.GetValue(collider);
+                if(native==IntPtr.Zero)continue;
+                uint shape=unchecked((uint)Marshal.ReadInt32(native,0x24));
+                if(shape==0)continue;
+                string owner=PathOf(collider.transform)+"|"+collider.GetType().Name+
+                    "#"+collider.GetInstanceID();
+                string previous;
+                if(result.TryGetValue(shape,out previous)&&previous!=owner)
+                    throw new InvalidOperationException("Two live Colliders own PxShape 0x"+
+                        shape.ToString("X8")+": "+previous+" and "+owner+".");
+                result[shape]=owner;
+            }
+            return result;
+        }
+
+        private static string ColliderOwner(Dictionary<uint,string> owners,UIntPtr shape)
+        {
+            string result;
+            return owners.TryGetValue(shape.ToUInt32(),out result)?result:null;
+        }
+
+        private static object DescribeContactManagerOwnerState(ContactManagerOwnerState value,bool includeRecords)
+        {
+            if(value==null)return null;
+            var receipt=value.Receipt;
+            var result=new Dictionary<string,object>{{"pool",Hex(receipt.Pool)},
+                {"freeArray",Hex(receipt.FreeArray)},{"slabs",Hex(receipt.Slabs)},
+                {"elementsPerSlab",receipt.ElementsPerSlab},{"slabCount",receipt.SlabCount},
+                {"totalSlots",receipt.TotalSlots},{"freeCount",receipt.FreeCount},
+                {"usedCount",receipt.UsedCount},{"activeCount",receipt.ActiveCount},
+                {"touchCount",receipt.TouchCount},{"modifiableCount",receipt.ModifiableCount},
+                {"freeOrderHash","0x"+receipt.FreeOrderHash.ToString("X8")},
+                {"freeIndexOrderHash","0x"+receipt.FreeIndexOrderHash.ToString("X8")},
+                {"useBitmapHash","0x"+receipt.UseBitmapHash.ToString("X8")},
+                {"activeBitmapHash","0x"+receipt.ActiveBitmapHash.ToString("X8")},
+                {"touchBitmapHash","0x"+receipt.TouchBitmapHash.ToString("X8")},
+                {"modifiableBitmapHash","0x"+receipt.ModifiableBitmapHash.ToString("X8")},
+                {"ownerHash","0x"+receipt.OwnerHash.ToString("X8")},
+                {"consistencyFlags","0x"+receipt.ConsistencyFlags.ToString("X8")}};
+            if(includeRecords)
+            {
+                var rows=new object[value.Records.Length];
+                for(int i=0;i<rows.Length;i++)rows[i]=DescribeContactManagerOwnerRecord(
+                    value.Records[i],value.ShapeOwners0[i],value.ShapeOwners1[i]);
+                result.Add("records",rows);
+            }
+            return result;
+        }
+
+        private static object DescribeContactManagerOwnerRecord(
+            NativeContactManagerOwnerRecord value,string owner0,string owner1)
+        {
+            return new Dictionary<string,object>{{"slot",value.Slot},{"membership","0x"+value.Membership.ToString("X8")},
+                {"manager",Hex(value.Manager)},{"sip",Hex(value.Sip)},
+                {"shapeSim0",Hex(value.ShapeSim0)},{"shapeSim1",Hex(value.ShapeSim1)},
+                {"pxShape0",Hex(value.PxShape0)},{"pxShape1",Hex(value.PxShape1)},
+                {"shapeOwner0",owner0},{"shapeOwner1",owner1},
+                {"rigidBody0",Hex(value.RigidBody0)},{"rigidBody1",Hex(value.RigidBody1)},
+                {"rigidCore0",Hex(value.RigidCore0)},{"rigidCore1",Hex(value.RigidCore1)},
+                {"actorPair",Hex(value.ActorPair)},{"managerFlags","0x"+value.ManagerFlags.ToString("X8")},
+                {"sipFlags","0x"+value.SipFlags.ToString("X8")},
+                {"interactionType",value.InteractionType},{"interactionFlags","0x"+value.InteractionFlags.ToString("X2")},
+                {"geomType0",value.GeomType0},{"geomType1",value.GeomType1},
+                {"transformCache0",value.TransformCache0},{"transformCache1",value.TransformCache1},
+                {"contactCount",value.ContactCount},{"workUnitFlags","0x"+value.WorkUnitFlags.ToString("X4")},
+                {"statusFlags","0x"+value.StatusFlags.ToString("X4")},
+                {"manifold",Hex(value.Manifold)},{"manifoldBytes",value.ManifoldBytes},
+                {"cachePointer",Hex(value.CachePointer)},{"cacheSize",value.CacheSize},
+                {"pairData","0x"+value.PairData.ToString("X8")},
+                {"managerHash","0x"+value.ManagerHash.ToString("X8")},
+                {"sipHash","0x"+value.SipHash.ToString("X8")},
+                {"manifoldHash","0x"+value.ManifoldHash.ToString("X8")},
+                {"cacheHash","0x"+value.CacheHash.ToString("X8")}};
         }
 
         private void RecordContactPoolReceipt(int action,int frame,NativeContactPoolReceipt receipt)
@@ -1295,6 +1468,19 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("The "+poolName+" manifold-pool checkpoint contains a null or duplicate free element.");
         }
 
+        private static void ValidateContactManagerOwnerState(ContactManagerOwnerState value)
+        {
+            if(value==null||value.Records==null||value.ShapeOwners0==null||value.ShapeOwners1==null||
+                value.Records.Length!=value.ShapeOwners0.Length||value.Records.Length!=value.ShapeOwners1.Length||
+                value.Receipt.Result!=1||value.Receipt.ConsistencyFlags!=0xFFu||
+                value.Receipt.RecordsWritten!=(uint)value.Records.Length||
+                value.Receipt.RecordsRequired!=value.Receipt.RecordsWritten||
+                value.Receipt.UsedCount!=value.Receipt.RecordsWritten||
+                value.Receipt.ActiveCount!=value.Receipt.UsedCount||
+                value.Receipt.FreeCount+value.Receipt.UsedCount!=value.Receipt.TotalSlots)
+                throw new InvalidOperationException("Contact-manager owner checkpoint sidecar is incomplete.");
+        }
+
         private static object DescribeManifoldPoolState(ManifoldPoolState value)
         {
             if(value==null)return null;
@@ -1360,6 +1546,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar is incomplete.");
             ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
             ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
+            ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar no longer owns the retained core snapshot.");
@@ -1370,6 +1557,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     previous.Context==value.Context&&previous.FreeArray==value.FreeArray&&
                     previous.OrderHash==value.OrderHash&&
                     previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
+                    SameContactManagerOwnerSnapshot(previous.ContactManagerOwners,value.ContactManagerOwners)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -1387,6 +1575,23 @@ namespace SuperchargedPatch.Authoring.Modules
             if(left==null||right==null)return left==right;
             return left.PoolKind==right.PoolKind&&left.Pool==right.Pool&&left.OrderHash==right.OrderHash&&
                 left.Order!=null&&right.Order!=null&&left.Order.SequenceEqual(right.Order);
+        }
+
+        private static bool SameContactManagerOwnerSnapshot(ContactManagerOwnerState left,ContactManagerOwnerState right)
+        {
+            if(left==null||right==null)return left==right;
+            if(left.Receipt.OwnerHash!=right.Receipt.OwnerHash||left.Receipt.FreeOrderHash!=right.Receipt.FreeOrderHash||
+                left.Receipt.UseBitmapHash!=right.Receipt.UseBitmapHash||left.Records==null||right.Records==null||
+                left.Records.Length!=right.Records.Length)return false;
+            for(int i=0;i<left.Records.Length;i++)
+            {
+                NativeContactManagerOwnerRecord a=left.Records[i],b=right.Records[i];
+                if(a.Slot!=b.Slot||a.Manager!=b.Manager||a.Sip!=b.Sip||a.PxShape0!=b.PxShape0||
+                    a.PxShape1!=b.PxShape1||a.ManagerHash!=b.ManagerHash||a.SipHash!=b.SipHash||
+                    a.Manifold!=b.Manifold||a.ManifoldHash!=b.ManifoldHash||a.CacheHash!=b.CacheHash)
+                    return false;
+            }
+            return true;
         }
 
         private static bool SameTransformDispatchSnapshot(TransformDispatchState left,TransformDispatchState right)
@@ -1435,6 +1640,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"freeArray",found?"0x"+value.FreeArray.ToString("X8"):null},
                 {"freeCount",found?value.ContactPoolOrder.Length:0},
                 {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
+                {"contactManagerOwners",found?DescribeContactManagerOwnerState(value.ContactManagerOwners,true):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -1605,6 +1811,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactPoolSnapshotFrame",lastFrame},{"contactPoolSnapshotContext",latest==null?null:"0x"+latest.Context.ToString("X8")},
                 {"contactPoolSnapshotCount",checkpointSidecars.Count},{"contactPoolSnapshotFirstFrame",firstFrame},
                 {"contactPoolSnapshotLastFrame",lastFrame},
+                {"contactManagerOwnerSnapshot",latest==null?null:
+                    DescribeContactManagerOwnerState(latest.ContactManagerOwners,true)},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -1661,6 +1869,7 @@ namespace SuperchargedPatch.Authoring.Modules
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
+            captureContactManagerActiveOwners=null;
             captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
             installDirtyInteractionOrder=null;statusDirtyInteractionOrder=null;armDirtyInteractionCapture=null;

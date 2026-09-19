@@ -1,5 +1,39 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Contact-manager owner diagnostic milestone (2026-09-19, managed r14k /
+> native r20):** the read-only PhysX walker now identifies all 12 managers
+> active at the scheduled f444 checkpoint.  They occupy pool slots 0..11 and
+> are all chef-capsule/static-box pairs: every chef overlaps both
+> `Design/Colliders/Collider` and `Ceiling` (eight pairs), while Player 4 also
+> overlaps the nearby standard-edge Worktop and Block plus DispenserCrate 3's
+> Block and NewCrate (four pairs).  There are no plate, fish, delivery, or
+> dynamic-container managers in this set.  All 12 report zero contacts and no
+> touch bit at capture; each owns a 240-byte capsule/box manifold.  The exact
+> pool membership/bitmap/free-order invariants, manager-to-SIP backlinks,
+> ShapeSim/PxShape endpoints, geometry types, transform-cache IDs, and bounded
+> manager/SIP/manifold hashes validate consistently.
+>
+> The native export is strictly observational and validates the shipped
+> UnityPlayer signatures and PhysX 3.3.3 layouts before reading.  The working
+> native DLL is
+> `artifacts/native-rigidbody-rebuild-r20-contact-owner-diag-cmake2/Oc2NativeRigidbodyRebuild.dll`,
+> SHA-256
+> `9069543CC915CB7BDFFC8D87B8F742BBB9B3145EC2FCC838172DDDA29DF19633`.
+> Managed r14k SHA-256 is
+> `6ECBACE2F95DE9D535DCBDE1453EF2CF9842230F12B6EEE32CB95E919B2CEB4F`.
+> Fresh minimized/non-foreground evidence is
+> `framework/artifacts/live-v87-contact-owner-f1048-to-f444-r1/`.
+>
+> The v87 request did not reach contact-pool restoration.  After the native
+> warp restored f444, the earlier paused WorldSync correction for held sushi
+> fish 55 failed its fail-closed invariant because applying the saved owner
+> local pose changed some field of container Rigidbody 56.  The guard reports
+> only a generic mismatch today.  Therefore the immediate next step is to add
+> read-only per-field before/after evidence to that guard, identify whether the
+> change is pose, motion, sleep, or settings, and repair only the authoring
+> restore ordering/state responsible.  Do not weaken the contact-pool exactness
+> gate and do not start search.
+
 > **Scheduled advancing-boundary Animator restore milestone (2026-09-19,
 > managed r57 / native r17f):** the direct Story 1-1 f1048 -> f444 rewind now
 > clears the complete Animator resume boundary for all four chefs.  Scheduled
