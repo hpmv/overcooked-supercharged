@@ -29,8 +29,9 @@
 >
 > This is an Animator milestone, not full replay parity.  The released resume
 > callback proceeds past Animator finalization and next fails closed in the
-> physics sidecar: the f444 contact-manager free-stack snapshot has count 1,
-> while the restored live pool has different membership/count
+> physics sidecar: the f444 contact-manager free-stack snapshot contains 244
+> free managers, while the restored live pool has a different count (the exact
+> live count is pending the r14i diagnostic)
 > (`ContactPoolCountChanged`, native result 10 / `ERROR_INVALID_STATE`).  No
 > replay physics frame ran.  A read-only r14i diagnostic is built to report the
 > live/checkpoint counts, storage, hashes, and leading entries on the next clean

@@ -21,7 +21,8 @@ suite passes 25 tests.
 
 The next failure is no longer Animator state.  Before the first replay physics
 frame, RigidbodyActorRebuild rejects contact-manager pool restoration because
-the f444 free-list count is 1 and the post-warp live count differs.  This is a
+the f444 free-list contains 244 managers and the post-warp live count differs
+(the exact live count is pending the r14i diagnostic).  This is a
 real hidden-physics-history boundary: the existing helper can reorder an exact
 membership set but deliberately cannot invent or discard active/free contact
 managers.  The next run uses a read-only diagnostic that records both pool
