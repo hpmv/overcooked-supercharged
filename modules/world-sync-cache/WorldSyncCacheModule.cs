@@ -63,7 +63,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private bool disposed;
         private string lastError;
         private object lastRestore;
-        public string Name { get { return "native-world-sync-cache-v17-logical-rest-clock"; } }
+        public string Name { get { return "native-world-sync-cache-v19-local-recreated-active-rest"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation, Dictionary<string, object> args)
@@ -86,7 +86,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"pendingPausedDynamicTransforms",pendingPausedDynamicTransforms==null?null:(object)pendingPausedDynamicTransforms.Frame},
                 {"pausedDynamicTransformCorrections",pausedDynamicTransformCorrections},
                 {"latest",Describe(latest)},
-                {"scope","Initial fixed and admitted dynamic PhysicalAttachment WorldObject caches, exact logical-clock rest timestamps, and exact scheduler cadence/order/urgent/free-ID state. The core substitutes its checkpointed logical clock for both native GetServerUpdate Time.time reads; the strict deadline test, payload, event emission, client handling and all poses remain native. Every admitted settled dynamic PhysicalAttachment checkpoints its client/server parent caches, empty attachment-container Rigidbody/Transform poses, and exact logical owner pose/prediction flags. Attached items require a surviving registered station/chef parent. Loose items require the exact surviving owner/container incarnation and physical-container parenting; detached cross-incarnation recreation remains unsupported. After rewind only, the exact dynamic container Transform is retained across frozen authoring maintenance while Rigidbody pose/motion/settings remain unchanged. An attached one-step replacement may instead be recreated and rebound under its historical owner/body IDs by a transactional rewind-only allocator reservation. All other missing, ambiguous or changed memberships fail closed."}
+                {"scope","Initial fixed and admitted dynamic PhysicalAttachment WorldObject caches, exact logical-clock rest timestamps, and exact scheduler cadence/order/urgent/free-ID state. The core substitutes its checkpointed logical clock for both native GetServerUpdate Time.time reads; the strict deadline test, payload, event emission, client handling and all poses remain native. Every admitted settled dynamic PhysicalAttachment checkpoints its client/server parent caches, empty attachment-container Rigidbody/Transform poses, and exact logical owner pose/prediction flags. A local-only owner proven by the requested warp to undergo exact transactional recreation may also retain its exact active pending-rest cache; this preserves local continuation while making no claim about remote packet parity. Attached items require a surviving registered station/chef parent. Loose dynamic items require the exact surviving owner/container incarnation and physical-container parenting; the exact initial delivery plate may instead rebind to its recreated historical container. After rewind only, exact dynamic container Transforms are retained across frozen authoring maintenance while Rigidbody pose/motion/settings remain unchanged. Authenticated replacement pairs are recreated and rebound under their historical owner/body IDs by a transactional rewind-only allocator reservation. All other missing, ambiguous or changed memberships fail closed."}
             };
         }
         private void Activate()
@@ -200,7 +200,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 var dynamicIds=new HashSet<int>(value.Scheduler.DynamicOwnerIds);
                 value.Items = ids.Concat(dynamicIds).Distinct().OrderBy(i=>i)
                     .Select(id=>CaptureItem(id,value.LogicalTime,dynamicIds.Contains(id))).ToArray();
-                foreach (var item in value.Items) RequireSupported(item);
+                // Capture cannot know a future WarpSpec yet. Retain the exact
+                // active pending-rest state for every candidate attachment,
+                // then require the requested warp to prove that this specific
+                // owner is recreated before any restore mutation is admitted.
+                foreach (var item in value.Items)RequireSupported(item,true);
             }
             catch (Exception error) { value.Unsupported=error.Message; }
             saved[frame]=value; lastFrame=frame; captures++;
@@ -249,7 +253,14 @@ namespace SuperchargedPatch.Authoring.Modules
             if(item.PendingRest)item.RestResidual=(((float)item.Values[1]+1f)-captureLogicalTime);
             return item;
         }
-        private static void RequireSupported(Item item)
+        internal static bool IsSupportedCacheLifecycle(bool sentReliable,bool started,bool sleepAllowed,
+            bool active,bool syncPositions,bool parentChanged,bool paused,bool localDynamicRecreation)
+        {
+            if(!started||!sleepAllowed||paused)return false;
+            if(sentReliable)return !active&&!parentChanged;
+            return syncPositions&&parentChanged&&(!active||localDynamicRecreation);
+        }
+        private static void RequireSupported(Item item,bool localDynamicRecreation=false)
         {
             bool sentReliable=(bool)item.Values[2],started=(bool)item.Values[3],sleepAllowed=(bool)item.Values[4];
             bool active=(bool)item.Values[5],parentChanged=(bool)item.Values[7],paused=(bool)item.Values[8];
@@ -258,7 +269,8 @@ namespace SuperchargedPatch.Authoring.Modules
             bool syncPositions=(bool)item.Values[6];
             if(sentReliable&&(active||parentChanged))
                 throw new InvalidOperationException("Inconsistent completed WorldObject rest state at entity " + item.Id);
-            if(!sentReliable&&(active||!parentChanged||!syncPositions))
+            if(!IsSupportedCacheLifecycle(sentReliable,started,sleepAllowed,active,syncPositions,parentChanged,
+                    paused,localDynamicRecreation))
                 throw new InvalidOperationException("Unsupported non-quiescent pending WorldObject rest state at entity " + item.Id);
             if (!ReferenceEquals(item.Values[0],item.Parent) || !Finite((float)item.Values[1])
                 || !Finite(item.Message.LocalPosition) || !Finite(item.Message.LocalRotation)
@@ -285,8 +297,9 @@ namespace SuperchargedPatch.Authoring.Modules
             target.Scheduler.ValidateBeforeRestore(warp);
             foreach (var item in target.Items)
             {
-                RequireSupported(item);
-                if(target.Scheduler.WillRebindOwner(item.Id))continue;
+                bool rebindOwner=target.Scheduler.WillRebindOwner(item.Id);
+                RequireSupported(item,rebindOwner);
+                if(rebindOwner)continue;
                 EntitySerialisationEntry historicalParent;Transform historicalTransform;
                 if(target.Scheduler.TryGetHistoricalParentRebind(item.Id,out historicalParent,out historicalTransform))
                     ValidateIdentityForParentRebind(item,historicalParent,historicalTransform);
@@ -322,7 +335,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 || !Exact(item.Transform.localPosition,item.LocalPosition) || !Exact(item.Transform.localRotation,item.LocalRotation)))
                 throw new InvalidOperationException("Native attachment pose must already match before WorldObject cache restore: " + item.Id);
         }
-        private Item RebindItem(Item target)
+        private Item RebindItem(Item target,EntitySerialisationEntry replacementParent=null,
+            Transform replacementTransform=null)
         {
             var entry=EntitySerialisationRegistry.GetEntry((uint)target.Id);
             var obj=entry==null?null:entry.m_GameObject;
@@ -334,10 +348,18 @@ namespace SuperchargedPatch.Authoring.Modules
             var message=(WorldObjectMessage)messageField.GetValue(sync);
             if(transform==null||transform!=obj.transform||message==null||message.GetType()!=typeof(WorldObjectMessage))
                 throw new InvalidOperationException("Recreated dynamic WorldObject cache differs: "+target.Id);
+            bool rebindParent=replacementParent!=null||replacementTransform!=null;
+            if(rebindParent&&(replacementParent==null||replacementParent.m_GameObject==null
+                ||replacementParent.m_Header.m_uEntityID==0||replacementTransform==null
+                ||!HasAncestor(replacementTransform,replacementParent.m_GameObject.transform)
+                ||!target.Message.HasParent||target.Message.ParentEntityID!=replacementParent.m_Header.m_uEntityID))
+                throw new InvalidOperationException("Recreated dynamic WorldObject parent differs: "+target.Id);
+            var values=(object[])target.Values.Clone();if(rebindParent)values[0]=replacementTransform;
             return new Item {Id=target.Id,Dynamic=target.Dynamic,LooseDynamic=target.LooseDynamic,Object=obj,ObjectId=obj.GetInstanceID(),Sync=sync,SyncId=sync.GetInstanceID(),
-                Transform=transform,Parent=target.Parent,ParentId=target.ParentId,OriginalMessage=message,Message=target.Message,
-                LocalPosition=target.LocalPosition,LocalRotation=target.LocalRotation,Values=(object[])target.Values.Clone(),
-                Client=target.Client.Rebind(obj),CaptureLogicalTime=target.CaptureLogicalTime,RestResidual=target.RestResidual,
+                Transform=transform,Parent=rebindParent?replacementTransform:target.Parent,
+                ParentId=rebindParent?replacementTransform.GetInstanceID():target.ParentId,OriginalMessage=message,Message=target.Message,
+                LocalPosition=target.LocalPosition,LocalRotation=target.LocalRotation,Values=values,
+                Client=rebindParent?target.Client.Rebind(obj,replacementParent):target.Client.Rebind(obj),CaptureLogicalTime=target.CaptureLogicalTime,RestResidual=target.RestResidual,
                 PendingRest=target.PendingRest,
                 Restored=target.Restored};
         }
@@ -364,17 +386,19 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 var item=target.Items[i];
                 EntitySerialisationEntry replacementParent;Transform replacementTransform;
-                if(target.Scheduler.TryGetCurrentParentRebind(item.Id,out replacementParent,out replacementTransform))
-                {
-                    RebindItemParent(item,replacementParent,replacementTransform);
-                    continue;
-                }
+                bool rebindParent=target.Scheduler.TryGetCurrentParentRebind(item.Id,out replacementParent,out replacementTransform);
                 var entry=EntitySerialisationRegistry.GetEntry((uint)item.Id);
                 if(entry==null||!ReferenceEquals(entry.m_GameObject,item.Object))
                 {
                     if(!target.Scheduler.WillRebindOwner(item.Id))
                         throw new InvalidOperationException("WorldObject incarnation changed without an admitted rebind: "+item.Id);
-                    target.Items[i]=RebindItem(item);
+                    item=RebindItem(item,rebindParent?replacementParent:null,rebindParent?replacementTransform:null);
+                    target.Items[i]=item;continue;
+                }
+                if(rebindParent)
+                {
+                    RebindItemParent(item,replacementParent,replacementTransform);
+                    continue;
                 }
             }
             foreach(var item in target.Items)ValidateIdentity(item,true);
@@ -526,6 +550,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     {"id",i.Id},{"dynamic",i.Dynamic},{"looseDynamic",i.LooseDynamic},{"objectId",i.ObjectId},{"syncId",i.SyncId},{"parentInstanceId",i.ParentId},
                     {"messageParent",i.Message.ParentEntityID},{"sentReliable",i.Values[2]},
                     {"lastUnreliableSend",i.Values[1]},{"active",i.Values[5]},{"parentChanged",i.Values[7]},
+                    {"localDynamicActivePending",i.Dynamic&&!(bool)i.Values[2]&&(bool)i.Values[5]
+                        &&s.Scheduler!=null&&s.Scheduler.WillRebindOwner(i.Id)},
                     {"restDeadlineMode",i.PendingRest?"logical-clock-pending":"completed-timestamp-irrelevant"},
                     {"restResidual",i.PendingRest?(object)i.RestResidual:null},
                     {"timestampRestoredExact",i.Restored}

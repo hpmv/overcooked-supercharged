@@ -166,7 +166,14 @@ namespace SuperchargedPatch {
   public static NativeDynamicWarpPlan InitialFixture(Hpmv.EntityWarpSpec spec,Type[][] components){
    var p=new NativeDynamicWarpPlan();p.targets.Add(new(){Spec=spec,Chain=components.Select(c=>new Profile{Components=c}).ToArray()});return p;
   }
+  public static NativeDynamicWarpPlan MixedFixture(Hpmv.EntityWarpSpec initialSpec,Type[][] initialComponents,
+   Hpmv.EntityWarpSpec dynamicSpec,Type[] dynamicComponents,UnityEngine.GameObject dynamicPrefab){
+   var p=new NativeDynamicWarpPlan();
+   p.targets.Add(new(){Spec=initialSpec,Chain=initialComponents.Select(c=>new Profile{Components=c}).ToArray()});
+   p.targets.Add(new(){Spec=dynamicSpec,Chain=new[]{new Profile{Prefab=dynamicPrefab,Components=dynamicComponents}}});return p;
+  }
   public void SetActual(UnityEngine.GameObject value){targets[0].Actual=value;}
+  public void SetActual(int index,UnityEngine.GameObject value){targets[index].Actual=value;}
   public void Spawn(){}
  }
 }

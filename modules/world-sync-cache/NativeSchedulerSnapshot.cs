@@ -78,6 +78,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private sealed class DynamicRestore
         {
             internal Member Owner,Container;
+            internal DynamicPair[] Pairs;
             internal Member DependentOwner,DependentContainer;
             internal EntitySerialisationEntry HistoricalOwnerEntry;
             internal GameObject HistoricalOwnerObject;
@@ -91,6 +92,17 @@ namespace SuperchargedPatch.Authoring.Modules
             internal object HistoricalPhysicsPair,SpawnedPhysicsPair;
             internal ushort[] QueueBefore;
             internal bool InitialRecreation,StackTopologyRecreation,QueueReordered,Rebound;
+        }
+        private sealed class DynamicPair
+        {
+            internal Member Owner,Container;
+            internal EntityWarpSpec Spec;
+            internal EntitySerialisationEntry SpawnedOwner,SpawnedContainer;
+        }
+        private sealed class DynamicPlanTarget
+        {
+            internal DynamicPair Pair;
+            internal object Target;
         }
         private sealed class DynamicDeletion
         {
@@ -429,8 +441,12 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         private void PrepareDynamicRestore(WarpSpec warp,Member[] missingRegular,Member[] missingFast)
         {
+            if(warp!=null&&missingFast.Length==0&&missingRegular.Length==4
+                &&TryPrepareInitialAndDynamicRestore(warp,missingRegular))return;
             if(warp==null||missingFast.Length!=0||missingRegular.Length!=2)
-                throw new InvalidOperationException("Unsupported dynamic native scheduler checkpoint membership.");
+                throw new InvalidOperationException("Unsupported dynamic native scheduler checkpoint membership: regular=["
+                    +string.Join(",",missingRegular.Select(member=>member.Id.ToString()).ToArray())+"] fast=["
+                    +string.Join(",",missingFast.Select(member=>member.Id.ToString()).ToArray())+"].");
             var owners=missingRegular.Where(m=>m.ContainerId!=0&&missingRegular.Any(c=>c.Id==m.ContainerId)).ToArray();
             if(owners.Length!=1)throw new InvalidOperationException("Missing scheduler members are not one exact PhysicalAttachment pair.");
             var ownerMember=owners[0];var containerMember=missingRegular.Single(m=>m.Id==ownerMember.ContainerId);
@@ -484,8 +500,8 @@ namespace SuperchargedPatch.Authoring.Modules
                         throw new InvalidOperationException("Initial PhysicalAttachment free-ID queue does not contain the exact destruction suffix.");
                 }
                 else ValidateTransactionalFreeIds(initialQueue,deletions,ownerMember,containerMember);
-                dynamic=new DynamicRestore {Owner=ownerMember,Container=containerMember,Spec=spawned[0],
-                    InitialRecreation=true,Deletions=deletions,CurrentRegular=currentRegular,CurrentFast=currentFast,QueueBefore=initialQueue};
+                dynamic=SinglePair(new DynamicRestore {Owner=ownerMember,Container=containerMember,Spec=spawned[0],
+                    InitialRecreation=true,Deletions=deletions,CurrentRegular=currentRegular,CurrentFast=currentFast,QueueBefore=initialQueue});
                 if(deletions.Length!=0)
                     NativeInitialAttachmentDeletionAuthorization.Authorize(warp,checked((int)ownerMember.Id),
                         checked((int)containerMember.Id),deletions.Select(pair=>checked((int)pair.OwnerId)));
@@ -508,14 +524,99 @@ namespace SuperchargedPatch.Authoring.Modules
                     currentRegistry,currentPhysics,currentQueue,ownerMember,containerMember,"Dynamic PhysicalAttachment");
             }
             else ValidateTransactionalFreeIds(currentQueue,replacementDeletions,ownerMember,containerMember);
-            dynamic=new DynamicRestore {Owner=ownerMember,Container=containerMember,Spec=spawned[0],
+            dynamic=SinglePair(new DynamicRestore {Owner=ownerMember,Container=containerMember,Spec=spawned[0],
                 DependentOwner=dependentOwner,DependentContainer=dependentContainer,
                 HistoricalOwnerEntry=ownerMember.Entry,HistoricalOwnerObject=ownerMember.Object,
                 HistoricalOwnerTransform=stackTopologyRecreation?dependentOwner.DynamicPose.Parent:ownerMember.ObjectTransform,
                 StackTopologyRecreation=stackTopologyRecreation,Deletions=replacementDeletions,
                 CurrentRegular=currentRegularReplacement,CurrentFast=currentFastReplacement,
                 CurrentRegistry=currentRegistry,CurrentPhysics=currentPhysics,HistoricalPhysicsPair=historicalPhysicsPair,
-                QueueBefore=currentQueue};
+                QueueBefore=currentQueue});
+        }
+        private bool TryPrepareInitialAndDynamicRestore(WarpSpec warp,Member[] missingRegular)
+        {
+            var owners=missingRegular.Where(member=>member.ContainerId!=0
+                &&missingRegular.Any(container=>container.Id==member.ContainerId)).ToArray();
+            if(owners.Length!=2)return false;
+            var containers=owners.Select(ownerMember=>missingRegular.SingleOrDefault(member=>member.Id==ownerMember.ContainerId)).ToArray();
+            if(containers.Any(member=>member==null)||owners.Concat(containers).Distinct().Count()!=4
+                ||missingRegular.Any(member=>!owners.Contains(member)&&!containers.Contains(member)))return false;
+            var initialOwners=owners.Where(member=>member.InitialAttachment).ToArray();
+            var dynamicOwners=owners.Where(member=>!member.InitialAttachment).ToArray();
+            if(initialOwners.Length!=1||dynamicOwners.Length!=1)return false;
+            foreach(var ownerMember in owners)
+            {
+                var containerMember=containers[Array.IndexOf(owners,ownerMember)];
+                bool detachedInitial=ownerMember.InitialAttachment&&ownerMember.DynamicPose!=null
+                    &&ownerMember.DynamicPose.DetachedOnContainer&&!ownerMember.DynamicPose.Attached
+                    &&ReferenceEquals(ownerMember.DynamicPose.ParentEntry,containerMember.Entry)
+                    &&ReferenceEquals(ownerMember.DynamicPose.ParentObject,containerMember.Object)
+                    &&ReferenceEquals(ownerMember.DynamicPose.Parent,containerMember.ObjectTransform);
+                bool attachedToSurvivor=ownerMember.DynamicPose!=null&&ownerMember.DynamicPose.Attached
+                    &&!ownerMember.DynamicPose.DetachedOnContainer
+                    &&!ReferenceEquals(ownerMember.DynamicPose.ParentEntry,containerMember.Entry)
+                    &&ownerMember.DynamicPose.ParentEntry!=null
+                    &&!missingRegular.Any(member=>ReferenceEquals(member.Entry,ownerMember.DynamicPose.ParentEntry));
+                if(!detachedInitial&&!attachedToSurvivor
+                    ||ownerMember.Id>ushort.MaxValue||containerMember.Id>ushort.MaxValue
+                    ||containerMember.DynamicBodyToken==null||containerMember.DynamicBodyRestore==null)
+                    throw new InvalidOperationException("Mixed initial/dynamic scheduler recreation is not one settled dynamic attachment plus one exact initial attached/container-detached owner/body pair: "+ownerMember.Id+".");
+                int ownerIndex=Array.IndexOf(regular,ownerMember),containerIndex=Array.IndexOf(regular,containerMember);
+                if(!ownerMember.InitialAttachment&&containerIndex!=ownerIndex+1)
+                    throw new InvalidOperationException("Mixed dynamic scheduler pair does not preserve historical adjacent allocation order: "+ownerMember.Id+".");
+            }
+            var spawned=warp.Entities.Where(spec=>!spec.__isset.entityId).ToArray();
+            if(spawned.Length!=2)
+                throw new InvalidOperationException("Mixed initial/dynamic scheduler restore requires exactly two recreation paths.");
+            var initialOwner=initialOwners[0];var dynamicOwner=dynamicOwners[0];
+            var pairs=new List<DynamicPair>();
+            foreach(var spec in spawned)
+            {
+                var ids=spec.EntityPathReference==null?null:spec.EntityPathReference.Ids;
+                if(!spec.__isset.entityPathReference||ids==null||spec.SpawningPath==null||spec.SpawningPath.Count<2)
+                    throw new InvalidOperationException("Mixed initial/dynamic scheduler recreation path metadata is absent.");
+                Member ownerMember=null;
+                if(ids.Count==1&&ids[0]==(int)initialOwner.Id)ownerMember=initialOwner;
+                else if(IsObservedDynamicRecreationPath(spec,dynamicOwner))ownerMember=dynamicOwner;
+                if(ownerMember==null||pairs.Any(pair=>ReferenceEquals(pair.Owner,ownerMember)))
+                    throw new InvalidOperationException("Mixed initial/dynamic scheduler recreation path does not map one-to-one to the missing owners: reference=["
+                        +string.Join(",",ids.Select(id=>id.ToString()).ToArray())+"] spawn=["
+                        +string.Join(",",spec.SpawningPath.Select(id=>id.ToString()).ToArray())+"].");
+                pairs.Add(new DynamicPair {Owner=ownerMember,
+                    Container=containers[Array.IndexOf(owners,ownerMember)],Spec=spec});
+            }
+            var currentRegular=regularList._items.Take(regularList.Count).ToArray();
+            var currentFast=fastList._items.Take(fastList.Count).ToArray();
+            var deletions=CaptureDeletions(warp,pairs[0].Owner,pairs[0].Container,currentRegular,currentFast);
+            var currentQueue=freeEntityIds.ToArray();ValidateFreeIds(currentQueue);
+            ValidateTransactionalFreeIds(currentQueue,deletions,pairs.SelectMany(pair=>new[]{pair.Owner,pair.Container}).ToArray());
+            dynamic=new DynamicRestore {Owner=pairs[0].Owner,Container=pairs[0].Container,Spec=pairs[0].Spec,
+                Pairs=pairs.ToArray(),InitialRecreation=true,Deletions=deletions,
+                CurrentRegular=currentRegular,CurrentFast=currentFast,QueueBefore=currentQueue};
+            var initialPair=pairs.Single(pair=>pair.Owner.InitialAttachment);
+            if(deletions.Length!=0)
+                NativeInitialAttachmentDeletionAuthorization.Authorize(warp,checked((int)initialPair.Owner.Id),
+                    checked((int)initialPair.Container.Id),deletions.Select(pair=>checked((int)pair.OwnerId)));
+            return true;
+        }
+        private static bool IsObservedDynamicRecreationPath(EntityWarpSpec spec,Member ownerMember)
+        {
+            var reference=spec==null||spec.EntityPathReference==null?null:spec.EntityPathReference.Ids;
+            var spawn=spec==null?null:spec.SpawningPath;
+            if(ownerMember==null||ownerMember.InitialAttachment||ownerMember.DynamicSpawnPrefab==null
+                ||reference==null||reference.Count!=2||spawn==null||spawn.Count!=2
+                ||reference[0]!=spawn[0]||spawn[0]<=0||spawn[1]<0)return false;
+            var root=EntitySerialisationRegistry.GetEntry((uint)spawn[0]);
+            var collection=root==null||root.m_GameObject==null?null:root.m_GameObject.GetComponent<SpawnableEntityCollection>();
+            var prefabs=collection==null?null:collection.GetSpawnables().ToArray();
+            return root!=null&&ReferenceEquals(EntitySerialisationRegistry.GetEntry(root.m_Header.m_uEntityID),root)
+                &&prefabs!=null&&spawn[1]<prefabs.Length
+                &&ReferenceEquals(prefabs[spawn[1]],ownerMember.DynamicSpawnPrefab);
+        }
+        private static DynamicRestore SinglePair(DynamicRestore value)
+        {
+            value.Pairs=new[]{new DynamicPair {Owner=value.Owner,Container=value.Container,Spec=value.Spec}};
+            return value;
         }
         private bool ValidateAttachedStackRecreation(WarpSpec warp,EntityWarpSpec spec,Member ownerMember,
             out Member childOwner,out Member childContainer)
@@ -654,44 +755,61 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         private void ValidateTransactionalFreeIds(ushort[] current,DynamicDeletion[] deletions,Member missingOwner,Member missingContainer)
         {
+            ValidateTransactionalFreeIds(current,deletions,new[]{missingOwner,missingContainer});
+        }
+        private void ValidateTransactionalFreeIds(ushort[] current,DynamicDeletion[] deletions,Member[] missing)
+        {
             var expected=new HashSet<ushort>(savedFreeEntityIds);
             foreach(var deletion in deletions)
                 if(!expected.Remove((ushort)deletion.OwnerId)||!expected.Remove((ushort)deletion.ContainerId))
                     throw new InvalidOperationException("A future deletion pair did not consume checkpoint-free entity IDs.");
-            if(!expected.Add((ushort)missingOwner.Id)||!expected.Add((ushort)missingContainer.Id)
-                ||current.Length!=expected.Count||!expected.SetEquals(current))
+            foreach(var member in missing)
+                if(member==null||member.Id>ushort.MaxValue||!expected.Add((ushort)member.Id))
+                    throw new InvalidOperationException("A missing scheduler member is not one unique checkpoint allocation.");
+            if(current.Length!=expected.Count||!expected.SetEquals(current))
                 throw new InvalidOperationException("Native free entity-ID membership cannot be transactionally reversed for the dynamic pairs.");
         }
         internal void BeforeDynamicSpawn(object plan)
         {
             if(dynamic==null)return;
             ValidateOwner();ValidateDynamicPreimage();
-            object target=ValidateDynamicPlan(plan);
-            var chain=(Array)FieldValue(target,"Chain");var profile=chain.GetValue(chain.Length-1);
-            var prefabTypes=(Type[])FieldValue(profile,"Components");
-            if(dynamic.StackTopologyRecreation
-                &&!ReferenceEquals(FieldValue(profile,"Prefab"),dynamic.Owner.DynamicSpawnPrefab))
-                throw new InvalidOperationException("Dynamic spawn plan prefab differs from the observed historical stack prefab.");
-            if(!SameBehavioralTypes(prefabTypes,dynamic.Owner.ObjectComponents)||!prefabTypes.Any(t=>typeof(PhysicalAttachment).IsAssignableFrom(t)))
-                throw new InvalidOperationException("Dynamic spawn prefab differs from the historical scheduler owner signature: expected ["
-                    +Names(dynamic.Owner.ObjectComponents)+"] actual ["+Names(prefabTypes)+"]");
-            var remainder=dynamic.QueueBefore.Where(id=>id!=(ushort)dynamic.Owner.Id&&id!=(ushort)dynamic.Container.Id).ToArray();
-            int scratchCount=0;
-            if(dynamic.InitialRecreation)
-                for(int i=0;i<chain.Length-1;i++)
-                {
-                    var intermediateTypes=(Type[])FieldValue(chain.GetValue(i),"Components");
-                    // Every intermediate consumes its registered owner ID.  The
-                    // spawner also calls ManualEnable, so a PhysicalAttachment
-                    // consumes a separately registered Rigidbody-container ID.
-                    scratchCount+=1+intermediateTypes.Count(t=>typeof(PhysicalAttachment).IsAssignableFrom(t));
-                }
-            if(scratchCount<0||scratchCount>remainder.Length)
-                throw new InvalidOperationException("Native initial-attachment spawn requires unavailable scratch entity IDs.");
-            freeEntityIds.Clear();
-            for(int i=0;i<scratchCount;i++)freeEntityIds.Enqueue(remainder[i]);
-            freeEntityIds.Enqueue((ushort)dynamic.Owner.Id);freeEntityIds.Enqueue((ushort)dynamic.Container.Id);
-            for(int i=scratchCount;i<remainder.Length;i++)freeEntityIds.Enqueue(remainder[i]);
+            var targets=ValidateDynamicPlan(plan);
+            var reserved=new HashSet<ushort>(dynamic.Pairs.SelectMany(pair=>new[]{(ushort)pair.Owner.Id,(ushort)pair.Container.Id}));
+            var remainder=dynamic.QueueBefore.Where(id=>!reserved.Contains(id)).ToArray();
+            var scratchCounts=new int[targets.Length];int requiredScratch=0;
+            for(int targetIndex=0;targetIndex<targets.Length;targetIndex++)
+            {
+                var value=targets[targetIndex];
+                var pair=value.Pair;var chain=(Array)FieldValue(value.Target,"Chain");var profile=chain.GetValue(chain.Length-1);
+                var prefabTypes=(Type[])FieldValue(profile,"Components");
+                if(pair.Owner.DynamicSpawnPrefab!=null
+                    &&!ReferenceEquals(FieldValue(profile,"Prefab"),pair.Owner.DynamicSpawnPrefab))
+                    throw new InvalidOperationException("Dynamic spawn plan prefab differs from the observed historical prefab at "+pair.Owner.Id+".");
+                if(!SameBehavioralTypes(prefabTypes,pair.Owner.ObjectComponents)||!prefabTypes.Any(t=>typeof(PhysicalAttachment).IsAssignableFrom(t)))
+                    throw new InvalidOperationException("Dynamic spawn prefab differs from the historical scheduler owner signature at "+pair.Owner.Id+": expected ["
+                        +Names(pair.Owner.ObjectComponents)+"] actual ["+Names(prefabTypes)+"]");
+                int scratchCount=0;
+                if(pair.Owner.InitialAttachment)
+                    for(int i=0;i<chain.Length-1;i++)
+                    {
+                        var intermediateTypes=(Type[])FieldValue(chain.GetValue(i),"Components");
+                        // Every intermediate consumes its registered owner ID.  The
+                        // spawner also calls ManualEnable, so a PhysicalAttachment
+                        // consumes a separately registered Rigidbody-container ID.
+                        scratchCount+=1+intermediateTypes.Count(t=>typeof(PhysicalAttachment).IsAssignableFrom(t));
+                    }
+                if(scratchCount<0||requiredScratch+scratchCount>remainder.Length)
+                    throw new InvalidOperationException("Native initial-attachment spawn requires unavailable scratch entity IDs.");
+                scratchCounts[targetIndex]=scratchCount;requiredScratch+=scratchCount;
+            }
+            int scratchCursor=0;freeEntityIds.Clear();
+            for(int targetIndex=0;targetIndex<targets.Length;targetIndex++)
+            {
+                for(int i=0;i<scratchCounts[targetIndex];i++)freeEntityIds.Enqueue(remainder[scratchCursor++]);
+                freeEntityIds.Enqueue((ushort)targets[targetIndex].Pair.Owner.Id);
+                freeEntityIds.Enqueue((ushort)targets[targetIndex].Pair.Container.Id);
+            }
+            for(int i=scratchCursor;i<remainder.Length;i++)freeEntityIds.Enqueue(remainder[i]);
             dynamic.QueueReordered=true;
         }
         internal Exception FinalizeDynamicSpawn(object plan,Exception error)
@@ -705,17 +823,26 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             try
             {
-                object target=ValidateDynamicPlan(plan);var actual=(GameObject)FieldValue(target,"Actual");
-                var ownerEntry=actual==null?null:EntitySerialisationRegistry.GetEntry(actual);
-                var attachment=actual==null?null:actual.GetComponent<PhysicalAttachment>();
-                var containerObject=attachment==null||attachment.m_container==null?null:attachment.m_container.gameObject;
-                var containerEntry=containerObject==null?null:EntitySerialisationRegistry.GetEntry(containerObject);
-                if(ownerEntry==null||ownerEntry.m_Header.m_uEntityID!=dynamic.Owner.Id||containerEntry==null||containerEntry.m_Header.m_uEntityID!=dynamic.Container.Id)
-                    throw new InvalidOperationException("Native dynamic spawn did not consume the exact historical owner/container IDs.");
-                if(!regularList._items.Take(regularList.Count).SequenceEqual(dynamic.CurrentRegular.Concat(new[]{ownerEntry,containerEntry}))
+                var targets=ValidateDynamicPlan(plan);
+                var spawnedOwners=new EntitySerialisationEntry[targets.Length];
+                var spawnedContainers=new EntitySerialisationEntry[targets.Length];
+                for(int i=0;i<targets.Length;i++)
+                {
+                    var actual=(GameObject)FieldValue(targets[i].Target,"Actual");
+                    var ownerEntry=actual==null?null:EntitySerialisationRegistry.GetEntry(actual);
+                    var attachment=actual==null?null:actual.GetComponent<PhysicalAttachment>();
+                    var containerObject=attachment==null||attachment.m_container==null?null:attachment.m_container.gameObject;
+                    var containerEntry=containerObject==null?null:EntitySerialisationRegistry.GetEntry(containerObject);
+                    if(ownerEntry==null||ownerEntry.m_Header.m_uEntityID!=targets[i].Pair.Owner.Id
+                        ||containerEntry==null||containerEntry.m_Header.m_uEntityID!=targets[i].Pair.Container.Id)
+                        throw new InvalidOperationException("Native dynamic spawn did not consume the exact historical owner/container IDs at "+targets[i].Pair.Owner.Id+".");
+                    ValidateReplacement(ownerEntry,targets[i].Pair.Owner);ValidateReplacement(containerEntry,targets[i].Pair.Container);
+                    spawnedOwners[i]=ownerEntry;spawnedContainers[i]=containerEntry;
+                }
+                var appended=targets.SelectMany((value,index)=>new[]{spawnedOwners[index],spawnedContainers[index]}).ToArray();
+                if(!regularList._items.Take(regularList.Count).SequenceEqual(dynamic.CurrentRegular.Concat(appended))
                     ||!fastList._items.Take(fastList.Count).SequenceEqual(dynamic.CurrentFast))
                     throw new InvalidOperationException("Native dynamic spawn scheduler append order differs from the historical lane.");
-                ValidateReplacement(ownerEntry,dynamic.Owner);ValidateReplacement(containerEntry,dynamic.Container);
                 var currentQueue=freeEntityIds.ToArray();ValidateFreeIds(currentQueue);
                 var expectedPostSpawn=new HashSet<ushort>(savedFreeEntityIds);
                 foreach(var deletion in dynamic.Deletions)
@@ -729,19 +856,32 @@ namespace SuperchargedPatch.Authoring.Modules
                         ||!new HashSet<ushort>(currentQueue).SetEquals(savedFreeEntityIds))
                         throw new InvalidOperationException("Initial PhysicalAttachment scratch allocation did not return the exact checkpoint free-ID membership.");
                     freeEntityIds.Clear();foreach(var id in savedFreeEntityIds)freeEntityIds.Enqueue(id);
-                    var expected=regular.Select(member=>ReferenceEquals(member,dynamic.Owner)?ownerEntry:
-                        ReferenceEquals(member,dynamic.Container)?containerEntry:member.Entry).ToArray();
+                    var expected=regular.Select(member=>ReplacementEntry(member,targets,spawnedOwners,spawnedContainers)).ToArray();
                     if(expected.Length!=regularList.Count)
                         throw new InvalidOperationException("Initial PhysicalAttachment scheduler target cardinality differs after spawn.");
                     for(int i=0;i<expected.Length;i++)regularList._items[i]=expected[i];
                     if(!regularList._items.Take(regularList.Count).SequenceEqual(expected))
                         throw new InvalidOperationException("Initial PhysicalAttachment scheduler order could not be restored.");
-                    if(dynamic.StackTopologyRecreation)RestoreStackCanonicalOrder(ownerEntry,containerEntry);
+                    if(dynamic.StackTopologyRecreation)RestoreStackCanonicalOrder(spawnedOwners[0],spawnedContainers[0]);
                 }
-                dynamic.SpawnedOwner=ownerEntry;dynamic.SpawnedContainer=containerEntry;
+                for(int i=0;i<targets.Length;i++)
+                {
+                    targets[i].Pair.SpawnedOwner=spawnedOwners[i];targets[i].Pair.SpawnedContainer=spawnedContainers[i];
+                }
+                dynamic.SpawnedOwner=dynamic.Pairs[0].SpawnedOwner;dynamic.SpawnedContainer=dynamic.Pairs[0].SpawnedContainer;
                 return null;
             }
             catch(Exception failure) { return failure; }
+        }
+        private static EntitySerialisationEntry ReplacementEntry(Member member,DynamicPlanTarget[] targets,
+            EntitySerialisationEntry[] owners,EntitySerialisationEntry[] containers)
+        {
+            for(int i=0;i<targets.Length;i++)
+            {
+                if(ReferenceEquals(member,targets[i].Pair.Owner))return owners[i];
+                if(ReferenceEquals(member,targets[i].Pair.Container))return containers[i];
+            }
+            return member.Entry;
         }
         private void RestoreStackCanonicalOrder(EntitySerialisationEntry ownerEntry,
             EntitySerialisationEntry containerEntry)
@@ -783,10 +923,14 @@ namespace SuperchargedPatch.Authoring.Modules
         internal int RestoreDynamicAfterCore()
         {
             if(dynamic==null)return RestoreSurvivingDynamicAfterCore();
-            if(!dynamic.QueueReordered||dynamic.Rebound||dynamic.SpawnedOwner==null||dynamic.SpawnedContainer==null)
+            if(!dynamic.QueueReordered||dynamic.Rebound||dynamic.Pairs.Any(pair=>pair.SpawnedOwner==null||pair.SpawnedContainer==null))
                 throw new InvalidOperationException("Dynamic scheduler recreation did not complete before core restoration.");
-            var expectedRegular=regular.Select(m=>ReferenceEquals(m,dynamic.Owner)?dynamic.SpawnedOwner:
-                ReferenceEquals(m,dynamic.Container)?dynamic.SpawnedContainer:m.Entry).ToArray();
+            var expectedRegular=regular.Select(member=>
+            {
+                var pair=dynamic.Pairs.SingleOrDefault(value=>ReferenceEquals(member,value.Owner)||ReferenceEquals(member,value.Container));
+                if(pair==null)return member.Entry;
+                return ReferenceEquals(member,pair.Owner)?pair.SpawnedOwner:pair.SpawnedContainer;
+            }).ToArray();
             var expectedFast=fast.Select(m=>m.Entry).ToArray();
             foreach(var deletion in dynamic.Deletions)
                 if(EntitySerialisationRegistry.GetEntry(deletion.OwnerId)!=null
@@ -809,10 +953,15 @@ namespace SuperchargedPatch.Authoring.Modules
             if(!regularList._items.Take(regularList.Count).SequenceEqual(expectedRegular)
                 ||!fastList._items.Take(fastList.Count).SequenceEqual(expectedFast))
                 throw new InvalidOperationException("Post-core dynamic scheduler order could not be restored to the checkpoint target.");
-            ValidateReplacement(dynamic.SpawnedOwner,dynamic.Owner);ValidateReplacement(dynamic.SpawnedContainer,dynamic.Container);
-            RestoreDynamicBody(dynamic.Container,dynamic.SpawnedContainer);
-            RestoreDynamicOwnerPose(dynamic.Owner,dynamic.SpawnedOwner,dynamic.SpawnedContainer);
-            Rebind(dynamic.Owner,dynamic.SpawnedOwner);Rebind(dynamic.Container,dynamic.SpawnedContainer);dynamic.Rebound=true;
+            foreach(var pair in dynamic.Pairs)
+            {
+                ValidateReplacement(pair.SpawnedOwner,pair.Owner);ValidateReplacement(pair.SpawnedContainer,pair.Container);
+                RestoreDynamicBody(pair.Container,pair.SpawnedContainer);
+                RebindDetachedContainerParent(pair);
+                RestoreDynamicOwnerPose(pair.Owner,pair.SpawnedOwner,pair.SpawnedContainer);
+                Rebind(pair.Owner,pair.SpawnedOwner);Rebind(pair.Container,pair.SpawnedContainer);
+            }
+            dynamic.Rebound=true;
             if(dynamic.DependentOwner!=null)
             {
                 RebindDependentParent(dynamic.DependentOwner,dynamic.SpawnedOwner);
@@ -821,6 +970,32 @@ namespace SuperchargedPatch.Authoring.Modules
                 return 1;
             }
             return 0;
+        }
+        private static void RebindDetachedContainerParent(DynamicPair pair)
+        {
+            var target=pair==null||pair.Owner==null?null:pair.Owner.DynamicPose;
+            if(target==null||!target.DetachedOnContainer)return;
+            var replacement=pair.SpawnedContainer;
+            var replacementObject=replacement==null?null:replacement.m_GameObject;
+            var replacementTransform=ResolveTransformPath(replacementObject,target.ParentTransformPath);
+            if(!pair.Owner.InitialAttachment||replacementObject==null||replacementTransform==null
+                ||!ReferenceEquals(target.ParentEntry,pair.Container.Entry)
+                ||!ReferenceEquals(target.ParentObject,pair.Container.Object)
+                ||!ReferenceEquals(target.Parent,pair.Container.ObjectTransform))
+                throw new InvalidOperationException("Detached initial owner historical container topology differs: "+pair.Owner.Id);
+            if(ReferenceEquals(target.CachedClientParentObject,target.ParentObject))
+            {
+                var components=replacementObject.GetComponents<Component>();
+                var component=target.CachedClientParentIndex>=0&&target.CachedClientParentIndex<components.Length
+                    ?components[target.CachedClientParentIndex]:null;
+                var parentable=component as IParentable;
+                if(component==null||component.GetType()!=target.CachedClientParentType||parentable==null)
+                    throw new InvalidOperationException("Detached initial owner replacement client parent differs: "+pair.Owner.Id);
+                target.CachedClientParent=parentable;target.CachedClientParentObject=replacementObject;
+            }
+            else if(Destroyed(target.CachedClientParent as UnityEngine.Object))
+                throw new InvalidOperationException("Detached initial owner has an unrelated destroyed cached parent: "+pair.Owner.Id);
+            target.Parent=replacementTransform;target.ParentEntry=replacement;target.ParentObject=replacementObject;
         }
         private static void RebindDependentParent(Member child,EntitySerialisationEntry replacementParent)
         {
@@ -1006,34 +1181,44 @@ namespace SuperchargedPatch.Authoring.Modules
                 ||before.Sleeping!=after.Sleeping)
                 throw new InvalidOperationException("Dynamic owner pose restore changed container Rigidbody state: "+ownerId);
         }
-        private object ValidateDynamicPlan(object plan)
+        private DynamicPlanTarget[] ValidateDynamicPlan(object plan)
         {
             if(plan==null)throw new InvalidOperationException("Native dynamic spawn plan is absent.");
             var targets=((IEnumerable)FieldValue(plan,"targets")).Cast<object>().ToArray();
             var recreated=targets.Where(t=>FieldValue(t,"Chain")!=null).ToArray();
-            if(recreated.Length!=1||!ReferenceEquals(FieldValue(recreated[0],"Spec"),dynamic.Spec)
-                ||((Array)FieldValue(recreated[0],"Chain")).Length!=dynamic.Spec.SpawningPath.Count-1)
-                throw new InvalidOperationException("Native dynamic plan differs from the admitted recreation path.");
+            if(recreated.Length!=dynamic.Pairs.Length)
+                throw new InvalidOperationException("Native dynamic plan recreation cardinality differs from the admitted paths.");
+            var result=new List<DynamicPlanTarget>();var matched=new HashSet<DynamicPair>();
+            foreach(var target in recreated)
+            {
+                var spec=FieldValue(target,"Spec");
+                var pair=dynamic.Pairs.SingleOrDefault(value=>ReferenceEquals(value.Spec,spec));
+                if(pair==null||!matched.Add(pair)
+                    ||((Array)FieldValue(target,"Chain")).Length!=pair.Spec.SpawningPath.Count-1)
+                    throw new InvalidOperationException("Native dynamic plan differs from the admitted recreation paths.");
+                result.Add(new DynamicPlanTarget {Pair=pair,Target=target});
+            }
             var removals=((IEnumerable)FieldValue(plan,"removals")).Cast<object>().ToArray();
             if(removals.Length!=dynamic.Deletions.Length)
                 throw new InvalidOperationException("Native dynamic deletion plan cardinality differs from the admitted future pairs.");
-            var matched=new HashSet<DynamicDeletion>();
+            var matchedDeletions=new HashSet<DynamicDeletion>();
             foreach(var removal in removals)
             {
                 int ownerId=(int)FieldValue(removal,"Id");
                 var deletion=dynamic.Deletions.SingleOrDefault(pair=>pair.OwnerId==(uint)ownerId);
-                if(deletion==null||!matched.Add(deletion)
+                if(deletion==null||!matchedDeletions.Add(deletion)
                     ||(int)FieldValue(removal,"ContainerId")!=(int)deletion.ContainerId
                     ||!ReferenceEquals(FieldValue(removal,"Object"),deletion.Owner.m_GameObject)
                     ||!ReferenceEquals(FieldValue(removal,"Container"),deletion.Container.m_GameObject))
                     throw new InvalidOperationException("Native dynamic deletion plan differs from the admitted future pairs.");
             }
-            return recreated[0];
+            return result.ToArray();
         }
         private void ValidateDynamicPreimage()
         {
             if(dynamic.QueueReordered||dynamic.Rebound||!freeEntityIds.SequenceEqual(dynamic.QueueBefore)
-                ||EntitySerialisationRegistry.GetEntry(dynamic.Owner.Id)!=null||EntitySerialisationRegistry.GetEntry(dynamic.Container.Id)!=null
+                ||dynamic.Pairs.Any(pair=>EntitySerialisationRegistry.GetEntry(pair.Owner.Id)!=null
+                    ||EntitySerialisationRegistry.GetEntry(pair.Container.Id)!=null)
                 ||dynamic.Deletions.Any(deletion=>!ReferenceEquals(EntitySerialisationRegistry.GetEntry(deletion.OwnerId),deletion.Owner)
                     ||!ReferenceEquals(EntitySerialisationRegistry.GetEntry(deletion.ContainerId),deletion.Container))
                 ||!regularList._items.Take(regularList.Count).SequenceEqual(dynamic.CurrentRegular)
@@ -1044,7 +1229,8 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         private void RollbackQueue()
         {
-            if(EntitySerialisationRegistry.GetEntry(dynamic.Owner.Id)!=null||EntitySerialisationRegistry.GetEntry(dynamic.Container.Id)!=null)
+            if(dynamic.Pairs.Any(pair=>EntitySerialisationRegistry.GetEntry(pair.Owner.Id)!=null
+                ||EntitySerialisationRegistry.GetEntry(pair.Container.Id)!=null))
                 throw new InvalidOperationException("A partially spawned historical ID remains registered.");
             var now=freeEntityIds.ToArray();ValidateFreeIds(now);
             if(now.Length!=dynamic.QueueBefore.Length||!new HashSet<ushort>(now).SetEquals(dynamic.QueueBefore))
@@ -1131,7 +1317,7 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         internal bool WillRebindOwner(int id)
         {
-            return dynamic!=null&&dynamic.Owner.Id==(uint)id;
+            return dynamic!=null&&dynamic.Pairs.Any(pair=>pair.Owner.Id==(uint)id);
         }
         internal bool WillRebindParent(int id)
         {
@@ -1147,6 +1333,15 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         internal bool TryGetCurrentParentRebind(int id,out EntitySerialisationEntry entry,out Transform transform)
         {
+            var detached=dynamic==null?null:dynamic.Pairs.SingleOrDefault(pair=>pair.Owner.Id==(uint)id
+                &&pair.Owner.DynamicPose!=null&&pair.Owner.DynamicPose.DetachedOnContainer);
+            if(detached!=null)
+            {
+                entry=detached.SpawnedContainer;
+                transform=entry==null||entry.m_GameObject==null?null:
+                    ResolveTransformPath(entry.m_GameObject,detached.Owner.DynamicPose.ParentTransformPath);
+                return entry!=null&&transform!=null;
+            }
             if(!WillRebindParent(id)) { entry=null;transform=null;return false; }
             entry=dynamic.SpawnedOwner;
             transform=entry==null||entry.m_GameObject==null?null:

@@ -41,6 +41,16 @@ void Capture(int f){Hpmv.Injector.Server.CurrentFrameData.FrameNumber=f;WorldSyn
 void PlainResumeInput(){Hpmv.Injector.Server.CurrentInput=new(){RequestResume=true,GameSpeed=1000};Hpmv.Injector.Server.CurrentInput.__isset.gameSpeed=true;}
 void Prepare(int f)=>WorldSyncCacheModule.BeforePrepare(new(){Frame=f});
 void Restore(int f){var p=NativeKitchenCheckpoint.Prepare(new(){Frame=f});p.Complete();WorldSyncCacheModule.AfterComplete(p);}
+Check(!WorldSyncCacheModule.IsSupportedCacheLifecycle(false,true,true,true,true,true,false,false),
+ "Active pending-rest WorldObject remains rejected without exact local dynamic recreation");
+Check(WorldSyncCacheModule.IsSupportedCacheLifecycle(false,true,true,true,true,true,false,true),
+ "Exact local dynamic recreation admits its active pending-rest cache");
+Check(!WorldSyncCacheModule.IsSupportedCacheLifecycle(false,true,true,true,true,false,false,true),
+ "Local dynamic recreation still rejects a pending cache without parent-change state");
+Check(!WorldSyncCacheModule.IsSupportedCacheLifecycle(false,true,true,true,false,true,false,true),
+ "Local dynamic recreation still rejects disabled position synchronization");
+Check(!WorldSyncCacheModule.IsSupportedCacheLifecycle(false,true,true,true,true,true,true,true),
+ "Local dynamic recreation still rejects a paused synchronizer lifecycle");
 {
  var(m,s,p)=Setup(preexisting:true);Capture(161);
  Check((int)Status(m)["frames"]==0,"Late activation does not invent caches for an existing immutable native snapshot");
@@ -549,6 +559,88 @@ foreach(var mutation in new[]{"owner","list","membership","componentOrder","mode
   "Post-deletion initial recreation restores exact target scheduler order before dynamic rebind");
  Check((int)Status(m)["dynamicRestores"]==1&&ReferenceEquals(EntitySerialisationRegistry.entries[2].m_GameObject,newOwner),
   "Initial recreation plus multiple future-only deletion pairs completes one exact dynamic rebind");
+ m.Dispose();
+}
+{
+ var(m,s,p)=Setup();var scheduler=Get(ControllerHandler.MultiplayerController,"m_ServerSync");
+ var regular=(FastList<EntitySerialisationEntry>)Get(scheduler,"m_EntitiesList");
+ EntitySerialisationRegistry.m_ServerFreeEntityIDList=new(new ushort[]{59,60,61,62,63,64});
+ EntitySerialisationEntry AddEntry(uint id,GameObject obj,ServerSynchroniser sync=null){
+  var entry=new EntitySerialisationEntry{m_GameObject=obj};entry.m_Header.m_uEntityID=id;
+  if(sync!=null)entry.m_ServerSynchronisedComponents._items.Add(sync);EntitySerialisationRegistry.entries.Add(id,entry);return entry;
+ }
+ (EntitySerialisationEntry ownerEntry,EntitySerialisationEntry containerEntry,GameObject owner,GameObject container) AddPair(uint ownerId,uint containerId,bool detached=false){
+  var ownerObject=new GameObject();var physical=ownerObject.Add<PhysicalAttachment>();var serverAttachment=ownerObject.Add<ServerPhysicalAttachment>();
+  var clientAttachment=ownerObject.Add<ClientPhysicalAttachment>();var containerObject=new GameObject();var objectContainer=containerObject.Add<ObjectContainer>();
+  physical.m_container=objectContainer;var physics=containerObject.Add<ServerPhysicsObjectSynchroniser>();
+  IParentable parent=p.GetComponent<AttachStation>();uint parentId=41;
+  if(detached){ownerObject.transform.parent=containerObject.transform;serverAttachment.attached=false;clientAttachment.attached=false;parent=objectContainer;parentId=containerId;}
+  else ownerObject.transform.parent=p.transform;
+  clientAttachment.Setup(parent);var world=ownerObject.Add<ServerWorldObjectSynchroniser>();world.Setup();
+  var message=(WorldObjectMessage)Get(world,"m_ServerData");message.ParentEntityID=parentId;
+  var client=ownerObject.Add<ClientWorldObjectSynchroniser>();client.Setup(parent,parentId);
+  var ownerEntry=AddEntry(ownerId,ownerObject,world);ownerEntry.m_ClientSynchronisedComponents._items.Add(client);
+  var containerEntry=AddEntry(containerId,containerObject,physics);return(ownerEntry,containerEntry,ownerObject,containerObject);
+ }
+ var initial=AddPair(2,47,true);var fixedEntry=AddEntry(99,new GameObject());var dynamicTarget=AddPair(55,56);
+ var crate=new GameObject();var dynamicPrefab=new GameObject();crate.Add<SpawnableEntityCollection>().Spawnables.Add(dynamicPrefab);
+ AddEntry(30,crate);NativeDynamicWarpPlan.ObserveFixture(dynamicTarget.owner,dynamicPrefab);
+ regular._items.Add(initial.ownerEntry);regular._items.Add(fixedEntry);regular._items.Add(initial.containerEntry);
+ regular._items.Add(dynamicTarget.ownerEntry);regular._items.Add(dynamicTarget.containerEntry);
+ var initialWorld=initial.owner.GetComponent<ServerWorldObjectSynchroniser>();
+ Set(initialWorld,"m_bSentReliableRestPosition",false);Set(initialWorld,"m_bActive",true);
+ Set(initialWorld,"m_bParentChanged",true);Set(initialWorld,"m_LastUnreliableActiveSend",99.5f);
+ NativeSceneMetadata.InitialPhysicalAttachmentIds.Add(2);Capture(161);
+ foreach(var entry in new[]{initial.ownerEntry,initial.containerEntry,dynamicTarget.ownerEntry,dynamicTarget.containerEntry}){
+  regular._items.Remove(entry);EntitySerialisationRegistry.entries.Remove(entry.m_Header.m_uEntityID);
+ }
+ EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(2);EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(47);
+ EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(55);EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(56);
+ (EntitySerialisationEntry ownerEntry,EntitySerialisationEntry containerEntry,GameObject owner,GameObject container) AddFuture(){
+  ushort ownerId=EntitySerialisationRegistry.m_ServerFreeEntityIDList.Dequeue();ushort containerId=EntitySerialisationRegistry.m_ServerFreeEntityIDList.Dequeue();
+  var pair=AddPair(ownerId,containerId);regular._items.Add(pair.ownerEntry);regular._items.Add(pair.containerEntry);return pair;
+ }
+ var future1=AddFuture();var future2=AddFuture();
+ var initialSpec=new EntityWarpSpec{EntityPathReference=new()};initialSpec.__isset.entityPathReference=true;
+ initialSpec.EntityPathReference.Ids.Add(2);initialSpec.SpawningPath.AddRange(new[]{34,0,0});
+ var dynamicSpec=new EntityWarpSpec{EntityPathReference=new()};dynamicSpec.__isset.entityPathReference=true;
+ dynamicSpec.EntityPathReference.Ids.AddRange(new[]{30,1});dynamicSpec.SpawningPath.AddRange(new[]{30,0});
+ var mixedWarp=new WarpSpec{Frame=161};mixedWarp.Entities.Add(initialSpec);mixedWarp.Entities.Add(dynamicSpec);
+ mixedWarp.EntitiesToDelete.Add((int)future1.ownerEntry.m_Header.m_uEntityID);mixedWarp.EntitiesToDelete.Add((int)future2.ownerEntry.m_Header.m_uEntityID);
+ WorldSyncCacheModule.BeforePrepare(mixedWarp);
+ Check(NativeInitialAttachmentDeletionAuthorization.Authorizations==1
+  &&NativeInitialAttachmentDeletionAuthorization.HistoricalOwnerId==2
+  &&NativeInitialAttachmentDeletionAuthorization.HistoricalContainerId==47,
+  "Mixed initial/dynamic recreation authenticates only the initial pair for future deletion capability");
+ var mixedPlan=NativeDynamicWarpPlan.MixedFixture(initialSpec,
+  new[]{new[]{typeof(PhysicalAttachment)},initial.owner.GetComponents<Component>().Select(c=>c.GetType()).ToArray()},
+  dynamicSpec,dynamicTarget.owner.GetComponents<Component>().Select(c=>c.GetType()).ToArray(),dynamicPrefab);
+ AddPlanRemoval(mixedPlan,future1.owner,future1.container);AddPlanRemoval(mixedPlan,future2.owner,future2.container);
+ WorldSyncCacheModule.BeforeDynamicSpawn(mixedPlan);
+ Check(EntitySerialisationRegistry.m_ServerFreeEntityIDList.SequenceEqual(new ushort[]{63,64,2,47,55,56}),
+  "Mixed recreation reserves initial scratch IDs and both historical owner/body pairs in native plan order");
+ foreach(var expected in new ushort[]{63,64,2,47,55,56})Check(EntitySerialisationRegistry.m_ServerFreeEntityIDList.Dequeue()==expected,
+  "Mixed recreation allocator consumes the next authenticated registration ID");
+ var newInitial=AddPair(2,47,true);var newDynamic=AddPair(55,56);
+ regular._items.Add(newInitial.ownerEntry);regular._items.Add(newInitial.containerEntry);
+ regular._items.Add(newDynamic.ownerEntry);regular._items.Add(newDynamic.containerEntry);
+ newInitial.owner.Add<SuperchargedPatch.EntityPathReferenceMarker>();newDynamic.owner.Add<SuperchargedPatch.EntityPathReferenceMarker>();
+ EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(63);EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue(64);
+ mixedPlan.SetActual(0,newInitial.owner);mixedPlan.SetActual(1,newDynamic.owner);
+ Check(WorldSyncCacheModule.FinalizeDynamicSpawn(mixedPlan,null)==null,
+  "Mixed recreation finalizes both exact historical scheduler incarnations in one native spawn transaction");
+ foreach(var entry in new[]{future1.ownerEntry,future1.containerEntry,future2.ownerEntry,future2.containerEntry}){
+  regular._items.Remove(entry);EntitySerialisationRegistry.entries.Remove(entry.m_Header.m_uEntityID);
+  EntitySerialisationRegistry.m_ServerFreeEntityIDList.Enqueue((ushort)entry.m_Header.m_uEntityID);
+ }
+ var restorePlan=NativeKitchenCheckpoint.Prepare(mixedWarp);restorePlan.Complete();WorldSyncCacheModule.AfterComplete(restorePlan);
+ Check(regular._items.SequenceEqual(new[]{EntitySerialisationRegistry.entries[12],newInitial.ownerEntry,fixedEntry,
+  newInitial.containerEntry,newDynamic.ownerEntry,newDynamic.containerEntry}),
+  "Mixed recreation restores exact checkpoint scheduler order across both rebound pairs");
+ Check(EntitySerialisationRegistry.m_ServerFreeEntityIDList.SequenceEqual(new ushort[]{59,60,61,62,63,64})
+  &&ReferenceEquals(EntitySerialisationRegistry.entries[2],newInitial.ownerEntry)
+  &&ReferenceEquals(EntitySerialisationRegistry.entries[55],newDynamic.ownerEntry),
+  "Mixed recreation restores checkpoint allocator order and both exact historical owner IDs");
  m.Dispose();
 }
 {

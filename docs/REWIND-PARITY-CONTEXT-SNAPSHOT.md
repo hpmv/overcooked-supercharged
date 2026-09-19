@@ -1481,3 +1481,48 @@ this milestone; the focused suite passes 44 tests with one expected skip.
 Current open coverage before search: multiple deliveries and repeated dynamic
 ID lifecycles, order expiry/deduction, broader two-chef combinations, and
 varied arbitrary non-adjacent rewind order.
+
+## 2026-09-18 checkpoint: mixed f444 reincarnations pass preflight
+
+The current deep-rewind cell is the single bounded f1048 -> f444 request; no
+route search is running.  f444 requires simultaneous recreation of delivery
+plate/body `2/47` and sushi-fish/body `55/56`.  Plate 2 is the initial
+attachment in its exact container-detached delivery-fade topology.  Fish 55 is
+a dynamic crate spawn whose target reference is logical path `[30,1]` and
+whose observed spawn path is `[30,0]`; its native historical ID therefore
+cannot be inferred from the path text alone.  f1048 instead contains future
+returned-stack owner/body pairs `59/60` and `61/62`, both declared for deletion.
+
+WorldSyncCache r13u now recognizes only that fully authenticated shape.  It
+uses captured scheduler/body/prefab identity plus the live entity-30 spawnable
+collection, restores all historical allocator and scheduler slots in native
+plan order, rebinds the detached plate's recreated container and client/server
+parent caches, and defers local-only active pending-rest eligibility until the
+actual WarpSpec proves the corresponding owner recreation.  It does not alter
+ordinary forward behavior and does not claim online packet parity.  The
+synthetic exact transaction and all prior cases pass 201 WorldSync checks.
+
+Pinned WorldSync DLL:
+`WorldSyncCache-r13u-mixed-logical-spawn-path-core-bg4-v14`, SHA-256
+`97D9DBD1072C6D1827BBEB261432AFF44EA3DCB030C4EBED0472F6B4B3528198`.
+Pinned core remains
+`A4B50DB0CAF564CFCED075DADEA6109CA14F3A0C2D7C16A9310954D0C7DE960F`.
+Delivery r10o is
+`A0DD0FCC54E82B7758A8E262FCF27B7CA82F466A74994562ACAE4D169362F71B`;
+actor-sidecar r14h is
+`206C81591ABA6B9368B3C375CFEEB1E210252C031F20BE8F8116508EBDD8FE8D`.
+
+Live evidence is
+`framework/artifacts/live-v43-midfade-f1048-to-f444-r1/summary.json`
+(SHA-256
+`84D8DB005E45A66192165322A01B3F060F525004D581E558B1BC18B1F0A677E6`).
+All advancing leases remained minimized, background-owned, and exact.  The
+request passed the new delivery/WorldSync/scheduler gates and stopped at the
+next downstream validator, before restore mutation:
+`No unambiguous linked chef Animator boundary and resume-ready checkpoint at
+output frame 444.`
+
+This does not yet prove that either recreated pair completes live restoration.
+Next inspect the exact f444 Animator checkpoint/link lifecycle, then rerun the
+same single rewind until the restored boundary and suffix replay are exact.
+Search stays disabled.

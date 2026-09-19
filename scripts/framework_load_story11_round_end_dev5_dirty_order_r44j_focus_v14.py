@@ -8,10 +8,19 @@ import framework_load_story11_round_end_dev5_physics_pause_r44i_focus_v14 as set
 loader = setup.setup.loader
 loader.STACK = tuple(
     (slot,
-     "RigidbodyActorRebuild-r14e-dirty-projection-core-bg4-v14-r44i"
+     "WorldSyncCache-r13u-mixed-logical-spawn-path-core-bg4-v14"
+     if slot == "world-sync-cache" else
+     "RigidbodyActorRebuild-r14h-target-frame-json-int64-focus-v14"
      if slot == "rigidbody-actor-rebuild" else
      "BodyRestore-r44s-sleeping-kinematic-noop-transform-core-bg4-v14"
      if slot == "body-restore" else revision,
+     activation)
+    for slot, revision, activation in loader.STACK
+)
+loader.STACK = tuple(
+    (slot,
+     "DeliveryFadeCheckpoint-r10o-parent-incarnation-rebind"
+     if slot == "delivery-fade-checkpoint" else revision,
      activation)
     for slot, revision, activation in loader.STACK
 )
@@ -27,8 +36,8 @@ native = (
 loader.NATIVE["actor"] = native
 loader.NATIVE["body"] = native
 loader.CLASSIFICATION = (
-    "Pinned local Story 1-1 v14/r44j rewind-parity setup with one-shot "
-    "PhysX dirty-interaction semantic-order projection; no search"
+    "Pinned local Story 1-1 v14/r44j rewind-parity setup with exact future-frame "
+    "PhysX sidecar capture and mid-delivery-fade reconstruction; no search"
 )
 loader.__file__ = __file__
 loader.__doc__ = __doc__

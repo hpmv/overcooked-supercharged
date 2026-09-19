@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><UseAppHost>false</UseAppHost><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><UseAppHost>false</UseAppHost><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
  <ItemGroup>
+  <Compile Include="Program.cs" />
+  <Compile Include="Stubs.cs" />
   <Compile Include="../../modules/world-sync-cache/WorldSyncCacheModule.cs" Link="WorldSyncCacheModule.cs" />
   <Compile Include="../../modules/world-sync-cache/NativeSchedulerSnapshot.cs" Link="NativeSchedulerSnapshot.cs" />
   <Compile Include="../../modules/world-sync-cache/NativeClientWorldSnapshot.cs" Link="NativeClientWorldSnapshot.cs" />

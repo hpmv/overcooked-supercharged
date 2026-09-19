@@ -2,6 +2,8 @@ using SuperchargedPatch.Authoring.Modules;
 
 int checks=0;
 void Check(bool value,string name){if(!value)throw new Exception(name);checks++;}
+DeliveryFadeSpawnShape Spawn(int[] factory,int[] logical,bool contents=true)=>new DeliveryFadeSpawnShape {
+    SpawningPath=factory,LogicalPath=logical,HasIngredientContainer=contents };
 
 Check(DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(
     new[]{34,0,0},new[]{2},2),"exact Story 1-1 plate factory admitted");
@@ -13,6 +15,28 @@ Check(!DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(
     new[]{34,0,0},new[]{3},2),"different historical entity rejected");
 Check(!DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(
     new[]{34,0,0},new[]{2,47},2),"non-root logical path rejected");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2})})==0,"single exact entity 2 plate spawn selected");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{30,0},new[]{30,1},false),Spawn(new[]{34,0,0},new[]{2})})==1,
+    "live-proved unrelated carried-item spawn allowed before exact plate spawn");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2}),Spawn(new[]{30,0},new[]{30,1},false)})==0,
+    "unrelated carried-item spawn allowed after exact plate spawn");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2}),Spawn(new[]{34,0,0},new[]{2})})<0,
+    "duplicate exact entity 2 plate spawns rejected");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2}),Spawn(new[]{34,0,1},new[]{2})})<0,
+    "near-matching entity 2 plate spawn rejected beside exact candidate");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2}),Spawn(new[]{34,0,0},new[]{2,9})})<0,
+    "ambiguous descendant path from the plate factory rejected");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{34,0,0},new[]{2},false)})<0,
+    "entity 2 plate candidate without contents rejected");
+Check(DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(new[]{
+    Spawn(new[]{30,0},new[]{30,1},false)})<0,"missing entity 2 plate spawn rejected");
 
 Check(DeliveryFadeReincarnationContract.IsDisjointFutureDeletionSet(
     Array.Empty<int>(),new[]{1,2,3,4}),"empty future deletion set admitted");
@@ -51,6 +75,21 @@ Check(!DeliveryFadeReincarnationContract.IsExactRecreatedComponentTopology(histo
     new[]{"Transform","PhysicalAttachment","ClientPlate","Unexpected",
         "ClientIngredientContentGUI",DeliveryFadeReincarnationContract.PathMarkerType}),
     "extra gameplay component rejected");
+Check(DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+    true,false,-23544,true,601002,false),
+    "destroyed historical attachment parent admits one distinct live factory incarnation");
+Check(DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+    true,true,-23544,true,-23544,true),
+    "surviving historical attachment parent remains exact by reference and instance id");
+Check(!DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+    true,false,-23544,false,601002,false),
+    "destroyed replacement attachment parent rejected");
+Check(!DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+    true,false,-23544,true,-23544,false),
+    "reused attachment-parent instance id rejected across reincarnation");
+Check(!DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+    true,true,-23544,true,601002,false),
+    "live historical attachment parent may not silently change incarnation");
 
 var rendererMap=DeliveryFadeReincarnationContract.ExactUniqueKeyMap(
     new[]{"food@0","plate@0"},new[]{"plate@0","food@0"});
@@ -185,7 +224,7 @@ Check(!DeliveryFadeReincarnationContract.HasManagedReference(null),"true CLR nul
 
 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{
     passed=true,checks,gameCalls=0,
-    scope="Pure destroyed-delivery factory/component/key/terminal and exact Story 1-1 entity2 PC2 admission contract; Unity object, coroutine, PFX and rendering proofs compile in the hot module and require native receipts."
+    scope="Pure destroyed-delivery factory/spawn-shape/component/key/terminal and exact Story 1-1 entity2 PC2 admission contract; Unity object, coroutine, PFX and rendering proofs compile in the hot module and require native receipts."
 }));
 
 sealed class NullLike

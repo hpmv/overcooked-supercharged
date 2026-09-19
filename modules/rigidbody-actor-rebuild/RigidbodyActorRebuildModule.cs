@@ -496,11 +496,15 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private object ArmContactPoolCaptureAtFrame(Dictionary<string,object> args)
         {
-            if(args.Count!=1||!args.ContainsKey("frame")||args["frame"]==null||args["frame"].GetType()!=typeof(int))
-                throw new ArgumentException("capture-contact-pool-at-frame requires exactly frame:int.");
+            if(args.Count!=1||!args.ContainsKey("frame")||args["frame"]==null||
+                (args["frame"].GetType()!=typeof(int)&&args["frame"].GetType()!=typeof(long)))
+                throw new ArgumentException("capture-contact-pool-at-frame requires exactly one whole-number frame.");
+            long requestedFrame=Convert.ToInt64(args["frame"]);
+            if(requestedFrame<int.MinValue||requestedFrame>int.MaxValue)
+                throw new ArgumentOutOfRangeException("frame","Scheduled contact-pool capture frame is outside Int32 range.");
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
                 throw new InvalidOperationException("Scheduled contact-pool capture requires the authoring pause fence.");
-            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore)
+            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore||!dirtyInteractionHookInstalled)
                 throw new InvalidOperationException("Scheduled contact-pool capture requires the active automatic contact-pool restore module.");
             ObserveSceneGeneration();
             ObserveCoreRoundIdentity();
@@ -509,9 +513,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Scheduled contact-pool capture requires an active observed or explicit context.");
             if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0||
                 pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar!=null||
-                dirtyRestorePendingValidation||automaticRestorePending||warpInProgress)
+                pendingDirtyCaptureOrdinal!=0||dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||
+                pendingDirtyRestoreState!=null||automaticRestorePending||warpInProgress)
                 throw new InvalidOperationException("Another contact-pool capture, restore, or dirty-interaction action is pending or scheduled.");
-            int target=(int)args["frame"];
+            int target=(int)requestedFrame;
             int current=CurrentCheckpointFrame();
             if(target<=current)
                 throw new InvalidOperationException("Scheduled contact-pool capture target must be after current checkpoint frame "+current+".");
@@ -532,7 +537,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Scheduled contact-pool capture skipped exact output frame "+target+
                     "; next observed frame was "+observedFrame+".");
             if(pendingContactPoolAction!=0||pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||
-                pendingDirtyCaptureSidecar!=null||dirtyRestorePendingValidation||automaticRestorePending||warpInProgress)
+                pendingDirtyCaptureSidecar!=null||pendingDirtyCaptureOrdinal!=0||
+                dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||pendingDirtyRestoreState!=null||
+                automaticRestorePending||warpInProgress)
                 throw new InvalidOperationException("Scheduled contact-pool capture reached its target while another native checkpoint action was pending.");
 
             RefreshObservedContactManagerContext();

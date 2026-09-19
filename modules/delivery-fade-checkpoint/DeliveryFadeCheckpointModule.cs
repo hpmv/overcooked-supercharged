@@ -211,7 +211,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object lastRendererMaterialFailure;
         private bool disposed;
 
-        public string Name { get { return "delivery-fade-checkpoint-r10m-source-safety"; } }
+        public string Name { get { return "delivery-fade-checkpoint-r10o-parent-incarnation-rebind"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation, Dictionary<string,object> args)
@@ -838,13 +838,15 @@ namespace SuperchargedPatch.Authoring.Modules
             var discardedReturnEntityIds=warp.EntitiesToDelete.OrderBy(value=>value).ToArray();
             var spawned=warp.Entities.Where(value=>value!=null&&!value.__isset.entityId
                 &&value.SpawningPath!=null&&value.SpawningPath.Count!=0).ToArray();
-            if(spawned.Length!=1||!spawned[0].__isset.entityPathReference||spawned[0].EntityPathReference==null
-                ||spawned[0].EntityPathReference.Ids==null||spawned[0].EntityPathReference.Ids.Count!=1)
-                throw new InvalidOperationException("Destroyed delivery restore requires exactly one logical native spawn.");
-            int entityId=spawned[0].EntityPathReference.Ids[0];
-            if(!DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(spawned[0].SpawningPath,
-                spawned[0].EntityPathReference.Ids,entityId)||entityId!=2||spawned[0].IngredientContainer==null)
-                throw new InvalidOperationException("Destroyed delivery restore requires exact Story 1-1 plate factory [34,0,0], path [2], and contents data.");
+            int plateSpawn=DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(
+                spawned.Select(value=>new DeliveryFadeSpawnShape {
+                    SpawningPath=value.SpawningPath,
+                    LogicalPath=value.__isset.entityPathReference&&value.EntityPathReference!=null
+                        ?value.EntityPathReference.Ids:null,
+                    HasIngredientContainer=value.IngredientContainer!=null }).ToArray());
+            if(plateSpawn<0)
+                throw new InvalidOperationException("Destroyed delivery restore requires exactly one unambiguous Story 1-1 plate factory [34,0,0], path [2], and contents data; unrelated core spawns are allowed.");
+            int entityId=2;
             var targets=target.Plates.Where(value=>value.EntityId==entityId).ToArray();
             if(targets.Length!=1)throw new InvalidOperationException("Destroyed delivery target does not contain exact historical plate entity 2.");
             var targetPlate=targets[0];
@@ -853,9 +855,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 ||EntitySerialisationRegistry.GetEntry((uint)entityId)!=null||Alive(targetPlate.Object)||Alive(targetPlate.Plate)
                 ||targetPlate.ObjectId==0||targetPlate.ComponentId==0)
                 throw new InvalidOperationException("Historical delivered plate is not in the required destroyed-current state.");
-            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Parent)||!Alive(targetPlate.Parent)
-                ||targetPlate.ParentId==0||targetPlate.Parent.GetInstanceID()!=targetPlate.ParentId)
-                throw new InvalidOperationException("Historical delivered plate attachment parent is absent or stale.");
+            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Parent)||targetPlate.ParentId==0
+                ||Alive(targetPlate.Parent)&&targetPlate.Parent.GetInstanceID()!=targetPlate.ParentId)
+                throw new InvalidOperationException("Historical delivered plate attachment parent identity is absent or stale.");
             foreach(var other in target.Plates.Where(value=>!ReferenceEquals(value,targetPlate)))
                 ValidatePlateIncarnation(other,other.Plate);
             if(targetPlate.ComponentTypes==null||targetPlate.ComponentTypes.Count(value=>value==typeof(ClientPlate).FullName)!=1
@@ -890,12 +892,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Active destroyed-delivery restore requires distinct future-only deletions.");
             var spawned=warp.Entities.Where(value=>value!=null&&!value.__isset.entityId
                 &&value.SpawningPath!=null&&value.SpawningPath.Count!=0).ToArray();
-            if(spawned.Length!=1||!spawned[0].__isset.entityPathReference||spawned[0].EntityPathReference==null
-                ||spawned[0].EntityPathReference.Ids==null||spawned[0].EntityPathReference.Ids.Count!=1
-                ||!DeliveryFadeReincarnationContract.IsExactStory11PlateFactory(spawned[0].SpawningPath,
-                    spawned[0].EntityPathReference.Ids,spawned[0].EntityPathReference.Ids[0])
-                ||spawned[0].EntityPathReference.Ids[0]!=2||spawned[0].IngredientContainer==null)
-                throw new InvalidOperationException("Active destroyed-delivery restore requires exact Story 1-1 plate entity 2 recreation.");
+            int plateSpawn=DeliveryFadeReincarnationContract.ExactStory11Entity2PlateSpawnIndex(
+                spawned.Select(value=>new DeliveryFadeSpawnShape {
+                    SpawningPath=value.SpawningPath,
+                    LogicalPath=value.__isset.entityPathReference&&value.EntityPathReference!=null
+                        ?value.EntityPathReference.Ids:null,
+                    HasIngredientContainer=value.IngredientContainer!=null }).ToArray());
+            if(plateSpawn<0)
+                throw new InvalidOperationException("Active destroyed-delivery restore requires exactly one unambiguous Story 1-1 plate entity 2 recreation; unrelated core spawns are allowed.");
             var targets=target.Plates.Where(value=>value.EntityId==2).ToArray();
             if(targets.Length!=1)throw new InvalidOperationException("Active delivery target lacks historical plate entity 2.");
             var targetPlate=targets[0];
@@ -903,9 +907,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 ||!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Plate)
                 ||EntitySerialisationRegistry.GetEntry((uint)2)!=null||Alive(targetPlate.Object)||Alive(targetPlate.Plate))
                 throw new InvalidOperationException("Active delivery target plate entity 2 is not destroyed in the current world.");
-            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Parent)||!Alive(targetPlate.Parent)
-                ||targetPlate.Parent.GetInstanceID()!=targetPlate.ParentId)
-                throw new InvalidOperationException("Active delivery target attachment parent is absent or stale.");
+            if(!DeliveryFadeReincarnationContract.HasManagedReference(targetPlate.Parent)||targetPlate.ParentId==0
+                ||Alive(targetPlate.Parent)&&targetPlate.Parent.GetInstanceID()!=targetPlate.ParentId)
+                throw new InvalidOperationException("Active delivery target attachment parent identity is absent or stale.");
             foreach(var other in target.Plates.Where(value=>!ReferenceEquals(value,targetPlate)))
                 ValidatePlateIncarnation(other,other.Plate);
 
@@ -1738,7 +1742,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 ||!target.ServerSynchroniserTypes.SequenceEqual(current.ServerSynchroniserTypes)
                 ||!target.ClientSynchroniserTypes.SequenceEqual(current.ClientSynchroniserTypes))
                 throw new InvalidOperationException("Recreated delivered plate component or synchroniser topology differs from the historical entity.");
-            if(!ReferenceEquals(current.Parent,target.Parent)||current.ParentId!=target.ParentId
+            if(!DeliveryFadeReincarnationContract.IsExactAttachmentParentIncarnation(
+                    DeliveryFadeReincarnationContract.HasManagedReference(target.Parent),Alive(target.Parent),target.ParentId,
+                    Alive(current.Parent),current.ParentId,ReferenceEquals(current.Parent,target.Parent))
                 ||!Same(current.LocalPosition,target.LocalPosition)||!Same(current.LocalRotation,target.LocalRotation)
                 ||!Same(current.LocalScale,target.LocalScale)||current.Layer!=target.Layer
                 ||current.ActiveSelf!=target.ActiveSelf||current.ActiveInHierarchy!=target.ActiveInHierarchy)
@@ -2020,6 +2026,7 @@ namespace SuperchargedPatch.Authoring.Modules
             RendererState[] renderers,ColliderState[] colliders)
         {
             saved.Object=current.Object;saved.ObjectId=current.ObjectId;saved.Plate=current.Plate;saved.ComponentId=current.ComponentId;
+            saved.Parent=current.Parent;saved.ParentId=current.ParentId;
             saved.PresentationOwner=current.PresentationOwner;saved.PresentationOwnerId=current.PresentationOwnerId;
             saved.PresentationContainer=current.PresentationContainer;saved.PresentationContainerId=current.PresentationContainerId;
             for(int i=0;i<saved.Renderers.Length;i++)
@@ -2390,7 +2397,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object Status(string operation)
         {
             return Map("name",Name,"operation",operation,"active",ReferenceEquals(active,this),"readOnlyDuringForwardPlay",true,
-                "restoreScope","Authoring-only one live pre-destruction fade, one exact terminal Story 1-1 destroyed plate recreated through factory [34,0,0] at historical path [2], or the proven Story 1-1 f1048-to-f444 composite (cancel entity 1 and recreate entity 2 at PC2/progress 0.3). Other mid-fade targets reject. Compatible retained entity 2 histories through the target frame are rebound to the fresh incarnation; incompatible earlier sidecars are discarded fail-closed with per-frame reasons in the restore receipt. Root components, server/client synchronisers, attachment pose, renderer topology/mesh/pose/layer/active state, materials and external ingredient UI fail closed; recreated particle playback is mechanically guarded but not pixel-exact.",
+                "restoreScope","Authoring-only one live pre-destruction fade, one exact terminal Story 1-1 destroyed plate recreated through factory [34,0,0] at historical path [2], or the proven Story 1-1 f1048-to-f444 composite (cancel entity 1 and recreate entity 2 at PC2/progress 0.3). Other mid-fade targets reject. The destroyed plate's retained attachment-parent wrapper is admitted only as either the same live incarnation or a distinct live factory-recreated incarnation, then rebound with the plate. Compatible retained entity 2 histories through the target frame are rebound to the fresh incarnation; incompatible earlier sidecars are discarded fail-closed with per-frame reasons in the restore receipt. Root components, server/client synchronisers, attachment pose, renderer topology/mesh/pose/layer/active state, materials and external ingredient UI fail closed; recreated particle playback is mechanically guarded but not pixel-exact.",
                 "factories",factories,"captures",captures,"duplicates",duplicates,"resets",resets,"restores",restores,
                 "historyRestores",historyRestores,"lastFrame",lastFrame,
                 "historyFrames",history.Keys.ToArray(),"trackedSequences",sequences.Count,"pendingNativeDeliveryFades",NativePlateLifecycle.PendingDeliveryFades,

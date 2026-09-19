@@ -107,6 +107,12 @@ namespace SuperchargedPatch.Authoring.Modules
             if(obj==null)throw new ArgumentNullException("obj");
             return new NativeClientWorldSnapshot(id,obj,this,null);
         }
+        internal NativeClientWorldSnapshot Rebind(GameObject obj,EntitySerialisationEntry replacementParent)
+        {
+            if(obj==null)throw new ArgumentNullException("obj");
+            if(replacementParent==null)throw new ArgumentNullException("replacementParent");
+            return new NativeClientWorldSnapshot(id,obj,this,replacementParent);
+        }
         internal void ValidateForParentRebind(EntitySerialisationEntry historicalParent)
         {
             ValidateOwner();

@@ -1991,3 +1991,51 @@ factory into the exact already-yielded fade state.  Native checkpoint preflight
 also requires a scoped temporary mask of the target snapshot's delivery-fade
 count, restored before its final exact-boundary capture.  Search remains
 disabled.
+
+## 2026-09-18: f1048 -> f444 reaches Animator after exact mixed scheduler preflight
+
+The bounded, no-search f1048 -> f444 Story 1-1 probe now passes the delivery
+parent-incarnation and WorldObject/native-scheduler gates which previously
+blocked restore preparation.  The target contains two destroyed checkpoint
+owner/body pairs simultaneously: initial delivery plate `2/47`, detached on
+its own container during the f444 fade, and dynamically spawned sushi fish
+`55/56`, addressed by logical crate path `[30,1]` from spawn path `[30,0]`.
+The source contains future returned-stack pairs `59/60` and `61/62`, which the
+warp deletes.
+
+`WorldSyncCache-r13u-mixed-logical-spawn-path-core-bg4-v14` authenticates that
+exact mixed transaction before mutation.  It validates the observed crate
+prefab against entity 30's live `SpawnableEntityCollection`, reserves all four
+historical IDs in native plan order, preserves the allocator and scheduler
+orders, rebinds both recreated incarnations, and can rebind the detached
+initial plate's server/client parent caches to its recreated container.  Its
+local-only pending-rest admission is retained at capture but accepted at warp
+time only for an owner the actual scheduler plan proves will be recreated.
+This deliberately makes no remote packet-parity claim.  Ordinary forward play
+is unchanged: capture is read-only and every allocator, registry, parent-cache,
+body, and pose write is behind an authenticated authoring rewind.
+
+The focused WorldSync suite passes 201 checks, including the exact mixed
+plate/sushi transaction with active pending-rest state.  The pinned module DLL
+SHA-256 is
+`97D9DBD1072C6D1827BBEB261432AFF44EA3DCB030C4EBED0472F6B4B3528198`.
+The same stack pins delivery r10o SHA-256
+`A0DD0FCC54E82B7758A8E262FCF27B7CA82F466A74994562ACAE4D169362F71B`
+and actor-sidecar r14h SHA-256
+`206C81591ABA6B9368B3C375CFEEB1E210252C031F20BE8F8116508EBDD8FE8D`.
+
+Live v43 is the decisive downstream-gate proof.  Its summary is
+`framework/artifacts/live-v43-midfade-f1048-to-f444-r1/summary.json`, SHA-256
+`84D8DB005E45A66192165322A01B3F060F525004D581E558B1BC18B1F0A677E6`.
+The game stayed minimized and non-foreground throughout every advancing
+lease.  Restore preparation passed registry, delivery, mixed scheduler,
+WorldObject, dynamic logical-path, and native sidecar validation, then failed
+closed before mutation in ChefAnimatorCheckpoint with:
+`No unambiguous linked chef Animator boundary and resume-ready checkpoint at
+output frame 444.`
+
+This is a scheduler/WorldSync preflight milestone, not a completed rewind.
+The immediate next task is to inspect why the already scheduled exact f444
+Animator capture is not linked/resume-ready in this non-adjacent fixture.  Do
+not weaken the new scheduler transaction and do not start search; continue
+toward a successful f1048 -> f444 restore and exact suffix replay.

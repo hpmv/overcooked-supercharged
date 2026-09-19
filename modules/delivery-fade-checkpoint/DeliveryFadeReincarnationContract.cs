@@ -5,6 +5,13 @@ using System.Linq;
 
 namespace SuperchargedPatch.Authoring.Modules
 {
+    internal sealed class DeliveryFadeSpawnShape
+    {
+        internal IList<int> SpawningPath;
+        internal IList<int> LogicalPath;
+        internal bool HasIngredientContainer;
+    }
+
     // StartCoroutine advances its IEnumerator synchronously.  This one-yield
     // relay lets authoring resume schedule an already-advanced native iterator
     // without consuming its restored frame before normal Unity scheduling.
@@ -45,6 +52,26 @@ namespace SuperchargedPatch.Authoring.Modules
                 &&logicalPath!=null&&logicalPath.Count==1&&logicalPath[0]==entityId;
         }
 
+        internal static int ExactStory11Entity2PlateSpawnIndex(IList<DeliveryFadeSpawnShape> spawns)
+        {
+            if(spawns==null)return -1;
+            int exact=-1;
+            for(int i=0;i<spawns.Count;i++)
+            {
+                var spawn=spawns[i];
+                if(spawn==null)continue;
+                bool plateFactory=spawn.SpawningPath!=null&&spawn.SpawningPath.Count==3
+                    &&spawn.SpawningPath[0]==34&&spawn.SpawningPath[1]==0&&spawn.SpawningPath[2]==0;
+                bool entity2=spawn.LogicalPath!=null&&spawn.LogicalPath.Count!=0&&spawn.LogicalPath[0]==2;
+                if(!plateFactory&&!entity2)continue;
+                bool candidate=IsExactStory11PlateFactory(spawn.SpawningPath,spawn.LogicalPath,2)
+                    &&spawn.HasIngredientContainer;
+                if(!candidate||exact>=0)return -1;
+                exact=i;
+            }
+            return exact;
+        }
+
         internal static bool IsDisjointFutureDeletionSet(IList<int> deletionIds,IList<int> targetPlateIds)
         {
             if(deletionIds==null||targetPlateIds==null)return false;
@@ -62,6 +89,15 @@ namespace SuperchargedPatch.Authoring.Modules
                 ||recreated.Count(value=>value==PathMarkerType)!=1)return false;
             return historical.Where(value=>value!=PathMarkerType)
                 .SequenceEqual(recreated.Where(value=>value!=PathMarkerType));
+        }
+
+        internal static bool IsExactAttachmentParentIncarnation(bool historicalReferencePresent,
+            bool historicalAlive,int historicalId,bool recreatedAlive,int recreatedId,bool sameReference)
+        {
+            if(!historicalReferencePresent||historicalId==0||!recreatedAlive||recreatedId==0)return false;
+            return historicalAlive
+                ?sameReference&&recreatedId==historicalId
+                :!sameReference&&recreatedId!=historicalId;
         }
 
         // Returns the current index for each target key.  Enumeration order is

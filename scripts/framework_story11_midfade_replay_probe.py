@@ -131,6 +131,9 @@ def main():
     parser.add_argument("--actor-rebuild-slot", default="rigidbody-actor-rebuild")
     parser.add_argument("--reconcile-dynamic-registry", action="store_true")
     parser.add_argument("--delivery-fade-slot", default="delivery-fade-checkpoint")
+    parser.add_argument("--resume-prefix-index", type=int, choices=(0, 8), default=0,
+                        help=("Resume the same bounded route at the exact f436 boundary before "
+                              "prefix-8; intended only after a pause-fenced tooling failure."))
     args = parser.parse_args()
     if args.restore_transform_dispatch and not args.restore_contact_manager_free_stack:
         parser.error("--restore-transform-dispatch requires --restore-contact-manager-free-stack")
@@ -167,6 +170,7 @@ def main():
         "contactManagerFreeStackRestored": args.restore_contact_manager_free_stack,
         "transformDispatchRestored": args.restore_transform_dispatch,
         "registryReconciliation": args.reconcile_dynamic_registry,
+        "resumePrefixIndex": args.resume_prefix_index,
     }
     bridge = host = None
     advancing_lease = None
@@ -279,19 +283,49 @@ def main():
     try:
         bridge = Client(args.bridge_port)
         host = ControllerClient(args.controller_port)
-        initial = settled("fresh-start")
-        fresh_bridge = call("bridge", {"command": "status"}, "fresh-start-bridge")
-        require(initial.get("frame") == 1 and initial.get("state") == "Paused" and
-                initial.get("freshLevelLoadObserved") is True and
-                "Story11" in str(initial.get("setupSource")),
-                "Probe requires a fresh paused Story11 controller at frame 1.")
-        require(fresh_bridge.get("bridge", {}).get("session", {}).get("scene") == "s_sushi_1_1",
-                "Bridge is not in the Story 1-1 scene.")
-
+        start_label = "fresh-start" if args.resume_prefix_index == 0 else "resume-prefix-8-start"
+        initial = settled(start_label)
+        fresh_bridge = call("bridge", {"command": "status"}, start_label + "-bridge")
         frame = 1
         prefix_boundaries = []
-        for index, request in enumerate(prefixes):
+        for index in range(args.resume_prefix_index):
             start = frame
+            frame += prefix_lengths[index] + 2
+            prefix_boundaries.append({"index": index, "start": start, "end": frame,
+                                      "payloadFrames": prefix_lengths[index],
+                                      "continuedFromPriorProcess": True})
+        require(initial.get("frame") == frame and initial.get("state") == "Paused" and
+                initial.get("freshLevelLoadObserved") is True and
+                "Story11" in str(initial.get("setupSource")),
+                "Probe requires the exact paused Story11 route boundary for its selected prefix.")
+        require(fresh_bridge.get("bridge", {}).get("session", {}).get("scene") == "s_sushi_1_1",
+                "Bridge is not in the Story 1-1 scene.")
+        if args.resume_prefix_index:
+            resume_native = native_observation(start_label + "-native")
+            require_native_boundary(resume_native)
+            initial, resume_native = reconcile_registry(initial, resume_native, start_label)
+            save(start_label + "-managed.json", initial)
+            save(start_label + "-native.json", resume_native)
+
+        for index in range(args.resume_prefix_index, len(prefixes)):
+            request = prefixes[index]
+            start = frame
+            if args.restore_contact_manager_free_stack and index == 8:
+                call("bridge", {"command": "pause"}, "target-sidecar-schedule-fence")
+                scheduled = call("bridge", {"command": "hot-call",
+                                  "slot": args.actor_rebuild_slot,
+                                  "operation": "capture-contact-pool-at-frame",
+                                  "args": {"frame": args.target_frame}},
+                                 "target-sidecar-schedule")["detail"]["result"]
+                schedule_receipt = scheduled.get("result", {})
+                require(scheduled.get("active") is True and
+                        scheduled.get("automaticContactPoolRestore") is True and
+                        schedule_receipt.get("pending") == "scheduled-capture" and
+                        schedule_receipt.get("currentFrame") == start == 436 and
+                        schedule_receipt.get("frame") == args.target_frame,
+                        "The exact future-frame contact/Transform sidecar did not arm at f436.")
+                summary["scheduledTargetSidecar"] = schedule_receipt
+                save("target-sidecar-schedule.json", scheduled)
             arm_advancing(f"prefix-{index}-arm")
             call("controller", request, f"prefix-{index}-input")
             state = settled(f"prefix-{index}-settled")
