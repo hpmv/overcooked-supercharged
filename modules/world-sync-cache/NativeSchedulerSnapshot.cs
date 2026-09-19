@@ -594,9 +594,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 Pairs=pairs.ToArray(),InitialRecreation=true,Deletions=deletions,
                 CurrentRegular=currentRegular,CurrentFast=currentFast,QueueBefore=currentQueue};
             var initialPair=pairs.Single(pair=>pair.Owner.InitialAttachment);
-            if(deletions.Length!=0)
-                NativeInitialAttachmentDeletionAuthorization.Authorize(warp,checked((int)initialPair.Owner.Id),
-                    checked((int)initialPair.Container.Id),deletions.Select(pair=>checked((int)pair.OwnerId)));
+            NativeInitialAttachmentDeletionAuthorization.Authorize(warp,checked((int)initialPair.Owner.Id),
+                checked((int)initialPair.Container.Id),deletions.Select(pair=>checked((int)pair.OwnerId)),
+                pairs.Where(pair=>!pair.Owner.InitialAttachment).SelectMany(pair=>new[]{
+                    checked((int)pair.Owner.Id),checked((int)pair.Container.Id)}));
             return true;
         }
         private static bool IsObservedDynamicRecreationPath(EntityWarpSpec spec,Member ownerMember)
@@ -1072,7 +1073,18 @@ namespace SuperchargedPatch.Authoring.Modules
                     ||!ReferenceEquals(transform.parent,target.Parent)
                     ||target.ParentId!=0&&(target.Parent==null||target.Parent.GetInstanceID()!=target.ParentId)
                     ||!Exact(body.position,target.BodyPosition)||!Exact(body.rotation,target.BodyRotation))
-                    throw new InvalidOperationException("Paused dynamic container identity/body pose differs: "+savedOwner.Id);
+                    throw new InvalidOperationException("Paused dynamic container identity/body pose differs: owner="+
+                        savedOwner.Id+" container="+savedContainer.Id+
+                        " targetPresent="+(target!=null)+" bodyPresent="+(body!=null)+
+                        " transformPresent="+(transform!=null)+
+                        " entryExact="+ReferenceEquals(current,savedContainer.Entry)+
+                        " parentExact="+(target!=null&&transform!=null&&ReferenceEquals(transform.parent,target.Parent))+
+                        " parentIdExact="+(target!=null&&(target.ParentId==0||
+                            (target.Parent!=null&&target.Parent.GetInstanceID()==target.ParentId)))+
+                        " targetBodyPosition="+(target==null?"null":target.BodyPosition.ToString("R"))+
+                        " currentBodyPosition="+(body==null?"null":body.position.ToString("R"))+
+                        " targetBodyRotation="+(target==null?"null":target.BodyRotation.ToString("R"))+
+                        " currentBodyRotation="+(body==null?"null":body.rotation.ToString("R")));
                 Transform looseOwnerTransform=null;
                 if(savedOwner.DynamicPose.DetachedOnContainer)
                 {

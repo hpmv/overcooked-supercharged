@@ -20,36 +20,57 @@ namespace SuperchargedPatch
     {
         private static WarpSpec authorizedWarp;
         private static int ownerId,containerId;
-        private static int[] deletionOwnerIds;
+        private static int[] deletionOwnerIds,concurrentHistoricalEntityIds;
 
         public static void Authorize(WarpSpec warp,int historicalOwnerId,int historicalContainerId,
             IEnumerable<int> futureDeletionOwnerIds)
         {
-            if(warp==null||historicalOwnerId<=0||historicalContainerId<=0||futureDeletionOwnerIds==null)
+            Authorize(warp,historicalOwnerId,historicalContainerId,futureDeletionOwnerIds,new int[0]);
+        }
+
+        public static void Authorize(WarpSpec warp,int historicalOwnerId,int historicalContainerId,
+            IEnumerable<int> futureDeletionOwnerIds,IEnumerable<int> concurrentMissingHistoricalEntityIds)
+        {
+            if(warp==null||historicalOwnerId<=0||historicalContainerId<=0||futureDeletionOwnerIds==null
+                ||concurrentMissingHistoricalEntityIds==null)
                 throw new InvalidOperationException("Initial-attachment deletion authorization is incomplete.");
             var ids=futureDeletionOwnerIds.ToArray();
-            if(ids.Length==0||ids.Any(value=>value<=0||value==historicalOwnerId||value==historicalContainerId)
+            var concurrent=concurrentMissingHistoricalEntityIds.ToArray();
+            if((ids.Length==0&&concurrent.Length==0)
+                ||ids.Any(value=>value<=0||value==historicalOwnerId||value==historicalContainerId)
                 ||ids.Distinct().Count()!=ids.Length)
                 throw new InvalidOperationException("Initial-attachment deletion authorization is not a distinct future-only owner set.");
+            // The only admitted composite currently contains one additional
+            // historical PhysicalAttachment owner/body pair.  Its identities
+            // are absent now, but will be recreated by the independently
+            // authenticated scheduler transaction before core finalization.
+            if(concurrent.Length!=0&&concurrent.Length!=2
+                ||concurrent.Any(value=>value<=0||value==historicalOwnerId||value==historicalContainerId
+                    ||EntitySerialisationRegistry.GetEntry((uint)value)!=null)
+                ||concurrent.Distinct().Count()!=concurrent.Length
+                ||concurrent.Any(value=>ids.Contains(value)))
+                throw new InvalidOperationException("Initial-attachment concurrent historical recreation set is not one exact absent pair.");
             authorizedWarp=warp;ownerId=historicalOwnerId;containerId=historicalContainerId;
             deletionOwnerIds=ids.OrderBy(value=>value).ToArray();
+            concurrentHistoricalEntityIds=concurrent.OrderBy(value=>value).ToArray();
         }
 
         internal static bool Consume(WarpSpec warp,int historicalOwnerId,int historicalContainerId,
-            out int[] futureDeletionOwnerIds)
+            out int[] futureDeletionOwnerIds,out int[] concurrentMissingHistoricalEntityIds)
         {
-            var expected=deletionOwnerIds;
+            var expected=deletionOwnerIds;var concurrent=concurrentHistoricalEntityIds;
             bool admitted=ReferenceEquals(warp,authorizedWarp)&&ownerId==historicalOwnerId
-                &&containerId==historicalContainerId&&expected!=null&&warp.EntitiesToDelete!=null
+                &&containerId==historicalContainerId&&expected!=null&&concurrent!=null&&warp.EntitiesToDelete!=null
                 &&warp.EntitiesToDelete.OrderBy(value=>value).SequenceEqual(expected);
             futureDeletionOwnerIds=admitted?(int[])expected.Clone():null;
+            concurrentMissingHistoricalEntityIds=admitted?(int[])concurrent.Clone():null;
             Clear();
             return admitted;
         }
 
         internal static void Clear()
         {
-            authorizedWarp=null;ownerId=0;containerId=0;deletionOwnerIds=null;
+            authorizedWarp=null;ownerId=0;containerId=0;deletionOwnerIds=null;concurrentHistoricalEntityIds=null;
         }
     }
 
@@ -63,12 +84,12 @@ namespace SuperchargedPatch
     {
         internal sealed class TopologySnapshot
         {
-            private sealed class IngredientRecord
+            internal sealed class IngredientRecord
             {
                 internal object Value;
                 internal EntitySerialisationEntry Entry;
             }
-            private sealed class PhysicsRecord
+            internal sealed class PhysicsRecord
             {
                 internal object Value;
                 internal EntitySerialisationEntry Entry;
@@ -84,6 +105,9 @@ namespace SuperchargedPatch
             internal sealed class RestoreTransaction
             {
                 internal FutureDeletion[] Deletions;
+                internal HistoricalRecreation[] ConcurrentRecreations;
+                internal CanonicalRebind InitialRebind;
+                internal CanonicalRebind[] ConcurrentRebinds;
                 internal object[] RegistryPreimage,IngredientPreimage,PhysicsPreimage;
                 internal int RetiredFuturePhysicsPairs,AlreadyRetiredFuturePhysicsPairs;
                 internal bool Rebound,Finalized;
@@ -95,6 +119,32 @@ namespace SuperchargedPatch
                 internal object Ingredient,Physics;
                 internal Transform PhysicsTransform;
             }
+            internal sealed class PhysicalPairRecord
+            {
+                internal EntitySerialisationEntry OwnerEntry,ContainerEntry;
+                internal Transform OwnerTransform;
+                internal Type[] OwnerComponents,ContainerComponents,OwnerColliderTypes,ContainerColliderTypes;
+            }
+            internal sealed class HistoricalRecreation
+            {
+                internal int OwnerId,ContainerId;
+                internal EntitySerialisationEntry OwnerEntry,ContainerEntry;
+                internal IngredientRecord Ingredient;
+                internal PhysicsRecord Physics;
+                internal PhysicalPairRecord Pair;
+            }
+            internal sealed class CanonicalRebind
+            {
+                internal int OwnerIndex,ContainerIndex;
+                internal EntitySerialisationEntry HistoricalOwner,HistoricalContainer,Owner,Container;
+                internal IngredientRecord IngredientRecord;
+                internal object IngredientValue;
+                internal PhysicsRecord PhysicsRecord;
+                internal object PhysicsValue;
+                internal Transform PhysicsTransform;
+                internal PlateRecord PlateRecord;
+                internal PhysicalPairRecord PairRecord;
+            }
 
             private readonly FastList<EntitySerialisationEntry> registry;
             private readonly EntitySerialisationEntry[] registryEntries;
@@ -102,19 +152,21 @@ namespace SuperchargedPatch
             private readonly IList ingredientList,physicsList;
             private readonly IngredientRecord[] ingredients;
             private readonly PhysicsRecord[] physics;
+            private readonly PhysicalPairRecord[] physicalPairs;
             private readonly PlateRecord[] plates;
             private readonly FieldInfo physicsEntry,physicsTransform;
 
             private TopologySnapshot(FastList<EntitySerialisationEntry> registry,
                 EntitySerialisationEntry[] registryEntries,string[] registryNames,IList ingredientList,
                 IngredientRecord[] ingredients,IList physicsList,PhysicsRecord[] physics,
-                FieldInfo physicsEntry,FieldInfo physicsTransform,PlateRecord[] plates)
+                FieldInfo physicsEntry,FieldInfo physicsTransform,PhysicalPairRecord[] physicalPairs,
+                PlateRecord[] plates)
             {
                 this.registry=registry;this.registryEntries=registryEntries;this.registryNames=registryNames;
                 this.ingredientList=ingredientList;this.ingredients=ingredients;
                 this.physicsList=physicsList;this.physics=physics;
                 this.physicsEntry=physicsEntry;this.physicsTransform=physicsTransform;
-                this.plates=plates;
+                this.physicalPairs=physicalPairs;this.plates=plates;
             }
 
             internal static TopologySnapshot Capture()
@@ -156,9 +208,30 @@ namespace SuperchargedPatch
                 var registryEntries=registry._items.Take(registry.Count).ToArray();
                 if(registryEntries.Any(value=>value==null||value.m_GameObject==null))
                     throw new InvalidOperationException("Native entity registry contains an incomplete value.");
+                var physicalPairs=registryEntries.Select(CapturePhysicalPair).Where(value=>value!=null).ToArray();
                 var plates=registryEntries.Select(CapturePlate).Where(value=>value!=null).ToArray();
                 return new TopologySnapshot(registry,registryEntries,registryEntries.Select(value=>value.m_GameObject.name).ToArray(),
-                    ingredientList,ingredientRecords,physicsList,physicsRecords,physicsEntry,physicsTransform,plates);
+                    ingredientList,ingredientRecords,physicsList,physicsRecords,physicsEntry,physicsTransform,
+                    physicalPairs,plates);
+            }
+
+            private static PhysicalPairRecord CapturePhysicalPair(EntitySerialisationEntry entry)
+            {
+                var obj=entry.m_GameObject;
+                var attachments=obj.GetComponents<PhysicalAttachment>();
+                if(attachments.Length!=1||attachments[0].m_container==null)return null;
+                var containerObject=attachments[0].m_container.gameObject;
+                var containerEntry=containerObject==null?null:EntitySerialisationRegistry.GetEntry(containerObject);
+                if(containerEntry==null||!ReferenceEquals(containerEntry.m_GameObject,containerObject))return null;
+                return new PhysicalPairRecord {OwnerEntry=entry,ContainerEntry=containerEntry,OwnerTransform=obj.transform,
+                    OwnerComponents=ComponentTypes(obj),ContainerComponents=ComponentTypes(containerObject),
+                    OwnerColliderTypes=ColliderTypes(obj),
+                    // A newly spawned PhysicalAttachment is temporarily below
+                    // its container until the ordinary attachment callback
+                    // restores the target parent.  Record only colliders owned
+                    // independently by the container so this immutable
+                    // topology does not depend on that lifecycle phase.
+                    ContainerColliderTypes=ColliderTypesExcluding(containerObject,obj.transform)};
             }
 
             private static PlateRecord CapturePlate(EntitySerialisationEntry entry)
@@ -178,6 +251,14 @@ namespace SuperchargedPatch
             {return ComponentTypes(obj).Where(value=>!RuntimeComponent(value)).ToArray();}
             private static Type[] ColliderTypes(GameObject obj)
             {return obj.GetComponentsInChildren<Collider>(true).Where(value=>value!=null).Select(value=>value.GetType()).OrderBy(value=>value.FullName).ToArray();}
+            private static Type[] ColliderTypesExcluding(GameObject obj,Transform excludedRoot)
+            {return obj.GetComponentsInChildren<Collider>(true).Where(value=>value!=null
+                &&!HasAncestor(value.transform,excludedRoot)).Select(value=>value.GetType())
+                .OrderBy(value=>value.FullName).ToArray();}
+            private static bool HasAncestor(Transform value,Transform ancestor)
+            {for(var cursor=value;cursor!=null;cursor=cursor.parent)if(ReferenceEquals(cursor,ancestor))return true;return false;}
+            private static Type[] BehavioralComponentTypes(Type[] values)
+            {return values.Where(value=>value!=typeof(EntityPathReferenceMarker)).ToArray();}
             private static bool RuntimeComponent(Type type)
             {
                 return typeof(ServerSynchroniserBase).IsAssignableFrom(type)
@@ -250,9 +331,10 @@ namespace SuperchargedPatch
             {return ColliderTypes(obj);}
 
             internal RestoreTransaction ValidateMissing(NativeAttachmentPoseCheckpoint.Snapshot attachment,
-                NativeBodyPoseCheckpoint.Snapshot body,int[] futureDeletionOwnerIds)
+                NativeBodyPoseCheckpoint.Snapshot body,int[] futureDeletionOwnerIds,
+                int[] concurrentMissingHistoricalEntityIds)
             {
-                if(futureDeletionOwnerIds==null)
+                if(futureDeletionOwnerIds==null||concurrentMissingHistoricalEntityIds==null)
                     throw new InvalidOperationException("Initial PhysicalAttachment future-deletion topology is absent.");
                 if(!ReferenceEquals(EntitySerialisationRegistry.m_EntitiesList,registry)
                     ||registryEntries.Count(value=>ReferenceEquals(value,attachment.Entry))!=1
@@ -263,22 +345,59 @@ namespace SuperchargedPatch
                     &&ReferenceEquals(value.Transform,body.Transform)).ToArray();
                 if(missingIngredient.Length!=1||missingPhysics.Length!=1)
                     throw new InvalidOperationException("Initial PhysicalAttachment canonical-list membership is not unique.");
+                var concurrent=CaptureConcurrentHistoricalRecreations(concurrentMissingHistoricalEntityIds,
+                    attachment,body);
                 var deletions=CaptureFutureDeletions(futureDeletionOwnerIds,attachment,body);
                 var registryPreimage=CurrentRegistry();
                 var ingredientPreimage=Current(ingredientList);
                 var physicsPreimage=Current(physicsList);
                 RequireExactExtension(registryPreimage,registryEntries.Where(value=>!ReferenceEquals(value,attachment.Entry)
-                    &&!ReferenceEquals(value,body.Entry)).Cast<object>().ToArray(),deletions.SelectMany(value=>
+                    &&!ReferenceEquals(value,body.Entry)
+                    &&!concurrent.Any(pair=>ReferenceEquals(value,pair.OwnerEntry)
+                        ||ReferenceEquals(value,pair.ContainerEntry))).Cast<object>().ToArray(),deletions.SelectMany(value=>
                         new object[]{value.OwnerEntry,value.ContainerEntry}).ToArray(),"entity registry survivor order");
                 RequireExactExtension(ingredientPreimage,ingredients.Where(value=>!ReferenceEquals(value,missingIngredient[0]))
+                    .Where(value=>!concurrent.Any(pair=>ReferenceEquals(value,pair.Ingredient)))
                     .Select(value=>value.Value).ToArray(),deletions.Where(value=>value.Ingredient!=null)
                         .Select(value=>value.Ingredient).ToArray(),
                     "ingredient survivor order");
                 RequireExactExtension(physicsPreimage,physics.Where(value=>!ReferenceEquals(value,missingPhysics[0]))
+                    .Where(value=>!concurrent.Any(pair=>ReferenceEquals(value,pair.Physics)))
                     .Select(value=>value.Value).ToArray(),deletions.Select(value=>value.Physics).ToArray(),
                     "physics survivor order");
-                return new RestoreTransaction {Deletions=deletions,RegistryPreimage=registryPreimage,
+                return new RestoreTransaction {Deletions=deletions,ConcurrentRecreations=concurrent,
+                    RegistryPreimage=registryPreimage,
                     IngredientPreimage=ingredientPreimage,PhysicsPreimage=physicsPreimage};
+            }
+
+            private HistoricalRecreation[] CaptureConcurrentHistoricalRecreations(int[] entityIds,
+                NativeAttachmentPoseCheckpoint.Snapshot attachment,NativeBodyPoseCheckpoint.Snapshot body)
+            {
+                if(entityIds.Length==0)return new HistoricalRecreation[0];
+                if(entityIds.Length!=2||entityIds.Any(value=>value<=0||value>ushort.MaxValue
+                    ||value==attachment.EntityId||value==body.EntityId)
+                    ||entityIds.Distinct().Count()!=entityIds.Length)
+                    throw new InvalidOperationException("Concurrent historical recreation is not one distinct owner/container pair.");
+                var selected=registryEntries.Where(entry=>entityIds.Contains((int)entry.m_Header.m_uEntityID)).ToArray();
+                if(selected.Length!=2||selected.Any(entry=>EntitySerialisationRegistry.GetEntry(entry.m_Header.m_uEntityID)!=null))
+                    throw new InvalidOperationException("Concurrent historical recreation identities are not exactly absent from the live registry.");
+                var pairs=physicalPairs.Where(pair=>selected.Contains(pair.OwnerEntry)
+                    &&selected.Contains(pair.ContainerEntry)).ToArray();
+                if(pairs.Length!=1||ReferenceEquals(pairs[0].OwnerEntry,pairs[0].ContainerEntry))
+                    throw new InvalidOperationException("Concurrent historical recreation lacks one exact captured PhysicalAttachment pair.");
+                var capturedPair=pairs[0];
+                var ownerIngredients=ingredients.Where(value=>ReferenceEquals(value.Entry,capturedPair.OwnerEntry)).ToArray();
+                var containerIngredients=ingredients.Where(value=>ReferenceEquals(value.Entry,capturedPair.ContainerEntry)).ToArray();
+                var ownerPhysics=physics.Where(value=>ReferenceEquals(value.Entry,capturedPair.OwnerEntry)).ToArray();
+                var containerPhysics=physics.Where(value=>ReferenceEquals(value.Entry,capturedPair.ContainerEntry)).ToArray();
+                if(ownerIngredients.Length>1||containerIngredients.Length!=0||ownerPhysics.Length!=0
+                    ||containerPhysics.Length!=1)
+                    throw new InvalidOperationException("Concurrent historical PhysicalAttachment canonical-list roles differ.");
+                return new[]{new HistoricalRecreation {
+                    OwnerId=(int)capturedPair.OwnerEntry.m_Header.m_uEntityID,
+                    ContainerId=(int)capturedPair.ContainerEntry.m_Header.m_uEntityID,
+                    OwnerEntry=capturedPair.OwnerEntry,ContainerEntry=capturedPair.ContainerEntry,
+                    Ingredient=ownerIngredients.SingleOrDefault(),Physics=containerPhysics[0],Pair=capturedPair}};
             }
 
             private FutureDeletion[] CaptureFutureDeletions(int[] ownerIds,
@@ -347,30 +466,35 @@ namespace SuperchargedPatch
                 var oldPhysics=physics.Single(value=>ReferenceEquals(value.Entry,body.Entry)
                     &&ReferenceEquals(value.Transform,body.Transform));
                 var oldPlate=plates.Single(value=>ReferenceEquals(value.Entry,attachment.Entry));
+                var oldPair=physicalPairs.Single(value=>ReferenceEquals(value.OwnerEntry,attachment.Entry)
+                    &&ReferenceEquals(value.ContainerEntry,body.Entry));
                 var newIngredient=owner.m_GameObject.GetComponent<ServerIngredientContainer>();
                 var newPhysics=Current(physicsList).Where(value=>ReferenceEquals(physicsEntry.GetValue(value),container)
                     &&ReferenceEquals(physicsTransform.GetValue(value),container.m_GameObject.transform)).ToArray();
                 if(newIngredient==null||newPhysics.Length!=1)
                     throw new InvalidOperationException("Recreated initial PhysicalAttachment canonical-list values are absent.");
-                RequireSame(CurrentRegistry(),transaction.RegistryPreimage.Concat(new object[]{owner,container}).ToArray(),
-                    "recreated entity registry append order");
-                RequireSame(Current(ingredientList),transaction.IngredientPreimage.Concat(new object[]{newIngredient}).ToArray(),
-                    "recreated ingredient append order");
-                RequireSamePhysics(Current(physicsList),transaction.PhysicsPreimage.Concat(newPhysics).ToArray(),
-                    "recreated physics append order");
+                var concurrent=ValidateConcurrentHistoricalRecreations(transaction.ConcurrentRecreations);
+                RequireExactExtension(CurrentRegistry(),transaction.RegistryPreimage,
+                    new object[]{owner,container}.Concat(concurrent.SelectMany(value=>
+                        new object[]{value.Owner,value.Container})).ToArray(),"recreated entity registry membership");
+                RequireExactExtension(Current(ingredientList),transaction.IngredientPreimage,
+                    new object[]{newIngredient}.Concat(concurrent.Where(value=>value.IngredientRecord!=null)
+                        .Select(value=>value.IngredientValue)).ToArray(),"recreated ingredient membership");
+                RequireExactExtension(Current(physicsList),transaction.PhysicsPreimage,
+                    new object[]{newPhysics[0]}.Concat(concurrent.Select(value=>value.PhysicsValue)).ToArray(),
+                    "recreated physics membership");
 
                 int ownerIndex=Array.IndexOf(registryEntries,attachment.Entry);
                 int bodyIndex=Array.IndexOf(registryEntries,body.Entry);
                 owner.m_GameObject.name=registryNames[ownerIndex];
                 container.m_GameObject.name=registryNames[bodyIndex];
-                registryEntries[ownerIndex]=owner;registryEntries[bodyIndex]=container;
-                oldIngredient.Value=newIngredient;oldIngredient.Entry=owner;
-                oldPhysics.Value=newPhysics[0];oldPhysics.Entry=container;oldPhysics.Transform=container.m_GameObject.transform;
-                // The retained checkpoint topology is reused by later rewinds
-                // to the same frame.  Keep its factory-signature record joined
-                // to the current incarnation just like the registry,
-                // ingredient, and physics records above.
-                oldPlate.Entry=owner;
+                transaction.InitialRebind=new CanonicalRebind {
+                    OwnerIndex=ownerIndex,ContainerIndex=bodyIndex,
+                    HistoricalOwner=attachment.Entry,HistoricalContainer=body.Entry,
+                    Owner=owner,Container=container,IngredientRecord=oldIngredient,IngredientValue=newIngredient,
+                    PhysicsRecord=oldPhysics,PhysicsValue=newPhysics[0],PhysicsTransform=container.m_GameObject.transform,
+                    PlateRecord=oldPlate,PairRecord=oldPair};
+                transaction.ConcurrentRebinds=concurrent;
                 transaction.Rebound=true;
                 if(owner.m_GameObject.name!=registryNames[ownerIndex]||container.m_GameObject.name!=registryNames[bodyIndex])
                     throw new InvalidOperationException("Recreated initial PhysicalAttachment names were not restored exactly.");
@@ -416,9 +540,28 @@ namespace SuperchargedPatch
                         throw new InvalidOperationException("An authorized future PhysicalAttachment deletion remains registered: "+
                             (deletion==null?0:deletion.OwnerId)+".");
                 }
-                var targetRegistry=registryEntries.Cast<object>().ToArray();
-                var targetIngredients=ingredients.Select(value=>value.Value).ToArray();
-                var targetPhysics=physics.Select(value=>value.Value).ToArray();
+                var concurrentObserved=ValidateConcurrentHistoricalRecreations(transaction.ConcurrentRecreations);
+                if(transaction.ConcurrentRebinds==null
+                    ||transaction.ConcurrentRebinds.Length!=concurrentObserved.Length)
+                    throw new InvalidOperationException("Concurrent historical PhysicalAttachment replacement lifecycle differs.");
+                for(int i=0;i<concurrentObserved.Length;i++)
+                    if(!ReferenceEquals(transaction.ConcurrentRebinds[i].HistoricalOwner,concurrentObserved[i].HistoricalOwner)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].HistoricalContainer,concurrentObserved[i].HistoricalContainer)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].Owner,concurrentObserved[i].Owner)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].Container,concurrentObserved[i].Container)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].IngredientValue,concurrentObserved[i].IngredientValue)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].PhysicsValue,concurrentObserved[i].PhysicsValue)
+                        ||!ReferenceEquals(transaction.ConcurrentRebinds[i].PhysicsTransform,concurrentObserved[i].PhysicsTransform))
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment replacement changed before finalization.");
+                var concurrentRebinds=transaction.ConcurrentRebinds;
+                var rebinds=new[]{transaction.InitialRebind}.Concat(concurrentRebinds).ToArray();
+                if(rebinds.Any(value=>value==null)
+                    ||rebinds.SelectMany(value=>new[]{value.HistoricalOwner,value.HistoricalContainer}).Distinct().Count()!=rebinds.Length*2
+                    ||rebinds.SelectMany(value=>new[]{value.Owner,value.Container}).Distinct().Count()!=rebinds.Length*2)
+                    throw new InvalidOperationException("Historical PhysicalAttachment replacement identities overlap.");
+                var targetRegistry=registryEntries.Select(value=>(object)ReplacementEntry(value,rebinds)).ToArray();
+                var targetIngredients=ingredients.Select(value=>ReplacementIngredient(value,rebinds)).ToArray();
+                var targetPhysics=physics.Select(value=>ReplacementPhysics(value,rebinds)).ToArray();
                 RequireSameMembers(CurrentRegistry(),targetRegistry,"restored entity registry membership");
                 RequireSameMembers(Current(ingredientList),targetIngredients,"restored ingredient membership");
                 // NetworkUtils unregisters a destroyed PhysicalAttachment body
@@ -456,13 +599,146 @@ namespace SuperchargedPatch
                     transaction.AlreadyRetiredFuturePhysicsPairs=pendingPhysics.Length-residualPhysics.Length;
                 }
                 RequireSamePhysicsMembers(Current(physicsList),targetPhysics,"restored physics membership");
-                for(int i=0;i<registryEntries.Length;i++)registry._items[i]=registryEntries[i];
-                for(int i=0;i<ingredients.Length;i++)ingredientList[i]=ingredients[i].Value;
-                for(int i=0;i<physics.Length;i++)physicsList[i]=physics[i].Value;
+                // The live canonical lists must receive the replacement-aware
+                // targets.  The retained historical records are updated only
+                // after those live writes and exact readbacks succeed, so a
+                // failed transaction cannot poison a reusable checkpoint.
+                for(int i=0;i<targetRegistry.Length;i++)
+                    registry._items[i]=(EntitySerialisationEntry)targetRegistry[i];
+                for(int i=0;i<targetIngredients.Length;i++)ingredientList[i]=targetIngredients[i];
+                for(int i=0;i<targetPhysics.Length;i++)physicsList[i]=targetPhysics[i];
                 RequireSame(CurrentRegistry(),targetRegistry,"restored entity registry order");
                 RequireSame(Current(ingredientList),targetIngredients,"restored ingredient order");
                 RequireSamePhysics(Current(physicsList),targetPhysics,"restored physics order");
+                // Commit retained checkpoint identities only after every live
+                // membership/order proof succeeds. A failed attempt therefore
+                // cannot poison a reusable historical snapshot halfway through
+                // a mixed recreation.
+                foreach(var rebind in rebinds)
+                {
+                    registryEntries[rebind.OwnerIndex]=rebind.Owner;
+                    registryEntries[rebind.ContainerIndex]=rebind.Container;
+                    if(rebind.IngredientRecord!=null)
+                    {
+                        rebind.IngredientRecord.Value=rebind.IngredientValue;
+                        rebind.IngredientRecord.Entry=rebind.Owner;
+                    }
+                    rebind.PhysicsRecord.Value=rebind.PhysicsValue;
+                    rebind.PhysicsRecord.Entry=rebind.Container;
+                    rebind.PhysicsRecord.Transform=rebind.PhysicsTransform;
+                    if(rebind.PlateRecord!=null)rebind.PlateRecord.Entry=rebind.Owner;
+                    if(rebind.PairRecord!=null)
+                    {
+                        rebind.PairRecord.OwnerEntry=rebind.Owner;
+                        rebind.PairRecord.ContainerEntry=rebind.Container;
+                        rebind.PairRecord.OwnerTransform=rebind.Owner.m_GameObject.transform;
+                    }
+                }
                 transaction.Finalized=true;
+            }
+
+            private CanonicalRebind[] ValidateConcurrentHistoricalRecreations(HistoricalRecreation[] recreations)
+            {
+                if(recreations==null)
+                    throw new InvalidOperationException("Concurrent historical recreation topology is absent.");
+                var result=new List<CanonicalRebind>();
+                foreach(var recreation in recreations)
+                {
+                    var owner=EntitySerialisationRegistry.GetEntry((uint)recreation.OwnerId);
+                    var container=EntitySerialisationRegistry.GetEntry((uint)recreation.ContainerId);
+                    var ownerObject=owner==null?null:owner.m_GameObject;
+                    var containerObject=container==null?null:container.m_GameObject;
+                    var attachments=ownerObject==null?new PhysicalAttachment[0]:ownerObject.GetComponents<PhysicalAttachment>();
+                    var physical=attachments.Length==1?attachments[0]:null;
+                    var physicalContainer=physical==null||physical.m_container==null?null:physical.m_container.gameObject;
+                    if(recreation==null||recreation.Pair==null||recreation.OwnerEntry==null
+                        ||recreation.ContainerEntry==null||recreation.Physics==null
+                        ||owner==null||container==null||ownerObject==null||containerObject==null
+                        ||ReferenceEquals(owner,recreation.OwnerEntry)||ReferenceEquals(container,recreation.ContainerEntry)
+                        ||owner.m_Header.m_uEntityID!=recreation.OwnerId
+                        ||container.m_Header.m_uEntityID!=recreation.ContainerId
+                        ||!ReferenceEquals(EntitySerialisationRegistry.GetEntry((uint)recreation.OwnerId),owner)
+                        ||!ReferenceEquals(EntitySerialisationRegistry.GetEntry((uint)recreation.ContainerId),container)
+                        ||CurrentRegistry().Count(value=>ReferenceEquals(value,owner))!=1
+                        ||CurrentRegistry().Count(value=>ReferenceEquals(value,container))!=1
+                        ||attachments.Length!=1||!ReferenceEquals(physicalContainer,containerObject)
+                        ||!BehavioralComponentTypes(ComponentTypes(ownerObject)).SequenceEqual(
+                            BehavioralComponentTypes(recreation.Pair.OwnerComponents))
+                        ||!BehavioralComponentTypes(ComponentTypes(containerObject)).SequenceEqual(
+                            BehavioralComponentTypes(recreation.Pair.ContainerComponents))
+                        ||!ColliderTypes(ownerObject).SequenceEqual(recreation.Pair.OwnerColliderTypes)
+                        ||!ColliderTypesExcluding(containerObject,ownerObject.transform).SequenceEqual(
+                            recreation.Pair.ContainerColliderTypes))
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment replacement differs from its checkpoint topology: "+
+                            (recreation==null?0:recreation.OwnerId)+".");
+                    int ownerIndex=Array.IndexOf(registryEntries,recreation.OwnerEntry);
+                    int containerIndex=Array.IndexOf(registryEntries,recreation.ContainerEntry);
+                    if(ownerIndex<0||containerIndex<0||ownerIndex==containerIndex
+                        ||ownerObject.name!=registryNames[ownerIndex]||containerObject.name!=registryNames[containerIndex])
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment registry identity/name differs: "+recreation.OwnerId+".");
+
+                    var ownerIngredients=ownerObject.GetComponents<ServerIngredientContainer>();
+                    var currentIngredientValues=Current(ingredientList);
+                    var currentIngredients=ownerIngredients.Length==1?currentIngredientValues
+                        .Where(value=>ReferenceEquals(value,ownerIngredients[0])).ToArray():new object[0];
+                    if(ownerIngredients.Length!=(recreation.Ingredient==null?0:1)
+                        ||currentIngredients.Length!=ownerIngredients.Length)
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment ingredient membership differs: "+recreation.OwnerId+".");
+                    var currentPhysics=Current(physicsList);
+                    var replacementPhysics=currentPhysics.Where(value=>value!=null
+                        &&ReferenceEquals(physicsEntry.GetValue(value),container)
+                        &&ReferenceEquals(physicsTransform.GetValue(value),containerObject.transform)).ToArray();
+                    if(replacementPhysics.Length!=1
+                        ||currentPhysics.Count(value=>ReferenceEquals(physicsEntry.GetValue(value),container))!=1
+                        ||currentPhysics.Count(value=>ReferenceEquals(physicsTransform.GetValue(value),containerObject.transform))!=1)
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment physics membership differs: "+recreation.OwnerId+".");
+
+                    var historicalPlates=plates.Where(value=>ReferenceEquals(value.Entry,recreation.OwnerEntry)
+                        ||ReferenceEquals(value.Entry,recreation.ContainerEntry)).ToArray();
+                    if(historicalPlates.Length>1||historicalPlates.Any(value=>ReferenceEquals(value.Entry,recreation.ContainerEntry)))
+                        throw new InvalidOperationException("Concurrent historical PhysicalAttachment plate role is ambiguous: "+recreation.OwnerId+".");
+                    var plate=historicalPlates.SingleOrDefault();
+                    if(plate!=null)
+                    {
+                        var observed=CapturePlate(owner);
+                        if(observed==null||!observed.Components.SequenceEqual(plate.Components)
+                            ||!observed.AuthoringComponents.SequenceEqual(plate.AuthoringComponents)
+                            ||!observed.ColliderTypes.SequenceEqual(plate.ColliderTypes)
+                            ||!ReferenceEquals(observed.Step,plate.Step)||!ReferenceEquals(observed.ModelPrefab,plate.ModelPrefab))
+                            throw new InvalidOperationException("Concurrent historical plate replacement signature differs: "+recreation.OwnerId+".");
+                    }
+                    result.Add(new CanonicalRebind {OwnerIndex=ownerIndex,ContainerIndex=containerIndex,
+                        HistoricalOwner=recreation.OwnerEntry,HistoricalContainer=recreation.ContainerEntry,
+                        Owner=owner,Container=container,IngredientRecord=recreation.Ingredient,
+                        IngredientValue=currentIngredients.SingleOrDefault(),PhysicsRecord=recreation.Physics,
+                        PhysicsValue=replacementPhysics[0],PhysicsTransform=containerObject.transform,
+                        PlateRecord=plate,PairRecord=recreation.Pair});
+                }
+                return result.ToArray();
+            }
+
+            private static EntitySerialisationEntry ReplacementEntry(EntitySerialisationEntry value,
+                CanonicalRebind[] rebinds)
+            {
+                var owner=rebinds.Where(rebind=>ReferenceEquals(value,rebind.HistoricalOwner)).ToArray();
+                var container=rebinds.Where(rebind=>ReferenceEquals(value,rebind.HistoricalContainer)).ToArray();
+                if(owner.Length+container.Length>1)
+                    throw new InvalidOperationException("Historical registry replacement mapping is ambiguous.");
+                return owner.Length==1?owner[0].Owner:container.Length==1?container[0].Container:value;
+            }
+
+            private static object ReplacementIngredient(IngredientRecord value,CanonicalRebind[] rebinds)
+            {
+                var matches=rebinds.Where(rebind=>ReferenceEquals(value,rebind.IngredientRecord)).ToArray();
+                if(matches.Length>1)throw new InvalidOperationException("Historical ingredient replacement mapping is ambiguous.");
+                return matches.Length==1?matches[0].IngredientValue:value.Value;
+            }
+
+            private static object ReplacementPhysics(PhysicsRecord value,CanonicalRebind[] rebinds)
+            {
+                var matches=rebinds.Where(rebind=>ReferenceEquals(value,rebind.PhysicsRecord)).ToArray();
+                if(matches.Length>1)throw new InvalidOperationException("Historical physics replacement mapping is ambiguous.");
+                return matches.Length==1?matches[0].PhysicsValue:value.Value;
             }
 
             private void ValidateListIdentity()
@@ -560,6 +836,14 @@ namespace SuperchargedPatch
             }
         }
 
+        private sealed class ConcurrentColliderRecreation
+        {
+            internal int OwnerId;
+            internal Transform HistoricalOwner;
+            internal NativeBodyPoseCheckpoint.Snapshot AffectedBody;
+            internal NativeBodyColliderCheckpoint.Shape[] AffectedShapes;
+        }
+
         private readonly int ownerId, containerId;
         private readonly EntityPathReference path;
         private readonly TopologySnapshot topology;
@@ -570,6 +854,8 @@ namespace SuperchargedPatch
         private NativeAttachmentPoseCheckpoint.Snapshot attachment;
         private NativeBodyPoseCheckpoint.Snapshot body,affectedBody;
         private NativeBodyColliderCheckpoint.Shape[] affectedOwnerShapes;
+        private readonly ConcurrentColliderRecreation[] concurrentColliderRecreations;
+        private readonly bool detachedOnContainer;
         private EntitySerialisationEntry recreatedOwner,recreatedContainer;
         private bool attachmentIdentityRebound,bodyIdentityRebound,collidersRebound,colliderTransformSyncRequired,lineageCommitted;
 
@@ -577,12 +863,15 @@ namespace SuperchargedPatch
             EntityPathReference path, NativeAttachmentPoseCheckpoint.Snapshot attachment,
             NativeBodyPoseCheckpoint.Snapshot body,NativeBodyPoseCheckpoint.Snapshot affectedBody,
             NativeBodyColliderCheckpoint.Shape[] affectedOwnerShapes,TopologySnapshot topology,
-            TopologySnapshot.PlateRecord initialPlate,TopologySnapshot.RestoreTransaction topologyRestore)
+            TopologySnapshot.PlateRecord initialPlate,TopologySnapshot.RestoreTransaction topologyRestore,
+            bool detachedOnContainer,ConcurrentColliderRecreation[] concurrentColliders)
         {
             this.ownerId=ownerId;this.containerId=containerId;this.path=path;
             this.attachment=attachment;this.body=body;this.affectedBody=affectedBody;
             this.affectedOwnerShapes=affectedOwnerShapes;this.topology=topology;
             this.initialPlate=initialPlate;this.topologyRestore=topologyRestore;
+            this.detachedOnContainer=detachedOnContainer;
+            concurrentColliderRecreations=concurrentColliders??new ConcurrentColliderRecreation[0];
             historicalOwner=attachment.Transform;
             historicalOwnerEntry=attachment.Entry;historicalBodyEntry=body.Entry;
         }
@@ -610,53 +899,120 @@ namespace SuperchargedPatch
             if(!ReferenceEquals(attachment.Container,body.Body)||attachment.EntityId<=0||body.EntityId<=0
                 ||attachment.EntityId>ushort.MaxValue||body.EntityId>ushort.MaxValue)
                 throw new InvalidOperationException("Missing initial PhysicalAttachment does not own the missing initial body.");
-            if(attachment.Unsupported!=null||!attachment.Attached||attachment.ParentEntry==null
-                ||attachment.ParentObject==null
+            // A target-side detached pair is missing precisely because both historical
+            // Unity objects were destroyed later in the retained future. Unity's
+            // overloaded null operator reports those still-addressable checkpoint
+            // references as null, so qualification must use CLR reference-null checks.
+            bool detached=!attachment.Attached&&!ReferenceEquals(attachment.ParentEntry,null)
+                &&!ReferenceEquals(attachment.ParentObject,null)
+                &&ReferenceEquals(attachment.ParentEntry,body.Entry)&&ReferenceEquals(attachment.ParentObject,body.Object)
+                &&ReferenceEquals(attachment.Parent,body.Transform);
+            bool attached=attachment.Attached&&!ReferenceEquals(attachment.ParentEntry,null)
+                &&!ReferenceEquals(attachment.ParentObject,null)
+                &&!ReferenceEquals(attachment.ParentEntry,body.Entry);
+            if(attachment.Unsupported!=null||(!attached&&!detached)
                 ||attachment.Prediction!=null||attachment.PredictionTransform!=null
                 ||attachment.PredictionQueueCount!=0||body.Colliders.Length!=0)
-                throw new InvalidOperationException("Missing initial PhysicalAttachment checkpoint is not an attached, predictor-free, colliderless-container pair.");
-            if(!ReferenceEquals(EntitySerialisationRegistry.GetEntry(attachment.ParentObject),attachment.ParentEntry))
-                throw new InvalidOperationException("Missing initial PhysicalAttachment target parent incarnation changed.");
-            var affected=bodies.Where(value=>!ReferenceEquals(value,body))
-                .Select(value=>new {Body=value,Shapes=value.Colliders.Where(shape=>
-                    NativeBodyColliderCheckpoint.HasAncestor(shape,attachment.Transform)).ToArray()})
-                .Where(value=>value.Shapes.Length!=0).ToArray();
-            if(affected.Length!=1||!ReferenceEquals(affected[0].Body.Entry,attachment.ParentEntry)
-                ||affected[0].Shapes.Length==0)
-                throw new InvalidOperationException("Missing initial attachment collider ownership is absent or ambiguous.");
-            foreach(var shape in affected[0].Shapes)
-                if(!NativeBodyColliderCheckpoint.HasUniqueNonBodyAncestor(shape,attachment.Transform)
-                    ||!NativeBodyColliderCheckpoint.Destroyed(shape))
-                    throw new InvalidOperationException("Missing initial attachment collider ancestry/incarnation differs.");
-            var unaffected=affected[0].Body.Colliders.Except(affected[0].Shapes).ToArray();
-            NativeBodyColliderCheckpoint.ValidateCaptured(unaffected);
-            NativeBodyColliderCheckpoint.RequireExactMembership(affected[0].Body.Body,unaffected);
-            int affectedIndex=Array.IndexOf(survivingBodies,affected[0].Body);
-            if(affectedIndex<0||survivingBodies.Count(value=>ReferenceEquals(value,affected[0].Body))!=1)
-                throw new InvalidOperationException("Missing initial attachment collider body membership changed.");
-            survivingBodies[affectedIndex]=NativeBodyPoseCheckpoint.CloneWithColliders(affected[0].Body,unaffected);
+                throw new InvalidOperationException("Missing initial PhysicalAttachment checkpoint is not an exact attached-or-container-detached, predictor-free, colliderless-container pair.");
+            NativeBodyPoseCheckpoint.Snapshot affectedBody=null;
+            NativeBodyColliderCheckpoint.Shape[] affectedShapes=new NativeBodyColliderCheckpoint.Shape[0];
+            if(attached)
+            {
+                if(!ReferenceEquals(EntitySerialisationRegistry.GetEntry(attachment.ParentObject),attachment.ParentEntry))
+                    throw new InvalidOperationException("Missing initial PhysicalAttachment target parent incarnation changed.");
+                var affected=bodies.Where(value=>!ReferenceEquals(value,body))
+                    .Select(value=>new {Body=value,Shapes=value.Colliders.Where(shape=>
+                        NativeBodyColliderCheckpoint.HasAncestor(shape,attachment.Transform)).ToArray()})
+                    .Where(value=>value.Shapes.Length!=0).ToArray();
+                if(affected.Length!=1||!ReferenceEquals(affected[0].Body.Entry,attachment.ParentEntry)
+                    ||affected[0].Shapes.Length==0)
+                    throw new InvalidOperationException("Missing initial attachment collider ownership is absent or ambiguous.");
+                foreach(var shape in affected[0].Shapes)
+                    if(!NativeBodyColliderCheckpoint.HasUniqueNonBodyAncestor(shape,attachment.Transform)
+                        ||!NativeBodyColliderCheckpoint.Destroyed(shape))
+                        throw new InvalidOperationException("Missing initial attachment collider ancestry/incarnation differs.");
+                var unaffected=affected[0].Body.Colliders.Except(affected[0].Shapes).ToArray();
+                NativeBodyColliderCheckpoint.ValidateCaptured(unaffected);
+                NativeBodyColliderCheckpoint.RequireExactMembership(affected[0].Body.Body,unaffected);
+                int affectedIndex=Array.IndexOf(survivingBodies,affected[0].Body);
+                if(affectedIndex<0||survivingBodies.Count(value=>ReferenceEquals(value,affected[0].Body))!=1)
+                    throw new InvalidOperationException("Missing initial attachment collider body membership changed.");
+                survivingBodies[affectedIndex]=NativeBodyPoseCheckpoint.CloneWithColliders(affected[0].Body,unaffected);
+                affectedBody=affected[0].Body;affectedShapes=affected[0].Shapes;
+            }
             if(warp.EntitiesToDelete==null||warp.EntitiesToDelete.Any(value=>value<=0
                 ||value==attachment.EntityId||value==body.EntityId)
                 ||warp.EntitiesToDelete.Distinct().Count()!=warp.EntitiesToDelete.Count)
                 throw new InvalidOperationException("Initial PhysicalAttachment recreation has an invalid deletion owner set.");
-            var futureDeletionOwnerIds=new int[0];
-            if(warp.EntitiesToDelete.Count!=0&&!NativeInitialAttachmentDeletionAuthorization.Consume(
-                warp,attachment.EntityId,body.EntityId,out futureDeletionOwnerIds))
+            var futureDeletionOwnerIds=new int[0];var concurrentMissingHistoricalEntityIds=new int[0];
+            bool authorized=NativeInitialAttachmentDeletionAuthorization.Consume(
+                warp,attachment.EntityId,body.EntityId,out futureDeletionOwnerIds,
+                out concurrentMissingHistoricalEntityIds);
+            if(warp.EntitiesToDelete.Count!=0&&!authorized)
                 throw new InvalidOperationException("Initial PhysicalAttachment recreation with deletions lacks an exact scheduler authorization.");
-            var spawned=warp.Entities.Where(value=>!value.__isset.entityId).ToArray();
-            if(spawned.Length!=1||!spawned[0].__isset.entityPathReference
-                ||spawned[0].EntityPathReference==null||spawned[0].SpawningPath==null
-                ||spawned[0].SpawningPath.Count<2)
-                throw new InvalidOperationException("Initial PhysicalAttachment recreation requires one exact observed spawn path.");
+            if(!authorized)
+            {
+                futureDeletionOwnerIds=new int[0];concurrentMissingHistoricalEntityIds=new int[0];
+            }
+            // A backward warp can recreate this initial plate alongside an
+            // unrelated dynamic owner. Select by the plate's exact logical root
+            // instead of requiring it to be the warp's only spawn row; the
+            // dynamic plan independently authenticates every other row.
+            var spawned=warp.Entities.Where(value=>value!=null&&!value.__isset.entityId
+                &&value.__isset.entityPathReference&&value.EntityPathReference!=null
+                &&value.EntityPathReference.Ids!=null&&value.EntityPathReference.Ids.Count==1
+                &&value.EntityPathReference.Ids[0]==attachment.EntityId).ToArray();
+            if(spawned.Length!=1||spawned[0].SpawningPath==null||spawned[0].SpawningPath.Count<2)
+                throw new InvalidOperationException("Initial PhysicalAttachment recreation requires one exact observed spawn path for the missing owner.");
             var thriftPath=spawned[0].EntityPathReference;
             var logicalPath=thriftPath.FromThrift();
-            if(thriftPath.Ids==null||thriftPath.Ids.Count!=1
-                ||thriftPath.Ids[0]!=attachment.EntityId)
-                throw new InvalidOperationException("Initial PhysicalAttachment recreation path does not name the missing owner.");
-            var topologyRestore=topology.ValidateMissing(attachment,body,futureDeletionOwnerIds);
+            var topologyRestore=topology.ValidateMissing(attachment,body,futureDeletionOwnerIds,
+                concurrentMissingHistoricalEntityIds);
+            var concurrentColliders=PrepareConcurrentColliderRecreations(topologyRestore,bodies,
+                affectedBody,survivingBodies);
             return new NativeInitialAttachmentRecreation(attachment.EntityId,body.EntityId,
-                logicalPath,attachment,body,affected[0].Body,affected[0].Shapes,topology,
-                topology.Plate(attachment.Entry),topologyRestore);
+                logicalPath,attachment,body,affectedBody,affectedShapes,topology,
+                topology.Plate(attachment.Entry),topologyRestore,detached,concurrentColliders);
+        }
+
+        private static ConcurrentColliderRecreation[] PrepareConcurrentColliderRecreations(
+            TopologySnapshot.RestoreTransaction transaction,NativeBodyPoseCheckpoint.Snapshot[] bodies,
+            NativeBodyPoseCheckpoint.Snapshot initialAffectedBody,
+            NativeBodyPoseCheckpoint.Snapshot[] survivingBodies)
+        {
+            if(transaction==null||transaction.ConcurrentRecreations==null)
+                throw new InvalidOperationException("Concurrent collider recreation topology is absent.");
+            var result=new List<ConcurrentColliderRecreation>();
+            foreach(var recreation in transaction.ConcurrentRecreations)
+            {
+                var historicalOwner=recreation==null||recreation.Pair==null?null:recreation.Pair.OwnerTransform;
+                if(ReferenceEquals(historicalOwner,null)||!NativeBodyColliderCheckpoint.IsDestroyedUnityWrapper(historicalOwner))
+                    throw new InvalidOperationException("Concurrent recreated attachment lacks one destroyed historical owner transform.");
+                var affected=bodies.Select(value=>new {Body=value,Shapes=value.Colliders.Where(shape=>
+                        NativeBodyColliderCheckpoint.HasAncestor(shape,historicalOwner)).ToArray()})
+                    .Where(value=>value.Shapes.Length!=0).ToArray();
+                if(affected.Length!=1||ReferenceEquals(affected[0].Body,initialAffectedBody)
+                    ||affected[0].Shapes.Length==0)
+                    throw new InvalidOperationException("Concurrent recreated attachment collider ownership is absent, shared, or ambiguous: "+recreation.OwnerId+".");
+                foreach(var shape in affected[0].Shapes)
+                    if(!NativeBodyColliderCheckpoint.HasUniqueNonBodyAncestor(shape,historicalOwner)
+                        ||!NativeBodyColliderCheckpoint.Destroyed(shape))
+                        throw new InvalidOperationException("Concurrent recreated attachment collider ancestry/incarnation differs: "+recreation.OwnerId+".");
+                int affectedIndex=Array.FindIndex(survivingBodies,value=>ReferenceEquals(value,affected[0].Body));
+                if(affectedIndex<0||survivingBodies.Count(value=>ReferenceEquals(value,affected[0].Body))!=1)
+                    throw new InvalidOperationException("Concurrent recreated attachment collider body membership changed: "+recreation.OwnerId+".");
+                var unaffected=survivingBodies[affectedIndex].Colliders.Except(affected[0].Shapes).ToArray();
+                NativeBodyColliderCheckpoint.ValidateCaptured(unaffected);
+                NativeBodyColliderCheckpoint.RequireExactMembership(affected[0].Body.Body,unaffected);
+                survivingBodies[affectedIndex]=NativeBodyPoseCheckpoint.CloneWithColliders(affected[0].Body,unaffected);
+                result.Add(new ConcurrentColliderRecreation {OwnerId=recreation.OwnerId,
+                    HistoricalOwner=historicalOwner,AffectedBody=affected[0].Body,
+                    AffectedShapes=affected[0].Shapes});
+            }
+            if(result.Select(value=>value.OwnerId).Distinct().Count()!=result.Count
+                ||result.Select(value=>value.AffectedBody).Distinct().Count()!=result.Count)
+                throw new InvalidOperationException("Concurrent recreated attachment collider mappings overlap.");
+            return result.ToArray();
         }
 
         private static bool AttachmentMissing(NativeAttachmentPoseCheckpoint.Snapshot row)
@@ -742,7 +1098,12 @@ namespace SuperchargedPatch
             var colliderTypeDifference=TopologySnapshot.ComponentDifference(factoryColliderTypes,initialPlate.ColliderTypes);
             if(colliderTypeDifference!=null)
                 throw new InvalidOperationException("Latent initial-plate collider type signature differs: "+colliderTypeDifference+".");
-            if(!FactoryCollidersMatch(platePrefab,affectedOwnerShapes,historicalOwner))
+            if(detachedOnContainer)
+            {
+                if(affectedBody!=null||affectedOwnerShapes.Length!=0||initialPlate.ColliderTypes.Length==0)
+                    throw new InvalidOperationException("Latent detached initial-plate checkpoint has an unexpected collider-owner witness.");
+            }
+            else if(!FactoryCollidersMatch(platePrefab,affectedOwnerShapes,historicalOwner))
                 throw new InvalidOperationException("Latent initial-plate collider topology or serialized properties differ.");
             topology.ValidateSurvivingPlatePeers(initialPlate);
 
@@ -852,7 +1213,17 @@ namespace SuperchargedPatch
             // callback below will move them to the saved chef body.  Rebind the
             // addressable attachment now, but defer the body's strict
             // colliderless certification until that callback has run.
-            var reboundAttachment=NativeAttachmentPoseCheckpoint.RebindDestroyed(attachment,owner);
+            var reboundAttachment=NativeAttachmentPoseCheckpoint.RebindDestroyed(
+                attachment,owner,detachedOnContainer?container:null);
+            if(detachedOnContainer)
+            {
+                var replacementParent=container.m_GameObject.transform;
+                if(replacementParent==null||reboundAttachment.CachedClientParent==null
+                    ||!ReferenceEquals(reboundAttachment.ParentEntry,container)
+                    ||!ReferenceEquals(reboundAttachment.ParentObject,container.m_GameObject)
+                    ||reboundAttachment.Parent==null)
+                    throw new InvalidOperationException("Recreated detached initial attachment parent/cache contract is incomplete.");
+            }
             topology.Rebind(attachment,body,owner,container,topologyRestore);
             Replace(attachments,attachment,reboundAttachment,"attachment");
             attachment=reboundAttachment;recreatedOwner=owner;recreatedContainer=container;
@@ -877,71 +1248,104 @@ namespace SuperchargedPatch
             var reboundContainerBody=NativeBodyPoseCheckpoint.RebindDestroyedColliderless(body,recreatedContainer);
             Replace(bodies,body,reboundContainerBody,"body");
             body=reboundContainerBody;bodyIdentityRebound=true;
-            var recreatedOwnerTransform=recreatedOwner.m_GameObject.transform;
-            var hierarchyShapes=NativeBodyColliderCheckpoint.CaptureOwnerHierarchy(affectedBody.Body,recreatedOwnerTransform);
-            if(hierarchyShapes.Length!=affectedOwnerShapes.Length||hierarchyShapes.Length==0)
-                throw new InvalidOperationException("Recreated attachment collider hierarchy cardinality differs.");
+            if(detachedOnContainer)
+            {
+                if(affectedBody!=null||affectedOwnerShapes.Length!=0)
+                    throw new InvalidOperationException("Detached initial attachment unexpectedly retained a separate collider-owner checkpoint.");
+            }
+            else
+            {
+                var recreatedOwnerTransform=recreatedOwner.m_GameObject.transform;
+                var reboundBody=RebindColliderOwner(affectedBody,affectedOwnerShapes,
+                    historicalOwner,recreatedOwnerTransform,"initial attachment");
+                Replace(bodies,affectedBody,reboundBody,"collider owner body");
+                affectedBody=reboundBody;affectedOwnerShapes=reboundBody.Colliders.Where(shape=>
+                    NativeBodyColliderCheckpoint.HasAncestor(shape,recreatedOwnerTransform)).ToArray();
+            }
+            foreach(var concurrent in concurrentColliderRecreations)
+            {
+                var entry=EntitySerialisationRegistry.GetEntry((uint)concurrent.OwnerId);
+                var ownerObject=entry==null?null:entry.m_GameObject;
+                if(ownerObject==null||entry.m_Header.m_uEntityID!=concurrent.OwnerId
+                    ||!ReferenceEquals(EntitySerialisationRegistry.GetEntry((uint)concurrent.OwnerId),entry))
+                    throw new InvalidOperationException("Concurrent recreated collider owner is absent: "+concurrent.OwnerId+".");
+                var currentOwner=ownerObject.transform;
+                var reboundBody=RebindColliderOwner(concurrent.AffectedBody,concurrent.AffectedShapes,
+                    concurrent.HistoricalOwner,currentOwner,"concurrent attachment "+concurrent.OwnerId);
+                Replace(bodies,concurrent.AffectedBody,reboundBody,"concurrent collider owner body");
+                concurrent.AffectedBody=reboundBody;
+                concurrent.AffectedShapes=reboundBody.Colliders.Where(shape=>
+                    NativeBodyColliderCheckpoint.HasAncestor(shape,currentOwner)).ToArray();
+            }
+            collidersRebound=true;
+        }
+
+        private NativeBodyPoseCheckpoint.Snapshot RebindColliderOwner(
+            NativeBodyPoseCheckpoint.Snapshot targetBody,NativeBodyColliderCheckpoint.Shape[] targetShapes,
+            Transform oldOwner,Transform newOwner,string kind)
+        {
+            if(targetBody==null||targetShapes==null||targetShapes.Length==0
+                ||ReferenceEquals(oldOwner,null)||newOwner==null)
+                throw new InvalidOperationException("Recreated "+kind+" collider mapping is incomplete.");
+            var hierarchyShapes=NativeBodyColliderCheckpoint.CaptureOwnerHierarchy(targetBody.Body,newOwner);
+            if(hierarchyShapes.Length!=targetShapes.Length||hierarchyShapes.Length==0)
+                throw new InvalidOperationException("Recreated "+kind+" collider hierarchy cardinality differs.");
             var topologyMatches=new HashSet<NativeBodyColliderCheckpoint.Shape>();
             var poseMappings=new List<KeyValuePair<NativeBodyColliderCheckpoint.Shape,NativeBodyColliderCheckpoint.Shape>>();
             foreach(var value in hierarchyShapes)
             {
-                var matches=affectedOwnerShapes.Where(target=>!topologyMatches.Contains(target)
+                var matches=targetShapes.Where(target=>!topologyMatches.Contains(target)
                     &&NativeBodyColliderCheckpoint.SameRecreatedOwnerTopology(target,value,
-                        historicalOwner,recreatedOwnerTransform)).ToArray();
+                        oldOwner,newOwner)).ToArray();
                 if(matches.Length!=1)
-                    throw new InvalidOperationException("Recreated attachment collider hierarchy mapping is ambiguous.");
+                    throw new InvalidOperationException("Recreated "+kind+" collider hierarchy mapping is ambiguous.");
                 topologyMatches.Add(matches[0]);
                 poseMappings.Add(new KeyValuePair<NativeBodyColliderCheckpoint.Shape,NativeBodyColliderCheckpoint.Shape>(matches[0],value));
             }
             bool posesChanged=NativeBodyColliderCheckpoint.RestoreRecreatedOwnerPoses(poseMappings,
-                historicalOwner,recreatedOwnerTransform,affectedBody.Body);
-            if(posesChanged||hierarchyShapes.Any(value=>value.Collider.attachedRigidbody!=affectedBody.Body))
+                oldOwner,newOwner,targetBody.Body);
+            if(posesChanged||hierarchyShapes.Any(value=>value.Collider.attachedRigidbody!=targetBody.Body))
             {
                 colliderTransformSyncRequired=true;Physics.SyncTransforms();
             }
-            var currentRows=NativeBodyPoseCheckpoint.Capture(new HashSet<int>{affectedBody.EntityId});
-            if(currentRows.Length!=1)throw new InvalidOperationException("Recreated attachment collider body capture differs.");
+            var currentRows=NativeBodyPoseCheckpoint.Capture(new HashSet<int>{targetBody.EntityId});
+            if(currentRows.Length!=1)throw new InvalidOperationException("Recreated "+kind+" collider body capture differs.");
             var current=currentRows[0];
             var currentOwnerShapes=current.Colliders.Where(shape=>
-                NativeBodyColliderCheckpoint.HasAncestor(shape,recreatedOwnerTransform)).ToArray();
-            if(currentOwnerShapes.Length!=affectedOwnerShapes.Length||currentOwnerShapes.Length==0
-                ||current.Colliders.Length!=affectedBody.Colliders.Length)
-                throw new InvalidOperationException("Recreated attachment collider membership cardinality differs.");
-            var historicalOtherShapes=affectedBody.Colliders.Except(affectedOwnerShapes).ToArray();
+                NativeBodyColliderCheckpoint.HasAncestor(shape,newOwner)).ToArray();
+            if(currentOwnerShapes.Length!=targetShapes.Length||currentOwnerShapes.Length==0
+                ||current.Colliders.Length!=targetBody.Colliders.Length)
+                throw new InvalidOperationException("Recreated "+kind+" collider membership cardinality differs.");
+            var historicalOtherShapes=targetBody.Colliders.Except(targetShapes).ToArray();
             var usedOwnerShapes=new HashSet<NativeBodyColliderCheckpoint.Shape>();
             var usedOtherShapes=new HashSet<NativeBodyColliderCheckpoint.Shape>();
             var reboundShapes=new NativeBodyColliderCheckpoint.Shape[current.Colliders.Length];
             for(int i=0;i<current.Colliders.Length;i++)
             {
                 var value=current.Colliders[i];
-                if(NativeBodyColliderCheckpoint.HasAncestor(value,recreatedOwnerTransform))
+                if(NativeBodyColliderCheckpoint.HasAncestor(value,newOwner))
                 {
-                    var matches=affectedOwnerShapes.Where(target=>!usedOwnerShapes.Contains(target)
+                    var matches=targetShapes.Where(target=>!usedOwnerShapes.Contains(target)
                         &&NativeBodyColliderCheckpoint.SameRecreatedOwnerTopology(target,value,
-                            historicalOwner,recreatedOwnerTransform)).ToArray();
+                            oldOwner,newOwner)).ToArray();
                     if(matches.Length!=1)
-                        throw new InvalidOperationException("Recreated attachment collider path/type/component mapping is ambiguous.");
+                        throw new InvalidOperationException("Recreated "+kind+" collider path/type/component mapping is ambiguous.");
                     usedOwnerShapes.Add(matches[0]);
                     reboundShapes[i]=NativeBodyColliderCheckpoint.RebindRecreatedOwnerShape(matches[0],value,
-                        historicalOwner,recreatedOwnerTransform,current.Body);
+                        oldOwner,newOwner,current.Body);
                 }
                 else
                 {
                     var matches=historicalOtherShapes.Where(target=>!usedOtherShapes.Contains(target)
                         &&ReferenceEquals(target.Collider,value.Collider)).ToArray();
                     if(matches.Length!=1)
-                        throw new InvalidOperationException("Surviving collider identity/order mapping changed during attachment recreation.");
+                        throw new InvalidOperationException("Surviving collider identity/order mapping changed during "+kind+" recreation.");
                     usedOtherShapes.Add(matches[0]);reboundShapes[i]=matches[0];
                 }
             }
-            if(usedOwnerShapes.Count!=affectedOwnerShapes.Length||usedOtherShapes.Count!=historicalOtherShapes.Length)
-                throw new InvalidOperationException("Recreated attachment collider mapping is not bijective.");
-            var reboundBody=NativeBodyPoseCheckpoint.RebindSurvivingWithRecreatedColliders(
-                affectedBody,current,reboundShapes);
-            Replace(bodies,affectedBody,reboundBody,"collider owner body");
-            affectedBody=reboundBody;affectedOwnerShapes=reboundShapes.Where(shape=>
-                NativeBodyColliderCheckpoint.HasAncestor(shape,recreatedOwnerTransform)).ToArray();
-            collidersRebound=true;
+            if(usedOwnerShapes.Count!=targetShapes.Length||usedOtherShapes.Count!=historicalOtherShapes.Length)
+                throw new InvalidOperationException("Recreated "+kind+" collider mapping is not bijective.");
+            return NativeBodyPoseCheckpoint.RebindSurvivingWithRecreatedColliders(targetBody,current,reboundShapes);
         }
 
         internal void CommitLineage()
@@ -966,6 +1370,7 @@ namespace SuperchargedPatch
         {
             get {return new Dictionary<string,object>{{"ownerId",ownerId},{"containerId",containerId},
                 {"path",path.ToThrift().Ids.ToArray()},
+                {"detachedOnContainer",detachedOnContainer},
                 {"attachmentIdentityRebound",attachmentIdentityRebound},{"bodyIdentityRebound",bodyIdentityRebound},
                 {"identityRebound",attachmentIdentityRebound&&bodyIdentityRebound},
                 {"futureDeletionOwnerIds",topologyRestore.Deletions.Select(value=>value.OwnerId).ToArray()},

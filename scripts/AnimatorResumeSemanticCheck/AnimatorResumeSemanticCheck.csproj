@@ -9,6 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="../../framework/modules/chef-animator-checkpoint/AnimatorResumeSemanticState.cs" Link="AnimatorResumeSemanticState.cs" />
+    <Compile Include="../../modules/chef-animator-checkpoint/AnimatorResumeSemanticState.cs" Link="AnimatorResumeSemanticState.cs" />
   </ItemGroup>
 </Project>

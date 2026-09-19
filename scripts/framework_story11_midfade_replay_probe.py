@@ -129,8 +129,10 @@ def main():
     parser.add_argument("--restore-contact-manager-free-stack", action="store_true")
     parser.add_argument("--restore-transform-dispatch", action="store_true")
     parser.add_argument("--actor-rebuild-slot", default="rigidbody-actor-rebuild")
+    parser.add_argument("--animator-slot", default="chef-animator-checkpoint")
     parser.add_argument("--reconcile-dynamic-registry", action="store_true")
     parser.add_argument("--delivery-fade-slot", default="delivery-fade-checkpoint")
+    parser.add_argument("--body-restore-slot", default="body-restore")
     parser.add_argument("--resume-prefix-index", type=int, choices=(0, 8), default=0,
                         help=("Resume the same bounded route at the exact f436 boundary before "
                               "prefix-8; intended only after a pause-fenced tooling failure."))
@@ -263,7 +265,7 @@ def main():
         bridge_status = call("bridge", {"command": "status"}, label + "-bridge")
         active = {row.get("slot") for row in
                   bridge_status.get("bridge", {}).get("authoringModules", {}).get("active", [])}
-        slots = (args.delivery_fade_slot, "chef-animator-checkpoint",
+        slots = (args.delivery_fade_slot, args.animator_slot,
                  args.actor_rebuild_slot, "world-sync-cache", "resume-phase")
         result = {"bridge": bridge_status, "modules": {}}
         for slot in slots:
@@ -310,8 +312,27 @@ def main():
         for index in range(args.resume_prefix_index, len(prefixes)):
             request = prefixes[index]
             start = frame
+            if index == 8:
+                call("bridge", {"command": "pause"}, "target-checkpoint-schedule-fence")
+                animator_schedule = call(
+                    "bridge", {"command": "hot-call", "slot": args.animator_slot,
+                               "operation": "capture-resume-ready-at-frame",
+                               "args": {"frame": args.target_frame}},
+                    "target-animator-schedule")["detail"]["result"]
+                animator_receipt = animator_schedule.get("lastScheduledResumeReadyCapture", {})
+                require(animator_schedule.get("active") is True and
+                        animator_schedule.get("scheduledResumeReadyCapturePending") is True and
+                        animator_schedule.get("scheduledResumeReadyCaptureFrame") == args.target_frame and
+                        animator_schedule.get("scheduledResumeReadyLastObservedFrame") == start == 436 and
+                        animator_schedule.get("scheduledResumeReadyCaptureArms") == 1 and
+                        animator_receipt.get("pending") == "scheduled-capture" and
+                        animator_receipt.get("currentFrame") == start and
+                        animator_receipt.get("frame") == args.target_frame and
+                        animator_receipt.get("gameStateMutation") is False,
+                        "The exact future-frame Animator resume-ready capture did not arm at f436.")
+                summary["scheduledAnimatorResumeReady"] = animator_receipt
+                save("target-animator-schedule.json", animator_schedule)
             if args.restore_contact_manager_free_stack and index == 8:
-                call("bridge", {"command": "pause"}, "target-sidecar-schedule-fence")
                 scheduled = call("bridge", {"command": "hot-call",
                                   "slot": args.actor_rebuild_slot,
                                   "operation": "capture-contact-pool-at-frame",
@@ -335,6 +356,25 @@ def main():
                     f"prefix-{index} did not finish at its exact release boundary.")
             prefix_boundaries.append({"index": index, "start": start, "end": frame,
                                       "payloadFrames": prefix_lengths[index]})
+            if index == 8:
+                call("bridge", {"command": "pause"}, "target-animator-capture-check-fence")
+                animator_capture = call(
+                    "bridge", {"command": "hot-call", "slot": args.animator_slot,
+                               "operation": "status", "args": {}},
+                    "target-animator-capture-check")["detail"]["result"]
+                save("target-animator-capture.json", animator_capture)
+                capture_receipt = animator_capture.get("lastScheduledResumeReadyCapture", {})
+                require(animator_capture.get("scheduledResumeReadyCapturePending") is False and
+                        animator_capture.get("scheduledResumeReadyCaptureFrame") == -1 and
+                        animator_capture.get("scheduledResumeReadyLastObservedFrame") == args.target_frame and
+                        animator_capture.get("scheduledResumeReadyCaptureTriggers") == 1 and
+                        animator_capture.get("scheduledResumeReadyCaptureFailure") is None and
+                        args.target_frame in animator_capture.get("resumePrefixReferenceFrames", []) and
+                        args.target_frame not in animator_capture.get("ambiguousResumePrefixFrames", []) and
+                        capture_receipt.get("exact") is True,
+                        "The exact f444 Animator resume-ready capture failed: " +
+                        json.dumps({"failure": animator_capture.get("scheduledResumeReadyCaptureFailure"),
+                                    "receipt": capture_receipt}))
             if registry_evidence is not None:
                 native = native_observation(f"prefix-{index}-native")
                 require_native_boundary(native)
@@ -370,6 +410,25 @@ def main():
         save("original-managed.json", original)
         save("original-native.json", original_native)
         original_modules = module_statuses("original")
+
+        animator = original_modules["modules"].get(args.animator_slot)
+        animator_receipt = animator.get("lastScheduledResumeReadyCapture", {}) \
+            if isinstance(animator, dict) else {}
+        require(isinstance(animator, dict) and animator.get("active") is True and
+                animator.get("scheduledResumeReadyCapturePending") is False and
+                animator.get("scheduledResumeReadyCaptureFrame") == -1 and
+                animator.get("scheduledResumeReadyLastObservedFrame") == args.target_frame and
+                animator.get("scheduledResumeReadyCaptureArms") == 1 and
+                animator.get("scheduledResumeReadyCaptureTriggers") == 1 and
+                args.target_frame in animator.get("resumePrefixReferenceFrames", []) and
+                args.target_frame not in animator.get("ambiguousResumePrefixFrames", []) and
+                animator.get("resumePrefixObserverFailure") is None and
+                animator_receipt.get("frame") == args.target_frame and
+                animator_receipt.get("boundaryIdentityLinked") is True and
+                animator_receipt.get("gameStateMutation") is False and
+                animator_receipt.get("exact") is True,
+                "No exact unambiguous Animator resume-ready checkpoint exists for f444.")
+        summary["capturedAnimatorResumeReady"] = animator_receipt
 
         contact_before = None
         if args.restore_contact_manager_free_stack:
@@ -501,6 +560,16 @@ def main():
         try:
             if bridge is not None:
                 call("bridge", {"command": "pause"}, "finally-pause")
+                if summary.get("error"):
+                    try:
+                        failure_body = call(
+                            "bridge",
+                            {"command": "hot-call", "slot": args.body_restore_slot,
+                             "operation": "status", "args": {}},
+                            "failure-body-restore-status")
+                        save("failure-body-restore-status.json", failure_body)
+                    except Exception as diagnostic_error:
+                        summary["failureBodyRestoreStatusError"] = str(diagnostic_error)
                 if advancing_lease is not None:
                     after = call("bridge", {"command": "status"},
                                  advancing_lease["label"] + "-background-aborted")

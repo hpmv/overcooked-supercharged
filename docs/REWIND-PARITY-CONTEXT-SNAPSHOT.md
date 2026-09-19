@@ -6,6 +6,37 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — f1048 -> f444 Animator resume boundary is exact
+
+Managed Animator r57 with native r17f now restores all four chefs across the
+large direct f1048 -> f444 rewind.  The target is a scheduled uninterrupted
+output boundary rather than a naturally paused checkpoint.  Its capture is
+therefore projected into authoring pause state only after duplicate read-only
+captures prove the native speed word, and its advancing ControllerMemory is
+restored once more after paused maintenance.  The final strict checks pass for
+ControllerMemory, ControllerInput semantics, transition topology, mixer and
+owner graphs, Playable times, pose, and Unity random state.  Ordinary paused
+templates and ordinary forward gameplay are unchanged.  The focused semantic
+suite passes 25 tests.
+
+The next failure is no longer Animator state.  Before the first replay physics
+frame, RigidbodyActorRebuild rejects contact-manager pool restoration because
+the f444 free-list count is 1 and the post-warp live count differs.  This is a
+real hidden-physics-history boundary: the existing helper can reorder an exact
+membership set but deliberately cannot invent or discard active/free contact
+managers.  The next run uses a read-only diagnostic that records both pool
+views, after which the fix must preserve allocation semantics rather than
+merely skip the check.  Search remains disabled.
+
+Evidence and binaries:
+
+- `framework/artifacts/live-v85-midfade-f1048-to-f444-r1/summary.json`;
+- `artifacts/live-v85-animator-failure-status-r1.json`;
+- Animator r57 SHA-256
+  `0213C9005F4AA00B62A82F913380B3A8FF4D1BFFD3ED4A8C328CF20C1EA88A59`;
+- native Animator r17f SHA-256
+  `4E4407C84EB97A2CBCB338433F928E22E7888AB73FDFA17B5AEA5EA09C45430C`.
+
 ## Latest result — f1045 warp succeeds; one dynamic sleep bit remains
 
 The clean second-delivery f1045 rewind now gets through the complete native

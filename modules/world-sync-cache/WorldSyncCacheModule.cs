@@ -463,7 +463,17 @@ namespace SuperchargedPatch.Authoring.Modules
                 int changed=target.Scheduler.RestorePausedDynamicContainerTransforms();
                 if(changed!=0)module.pausedDynamicTransformCorrections+=changed;
             }
-            catch(Exception error){module.lastError="Paused dynamic Transform correction: "+error.Message;throw;}
+            catch(Exception error)
+            {
+                // A failed authoring restore is already unusable.  Retrying the
+                // same strict correction on every paused LateUpdate only hides
+                // the first mismatch behind an exception loop and prevents the
+                // controller from collecting module diagnostics.  Successful
+                // restores and ordinary forward gameplay never take this path.
+                module.pendingPausedDynamicTransforms=null;
+                module.lastError="Paused dynamic Transform correction: "+error.Message;
+                throw;
+            }
         }
         public static void BeforeDynamicSpawn(NativeDynamicWarpPlan __instance)
         {

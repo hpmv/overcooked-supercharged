@@ -234,6 +234,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal AnimatorState[] Animators;
             internal UnityEngine.Random.State RandomState;
             internal int ChefRandomizeEventCount;
+            internal bool RequiresFinalControllerRestore;
         }
 
         private sealed class ChefRandomizeEvent
@@ -299,6 +300,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private string nativePath,nativeSha256;
         private string sceneIdentity,normalizedSceneIdentity,failure,resumeFailure;
         private int warpTarget=-1;
+        private int scheduledResumeReadyCaptureFrame=-1,scheduledResumeReadyLastObservedFrame=-1;
         private bool warpEligible,restoreApplied,pendingResumeRestore,resumeRestoreApplied,disposed;
         private int resumeRestoreStage,resumeStageAUnityFrame=-1,resumeStageBUnityFrame=-1,resumeArmedUnityFrame=-1,resumeArmedPhase=-1;
         private object resumeCoordinationToken,resumeCoordinationServer,resumeCoordinationInput;
@@ -319,9 +321,10 @@ namespace SuperchargedPatch.Authoring.Modules
         private long controllerNormalizations;
         private long replayFrameComparisons;
         private long resumePrefixReferenceCaptures,resumePrefixReferencePostCaptures,resumePrefixReplayPreCaptures,resumePrefixReplayPostCaptures,resumePrefixObserverFailures;
+        private long scheduledResumeReadyCaptureArms,scheduledResumeReadyCaptureTriggers;
         private long resumeReadyRestores,resumeCompletions,resumeCompletionFailures,unityRandomStateRestores,unityRandomBoundaryCorrections;
         private object lastRestore,lastControllerRestore,lastMixerGraphRestore,lastControllerNormalization,lastConfigurationObservation,lastPoseRestore,lastPoseFailure,lastProbe,lastControllerProbe;
-        private object lastResumePrefixObservation,lastResumePrefixReferencePostObservation,lastResumeCompletion;
+        private object lastResumePrefixObservation,lastResumePrefixReferencePostObservation,lastResumeCompletion,lastScheduledResumeReadyCapture;
         private object lastSettledEndTransitionNormalize;
         private object lastPlayableTimeRestore;
         private object lastTargetNullClipRestore;
@@ -342,7 +345,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private object firstResumePrefixPostRandomStateDifference;
         private object firstResumePrefixPostTransitionTopologyDifference,firstResumePrefixPostMixerGraphDifference;
         private object firstResumePrefixPostOwnerGraphDifference;
-        private string resumePrefixObserverFailure;
+        private string resumePrefixObserverFailure,scheduledResumeReadyCaptureFailure;
         private readonly List<object> controllerInputRestoreObservations=new List<object>();
         private readonly List<object> transitionTopologyRestoreObservations=new List<object>();
         private readonly List<object> mixerGraphRestoreObservations=new List<object>();
@@ -364,7 +367,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private const uint MaximumOwnerGraphBytes=65536u*OwnerGraphRecordSize;
         private const long MaximumOwnerGraphCaptureBytes=256L*1024L*1024L;
 
-        public string Name { get { return "chef-animator-checkpoint-v53-animation-owned-transform-boundary"; } }
+        public string Name { get { return "chef-animator-checkpoint-v57-scheduled-final-controller"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation,Dictionary<string,object> args)
@@ -377,14 +380,44 @@ namespace SuperchargedPatch.Authoring.Modules
                 BindNativeControllerMemory(args);Activate();
             }
             else if(operation=="commit-replay-prefix")CommitReplayPrefix(args);
+            else if(operation=="capture-resume-ready-at-frame")ArmResumeReadyCaptureAtFrame(args);
             else
             {
                 if(args.Count!=0)throw new ArgumentException("Operation takes no arguments.");
                 if(operation=="deactivate")Deactivate();
                 else if(operation=="probe-pose")ProbePose();
-                else if(operation!="status")throw new ArgumentException("Use activate, deactivate, commit-replay-prefix, probe-pose, probe-controller-memory or status.");
+                else if(operation!="status")throw new ArgumentException("Use activate, deactivate, capture-resume-ready-at-frame, commit-replay-prefix, probe-pose, probe-controller-memory or status.");
             }
             return Status(operation);
+        }
+
+        private void ArmResumeReadyCaptureAtFrame(Dictionary<string,object> args)
+        {
+            RequireFence();
+            if(args.Count!=1||!args.ContainsKey("frame")||args["frame"]==null||
+                (args["frame"].GetType()!=typeof(int)&&args["frame"].GetType()!=typeof(long)))
+                throw new ArgumentException("capture-resume-ready-at-frame requires exactly one whole-number frame.");
+            long requestedFrame=Convert.ToInt64(args["frame"]);
+            if(requestedFrame<int.MinValue||requestedFrame>int.MaxValue)
+                throw new ArgumentOutOfRangeException("frame","Scheduled Animator resume-ready capture frame is outside Int32 range.");
+            if(!ReferenceEquals(active,this)||history.Count==0||sceneIdentity==null)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture requires an active scene with a retained boundary.");
+            if(scheduledResumeReadyCaptureFrame>=0)
+                throw new InvalidOperationException("An Animator resume-ready capture is already scheduled.");
+            if(pendingResumeRestore||resumeFrame!=null||resumeReadyFrame!=null||resumeRestoreApplied||
+                chefRandomizeMode!=ChefRandomizeMode.Record||failure!=null||resumeFailure!=null||
+                chefRandomizeFailure!=null||resumePrefixObserverFailure!=null)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture requires an unfaulted forward-recording state.");
+            int current=history.Keys.Last();
+            int target=(int)requestedFrame;
+            if(target<=current)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture target must be after current captured frame "+current+".");
+            scheduledResumeReadyCaptureFrame=target;
+            scheduledResumeReadyLastObservedFrame=current;
+            scheduledResumeReadyCaptureFailure=null;
+            scheduledResumeReadyCaptureArms++;
+            lastScheduledResumeReadyCapture=new Dictionary<string,object>{{"pending","scheduled-capture"},
+                {"currentFrame",current},{"frame",target},{"gameStateMutation",false},{"exact",false}};
         }
 
         // An unwind may intentionally abandon the remainder of an older future.
@@ -630,15 +663,94 @@ namespace SuperchargedPatch.Authoring.Modules
             try
             {
                 module.CaptureFrame(__0);
+                module.CaptureScheduledResumeReadyAtFrame(__0);
                 if(module.resumeFailure==null&&module.chefRandomizeFailure==null)module.failure=null;
             }
-            catch(Exception error){module.failure=error.ToString();}
+            catch(Exception error)
+            {
+                if(module.scheduledResumeReadyCaptureFrame==__0&&module.scheduledResumeReadyCaptureFailure==null)
+                {
+                    module.scheduledResumeReadyCaptureFailure=error.ToString();
+                    module.lastScheduledResumeReadyCapture=new Dictionary<string,object>{{"pending","scheduled-capture"},
+                        {"frame",__0},{"stage","exact-boundary-or-resume-ready-capture"},
+                        {"error",module.scheduledResumeReadyCaptureFailure},{"gameStateMutation",false},{"exact",false}};
+                }
+                module.failure=error.ToString();
+            }
+        }
+
+        private void CaptureScheduledResumeReadyAtFrame(int observedFrame)
+        {
+            int target=scheduledResumeReadyCaptureFrame;
+            if(target<0)return;
+            scheduledResumeReadyLastObservedFrame=observedFrame;
+            if(observedFrame<target)return;
+            if(scheduledResumeReadyCaptureFailure!=null)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture already failed at exact output frame "+target+
+                    ": "+scheduledResumeReadyCaptureFailure);
+            if(observedFrame>target)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture skipped exact output frame "+target+
+                    "; next observed frame was "+observedFrame+".");
+            FrameState boundary;
+            if(!history.TryGetValue(target,out boundary))
+                throw new InvalidOperationException("Scheduled Animator resume-ready target has no exact boundary checkpoint.");
+            if(pendingResumeRestore||resumeFrame!=null||resumeReadyFrame!=null||resumeRestoreApplied||
+                chefRandomizeMode!=ChefRandomizeMode.Record)
+                throw new InvalidOperationException("Scheduled Animator resume-ready target was reached outside forward-recording state.");
+            bool prefix=ObserveResumePrefix(target,"reference-prefix");
+            bool post=prefix&&ObserveResumePrefix(target,"reference-post-observer");
+            ResumePrefixState reference;
+            bool linked=resumePrefixReference.TryGetValue(target,out reference)&&
+                ReferenceEquals(reference.Boundary,boundary);
+            if(!prefix||!post||!linked||ambiguousResumePrefix.Contains(target)||resumePrefixObserverFailure!=null)
+                throw new InvalidOperationException("Scheduled Animator resume-ready capture was not exact at output frame "+target+
+                    ": "+(resumePrefixObserverFailure??"linked tuple validation failed."));
+            object pauseProjection=ProjectScheduledResumeReadyPause(reference.Snapshot);
+            // Clear only after both synchronous read-only observations have
+            // produced one unambiguous template linked to this exact boundary.
+            // Unlike an ordinary Helpers.Resume-prefix capture, this snapshot
+            // was taken while the Animator was advancing. Project only the
+            // TimeManager-owned public/native speed word into its paused form;
+            // every other component remains the exact captured tuple.
+            scheduledResumeReadyCaptureFrame=-1;
+            scheduledResumeReadyCaptureFailure=null;
+            scheduledResumeReadyCaptureTriggers++;
+            lastScheduledResumeReadyCapture=new Dictionary<string,object>{{"pending",false},
+                {"frame",target},{"boundaryIdentityLinked",true},{"ambiguous",false},
+                {"pauseProjection",pauseProjection},{"gameStateMutation",false},{"exact",true}};
+        }
+
+        private object ProjectScheduledResumeReadyPause(FrameState snapshot)
+        {
+            if(snapshot==null||snapshot.Animators==null)
+                throw new InvalidOperationException("Scheduled Animator resume-ready projection has no captured tuple.");
+            var rows=new List<object>();
+            foreach(AnimatorState state in snapshot.Animators)
+            {
+                ControllerInputState input=state.ControllerInput;
+                if(input==null||input.Bytes==null)
+                    throw new InvalidOperationException("Scheduled Animator resume-ready projection lacks ControllerInput for "+state.Path+".");
+                byte[] projected;string error;
+                if(!AnimatorResumeSemanticState.TryProjectPausedControllerInput(input.Bytes,state.Speed,out projected,out error))
+                    throw new InvalidOperationException("Scheduled Animator pause projection failed for "+state.Path+": "+error);
+                float advancingSpeed=state.Speed;uint advancingHash=input.Hash;
+                state.Speed=0f;input.Bytes=projected;input.Hash=ByteHash(projected);
+                rows.Add(new Dictionary<string,object>{{"path",state.Path},{"advancingSpeed",advancingSpeed},
+                    {"pausedSpeed",state.Speed},{"advancingHash",advancingHash.ToString("X8")},
+                    {"pausedHash",input.Hash.ToString("X8")},{"projectedByteCount",4},{"exact",true}});
+            }
+            snapshot.RequiresFinalControllerRestore=true;
+            return new Dictionary<string,object>{{"owner","TimeManager main pause"},
+                {"source","scheduled advancing output boundary"},{"projectedField","ControllerInput+0/public Animator.speed"},
+                {"requiresFinalControllerRestore",true},{"gameStateMutation",false},{"animators",rows.ToArray()}};
         }
 
         public static void BeforePrepare(Hpmv.WarpSpec __0)
         {
             ChefAnimatorCheckpointModule module=active;
             if(module==null)return;
+            if(module.scheduledResumeReadyCaptureFrame>=0)
+                throw new InvalidOperationException("An exact-frame Animator resume-ready capture is still pending.");
             if(module.pendingResumeRestore||module.resumeFrame!=null||module.resumeReadyFrame!=null||module.resumeRestoreApplied)
                 throw new InvalidOperationException("A previous chef Animator resume-ready restore is still pending.");
             if(module.chefRandomizeMode==ChefRandomizeMode.Faulted||module.chefRandomizeFailure!=null)
@@ -960,6 +1072,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Helpers.Resume did not match the armed Animator finalization callback.");
                 FrameState ready=module.resumeReadyFrame;
                 module.ValidateConfiguration(ready,"before-authoring-resume-ready");
+                if(ready.RequiresFinalControllerRestore)
+                    module.RestoreControllerMemory(ready,"before-authoring-resume-ready-scheduled");
                 module.RestoreMixerGraph(ready,"before-authoring-resume-ready");
                 module.RestorePlayableTimes(ready,"before-authoring-resume-ready");
                 module.NormalizeSettledEndTransitions(ready,"resume-final-owner-verification",true);
@@ -1178,6 +1292,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 chefRandomizeReference.Clear();trackedChefAnimatorIds.Clear();
                 foreach(int animatorId in animatorIds)trackedChefAnimatorIds.Add(animatorId);
                 history.Clear();replayReference.Clear();resumePrefixReference.Clear();ambiguousResumePrefix.Clear();sceneIdentity=identity;warpTarget=-1;warpEligible=false;
+                scheduledResumeReadyCaptureFrame=-1;scheduledResumeReadyLastObservedFrame=-1;
+                scheduledResumeReadyCaptureFailure=null;
                 ownerGraphSceneCaptureBytes=0;
                 restoreApplied=false;pendingResumeRestore=false;resumeRestoreApplied=false;resumeFrame=null;resumeReadyFrame=null;
                 ClearResumeCoordination();
@@ -1197,12 +1313,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 lastSettledEndTransitionNormalize=null;lastPlayableTimeRestore=null;lastTargetNullClipRestore=null;
                 lastOverrideClipRestore=null;lastResumeCoordination=null;lastUnityRandomStateRestore=null;
                 lastUnityRandomBoundaryCorrection=null;lastReplayPrefixCommit=null;
+                lastScheduledResumeReadyCapture=null;
                 controllerInputRestoreObservations.Clear();transitionTopologyRestoreObservations.Clear();
                 mixerGraphRestoreObservations.Clear();settledEndTransitionNormalizeObservations.Clear();
                 playableTimeRestoreObservations.Clear();targetNullClipRestoreObservations.Clear();
                 overrideClipRestoreObservations.Clear();randomizeAnimParamObservations.Clear();
                 replayFrameComparisons=0;resumePrefixReferenceCaptures=0;resumePrefixReferencePostCaptures=0;
                 resumePrefixReplayPreCaptures=0;resumePrefixReplayPostCaptures=0;resumePrefixObserverFailures=0;
+                scheduledResumeReadyCaptureArms=0;scheduledResumeReadyCaptureTriggers=0;
                 chefRandomizeMode=ChefRandomizeMode.Record;replayChefRandomizeCursor=0;replayChefRandomizeLimit=0;
                 firstChefRandomizeReplayDifference=null;chefRandomizeFailure=null;
             }
@@ -1316,8 +1434,11 @@ namespace SuperchargedPatch.Authoring.Modules
             foreach(ServerChefSynchroniser chef in chefs)
             {
                 Animator[] found=chef.GetComponentsInChildren<Animator>(true);
-                if(found.Length!=1)throw new InvalidOperationException("Each chef must have exactly one child Animator: "+PathOf(chef.transform));
-                animators.Add(found[0]);
+                Animator[] owned=found.Where(value=>value!=null&&value.transform.parent==chef.transform).ToArray();
+                if(owned.Length!=1)throw new InvalidOperationException("Each chef must have exactly one directly owned Animator: "+
+                    PathOf(chef.transform)+"; direct="+String.Join(",",owned.Select(value=>PathOf(value.transform)).ToArray())+
+                    "; descendants="+String.Join(",",found.Select(value=>PathOf(value.transform)).ToArray())+".");
+                animators.Add(owned[0]);
             }
             if(animators.Select(value=>value.GetInstanceID()).Distinct().Count()!=4)
                 throw new InvalidOperationException("Chef Animator identities are not distinct.");
@@ -2911,6 +3032,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"replayReferenceFrames",replayReference.Count},{"replayFrameComparisons",replayFrameComparisons},
                 {"resumePrefixReferenceFrames",resumePrefixReference.Keys.ToArray()},
                 {"ambiguousResumePrefixFrames",ambiguousResumePrefix.OrderBy(value=>value).ToArray()},
+                {"scheduledResumeReadyCapturePending",scheduledResumeReadyCaptureFrame>=0},
+                {"scheduledResumeReadyCaptureFrame",scheduledResumeReadyCaptureFrame},
+                {"scheduledResumeReadyLastObservedFrame",scheduledResumeReadyLastObservedFrame},
+                {"scheduledResumeReadyCaptureArms",scheduledResumeReadyCaptureArms},
+                {"scheduledResumeReadyCaptureTriggers",scheduledResumeReadyCaptureTriggers},
+                {"scheduledResumeReadyCaptureFailure",scheduledResumeReadyCaptureFailure},
+                {"lastScheduledResumeReadyCapture",lastScheduledResumeReadyCapture},
                 {"resumePrefixReferenceCaptures",resumePrefixReferenceCaptures},
                 {"resumePrefixReferencePostCaptures",resumePrefixReferencePostCaptures},
                 {"resumePrefixReplayPreCaptures",resumePrefixReplayPreCaptures},
@@ -2960,7 +3088,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"lastControllerProbe",lastControllerProbe},
                 {"nativePath",nativePath},{"nativeSha256",nativeSha256},{"unityPlayerBase",unityPlayerBase==0?null:"0x"+unityPlayerBase.ToString("X8")},
                 {"live",live},{"liveError",liveError},
-                {"scope","Authoring-only chef Animator rewind checkpoint, including transition frames. Revision 53 limits public pose capture and restoration to the Animator-owned rig: a nested server/client world-object synchroniser ends pose ownership, so runtime-held plates and food visuals inherit the exact animated attachment-bone pose but remain owned by the attachment/body/lifecycle restorers. This filter is observational during ordinary forward play and does not alter the attachment point or plate physics. Revision 52 added an explicit fail-closed branch transaction keyed by the controller's paused output frame: an exact paused replay prefix, or the exact restored target before its first divergent advancing frame, may discard only the abandoned future comparison frames and RandomizeAnimParam callback tail. The explicit frame must be the latest captured output boundary; the diagnostic live CurrentFrameData value is retained separately because a paused hot-call can observe the following exchange. The transaction mutates module-owned reference bookkeeping only and reports gameStateMutation=false; divergent or incomplete prefixes are rejected before truncation. The revision otherwise retains the exact original RNG preimage, post-state, callback identity, parameter preimage/result, and last captured output-boundary watermark for every tracked chef RandomizeAnimParam.OnStateEnter callback. Exact Animator instance membership and explicit Record, ReplayStaged, ReplayActive, and Faulted lifecycle states prevent paused restore maintenance or callbacks outside the retained interval from recording or consuming events. Replay arms only after the final resume-ready tuple verifies, and boundary counts plus the fixed interval endpoint fail closed before RNG correction. Exact output-boundary RNG correction remains a second guard against unrewound decorative NPC and traffic Animator callbacks that share UnityEngine.Random but run on unrelated render-frame timing. Ordinary forward callbacks and random draws are observed but never changed. Complete owner graphs are retained for stored reference resume-prefix snapshots, replay-pre transaction observation, final replay-post verification, and OverrideClipPlayables mutation guards; ordinary output boundaries and diagnostic reference-post observations retain the rest of the native tuple without traversing the owner graph. Replay-pre traversal remains because removing the native read-only capture changed the subsequent paused-maintenance result in the transitioning-target-from-settled matrix cell; its ordering or timing dependency is not yet explained. Stage A admits Unity's idempotent OverrideClipPlayables no-op only when native before/after digests and a fresh managed full owner-graph byte capture are exact; changed bindings retain the original dirty-bit contract. Stage-B Playable clock restoration requires every saved physical node to exist, restores only those saved nodes, and leaves extra live resolver-only nodes untouched for the guarded EndTransition transaction; the final no-plan verification remains exact after those nodes become unreachable. Stage A and Stage B otherwise retain the guarded native target-null, Playable clock, EndTransition, mixer, owner, and pose restoration transactions. The null-inactive scalar finalizer skips rotated state machines only after validating their stable entry storage and port topology; rotated outer playable identities are intentionally classified after that structural check. Opaque branch-output port storage must match the checkpoint and remain exact through live preflight, but is not assumed to be zero; only the separately addressed output-weight word is writable. Accepted input provenance and exactly-once commit are owned by ResumePhase. Gameplay input, physics, score, and online synchronization behavior are untouched; decorative Animator visual parity is not claimed and this development revision is not search-qualified."}
+                {"scope","Authoring-only chef Animator rewind checkpoint, including transition frames. Revision 57 distinguishes an uninterrupted scheduled output-boundary template from a naturally paused resume-prefix template: only the scheduled form receives one final byte-exact ControllerMemory restore at the last Helpers.Resume prefix, after the two required paused maintenance frames and before the existing mixer, Playable-time, transition, input, topology, owner, pose, and RNG verification. Ordinary resume-prefix checkpoints retain their established lifecycle unchanged. Revision 56 projects a scheduled advancing-boundary resume tuple into the exact TimeManager-owned paused speed state by first proving ControllerInput +0 equals the captured public Animator speed, then cloning checkpoint data and zeroing only that four-byte word plus the saved public speed; no live Animator or game state is written, and every other tuple component remains strict. Revision 55 identifies each chef's directly owned Player/Chef Animator rather than rejecting frames where a held or attached object temporarily contributes another descendant Animator; this changes checkpoint observation membership only and does not write game state. Revision 54 may arm one pause-fenced read-only capture for an exact future output boundary, allowing a resume-ready tuple inside a continuous logical-input chunk without inserting a behavior-changing pause. It publishes the template only after the ordinary boundary exists and the established prefix/post observations remain exact; skipped, ambiguous, or scene-invalidated work fails closed. Revision 53 limits public pose capture and restoration to the Animator-owned rig: a nested server/client world-object synchroniser ends pose ownership, so runtime-held plates and food visuals inherit the exact animated attachment-bone pose but remain owned by the attachment/body/lifecycle restorers. This filter is observational during ordinary forward play and does not alter the attachment point or plate physics. Revision 52 added an explicit fail-closed branch transaction keyed by the controller's paused output frame: an exact paused replay prefix, or the exact restored target before its first divergent advancing frame, may discard only the abandoned future comparison frames and RandomizeAnimParam callback tail. The explicit frame must be the latest captured output boundary; the diagnostic live CurrentFrameData value is retained separately because a paused hot-call can observe the following exchange. The transaction mutates module-owned reference bookkeeping only and reports gameStateMutation=false; divergent or incomplete prefixes are rejected before truncation. The revision otherwise retains the exact original RNG preimage, post-state, callback identity, parameter preimage/result, and last captured output-boundary watermark for every tracked chef RandomizeAnimParam.OnStateEnter callback. Exact Animator instance membership and explicit Record, ReplayStaged, ReplayActive, and Faulted lifecycle states prevent paused restore maintenance or callbacks outside the retained interval from recording or consuming events. Replay arms only after the final resume-ready tuple verifies, and boundary counts plus the fixed interval endpoint fail closed before RNG correction. Exact output-boundary RNG correction remains a second guard against unrewound decorative NPC and traffic Animator callbacks that share UnityEngine.Random but run on unrelated render-frame timing. Ordinary forward callbacks and random draws are observed but never changed. Complete owner graphs are retained for stored reference resume-prefix snapshots, replay-pre transaction observation, final replay-post verification, and OverrideClipPlayables mutation guards; ordinary output boundaries and diagnostic reference-post observations retain the rest of the native tuple without traversing the owner graph. Replay-pre traversal remains because removing the native read-only capture changed the subsequent paused-maintenance result in the transitioning-target-from-settled matrix cell; its ordering or timing dependency is not yet explained. Stage A admits Unity's idempotent OverrideClipPlayables no-op only when native before/after digests and a fresh managed full owner-graph byte capture are exact; changed bindings retain the original dirty-bit contract. Stage-B Playable clock restoration requires every saved physical node to exist, restores only those saved nodes, and leaves extra live resolver-only nodes untouched for the guarded EndTransition transaction; the final no-plan verification remains exact after those nodes become unreachable. Stage A and Stage B otherwise retain the guarded native target-null, Playable clock, EndTransition, mixer, owner, and pose restoration transactions. The null-inactive scalar finalizer skips rotated state machines only after validating their stable entry storage and port topology; rotated outer playable identities are intentionally classified after that structural check. Opaque branch-output port storage must match the checkpoint and remain exact through live preflight, but is not assumed to be zero; only the separately addressed output-weight word is writable. Accepted input provenance and exactly-once commit are owned by ResumePhase. Gameplay input, physics, score, and online synchronization behavior are untouched; decorative Animator visual parity is not claimed and this development revision is not search-qualified."}
             };
         }
 
@@ -3041,6 +3169,8 @@ namespace SuperchargedPatch.Authoring.Modules
             if(harmony!=null)harmony.UnpatchSelf();
             harmony=null;if(ReferenceEquals(active,this))active=null;
             history.Clear();replayReference.Clear();resumePrefixReference.Clear();ambiguousResumePrefix.Clear();sceneIdentity=null;normalizedSceneIdentity=null;ownerGraphSceneCaptureBytes=0;warpTarget=-1;warpEligible=false;restoreApplied=false;
+            scheduledResumeReadyCaptureFrame=-1;scheduledResumeReadyLastObservedFrame=-1;lastScheduledResumeReadyCapture=null;
+            scheduledResumeReadyCaptureFailure=null;
             pendingResumeRestore=false;resumeRestoreApplied=false;resumeFrame=null;resumeReadyFrame=null;resumeFailure=null;
             chefRandomizeMode=ChefRandomizeMode.Record;replayChefRandomizeCursor=0;replayChefRandomizeLimit=0;
             chefRandomizeReference.Clear();trackedChefAnimatorIds.Clear();chefRandomizeFailure=null;

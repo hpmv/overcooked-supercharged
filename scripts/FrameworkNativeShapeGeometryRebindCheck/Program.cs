@@ -36,6 +36,18 @@ Check(plan.HistoricalManagedIndexByActorIndex.SequenceEqual(new[]{1,2,0})
 Check(HostileEquality.EqualityCalls==0,
     "destroyed-wrapper-safe role proof uses reference identity and never Equals/operator equality");
 
+var oldSingle=new HostileEquality("old-single");
+var newSingle=new HostileEquality("new-single");
+var singleSurvivor=new HostileEquality("single-survivor");
+var singlePlan=NativeShapeGeometryRebindPlan.Build(
+    new object[]{oldSingle,singleSurvivor},P(0x40,0x50),P(0x50,0x40),
+    new object[]{singleSurvivor,newSingle},P(0x50,0x60),P(0x50,0x60),
+    new[]{Pair(oldSingle,newSingle)},1);
+Check(singlePlan.RecreatedByActorIndex.SequenceEqual(new[]{false,true})
+    &&singlePlan.HistoricalManagedIndexByActorIndex.SequenceEqual(new[]{1,0})
+    &&singlePlan.CurrentManagedIndexByActorIndex.SequenceEqual(new[]{0,1}),
+    "one recreated row is proven exactly while the other actor row survives by reference identity");
+
 Reject(()=>NativeShapeGeometryRebindPlan.Build(historical,historicalBindings,historicalActor,
     current,currentBindings,currentActor,new[]{pairs[0]},2),"missing recreated pair fails closed");
 Reject(()=>NativeShapeGeometryRebindPlan.Build(historical,historicalBindings,historicalActor,

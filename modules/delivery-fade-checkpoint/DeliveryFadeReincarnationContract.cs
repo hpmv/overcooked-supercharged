@@ -147,9 +147,9 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(values==null||ownerValues==null||values.Count==0)return false;
             var valuesSet=new HashSet<int>();
-            foreach(int value in values)if(value<=0||!valuesSet.Add(value))return false;
+            foreach(int value in values)if(value==0||!valuesSet.Add(value))return false;
             var ownerSet=new HashSet<int>();
-            foreach(int value in ownerValues)if(value<=0||!ownerSet.Add(value))return false;
+            foreach(int value in ownerValues)if(value==0||!ownerSet.Add(value))return false;
             return valuesSet.IsSubsetOf(ownerSet);
         }
 

@@ -46,6 +46,46 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         /// <summary>
+        /// Projects an advancing ControllerInput capture into the state owned by
+        /// TimeManager's main pause. Unity copies the public Animator speed into
+        /// ControllerInput +0; pausing replaces that word with 0.0f before the
+        /// Helpers.Resume prefix. No layer record or other prefix byte changes.
+        /// </summary>
+        public static bool TryProjectPausedControllerInput(byte[] advancingBlob,float advancingSpeed,
+            out byte[] pausedBlob,out string error)
+        {
+            pausedBlob=null;
+            error=null;
+            if(advancingBlob==null)
+            {
+                error="ControllerInput blob must be non-null.";
+                return false;
+            }
+            if(advancingBlob.Length<ControllerInputPrefixSize||
+                (advancingBlob.Length-ControllerInputPrefixSize)%ControllerInputRecordSize!=0)
+            {
+                error="ControllerInput blob has an invalid shape.";
+                return false;
+            }
+            if(Single.IsNaN(advancingSpeed)||Single.IsInfinity(advancingSpeed))
+            {
+                error="Advancing Animator speed must be finite.";
+                return false;
+            }
+            byte[] speedBytes=BitConverter.GetBytes(advancingSpeed);
+            for(int offset=0;offset<4;++offset)
+            {
+                if(advancingBlob[offset]==speedBytes[offset])continue;
+                error="ControllerInput speed word does not match the captured public Animator speed at offset "+offset+".";
+                return false;
+            }
+            pausedBlob=(byte[])advancingBlob.Clone();
+            byte[] pausedSpeed=BitConverter.GetBytes(0f);
+            Array.Copy(pausedSpeed,0,pausedBlob,0,pausedSpeed.Length);
+            return true;
+        }
+
+        /// <summary>
         /// Validates two native 92-byte-record mixer observations as the same
         /// semantic graph, then returns a clone of savedBlob whose permitted
         /// branch-allocation fields refer to the observed graph. Saved weights

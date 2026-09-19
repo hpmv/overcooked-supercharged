@@ -167,6 +167,10 @@ Check(!DeliveryFadeReincarnationContract.IsNonEmptyDistinctSubset(new[]{31,33},n
     "unowned fresh fade material id rejected");
 Check(!DeliveryFadeReincarnationContract.IsNonEmptyDistinctSubset(new[]{31,31},new[]{30,31,32}),
     "duplicate fresh fade material identity rejected");
+Check(DeliveryFadeReincarnationContract.IsNonEmptyDistinctSubset(new[]{-31,-32},new[]{-30,-31,-32}),
+    "distinct negative Unity runtime material ids are admitted as an owned subset");
+Check(!DeliveryFadeReincarnationContract.IsNonEmptyDistinctSubset(new[]{0,-31},new[]{-30,-31,-32}),
+    "zero Unity instance id sentinel is rejected from the owned subset");
 Check(DeliveryFadeReincarnationContract.IsRebindableDeliveryPhase(
     0,true,false,0f,false,false,false,false,false),"virgin iterator history phase rebindable");
 Check(DeliveryFadeReincarnationContract.IsRebindableDeliveryPhase(

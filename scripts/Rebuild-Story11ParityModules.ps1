@@ -13,21 +13,24 @@ else { throw 'Cannot locate the Supercharged repository root from the scripts di
 $tasWorkspaceRoot = Split-Path -Parent $tasRepositoryRoot
 $tasBuilder = Join-Path $PSScriptRoot 'Build-FrameworkModule.ps1'
 $tasModules = @(
-    @{ Name='LevelSession'; Source='level-session'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.LevelSessionModule' },
-    @{ Name='ScriptedRound'; Source='scripted-round'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ScriptedRoundModule' },
-    @{ Name='RegistryObserver'; Source='registry-observer'; Revision="r2-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RegistryObserverModule' },
-    @{ Name='Inspection'; Source='inspection'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.InspectionModule' },
-    @{ Name='WorldSyncCache'; Source='world-sync-cache'; Revision="r13n-logical-rest-clock-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule' },
-    @{ Name='LocalSyncBypass'; Source='local-sync-bypass'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.LocalSyncBypassModule' },
-    @{ Name='ChefPausePose'; Source='chef-pause-pose'; Revision="r4-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefPausePoseModule' },
-    @{ Name='PhysicsSyncAfterRestore'; Source='physics-sync-after-restore'; Revision="r13-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.PhysicsSyncAfterRestoreModule' },
-    @{ Name='RigidbodyMotionTarget'; Source='rigidbody-motion-target'; Revision="r1-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyMotionTargetModule' },
-    @{ Name='ChefMovementHistoryCheckpoint'; Source='chef-movement-history-checkpoint'; Revision="r3-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefMovementHistoryCheckpointModule' },
-    @{ Name='RigidbodyActorRebuild'; Source='rigidbody-actor-rebuild'; Revision="r13z-manifold-pool-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule' },
-    @{ Name='ResumePhase'; Source='resume-phase'; Revision="r1bc-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ResumePhaseModule' },
-    @{ Name='ChefAnimatorCheckpoint'; Source='chef-animator-checkpoint'; Revision="r53b-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule' },
-    @{ Name='BodyRestore'; Source='body-restore'; Revision="r33-surviving-shape-state-rebind-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },
-    @{ Name='DeliveryFadeCheckpoint'; Source='delivery-fade-checkpoint'; Revision="r10k-persistent-backward-history-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.DeliveryFadeCheckpointModule' }
+    @{ Name='LevelSession'; Source='level-session'; Revision="r2-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.LevelSessionModule' },
+    @{ Name='ScriptedRound'; Source='scripted-round'; Revision="r2-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.ScriptedRoundModule' },
+    @{ Name='RegistryObserver'; Source='registry-observer'; Revision="r2-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.RegistryObserverModule' },
+    @{ Name='Inspection'; Source='inspection'; Revision="r1-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.InspectionModule' },
+    @{ Name='WorldSyncCache'; Source='world-sync-cache'; Revision="r13v-one-shot-pause-diagnostic-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.WorldSyncCacheModule' },
+    @{ Name='LocalSyncBypass'; Source='local-sync-bypass'; Revision="r1-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.LocalSyncBypassModule' },
+    @{ Name='ChefPausePose'; Source='chef-pause-pose'; Revision="r4-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.ChefPausePoseModule' },
+    @{ Name='AuthoringPhysicsPauseGate'; Source='authoring-physics-pause-gate'; Revision="r2-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.AuthoringPhysicsPauseGateModule' },
+    @{ Name='PhysicsSyncAfterRestore'; Source='physics-sync-after-restore'; Revision="r13-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.PhysicsSyncAfterRestoreModule' },
+    @{ Name='RigidbodyMotionTarget'; Source='rigidbody-motion-target'; Revision="r1-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyMotionTargetModule' },
+    @{ Name='ChefMovementHistoryCheckpoint'; Source='chef-movement-history-checkpoint'; Revision="r3-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.ChefMovementHistoryCheckpointModule' },
+    @{ Name='RigidbodyActorRebuild'; Source='rigidbody-actor-rebuild'; Revision="r14h-target-frame-json-int64-focus-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule' },
+    @{ Name='ResumePhase'; Source='resume-phase'; Revision="r1bc-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.ResumePhaseModule' },
+    @{ Name='ChefAnimatorCheckpoint'; Source='chef-animator-checkpoint'; Revision="r57-scheduled-final-controller-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.ChefAnimatorCheckpointModule' },
+    @{ Name='AnimatorCheckpointInspector'; Source='animator-checkpoint-inspector'; Revision="r25b-update-zero-probe-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.AnimatorCheckpointInspectorModule' },
+    @{ Name='BodyRestore'; Source='body-restore'; Revision="r48-deferred-settling-mass-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.BodyRestoreModule' },
+    @{ Name='DeliveryFadeCheckpoint'; Source='delivery-fade-checkpoint'; Revision="r18e-signed-unity-material-ids-core-$CoreTag"; Entry='SuperchargedPatch.Authoring.Modules.DeliveryFadeCheckpointModule' },
+    @{ Name='RoundEndCheckpoint'; Source='round-end-checkpoint'; Revision="dev5-core-$CoreTag-r44i"; Entry='SuperchargedPatch.Authoring.Modules.RoundEndCheckpointModule' }
 )
 
 foreach ($tasModule in $tasModules) {

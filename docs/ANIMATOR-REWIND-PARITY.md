@@ -2062,3 +2062,52 @@ Animator lifecycle defect.  The next experiment must start a clean process and
 install the verified read-only native physics/PhysX tracer before any Harmony
 hooks alter its revision-locked entry bytes, then capture the first resumed
 simulation step on both branches.
+
+## 2026-09-19: scheduled uninterrupted f444 capture passes final resume checks
+
+The f1048 -> f444 direct rewind exercises a stronger capture shape than the
+earlier naturally paused lifecycle matrix.  The scheduled f444 snapshot is
+taken at the exact uninterrupted output boundary: its public Animator speed and
+native ControllerInput prefix speed word are both `1`.  By the time authoring
+resume finalization runs, TimeManager has correctly paused every Animator at
+speed `0`.  Comparing either raw form against the other was therefore a false
+failure.
+
+Managed r56 introduced a pure checkpoint projection.  Two synchronous,
+read-only native captures must be identical and their prefix word must exactly
+equal the captured finite public speed.  Only then does the stored scheduled
+template change its public speed and the first four ControllerInput bytes to
+zero.  No live Animator is written.  The focused semantic tests cover the
+successful projection, mismatched-speed rejection, and malformed-input
+rejection in addition to the established strict-prefix and consumed-request
+word rules.
+
+The next v84 run, pinned back to the already-proved native r17f target-subset
+helper, passed Playable time and graph restoration but showed one exact
+ControllerMemory difference after the two mandatory paused maintenance frames.
+That difference was specific to scheduled uninterrupted templates: naturally
+paused resume-ready templates already contain the post-maintenance memory.
+Managed r57 marks only the scheduled projection and restores its captured
+ControllerMemory once more after configuration validation and before mixer,
+time, transition, pose, random-state, and final resume-prefix verification.
+
+Fresh v85 proves the result for all four chefs.  Every final ControllerMemory
+hash is byte-exact; Player 4's 76-record target owner graph is restored by
+native r17f; all Playable-time recipes complete; zero EndTransition plans are
+required; and ControllerInput semantics, transition topology, mixer graph,
+owner graph, pose, and random state have no reference difference.  The released
+resume callback then reaches the independent physics sidecar and fails before
+the first replay frame because the contact-manager free-list count has changed.
+That later `ContactPoolCountChanged` failure does not invalidate the completed
+Animator boundary, but full rewind/replay parity is not yet claimed.
+
+Evidence:
+
+- `framework/artifacts/live-v85-midfade-f1048-to-f444-r1/summary.json`, SHA-256
+  `E11116330363A2D485B576B2ED4EFBCBD71148B7C2A2C7AE36AB915A6C4E8E20`;
+- `artifacts/live-v85-animator-failure-status-r1.json`, SHA-256
+  `862677E8F9EB51031D4241B01EDE6811B330B30F555C315A986E83E7C8BEC959`;
+- managed r57 SHA-256
+  `0213C9005F4AA00B62A82F913380B3A8FF4D1BFFD3ED4A8C328CF20C1EA88A59`;
+- native r17f SHA-256
+  `4E4407C84EB97A2CBCB338433F928E22E7888AB73FDFA17B5AEA5EA09C45430C`.

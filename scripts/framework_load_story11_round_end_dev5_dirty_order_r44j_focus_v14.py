@@ -19,6 +19,13 @@ loader.STACK = tuple(
 )
 loader.STACK = tuple(
     (slot,
+     "ChefAnimatorCheckpoint-r55-chef-owned-animator-core-bg4-v14"
+     if slot == "chef-animator-checkpoint" else revision,
+     activation)
+    for slot, revision, activation in loader.STACK
+)
+loader.STACK = tuple(
+    (slot,
      "DeliveryFadeCheckpoint-r10o-parent-incarnation-rebind"
      if slot == "delivery-fade-checkpoint" else revision,
      activation)

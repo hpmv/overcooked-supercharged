@@ -610,7 +610,11 @@ enum KinematicTargetResult : uint32_t {
     KinematicTargetMissingActor = 4,
     KinematicTargetRevisionMismatch = 5,
     KinematicTargetUnreadableState = 6,
-    KinematicTargetNonfinite = 7
+    KinematicTargetNonfinite = 7,
+    KinematicTargetNotKinematic = 8,
+    KinematicTargetAlreadyValid = 9,
+    KinematicTargetBodyStateInvalid = 10,
+    KinematicTargetReadbackChanged = 11
 };
 
 enum InvalidateKinematicTargetResult : uint32_t {
@@ -653,6 +657,7 @@ static const uint32_t kNpSetWakeCounterRva = 0xA15760;
 static const uint32_t kNpWakeUpRva = 0xA15E80;
 static const uint32_t kNpPutToSleepRva = 0xA12E80;
 static const uint32_t kNpGetKinematicTargetRva = 0xA12530;
+static const uint32_t kNpSetKinematicTargetRva = 0xA149E0;
 static const uint32_t kScBodyCoreInvalidateKinematicTargetRva = 0xA3A5A0;
 static const uint32_t kNpSetCMassLocalPoseInternalRva = 0xA13E90;
 static const uint32_t kNpSetMassSpaceInertiaTensorRva = 0xA14E80;
@@ -769,6 +774,7 @@ static const uint8_t kNpPutToSleepBytes[] = {
     0x83,0xC1,0x30,0xE9,0x08,0x00,0x00,0x00
 };
 static const uint8_t kNpGetKinematicTargetBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x44,0xF7,0x81,0x1C,0x01,0x00,0x00,0x00,0x10,0x00,0x00};
+static const uint8_t kNpSetKinematicTargetBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x38};
 static const uint8_t kScBodyCoreInvalidateKinematicTargetBytes[] = {
     0x8B,0x81,0x9C,0x00,0x00,0x00,0xC6,0x40,0x1C,0x00,0xC3
 };
@@ -799,6 +805,8 @@ typedef void (__thiscall *NpShapeManagerMarkSceneQuery)(void* shapeManager,
     void* sceneQueryManager);
 typedef bool (__thiscall *NpRigidDynamicGetKinematicTarget)(void* self,
     PhysxTransform& pose);
+typedef void (__thiscall *NpRigidDynamicSetKinematicTarget)(void* self,
+    const PhysxTransform& pose);
 typedef void (__thiscall *ScBodyCoreInvalidateKinematicTarget)(void* self);
 typedef void (__thiscall *NpRigidBodySetCMassLocalPoseInternal)(void* self,
     const PhysxTransform& pose);
@@ -3419,6 +3427,127 @@ static int GetExistingActorKinematicTarget(uintptr_t unityBase,
     return 1;
 }
 
+// Reconstruct one source-equivalent pending kinematic target through PhysX's
+// public NpRigidDynamic entry point.  This is intentionally narrower than a
+// general wake-state writer: the caller must present a stable, targetless,
+// sleeping kinematic actor while simulation and API buffering are stopped.
+// PhysX owns the resulting wake counter, island activation, active-list order,
+// and BF_KINEMATIC_MOVED transition.
+static int SetExistingActorKinematicTarget(uintptr_t unityBase,
+    uintptr_t rigidbody, const RigidPose* pose,
+    KinematicTargetReceipt* receipt) {
+    if (!receipt) return 0;
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(KinematicTargetReceipt);
+    receipt->unityBase = unityBase;
+    receipt->rigidbody = rigidbody;
+    if (!unityBase || !rigidbody || !pose)
+        return FailKinematicTarget(receipt, KinematicTargetBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!Finite(*pose))
+        return FailKinematicTarget(receipt, KinematicTargetNonfinite,
+            ERROR_INVALID_DATA);
+
+    KinematicTargetReceipt beforeTarget = {};
+    if (GetExistingActorKinematicTarget(
+            unityBase, rigidbody, &beforeTarget) != 1) {
+        *receipt = beforeTarget;
+        return 0;
+    }
+    *receipt = beforeTarget;
+    if (beforeTarget.unityIsKinematic != 1 ||
+        beforeTarget.simStateIsKinematic != 1)
+        return FailKinematicTarget(receipt, KinematicTargetNotKinematic,
+            ERROR_INVALID_STATE);
+    if (beforeTarget.publicTargetValid != 0 ||
+        beforeTarget.bufferedTargetValid != 0 ||
+        beforeTarget.coreTargetValid != 0)
+        return FailKinematicTarget(receipt, KinematicTargetAlreadyValid,
+            ERROR_ALREADY_EXISTS);
+
+    BodyPoseState beforeBody = {};
+    uint32_t error = ERROR_SUCCESS;
+    if (CaptureBodyPoseState(unityBase, rigidbody, &beforeBody, &error) !=
+            Body2WorldOk ||
+        beforeBody.actor != beforeTarget.actor ||
+        beforeBody.controlState != 2 || beforeBody.bodyBufferFlags != 0 ||
+        beforeBody.simulationRunning != 0 || beforeBody.physicsBuffering != 0 ||
+        beforeBody.bufferedIsSleeping != 1 || beforeBody.bodySimActive != 0 ||
+        beforeBody.wakeCounterBufferedBits != 0 ||
+        beforeBody.wakeCounterCoreBits != 0)
+        return FailKinematicTarget(receipt, KinematicTargetBodyStateInvalid,
+            error == ERROR_SUCCESS ? ERROR_INVALID_STATE : error);
+    if (!Readable(reinterpret_cast<const void*>(beforeBody.actor),
+            sizeof(uintptr_t)) ||
+        *reinterpret_cast<const uintptr_t*>(beforeBody.actor) !=
+            unityBase + kNpRigidDynamicVtableRva)
+        return FailKinematicTarget(receipt, KinematicTargetMissingActor,
+            ERROR_INVALID_STATE);
+    const void* address = reinterpret_cast<const void*>(
+        unityBase + kNpSetKinematicTargetRva);
+    if (!Readable(address, sizeof(kNpSetKinematicTargetBytes)) ||
+        !EqualBytes(address, kNpSetKinematicTargetBytes,
+            sizeof(kNpSetKinematicTargetBytes)))
+        return FailKinematicTarget(receipt, KinematicTargetRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+
+    NpRigidDynamicSetKinematicTarget setTarget =
+        reinterpret_cast<NpRigidDynamicSetKinematicTarget>(
+            unityBase + kNpSetKinematicTargetRva);
+    const PhysxTransform nativePose = ImportPose(*pose);
+    setTarget(reinterpret_cast<void*>(beforeBody.actor), nativePose);
+
+    KinematicTargetReceipt afterTarget = {};
+    if (GetExistingActorKinematicTarget(
+            unityBase, rigidbody, &afterTarget) != 1) {
+        *receipt = afterTarget;
+        return 0;
+    }
+    BodyPoseState afterBody = {};
+    error = ERROR_SUCCESS;
+    const Body2WorldResult bodyResult = CaptureBodyPoseState(
+        unityBase, rigidbody, &afterBody, &error);
+    *receipt = afterTarget;
+    if (bodyResult != Body2WorldOk ||
+        afterTarget.actor != beforeTarget.actor ||
+        afterTarget.unityIsKinematic != 1 ||
+        afterTarget.publicTargetValid != 1 ||
+        afterTarget.scbBodyBufferFlags != 0 ||
+        afterTarget.bufferedTargetValid != 0 ||
+        afterTarget.simStateData != beforeTarget.simStateData ||
+        afterTarget.simStateIsKinematic != 1 ||
+        afterTarget.coreTargetValid != 1 ||
+        !EqualBytes(&afterTarget.target,
+            reinterpret_cast<const uint8_t*>(pose), sizeof(RigidPose)) ||
+        afterBody.actor != beforeBody.actor ||
+        afterBody.scene != beforeBody.scene ||
+        afterBody.controlState != beforeBody.controlState ||
+        afterBody.bodyBufferFlags != beforeBody.bodyBufferFlags ||
+        afterBody.simulationRunning != 0 || afterBody.physicsBuffering != 0 ||
+        afterBody.bodySim != beforeBody.bodySim ||
+        afterBody.bufferedIsSleeping != 0 || afterBody.bodySimActive != 1 ||
+        afterBody.wakeCounterBufferedBits == 0 ||
+        afterBody.wakeCounterBufferedBits != afterBody.wakeCounterCoreBits ||
+        !EqualBytes(&afterBody.actorPose,
+            reinterpret_cast<const uint8_t*>(&beforeBody.actorPose),
+            sizeof(RigidPose)) ||
+        !EqualBytes(&afterBody.body2Actor,
+            reinterpret_cast<const uint8_t*>(&beforeBody.body2Actor),
+            sizeof(RigidPose)) ||
+        !EqualBytes(&afterBody.bufferedBody2World,
+            reinterpret_cast<const uint8_t*>(&beforeBody.bufferedBody2World),
+            sizeof(RigidPose)) ||
+        !EqualBytes(&afterBody.coreBody2World,
+            reinterpret_cast<const uint8_t*>(&beforeBody.coreBody2World),
+            sizeof(RigidPose)))
+        return FailKinematicTarget(receipt, KinematicTargetReadbackChanged,
+            error == ERROR_SUCCESS ? ERROR_WRITE_FAULT : error);
+    receipt->result = KinematicTargetOk;
+    receipt->lastError = ERROR_SUCCESS;
+    return 1;
+}
+
 // Unity's Transform pose dispatch can install a kinematic target even when a
 // sleeping actor was already moved natively to that exact pose. PhysX 3.3.3
 // exposes no public clear-target API. Sc::BodyCore::invalidateKinematicTarget
@@ -3894,6 +4023,13 @@ extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_restore_wake_state(
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_get_kinematic_target(
     uintptr_t unityBase, uintptr_t rigidbody, KinematicTargetReceipt* receipt) {
     return GetExistingActorKinematicTarget(unityBase, rigidbody, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_set_kinematic_target(
+    uintptr_t unityBase, uintptr_t rigidbody, const RigidPose* pose,
+    KinematicTargetReceipt* receipt) {
+    return SetExistingActorKinematicTarget(
+        unityBase, rigidbody, pose, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_invalidate_kinematic_target(

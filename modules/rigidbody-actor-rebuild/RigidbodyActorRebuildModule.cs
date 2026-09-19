@@ -627,7 +627,18 @@ namespace SuperchargedPatch.Authoring.Modules
                         new UIntPtr(selected.FreeArray),snapshotBuffer,(uint)capacity,buffer);
                 receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(buffer,typeof(NativeContactPoolReceipt));
                 if(ok==0||receipt.Result!=1)
-                    throw new InvalidOperationException("Native contact-pool action failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+                {
+                    string liveTop=string.Join(",",(receipt.Top??new UIntPtr[0]).Select(Hex).ToArray());
+                    string expectedTop=selected==null?"":string.Join(",",selected.ContactPoolOrder
+                        .Take(16).Select(value=>"0x"+value.ToString("X8")).ToArray());
+                    throw new InvalidOperationException("Native contact-pool action failed: result="+receipt.Result+
+                        ", Win32/error="+receipt.LastError+", liveCount="+receipt.FreeCount+
+                        ", expectedCount="+capacity+", liveArray="+Hex(receipt.FreeArray)+
+                        ", expectedArray="+(selected==null?"":("0x"+selected.FreeArray.ToString("X8")))+
+                        ", liveHash=0x"+receipt.OrderHashBefore.ToString("X8")+
+                        ", expectedHash="+(selected==null?"":("0x"+selected.OrderHash.ToString("X8")))+
+                        ", liveTop=["+liveTop+"], expectedTop=["+expectedTop+"].");
+                }
                 if(action==1)
                 {
                     if(receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)

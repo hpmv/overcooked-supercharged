@@ -23,6 +23,9 @@ internal static class Program
             Run("mixer descriptor identity change is rejected",MixerDescriptorChangeRejected);
             Run("mixer record role change is rejected",MixerRoleChangeRejected);
             Run("controller exact data compares equal",ControllerExactPasses);
+            Run("controller advancing speed projects to paused prefix only",ControllerPauseProjectionSucceeds);
+            Run("controller pause projection rejects a mismatched speed word",ControllerPauseProjectionRejectsMismatch);
+            Run("controller pause projection rejects malformed input",ControllerPauseProjectionRejectsMalformedInput);
             Run("controller +0 state hash may differ with both gates clear",ControllerStateHashPassesWhenClear);
             Run("controller +0 state hash is strict with saved gate set",ControllerStateHashFailsWithSavedGate);
             Run("controller +0 state hash is strict with observed gate set",ControllerStateHashFailsWithObservedGate);
@@ -183,6 +186,46 @@ internal static class Program
         string error;
         True(AnimatorResumeSemanticState.ControllerInputsEqual(value,(byte[])value.Clone(),
             new[]{true,false},new[]{false,true},out error),error);
+    }
+
+    private static void ControllerPauseProjectionSucceeds()
+    {
+        byte[] advancing=BuildControllerInput();
+        byte[] speed=BitConverter.GetBytes(1f);
+        Array.Copy(speed,0,advancing,0,speed.Length);
+        byte[] before=(byte[])advancing.Clone();
+        byte[] paused;
+        string error;
+        True(AnimatorResumeSemanticState.TryProjectPausedControllerInput(advancing,1f,out paused,out error),error);
+        True(!Object.ReferenceEquals(advancing,paused),"Pause projection must return a new array.");
+        BytesEqual(before,advancing,"Pause projection mutated the advancing blob.");
+        for(int offset=0;offset<4;++offset)Equal((byte)0,paused[offset],"Paused speed word must be zero.");
+        for(int offset=4;offset<paused.Length;++offset)Equal(advancing[offset],paused[offset],
+            "Pause projection changed a non-speed byte at offset "+offset+".");
+    }
+
+    private static void ControllerPauseProjectionRejectsMismatch()
+    {
+        byte[] advancing=BuildControllerInput();
+        byte[] speed=BitConverter.GetBytes(1f);
+        Array.Copy(speed,0,advancing,0,speed.Length);
+        advancing[2]^=1;
+        byte[] paused;
+        string error;
+        True(!AnimatorResumeSemanticState.TryProjectPausedControllerInput(advancing,1f,out paused,out error),
+            "Mismatched public/native speed words must be rejected.");
+        True(paused==null,"Rejected projection must not return bytes.");
+        True(error!=null&&error.Contains("speed word"),"Mismatch rejection must describe the speed word.");
+    }
+
+    private static void ControllerPauseProjectionRejectsMalformedInput()
+    {
+        byte[] paused;
+        string error;
+        True(!AnimatorResumeSemanticState.TryProjectPausedControllerInput(new byte[13],1f,out paused,out error),
+            "Malformed ControllerInput shape must be rejected.");
+        True(!AnimatorResumeSemanticState.TryProjectPausedControllerInput(BuildControllerInput(),Single.NaN,out paused,out error),
+            "Non-finite Animator speed must be rejected.");
     }
 
     private static void ControllerObservedWordPassesWhenClear()

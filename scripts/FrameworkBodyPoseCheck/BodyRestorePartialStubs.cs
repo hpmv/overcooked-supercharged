@@ -33,9 +33,16 @@ namespace SuperchargedPatch.Authoring.Modules
         private object NativePostMaintenanceDiagnostics {get{return new Dictionary<string,object>();}}
         private object NativeKinematicFreezeDiagnostics {get{return new Dictionary<string,object>();}}
         private readonly List<object> nativeShapeGeometryRebinds=new List<object>();
+        private readonly List<object> nativeDestroyedBodyRebinds=new List<object>();
+        private readonly List<object> nativeDestroyedBodyModeRestores=new List<object>();
         private readonly List<object> pendingRecreatedShapes=new List<object>();
+        private readonly HashSet<int> deferredKinematicSleepEntities=new HashSet<int>();
+        private readonly HashSet<int> deferredKinematicTargetEntities=new HashSet<int>();
+        private readonly Dictionary<int,NativeShapeCheckpoint> deferredKinematicSleepPreimages=
+            new Dictionary<int,NativeShapeCheckpoint>();
         private int nativeShapePoseCaptures;
         private string nativeShapePoseCaptureFailure;
+        private string nativePostMaintenanceFailure;
         private bool nativeShapeGeometryRebindPoisoned;
         private string nativeShapeGeometryRebindFailure;
         private readonly List<object> colliderAncestorPoseRestores=new List<object>();
@@ -199,10 +206,18 @@ namespace SuperchargedPatch.Authoring.Modules
         private void RestoreNativeShapePoses(Snapshot row,NativeShapeCheckpoint target,long call,
             Vector3 velocity,Vector3 angular,bool kinematic,bool gravity) {}
         private NativeShapeCheckpoint PrepareSleepingKinematicNativePoseRestore(
-            Snapshot row,NativeShapeCheckpoint target) {return null;}
+            Snapshot row,NativeShapeCheckpoint target,out bool deferSleep)
+        {deferSleep=false;return null;}
         private bool TryRestoreSleepingKinematicPoseNatively(Snapshot row,NativeShapeCheckpoint target,
-            NativeShapeCheckpoint preTransform,Vector3 velocity,Vector3 angular,bool kinematic,
+            NativeShapeCheckpoint preTransform,bool deferSleep,
+            Vector3 velocity,Vector3 angular,bool kinematic,
             bool gravity,long call) {return false;}
+        private void RequireDeferredKinematicMaintenance(Snapshot row,NativeShapeCheckpoint target,
+            NativeShapeCheckpoint preTransform,long call) {}
+        private void RestoreCheckpointKinematicTarget(Snapshot row,NativeShapeCheckpoint target,
+            long call) {}
+        private void RequireDeferredKinematicMaintenanceAfterMass(
+            Snapshot row,NativeShapeCheckpoint target,long call) {}
 
         private bool Finite(NativeRigidPose pose)
         {

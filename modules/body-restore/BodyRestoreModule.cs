@@ -33,6 +33,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> motionSideEffectRestores=new List<object>();
         private readonly List<object> nativeBody2WorldRestores=new List<object>();
         private readonly List<object> nativeWakeStateRestores=new List<object>();
+        private readonly List<object> nativeKinematicTargetRestores=new List<object>();
         private readonly List<object> nativeKinematicTargetInvalidations=new List<object>();
         private long restoreCall,discardedRotationRecords;
         private IDisposable registration;
@@ -45,10 +46,11 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeRestoreBody2World nativeRestoreBody2World;
         private NativeRestoreWakeState nativeRestoreWakeState;
         private NativeGetKinematicTarget nativeGetKinematicTarget;
+        private NativeSetKinematicTarget nativeSetKinematicTarget;
         private NativeInvalidateKinematicTarget nativeInvalidateKinematicTarget;
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private bool disposed;
-        public string Name {get{return "body-native-auto-reset-v44-corrected-kinematic-lifecycle-receipt";}}
+        public string Name {get{return "body-native-auto-reset-v48-deferred-settling-mass";}}
         public int ApiVersion {get{return 1;}}
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
@@ -171,6 +173,9 @@ namespace SuperchargedPatch.Authoring.Modules
             out NativeWakeStateRestoreReceipt receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeGetKinematicTarget(
             UIntPtr unityBase,UIntPtr rigidbody,out NativeKinematicTargetReceipt receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeSetKinematicTarget(
+            UIntPtr unityBase,UIntPtr rigidbody,ref NativeRigidPose pose,
+            out NativeKinematicTargetReceipt receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeInvalidateKinematicTarget(
             UIntPtr unityBase,UIntPtr rigidbody,out NativeInvalidateKinematicTargetReceipt receipt);
         [DllImport("kernel32",SetLastError=true,CharSet=CharSet.Unicode)] private static extern IntPtr LoadLibrary(string path);
@@ -206,6 +211,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"motionSideEffectRestores",motionSideEffectRestores.ToArray()},
                 {"nativeBody2WorldRestores",nativeBody2WorldRestores.ToArray()},
                 {"nativeSleepingKinematicPoseRestores",nativeSleepingKinematicPoseRestores.ToArray()},
+                {"nativeKinematicTargetRestores",nativeKinematicTargetRestores.ToArray()},
                 {"nativeKinematicTargetInvalidations",nativeKinematicTargetInvalidations.ToArray()},
                 {"nativeWakeStateRestores",nativeWakeStateRestores.ToArray()},
                 {"nativeBody2WorldCaptures",nativeBody2WorldCaptures.ToArray()},
@@ -218,6 +224,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"nativeShapePoseRestores",nativeShapePoseRestores.ToArray()},
                 {"nativeShapeTopologyMismatches",nativeShapeTopologyMismatches.ToArray()},
                 {"nativeShapeGeometryRebinds",nativeShapeGeometryRebinds.ToArray()},
+                {"nativeDestroyedBodyRebinds",nativeDestroyedBodyRebinds.ToArray()},
+                {"nativeDestroyedBodyModeRestores",nativeDestroyedBodyModeRestores.ToArray()},
                 {"nativeShapeGeometryRebindPending",pendingRecreatedShapes.Count},
                 {"nativeShapeGeometryRebindPoisoned",nativeShapeGeometryRebindPoisoned},
                 {"nativeShapeGeometryRebindFailure",nativeShapeGeometryRebindFailure},
@@ -257,6 +265,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 nativeRestoreBody2World=Export<NativeRestoreBody2World>("oc2_rigidbody_restore_body2world");
                 nativeRestoreWakeState=Export<NativeRestoreWakeState>("oc2_rigidbody_restore_wake_state");
                 nativeGetKinematicTarget=Export<NativeGetKinematicTarget>("oc2_rigidbody_get_kinematic_target");
+                nativeSetKinematicTarget=Export<NativeSetKinematicTarget>(
+                    "oc2_rigidbody_set_kinematic_target");
                 nativeInvalidateKinematicTarget=Export<NativeInvalidateKinematicTarget>(
                     "oc2_rigidbody_invalidate_kinematic_target");
                 nativeCaptureShapePoses=Export<NativeCaptureShapePoses>("oc2_rigidbody_capture_shape_poses");
@@ -282,6 +292,7 @@ namespace SuperchargedPatch.Authoring.Modules
             nativeRestoreBody2World=null;
             nativeRestoreWakeState=null;
             nativeGetKinematicTarget=null;
+            nativeSetKinematicTarget=null;
             nativeInvalidateKinematicTarget=null;
             nativeCaptureShapePoses=null;
             nativeRestoreShapePoses=null;
@@ -313,6 +324,10 @@ namespace SuperchargedPatch.Authoring.Modules
         public void Restore(Snapshot[] saved)
         {
             if(disposed)throw new ObjectDisposedException("BodyRestoreModule");
+            deferredKinematicSleepEntities.Clear();
+            deferredKinematicTargetEntities.Clear();
+            deferredKinematicSleepPreimages.Clear();
+            nativePostMaintenanceFailure=null;
             NativeBodyPoseCheckpoint.Validate(saved);
             var nativeShapeTargets=RequireNativeShapeTargets(saved);
             // Require target compound geometry before any mass recomputation.
@@ -327,10 +342,15 @@ namespace SuperchargedPatch.Authoring.Modules
                 var nativeTarget=nativeShapeTargets[row];
                 var velocity=row.Body.velocity;var angular=row.Body.angularVelocity;
                 bool kinematic=row.Body.isKinematic,gravity=row.Body.useGravity;
+                bool admittedDeferredKinematicSleep=
+                    deferredKinematicSleepEntities.Contains(row.EntityId);
                 if(!Finite(velocity)||!Finite(angular))throw new InvalidOperationException("Nonfinite current native body velocity: "+row.EntityId);
-                var sleepingKinematicPreimage=PrepareSleepingKinematicNativePoseRestore(row,nativeTarget);
+                bool deferKinematicSleep;
+                var sleepingKinematicPreimage=PrepareSleepingKinematicNativePoseRestore(
+                    row,nativeTarget,out deferKinematicSleep);
                 bool restoredSleepingKinematicPose=TryRestoreSleepingKinematicPoseNatively(
-                    row,nativeTarget,sleepingKinematicPreimage,velocity,angular,kinematic,gravity,call);
+                    row,nativeTarget,sleepingKinematicPreimage,deferKinematicSleep,
+                    velocity,angular,kinematic,gravity,call);
                 if (!restoredSleepingKinematicPose) {
                     // Unity Rigidbody and Transform expose distinct stored poses.
                     // Restore the observed local transform before assigning the body;
@@ -370,8 +390,17 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
                 if(nativeRestoreWakeState!=null) {
                     if(kinematic) {
-                        if((nativeTarget.BufferedIsSleeping!=0)!=row.Body.IsSleeping())
+                        if(deferredKinematicTargetEntities.Contains(row.EntityId))
+                            RestoreCheckpointKinematicTarget(row,nativeTarget,call);
+                        if(admittedDeferredKinematicSleep&&!deferKinematicSleep) {
+                            RequireDeferredKinematicMaintenanceAfterMass(row,nativeTarget,call);
+                            deferKinematicSleep=true;
+                        }
+                        bool targetSleeping=nativeTarget.BufferedIsSleeping!=0;
+                        if(targetSleeping!=row.Body.IsSleeping()&&!deferKinematicSleep)
                             throw new InvalidOperationException("Kinematic native sleep state changed for "+row.EntityId+".");
+                        if(deferKinematicSleep)RequireDeferredKinematicMaintenance(
+                            row,nativeTarget,sleepingKinematicPreimage,call);
                     } else {
                         RestoreCheckpointWakeState(row,nativeTarget,velocity,angular,kinematic,gravity);
                     }
@@ -398,6 +427,10 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             var log=new Dictionary<string,object>{{"restoreCall",call},{"entityId",row.EntityId},{"before",MassFrame(row.Body)},
                 {"savedColliderCount",row.Colliders.Length},{"currentColliderCount",NativeBodyColliderCheckpoint.Capture(row.Body).Length},{"isKinematicBeforeReset",row.Body.isKinematic},
+                {"savedRawIsKinematic",row.RawIsKinematic},{"currentVelocity",Point(row.Body.velocity)},
+                {"currentAngularVelocity",Point(row.Body.angularVelocity)},{"savedRawVelocity",Point(row.RawVelocity)},
+                {"savedRawAngularVelocity",Point(row.RawAngularVelocity)},
+                {"hasObjectContainer",row.Object.GetComponents<Component>().Any(c=>c!=null&&c.GetType().Name=="ObjectContainer")},
                 {"target",MassFrame(row.Invariants)},{"exact",false},{"resetCenterOfMass",false},{"resetInertiaTensor",false}};
             massRestores.Add(log);if(massRestores.Count>128)massRestores.RemoveAt(0);
             int assignments=0;
@@ -551,8 +584,21 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Native body2World sidecar is nonfinite: "+row.EntityId);
             var expectedActorPose=new NativeRigidPose {Px=row.BodyPosition.x,Py=row.BodyPosition.y,Pz=row.BodyPosition.z,
                 Qx=row.BodyRotation.x,Qy=row.BodyRotation.y,Qz=row.BodyRotation.z,Qw=row.BodyRotation.w};
-            if(!SameBits(target.ActorPose,expectedActorPose))
+            if(!SameBits(target.ActorPose,expectedActorPose)) {
+                nativeBody2WorldRestores.Add(new Dictionary<string,object> {
+                    {"restoreCall",restoreCall},{"entityId",row.EntityId},
+                    {"phase",phase+"-actor-pose-preflight"},{"preflightMismatch",true},
+                    {"targetActorPose",NativePoseDiagnostic(target.ActorPose)},
+                    {"expectedManagedActorPose",NativePoseDiagnostic(expectedActorPose)},
+                    {"targetBody2Actor",NativePoseDiagnostic(target.Body2Actor)},
+                    {"targetBody2World",NativePoseDiagnostic(target.Body2World)},
+                    {"currentPose",CurrentPose(row)},
+                    {"savedRawIsKinematic",row.RawIsKinematic},
+                    {"currentIsKinematic",row.Body.isKinematic}
+                });
+                if(nativeBody2WorldRestores.Count>128)nativeBody2WorldRestores.RemoveAt(0);
                 throw new InvalidOperationException("Native actor-pose sidecar differs from its managed checkpoint: "+row.EntityId);
+            }
             bool sleeping=row.Body.IsSleeping();
             var actorPose=target.ActorPose;var body2Actor=target.Body2Actor;var body2World=target.Body2World;
             NativeBody2WorldRestoreReceipt receipt;

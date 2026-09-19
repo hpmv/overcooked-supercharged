@@ -124,7 +124,8 @@ namespace SuperchargedPatch
             }
         }
 
-        internal static Snapshot RebindDestroyed(Snapshot target,EntitySerialisationEntry currentEntry)
+        internal static Snapshot RebindDestroyed(Snapshot target,EntitySerialisationEntry currentEntry,
+            EntitySerialisationEntry replacementParentEntry=null)
         {
             if(target==null||currentEntry==null||currentEntry.m_GameObject==null
                 ||currentEntry.m_Header.m_uEntityID!=target.EntityId
@@ -139,7 +140,26 @@ namespace SuperchargedPatch
             var row=current[0];
             if(!ReferenceEquals(row.Entry,currentEntry))
                 throw new InvalidOperationException("Recreated initial attachment registration differs.");
-            row.Parent=target.Parent;row.ParentEntry=target.ParentEntry;row.ParentObject=target.ParentObject;
+            if(replacementParentEntry==null)
+            {
+                row.Parent=target.Parent;row.ParentEntry=target.ParentEntry;row.ParentObject=target.ParentObject;
+            }
+            else
+            {
+                var replacementParentObject=replacementParentEntry.m_GameObject;
+                var replacementParent=replacementParentObject==null?null:replacementParentObject.transform;
+                if(target.ParentEntry==null||!Destroyed(target.Parent)||!Destroyed(target.ParentObject)
+                    ||target.ParentEntry.m_Header.m_uEntityID!=replacementParentEntry.m_Header.m_uEntityID
+                    ||replacementParentObject==null||replacementParent==null
+                    ||!ReferenceEquals(EntitySerialisationRegistry.GetEntry(replacementParentObject),replacementParentEntry)
+                    ||!ReferenceEquals(row.ParentEntry,replacementParentEntry)
+                    ||!ReferenceEquals(row.ParentObject,replacementParentObject)
+                    ||row.Parent==null||!HasAncestor(row.Parent,replacementParent))
+                    throw new InvalidOperationException("Recreated initial attachment replacement parent contract differs.");
+                // Preserve the freshly captured live parent lineage.  The
+                // historical parent has the same entity ID but its Unity
+                // wrapper was destroyed with the old attachment container.
+            }
             row.LocalPosition=target.LocalPosition;row.WorldPosition=target.WorldPosition;
             row.LocalRotation=target.LocalRotation;row.WorldRotation=target.WorldRotation;
             row.LocalScale=target.LocalScale;row.WorldScale=target.WorldScale;row.Attached=target.Attached;

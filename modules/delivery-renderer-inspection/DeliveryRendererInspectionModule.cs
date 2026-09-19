@@ -31,6 +31,7 @@ namespace SuperchargedPatch.Authoring.Modules
             var owner=root.GetComponent<ClientAttachedOrderCosmeticDecisions>();
             var containerField=AccessTools.Field(typeof(ClientAttachedOrderCosmeticDecisions),"m_container");
             var container=owner==null||containerField==null?null:containerField.GetValue(owner) as GameObject;
+            var presentationPhysics=PresentationPhysics(container);
             var transforms=root.GetComponentsInChildren<Transform>(true).Select(value=>Map(
                 "key",TransformKey(root.transform,value),"name",value.name,"instanceId",value.GetInstanceID(),
                 "parentId",value.parent==null?0:value.parent.GetInstanceID(),"siblingIndex",value.GetSiblingIndex(),
@@ -53,9 +54,16 @@ namespace SuperchargedPatch.Authoring.Modules
                 "alpha",value.sharedMaterials.Select(material=>material!=null&&material.HasProperty("_Alpha")?(object)material.GetFloat("_Alpha"):null).ToArray())).ToArray();
             return Map("ok",true,"entityId",entityId,"root",root.name,"rootId",root.GetInstanceID(),
                 "parentId",root.transform.parent==null?0:root.transform.parent.GetInstanceID(),
+                "rootLocalPosition",Vector(root.transform.localPosition),
+                "rootLocalRotation",Quaternion(root.transform.localRotation),
+                "rootLocalScale",Vector(root.transform.localScale),
+                "rootLayer",root.layer,"rootActiveSelf",root.activeSelf,
+                "rootActiveInHierarchy",root.activeInHierarchy,
                 "presentationOwnerId",owner==null?0:owner.GetInstanceID(),
                 "presentationContainerId",container==null?0:container.GetInstanceID(),
                 "presentationContainerKey",container==null?null:TransformKey(root.transform,container.transform),
+                "presentationCompositionFingerprint",PresentationCompositionFingerprint(container),
+                "presentationPhysics",presentationPhysics,
                 "transforms",transforms,"renderers",renderers,"historical",Historical(frame,entityId),
                 "scope","Read-only registered plate hierarchy observation after failed restore; no mutation or retained Unity references.");
         }
@@ -81,6 +89,8 @@ namespace SuperchargedPatch.Authoring.Modules
             foreach(var plate in plates)
                 if(plate!=null&&Convert.ToInt32(Value(plate,"EntityId"))==entityId){target=plate;break;}
             if(target==null)return Map("available",false,"frame",frame,"entityId",entityId);
+            var targetOwner=Value(target,"PresentationOwner") as UnityEngine.Object;
+            var targetContainer=Value(target,"PresentationContainer") as UnityEngine.Object;
             var rendererValues=Value(target,"Renderers") as Array;var renderers=new List<object>();
             if(rendererValues!=null)foreach(var renderer in rendererValues)renderers.Add(Map(
                 "hierarchyKey",Value(renderer,"HierarchyKey"),"presentationKey",Value(renderer,"PresentationKey"),
@@ -95,7 +105,23 @@ namespace SuperchargedPatch.Authoring.Modules
                 "hasMode",Value(renderer,"HasMode"),"mode",Value(renderer,"Mode"),
                 "hasAlpha",Value(renderer,"HasAlpha"),"alpha",Value(renderer,"Alpha")));
             return Map("available",true,"frame",frame,"entityId",entityId,
-                "presentationContainerKey",Value(target,"PresentationContainerKey"),"renderers",renderers.ToArray());
+                "objectId",Value(target,"ObjectId"),"componentId",Value(target,"ComponentId"),
+                "parentId",Value(target,"ParentId"),
+                "localPosition",Vector((Vector3)Value(target,"LocalPosition")),
+                "localRotation",Quaternion((UnityEngine.Quaternion)Value(target,"LocalRotation")),
+                "localScale",Vector((Vector3)Value(target,"LocalScale")),
+                "layer",Value(target,"Layer"),"activeSelf",Value(target,"ActiveSelf"),
+                "activeInHierarchy",Value(target,"ActiveInHierarchy"),
+                "presentationOwnerId",Value(target,"PresentationOwnerId"),
+                "presentationOwnerManagedReference",!ReferenceEquals(targetOwner,null),
+                "presentationOwnerAlive",Alive(targetOwner),
+                "presentationContainerId",Value(target,"PresentationContainerId"),
+                "presentationContainerManagedReference",!ReferenceEquals(targetContainer,null),
+                "presentationContainerAlive",Alive(targetContainer),
+                "presentationContainerKey",Value(target,"PresentationContainerKey"),
+                "presentationCompositionFingerprint",Value(target,"PresentationCompositionFingerprint"),
+                "presentationContainerPhysicsFree",Value(target,"PresentationContainerPhysicsFree"),
+                "renderers",renderers.ToArray());
         }
 
         private static object Value(object instance,string name)
@@ -122,6 +148,39 @@ namespace SuperchargedPatch.Authoring.Modules
             int ordinal=Array.FindIndex(siblings,value=>ReferenceEquals(value,renderer));
             return TransformKey(root,renderer.transform)+"@"+ordinal;
         }
+        private static object PresentationPhysics(GameObject root)
+        {
+            if(!Alive(root))return Map("alive",false,"physicsFree",false);
+            int colliders=root.GetComponentsInChildren<Collider>(true).Length;
+            int rigidbodies=root.GetComponentsInChildren<Rigidbody>(true).Length;
+            int animators=root.GetComponentsInChildren<Animator>(true).Length;
+            int serverSyncs=root.GetComponentsInChildren<ServerWorldObjectSynchroniser>(true).Length;
+            int clientSyncs=root.GetComponentsInChildren<ClientWorldObjectSynchroniser>(true).Length;
+            return Map("alive",true,"colliders",colliders,"rigidbodies",rigidbodies,
+                "animators",animators,"serverSynchronisers",serverSyncs,"clientSynchronisers",clientSyncs,
+                "physicsFree",colliders==0&&rigidbodies==0&&animators==0&&serverSyncs==0&&clientSyncs==0);
+        }
+        private static string PresentationCompositionFingerprint(GameObject root)
+        {
+            if(!Alive(root))return null;
+            var assignable=root.GetComponentsInChildren<AssignableOrderDefinition>(true);
+            if(assignable.Length!=1)return null;
+            return CompositionFingerprint(assignable[0].GetOrderComposition());
+        }
+        private static string CompositionFingerprint(AssembledDefinitionNode value)
+        {
+            if(ReferenceEquals(value,null))return "clr-null";
+            if(ReferenceEquals(value,AssembledDefinitionNode.NullNode))return "NullNode";
+            var ingredient=value as IngredientAssembledNode;
+            if(ingredient!=null)
+                return "Ingredient("+(ingredient.m_ingriedientOrderNode==null?"null":ingredient.m_ingriedientOrderNode.m_uID.ToString())+")";
+            var composite=value as CompositeAssembledNode;
+            if(composite!=null)
+                return "Composite(C=["+String.Join(",",composite.m_composition.Select(CompositionFingerprint).ToArray())+"]"
+                    +",O=["+String.Join(",",composite.m_optional.Select(CompositionFingerprint).ToArray())+"])";
+            return value.GetType().FullName;
+        }
+        private static bool Alive(UnityEngine.Object value){return !ReferenceEquals(value,null)&&value!=null;}
         private static float[] Vector(Vector3 value){return new[]{value.x,value.y,value.z};}
         private static float[] Quaternion(UnityEngine.Quaternion value){return new[]{value.x,value.y,value.z,value.w};}
         private static Dictionary<string,object> Map(params object[] values)

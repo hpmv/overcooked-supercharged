@@ -13,18 +13,25 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             // Native X r2 observed the empty proxy's default mass frame return
             // synchronously at isKinematic=false, before either Reset method.
-            // Keep this exception limited to the witnessed native container state.
-            if(!kinematic||!row.RawIsKinematic||!Same(velocity,new Vector3())||!Same(angular,new Vector3())
+            // FrozenPhysicsData can expose a different temporary mode from the
+            // advancing checkpoint (including saved kinematic/current dynamic).
+            // Rebuild while dynamic, then restore the exact current lifecycle
+            // mode; the outer core remains responsible for the saved mode.  The
+            // admission proof is the empty native proxy plus byte-exact zero
+            // saved/current motion, not equality between those two modes.
+            if(!Same(velocity,new Vector3())||!Same(angular,new Vector3())
                 ||!Same(row.RawVelocity,new Vector3())||!Same(row.RawAngularVelocity,new Vector3())
                 ||row.Body.mass!=row.Invariants.Mass||row.Colliders.Length!=0
                 ||!row.Object.GetComponents<Component>().Any(c=>c!=null&&c.GetType().Name=="ObjectContainer"))
-                throw new InvalidOperationException("Empty body mass rebuild requires a saved/current kinematic, motionless native ObjectContainer with unchanged mass.");
+                throw new InvalidOperationException("Empty body mass rebuild requires exact saved/current zero motion, a native ObjectContainer and unchanged mass.");
             NativeBodyPoseCheckpoint.Validate(new[]{row});
             var entry=EntitySerialisationRegistry.GetEntry(row.Object);
             RequireEmptyProxy(entry,row.Object,row.Body);
-            log["emptyProxyRebuild"]=true;log["beforeClearKinematic"]=ProbeState(row.Body);
+            log["emptyProxyRebuild"]=true;log["savedKinematic"]=row.RawIsKinematic;
+            log["beforeClearKinematic"]=ProbeState(row.Body);
             try {
-                row.Body.isKinematic=false;log["afterClearKinematic"]=ProbeState(row.Body);
+                if(kinematic)row.Body.isKinematic=false;
+                log["afterClearKinematic"]=ProbeState(row.Body);
                 RequireEmptyProxy(entry,row.Object,row.Body);RequireMotionUnchanged(row,velocity,angular,false,gravity);
                 row.Body.ResetCenterOfMass();log["resetCenterOfMass"]=true;log["afterResetCenterOfMass"]=MassFrame(row.Body);
                 RequireEmptyProxy(entry,row.Object,row.Body);RequireMotionUnchanged(row,velocity,angular,false,gravity);

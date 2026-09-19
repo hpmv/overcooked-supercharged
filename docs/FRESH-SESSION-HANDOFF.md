@@ -1,5 +1,43 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Scheduled advancing-boundary Animator restore milestone (2026-09-19,
+> managed r57 / native r17f):** the direct Story 1-1 f1048 -> f444 rewind now
+> clears the complete Animator resume boundary for all four chefs.  Scheduled
+> output-frame capture first projects only the authoring pause speed from `1`
+> to `0` in checkpoint data after two read-only captures prove that the native
+> ControllerInput prefix word is the public Animator speed.  Because this
+> scheduled template came from uninterrupted advancement rather than a natural
+> pause, r57 then restores its captured ControllerMemory once more after the two
+> required paused maintenance frames and before the existing strict final
+> resume checks.  Ordinary naturally paused resume templates do not take this
+> path, and live forward game state is not changed during capture.
+>
+> Fresh v85 evidence is
+> `framework/artifacts/live-v85-midfade-f1048-to-f444-r1/summary.json`
+> (SHA-256
+> `E11116330363A2D485B576B2ED4EFBCBD71148B7C2A2C7AE36AB915A6C4E8E20`)
+> plus `artifacts/live-v85-animator-failure-status-r1.json` (SHA-256
+> `862677E8F9EB51031D4241B01EDE6811B330B30F555C315A986E83E7C8BEC959`).
+> ControllerMemory is byte-exact for every chef at finalization; native r17f
+> restores every target Playable time, including Player 4's smaller 76-record
+> owner graph against its live graph; transition topology, mixer graph, owner
+> graph, pose, Unity random state, and the semantic ControllerInput prefix all
+> pass.  The 25-test Animator semantic suite also passes.  Managed r57 SHA-256
+> is `0213C9005F4AA00B62A82F913380B3A8FF4D1BFFD3ED4A8C328CF20C1EA88A59`;
+> native r17f SHA-256 is
+> `4E4407C84EB97A2CBCB338433F928E22E7888AB73FDFA17B5AEA5EA09C45430C`.
+>
+> This is an Animator milestone, not full replay parity.  The released resume
+> callback proceeds past Animator finalization and next fails closed in the
+> physics sidecar: the f444 contact-manager free-stack snapshot has count 1,
+> while the restored live pool has different membership/count
+> (`ContactPoolCountChanged`, native result 10 / `ERROR_INVALID_STATE`).  No
+> replay physics frame ran.  A read-only r14i diagnostic is built to report the
+> live/checkpoint counts, storage, hashes, and leading entries on the next clean
+> run.  Determine whether restored dirty-interaction topology converges one
+> phase too late or whether active contact-manager membership/state must also be
+> checkpointed.  Do not weaken the exact free-stack gate and do not search.
+>
 > **Sleeping targetless kinematic rewind milestone (2026-09-15, BodyRestore
 > r44s / native API 11):** the previously failing committed-branch sequence is
 > now exact.  Fresh minimized/non-foreground evidence is under
