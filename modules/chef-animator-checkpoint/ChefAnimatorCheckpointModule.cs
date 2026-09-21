@@ -367,7 +367,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private const uint MaximumOwnerGraphBytes=65536u*OwnerGraphRecordSize;
         private const long MaximumOwnerGraphCaptureBytes=256L*1024L*1024L;
 
-        public string Name { get { return "chef-animator-checkpoint-v57-scheduled-final-controller"; } }
+        public string Name { get { return "chef-animator-checkpoint-v58-target-null-resolver-superset"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation,Dictionary<string,object> args)
@@ -1915,15 +1915,6 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Chef Animator checkpoint lacks an owner graph: "+saved.Path+".");
                 if(live.GetInstanceID()!=saved.InstanceId||PathOf(live.transform)!=saved.Path||!ReferenceEquals(live,saved.Animator))
                     throw new InvalidOperationException("Chef Animator incarnation changed during target-null clip restoration: "+saved.Path+".");
-                OwnerGraphState liveBefore=CaptureOwnerGraph(live);
-                if(liveBefore.RecordCount!=owner.RecordCount)
-                {
-                    rows.Add(new Dictionary<string,object>{{"path",saved.Path},{"exact",true},{"deferred",true},
-                        {"reason","owner cardinality differs before transition normalization"},
-                        {"targetOwnerCount",owner.RecordCount},{"currentOwnerCount",liveBefore.RecordCount},
-                        {"targetOwnerHash",owner.Hash.ToString("X8")},{"currentOwnerHash",liveBefore.Hash.ToString("X8")}});
-                    continue;
-                }
                 uint targetHash=ByteHash(owner.Bytes),outerCount=0;
                 for(int offset=0;offset<owner.Bytes.Length;offset+=(int)OwnerGraphRecordSize)
                     if(BitConverter.ToUInt32(owner.Bytes,offset)==1u)outerCount++;
@@ -1944,8 +1935,13 @@ namespace SuperchargedPatch.Authoring.Modules
                     owner.Controller==receipt.Controller.ToUInt32()&&owner.ControllerConstant==receipt.ControllerConstant.ToUInt32()&&
                     owner.Descriptors==receipt.Descriptors.ToUInt32()&&owner.Graph==receipt.Graph.ToUInt32();
                 bool targets=owner.Hash==targetHash&&receipt.TargetOwnerCount==owner.RecordCount&&receipt.TargetOwnerHash==owner.Hash;
-                bool counts=receipt.CurrentOwnerCount==owner.RecordCount&&receipt.ProjectedOwnerCount==owner.RecordCount&&
-                    receipt.StableOwnerCount==owner.RecordCount&&receipt.AfterOwnerCount==owner.RecordCount;
+                bool exactCardinality=receipt.CurrentOwnerCount==owner.RecordCount&&
+                    receipt.StableOwnerCount==owner.RecordCount&&receipt.ProjectedOwnerCount==owner.RecordCount&&
+                    receipt.AfterOwnerCount==owner.RecordCount;
+                bool resolvedResolverSuperset=receipt.CurrentOwnerCount>owner.RecordCount&&
+                    receipt.StableOwnerCount==receipt.CurrentOwnerCount&&
+                    receipt.ProjectedOwnerCount==owner.RecordCount&&receipt.AfterOwnerCount==owner.RecordCount;
+                bool counts=exactCardinality||resolvedResolverSuperset;
                 bool stateMachines=(ulong)receipt.ExactStateMachineCount+(ulong)receipt.RotatedStateMachineCount==(ulong)outerCount;
                 bool hashes=receipt.StableOwnerHash==receipt.CurrentOwnerHash&&receipt.AfterOwnerHash==receipt.ProjectedOwnerHash;
                 bool graphDirty=receipt.GraphDirtyBefore==owner.GraphDirty58&&receipt.GraphDirtyProjected==owner.GraphDirty58&&
@@ -1967,7 +1963,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     controllerDirty&&clearedFailure;
                 allExact=allExact&&exact;
                 var row=new Dictionary<string,object>{{"path",saved.Path},{"exact",exact},{"identitiesExact",identities},
-                    {"targetsExact",targets},{"countsExact",counts},{"stateMachinesCovered",stateMachines},
+                    {"targetsExact",targets},{"countsExact",counts},{"exactCardinality",exactCardinality},
+                    {"resolvedResolverSuperset",resolvedResolverSuperset},{"stateMachinesCovered",stateMachines},
                     {"hashesStable",hashes},{"graphDirtyExact",graphDirty},{"controllerDirtyExact",controllerDirty},
                     {"failureCleared",clearedFailure},{"apiVersion",receipt.ApiVersion},{"structSize",receipt.StructSize},
                     {"result",receipt.Result},{"lastError","0x"+receipt.LastError.ToString("X8")},{"stage",receipt.Stage},
@@ -2053,6 +2050,12 @@ namespace SuperchargedPatch.Authoring.Modules
                     receipt.TargetOwnerCount==owner.RecordCount&&receipt.TargetOwnerHash==owner.Hash;
                 bool immediateOwnerExact=receipt.ProjectedOwnerHash==owner.Hash&&receipt.AfterOwnerHash==owner.Hash;
                 bool projectedPostimageStable=receipt.ProjectedOwnerHash==receipt.AfterOwnerHash;
+                bool exactOwnerCardinality=receipt.ProjectedOwnerCount==owner.RecordCount&&
+                    receipt.AfterOwnerCount==owner.RecordCount;
+                bool admittedResolverSuperset=!requireNoPlan&&receipt.PlannedTransitionCount==0u&&
+                    receipt.CurrentOwnerCount>owner.RecordCount&&
+                    receipt.ProjectedOwnerCount==receipt.CurrentOwnerCount&&
+                    receipt.AfterOwnerCount==receipt.ProjectedOwnerCount;
                 bool accepted=nativeOk==1&&receipt.Result==1&&receipt.Stage==16&&
                     receipt.ApiVersion==NativeAnimatorApiVersion&&
                     receipt.StructSize==(uint)Marshal.SizeOf(typeof(NativeEndTransitionReceipt))&&identities&&targets&&
@@ -2061,12 +2064,13 @@ namespace SuperchargedPatch.Authoring.Modules
                     receipt.CompletedReboundClipCount==receipt.PlannedReboundClipCount&&
                     receipt.CompletedWeightPlanCount==receipt.PlannedWeightPlanCount&&
                     receipt.RollbackFailure==0u&&
-                    receipt.ProjectedOwnerCount==owner.RecordCount&&receipt.AfterOwnerCount==owner.RecordCount&&
+                    (exactOwnerCardinality||admittedResolverSuperset)&&
                     projectedPostimageStable&&
                     receipt.GraphDirtyProjected==owner.GraphDirty58&&receipt.GraphDirtyAfter==owner.GraphDirty58&&
                     receipt.ControllerDirtyAfter==receipt.ControllerDirtyProjected;
                 allExact=allExact&&accepted;
                 var row=new Dictionary<string,object>{{"path",saved.Path},{"accepted",accepted},{"requireNoPlan",requireNoPlan},{"immediateOwnerExact",immediateOwnerExact},
+                    {"exactOwnerCardinality",exactOwnerCardinality},{"admittedResolverSuperset",admittedResolverSuperset},
                     {"projectedPostimageStable",projectedPostimageStable},{"identitiesExact",identities},
                     {"targetsExact",targets},{"result",receipt.Result},{"lastError","0x"+receipt.LastError.ToString("X8")},
                     {"stage",receipt.Stage},{"plannedTransitionCount",receipt.PlannedTransitionCount},
@@ -3088,6 +3092,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"lastControllerProbe",lastControllerProbe},
                 {"nativePath",nativePath},{"nativeSha256",nativeSha256},{"unityPlayerBase",unityPlayerBase==0?null:"0x"+unityPlayerBase.ToString("X8")},
                 {"live",live},{"liveError",liveError},
+                {"revision58Scope","Restores an inactive target-null clip even when the live non-null clip contributes a verified resolver-only owner-graph superset. Native preflight filters only resolver rows rooted at checkpoint children, requires exact inactive branch and entry topology, accepts branch 0 or 1 only at zero outer and target child weight, proves the engine RootByType controller target, and requires projected and actual postimages to collapse to checkpoint cardinality. No comparison is relaxed; mutation is confined to paused rewind restoration."},
                 {"scope","Authoring-only chef Animator rewind checkpoint, including transition frames. Revision 57 distinguishes an uninterrupted scheduled output-boundary template from a naturally paused resume-prefix template: only the scheduled form receives one final byte-exact ControllerMemory restore at the last Helpers.Resume prefix, after the two required paused maintenance frames and before the existing mixer, Playable-time, transition, input, topology, owner, pose, and RNG verification. Ordinary resume-prefix checkpoints retain their established lifecycle unchanged. Revision 56 projects a scheduled advancing-boundary resume tuple into the exact TimeManager-owned paused speed state by first proving ControllerInput +0 equals the captured public Animator speed, then cloning checkpoint data and zeroing only that four-byte word plus the saved public speed; no live Animator or game state is written, and every other tuple component remains strict. Revision 55 identifies each chef's directly owned Player/Chef Animator rather than rejecting frames where a held or attached object temporarily contributes another descendant Animator; this changes checkpoint observation membership only and does not write game state. Revision 54 may arm one pause-fenced read-only capture for an exact future output boundary, allowing a resume-ready tuple inside a continuous logical-input chunk without inserting a behavior-changing pause. It publishes the template only after the ordinary boundary exists and the established prefix/post observations remain exact; skipped, ambiguous, or scene-invalidated work fails closed. Revision 53 limits public pose capture and restoration to the Animator-owned rig: a nested server/client world-object synchroniser ends pose ownership, so runtime-held plates and food visuals inherit the exact animated attachment-bone pose but remain owned by the attachment/body/lifecycle restorers. This filter is observational during ordinary forward play and does not alter the attachment point or plate physics. Revision 52 added an explicit fail-closed branch transaction keyed by the controller's paused output frame: an exact paused replay prefix, or the exact restored target before its first divergent advancing frame, may discard only the abandoned future comparison frames and RandomizeAnimParam callback tail. The explicit frame must be the latest captured output boundary; the diagnostic live CurrentFrameData value is retained separately because a paused hot-call can observe the following exchange. The transaction mutates module-owned reference bookkeeping only and reports gameStateMutation=false; divergent or incomplete prefixes are rejected before truncation. The revision otherwise retains the exact original RNG preimage, post-state, callback identity, parameter preimage/result, and last captured output-boundary watermark for every tracked chef RandomizeAnimParam.OnStateEnter callback. Exact Animator instance membership and explicit Record, ReplayStaged, ReplayActive, and Faulted lifecycle states prevent paused restore maintenance or callbacks outside the retained interval from recording or consuming events. Replay arms only after the final resume-ready tuple verifies, and boundary counts plus the fixed interval endpoint fail closed before RNG correction. Exact output-boundary RNG correction remains a second guard against unrewound decorative NPC and traffic Animator callbacks that share UnityEngine.Random but run on unrelated render-frame timing. Ordinary forward callbacks and random draws are observed but never changed. Complete owner graphs are retained for stored reference resume-prefix snapshots, replay-pre transaction observation, final replay-post verification, and OverrideClipPlayables mutation guards; ordinary output boundaries and diagnostic reference-post observations retain the rest of the native tuple without traversing the owner graph. Replay-pre traversal remains because removing the native read-only capture changed the subsequent paused-maintenance result in the transitioning-target-from-settled matrix cell; its ordering or timing dependency is not yet explained. Stage A admits Unity's idempotent OverrideClipPlayables no-op only when native before/after digests and a fresh managed full owner-graph byte capture are exact; changed bindings retain the original dirty-bit contract. Stage-B Playable clock restoration requires every saved physical node to exist, restores only those saved nodes, and leaves extra live resolver-only nodes untouched for the guarded EndTransition transaction; the final no-plan verification remains exact after those nodes become unreachable. Stage A and Stage B otherwise retain the guarded native target-null, Playable clock, EndTransition, mixer, owner, and pose restoration transactions. The null-inactive scalar finalizer skips rotated state machines only after validating their stable entry storage and port topology; rotated outer playable identities are intentionally classified after that structural check. Opaque branch-output port storage must match the checkpoint and remain exact through live preflight, but is not assumed to be zero; only the separately addressed output-weight word is writable. Accepted input provenance and exactly-once commit are owned by ResumePhase. Gameplay input, physics, score, and online synchronization behavior are untouched; decorative Animator visual parity is not claimed and this development revision is not search-qualified."}
             };
         }

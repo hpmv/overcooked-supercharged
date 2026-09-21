@@ -1,5 +1,22 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Animator target-null milestone (2026-09-21, managed r59/native r19):**
+> the clean bounded f1048 -> f444 run now completes Animator Stage A, Stage B,
+> final owner verification and resume release. Native r19 can clear an exact
+> inactive target-null child on branch 0 or 1 and can filter only verified
+> resolver rows from a larger live owner graph. Managed r59 invokes that
+> guarded preflight instead of deferring on cardinality alone. The live run
+> completed one clip clear, 224 Playable-time writes, three EndTransition
+> normalizations, and byte-exact final ControllerMemory for all four chefs.
+> This process had equal 104-row graphs, so the preceding 76-versus-104
+> resolver-superset shape was not re-exercised live; it remains fail-closed in
+> the new native projection. The next failure is downstream: contact-manager
+> recreation arm result 18 / error 5023 / state 3 / detail 32 before the first
+> suffix frame. Evidence:
+> `artifacts/target-null-resolver-superset-f1048-to-f444-r1/summary.json` and
+> `post-failure-module-statuses.json`. Search remains disabled; next inspect
+> exact ShapeInstancePair/contact recreation identity and pool admission.
+
 > **PhysX pending-sleep restore milestone (2026-09-19, BodyRestore r49):**
 > the fresh v92 f1048 -> f444 replay no longer fails at entity 49's automatic
 > mass-frame reset.  PhysX 3.3.3 advances that targetless kinematic from

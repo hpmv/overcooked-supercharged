@@ -8,6 +8,54 @@ rewind continuation parity**. Do not run route search yet.
 For a shorter explanation of the causal chain and current decision, start with
 [`REWIND-PARITY-CONTEXT-SNAPSHOT.md`](REWIND-PARITY-CONTEXT-SNAPSHOT.md).
 
+## 2026-09-21: target-null restore clears the live Animator gate
+
+The bounded, no-search f1048 -> f444 run now completes the entire paused
+Animator resume transaction and reaches the independent physics sidecar. A
+real remaining mismatch was an inactive branch child whose checkpoint clip was
+null while the run-ahead graph retained a non-null clip. Native r19 extends
+the existing guarded `SetClip` transaction in two narrow ways:
+
+- either exact state-machine branch (0 or 1) may be selected, but only with
+  zero outer and child weight, exact entry/playable topology, the shipped
+  `RootByType` controller root, and byte-stable preflight; and
+- a larger live owner graph may be projected only when every extra row is a
+  resolver observation rooted in a checkpoint child. The non-resolver row
+  sequence must still match exactly and the actual postimage must collapse to
+  the checkpoint cardinality.
+
+Managed r59 always invokes that native preflight instead of deferring solely
+because the initial owner counts differ. It accepts either exact cardinality
+or the strictly verified resolver-superset projection; all ordinary final
+owner comparisons remain strict.
+
+The clean live run happened to present 104 target and 104 current rows for all
+four chefs, so it exercised the exact-cardinality form rather than the
+resolver-superset form seen in the preceding failing process. Player 3
+planned and completed exactly one clip clear. All four Stage-A receipts were
+exact, all 224 Playable-time writes completed, the three required
+EndTransition normalizations completed, final no-plan owner verification was
+exact, and the final ControllerMemory restore was byte-exact. The resume was
+then released; no replay frame ran because RigidbodyActorRebuild failed later
+while arming contact-manager recreation with native error 5023, state 3,
+detail 32. Animator is therefore no longer the blocking subsystem for this
+clean f1048 -> f444 attempt, but complete suffix parity is not yet claimed.
+
+Evidence:
+
+- `artifacts/target-null-resolver-superset-f1048-to-f444-r1/summary.json`,
+  SHA-256 `2EB5C3BA35EF8023A5BC025F150E4154B2ACEB6C4EE85C3FFC1770A6405C4393`;
+- `artifacts/target-null-resolver-superset-f1048-to-f444-r1/post-failure-module-statuses.json`,
+  SHA-256 `BC35B1181EE4B1BAA0C3584C75F3FB7D748AAB6A697E6792260A427AC6A41408`;
+- managed r59 SHA-256
+  `C4B91A66DA01A8C76EEEDD9A9504E9E9D4AED869E3BEC13C907789F34FA319C9`;
+  and
+- native r19 SHA-256
+  `A66C32D8B4A5E5E8E640A009C580C9F1F1105A7B8EE26320D536473D4287ADDA`.
+
+The next rewind-parity task is the contact-recreation arm failure. Preserve
+the successful Animator transaction and keep route search disabled.
+
 ## 2026-09-12: r52 closes replay-prefix branch composability
 
 The r51c prefix-commit guard was checking

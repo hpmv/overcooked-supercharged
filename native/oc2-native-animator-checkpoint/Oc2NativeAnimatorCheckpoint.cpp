@@ -2595,6 +2595,85 @@ static bool CompareOwnerAllowPendingVisit(const AnimatorOwnerGraphRecord* expect
     return true;
 }
 
+static bool ResolverSupersetRecordRootedInTarget(
+    const AnimatorOwnerGraphRecord& record,
+    const AnimatorOwnerGraphRecord* target,uint32_t targetCount) {
+    if(record.recordKind<OwnerResolverNode||record.recordKind>OwnerResolverTerminal||
+       record.branchIndex!=0u||!record.resolverOrigin)return false;
+    bool duplicate=false;
+    const AnimatorOwnerGraphRecord* origin=FindOwnerChild(
+        target,targetCount,record.layerIndex,record.stateMachineIndex,
+        record.branchIndex,record.resolverOrigin,duplicate);
+    return origin&&!duplicate;
+}
+
+// A paused Stage-B capture can retain a longer SetClip resolver walk than the
+// checkpoint even though every checkpoint-owned playable and logical graph
+// record is still present. This is a read-only, no-EndTransition holding
+// state: admit only an exact checkpoint row sequence interleaved with
+// additional resolver rows rooted at an exact checkpoint child. The caller separately
+// requires the complete live projection to remain byte-exact through the
+// no-op transaction, and the later requireNoPlan verification stays exact.
+static bool CompareOwnerResolverSupersetAllowPendingVisit(
+    const AnimatorOwnerGraphRecord* expected,uint32_t expectedCount,
+    const AnimatorOwnerGraphRecord* actual,uint32_t actualCount,
+    const OwnerProjection* projection,AnimatorEndTransitionReceipt* receipt) {
+    if(actualCount<=expectedCount){
+        if(actualCount!=expectedCount){
+            receipt->result=ResultTopologyMismatch;receipt->expectedWord=expectedCount;
+            receipt->actualWord=actualCount;return false;
+        }
+        return CompareOwnerAllowPendingVisit(
+            expected,actual,expectedCount*sizeof(AnimatorOwnerGraphRecord),projection,receipt);
+    }
+
+    AnimatorOwnerGraphRecord* filtered=static_cast<AnimatorOwnerGraphRecord*>(
+        HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
+                  expectedCount*sizeof(AnimatorOwnerGraphRecord)));
+    if(!filtered){
+        receipt->lastError=GetLastError();receipt->result=ResultFault;return false;
+    }
+
+    bool success=false;
+    do {
+        for(uint32_t i=0;i<expectedCount;++i){
+            if(expected[i].recordKind>=OwnerResolverNode&&
+               expected[i].recordKind<=OwnerResolverTerminal){
+                receipt->result=ResultInvalidBlob;
+                SetOwnerFailure(receipt,expected,expectedCount,i,0,0u,expected[i].recordKind);break;
+            }
+        }
+        if(receipt->result)break;
+        uint32_t filteredCount=0;
+        for(uint32_t i=0;i<actualCount;++i){
+            const bool resolver=actual[i].recordKind>=OwnerResolverNode&&
+                                actual[i].recordKind<=OwnerResolverTerminal;
+            if(resolver){
+                if(!ResolverSupersetRecordRootedInTarget(actual[i],expected,expectedCount)){
+                    receipt->result=ResultTopologyMismatch;
+                    SetOwnerFailure(receipt,actual,actualCount,i,0,OwnerResolverNode,actual[i].recordKind);break;
+                }
+                continue;
+            }
+            if(filteredCount>=expectedCount){
+                receipt->result=ResultTopologyMismatch;
+                SetOwnerFailure(receipt,actual,actualCount,i,0,expectedCount,filteredCount+1u);break;
+            }
+            filtered[filteredCount++]=actual[i];
+        }
+        if(receipt->result)break;
+        if(filteredCount!=expectedCount){
+            receipt->result=ResultTopologyMismatch;receipt->expectedWord=expectedCount;
+            receipt->actualWord=filteredCount;break;
+        }
+        success=CompareOwnerAllowPendingVisit(
+            expected,filtered,expectedCount*sizeof(AnimatorOwnerGraphRecord),projection,receipt);
+    } while(false);
+
+    HeapFree(GetProcessHeap(),0,filtered);
+    return success;
+}
+
 static bool CleanSettledOuter(const AnimatorOwnerGraphRecord* outer,
                               const AnimatorOwnerGraphRecord* branch0,
                               const AnimatorOwnerGraphRecord* branch1) {
@@ -3005,6 +3084,64 @@ static bool CompareTargetNullClipBytes(const AnimatorOwnerGraphRecord* expected,
     return true;
 }
 
+static bool FilterTargetNullResolverSuperset(
+    const AnimatorOwnerGraphRecord* target,uint32_t targetCount,
+    const AnimatorOwnerGraphRecord* current,uint32_t currentCount,
+    AnimatorOwnerGraphRecord* filtered,AnimatorTargetNullClipReceipt* receipt) {
+    if(!target||!current||!filtered||currentCount<=targetCount){
+        receipt->result=ResultBadArgument;return false;
+    }
+    for(uint32_t i=0;i<targetCount;++i){
+        if(target[i].recordKind>=OwnerResolverNode&&target[i].recordKind<=OwnerResolverTerminal){
+            receipt->result=ResultInvalidBlob;
+            SetTargetNullClipFailure(receipt,target,targetCount,i,0,0u,target[i].recordKind);
+            return false;
+        }
+    }
+    uint32_t filteredCount=0;
+    for(uint32_t i=0;i<currentCount;++i){
+        const bool resolver=current[i].recordKind>=OwnerResolverNode&&
+                            current[i].recordKind<=OwnerResolverTerminal;
+        if(resolver){
+            if(!ResolverSupersetRecordRootedInTarget(current[i],target,targetCount)){
+                receipt->result=ResultTopologyMismatch;
+                SetTargetNullClipFailure(receipt,current,currentCount,i,0,
+                                         OwnerResolverNode,current[i].recordKind);
+                return false;
+            }
+            continue;
+        }
+        if(filteredCount>=targetCount){
+            receipt->result=ResultTopologyMismatch;
+            SetTargetNullClipFailure(receipt,current,currentCount,i,0,targetCount,filteredCount+1u);
+            return false;
+        }
+        filtered[filteredCount++]=current[i];
+    }
+    if(filteredCount!=targetCount){
+        receipt->result=ResultTopologyMismatch;receipt->expectedWord=targetCount;
+        receipt->actualWord=filteredCount;return false;
+    }
+    for(uint32_t i=0;i<targetCount;++i){
+        const AnimatorOwnerGraphRecord& expected=target[i];
+        const AnimatorOwnerGraphRecord& actual=filtered[i];
+        if(actual.recordKind!=expected.recordKind||actual.layerIndex!=expected.layerIndex||
+           actual.stateMachineIndex!=expected.stateMachineIndex||actual.branchIndex!=expected.branchIndex||
+           actual.inputIndex!=expected.inputIndex||actual.self!=expected.self||actual.vtable!=expected.vtable||
+           actual.internal!=expected.internal||actual.graph!=expected.graph||
+           actual.inputEntries!=expected.inputEntries||actual.inputCount!=expected.inputCount||
+           actual.inputCapacityRaw!=expected.inputCapacityRaw||actual.outputEntries!=expected.outputEntries||
+           actual.outputCount!=expected.outputCount||actual.outputCapacityRaw!=expected.outputCapacityRaw||
+           actual.entryAddress!=expected.entryAddress||actual.entryPlayable!=expected.entryPlayable||
+           actual.entryPortRaw!=expected.entryPortRaw){
+            receipt->result=ResultTopologyMismatch;
+            SetTargetNullClipFailure(receipt,target,targetCount,i,0,expected.recordKind,actual.recordKind);
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool SameDirectPlayableTopology(const AnimatorOwnerGraphRecord& left,
                                        const AnimatorOwnerGraphRecord& right) {
     return left.self==right.self&&left.vtable==right.vtable&&left.internal==right.internal&&
@@ -3200,34 +3337,39 @@ static bool BuildDirectClipClearPlan(uintptr_t unityBase,uintptr_t controller,
         }
         ++receipt->exactStateMachineCount;
 
-        const AnimatorOwnerGraphRecord* currentBranch=FindUniqueOwnerRecord(current,currentCount,OwnerBranchNode,
-            outer.layerIndex,outer.stateMachineIndex,1u,0xFFFFFFFFu);
-        const AnimatorOwnerGraphRecord* targetBranch=FindUniqueOwnerRecord(target,targetCount,OwnerBranchNode,
-            outer.layerIndex,outer.stateMachineIndex,1u,0xFFFFFFFFu);
-        if(!currentBranch||!targetBranch||currentBranch->self!=current1||targetBranch->self!=target1||
-           currentBranch->vtable!=unityBase+kAnimationMixerPlayableVtableRva||
-           targetBranch->vtable!=unityBase+kAnimationMixerPlayableVtableRva||
-           !SameDirectPlayableTopology(*currentBranch,*targetBranch)){
-            receipt->result=ResultTopologyMismatch;
-            SetTargetNullClipFailure(receipt,current,currentCount,i,20,target1,currentBranch?currentBranch->self:0);return false;
-        }
-        for(uint32_t input=0;input<currentBranch->inputCount;++input){
-            const AnimatorOwnerGraphRecord* currentInput=FindUniqueOwnerRecord(current,currentCount,OwnerBranchInput,
-                outer.layerIndex,outer.stateMachineIndex,1u,input);
-            const AnimatorOwnerGraphRecord* targetInput=FindUniqueOwnerRecord(target,targetCount,OwnerBranchInput,
-                outer.layerIndex,outer.stateMachineIndex,1u,input);
+        const uintptr_t currentBranches[2]={current0,current1};
+        const uintptr_t targetBranches[2]={target0,target1};
+        for(uint32_t branchIndex=0;branchIndex<2u;++branchIndex){
+            const AnimatorOwnerGraphRecord* currentBranch=FindUniqueOwnerRecord(current,currentCount,OwnerBranchNode,
+                outer.layerIndex,outer.stateMachineIndex,branchIndex,0xFFFFFFFFu);
+            const AnimatorOwnerGraphRecord* targetBranch=FindUniqueOwnerRecord(target,targetCount,OwnerBranchNode,
+                outer.layerIndex,outer.stateMachineIndex,branchIndex,0xFFFFFFFFu);
+            if(!currentBranch||!targetBranch||currentBranch->self!=currentBranches[branchIndex]||
+               targetBranch->self!=targetBranches[branchIndex]||
+               currentBranch->vtable!=unityBase+kAnimationMixerPlayableVtableRva||
+               targetBranch->vtable!=unityBase+kAnimationMixerPlayableVtableRva||
+               !SameDirectPlayableTopology(*currentBranch,*targetBranch)){
+                receipt->result=ResultTopologyMismatch;
+                SetTargetNullClipFailure(receipt,current,currentCount,i,20,targetBranches[branchIndex],
+                                         currentBranch?currentBranch->self:0);return false;
+            }
+            for(uint32_t input=0;input<currentBranch->inputCount;++input){
+                const AnimatorOwnerGraphRecord* currentInput=FindUniqueOwnerRecord(current,currentCount,OwnerBranchInput,
+                    outer.layerIndex,outer.stateMachineIndex,branchIndex,input);
+                const AnimatorOwnerGraphRecord* targetInput=FindUniqueOwnerRecord(target,targetCount,OwnerBranchInput,
+                    outer.layerIndex,outer.stateMachineIndex,branchIndex,input);
             if(!currentInput||!targetInput||!SameDirectEntryTopology(*currentInput,*targetInput)){
                 receipt->result=ResultTopologyMismatch;
                 SetTargetNullClipFailure(receipt,current,currentCount,i,88,input,0xFFFFFFFFu);return false;
             }
             bool duplicate=false;
             const AnimatorOwnerGraphRecord* currentChild=FindOwnerChild(current,currentCount,outer.layerIndex,
-                outer.stateMachineIndex,1u,currentInput->entryPlayable,duplicate);
+                outer.stateMachineIndex,branchIndex,currentInput->entryPlayable,duplicate);
             if(duplicate){receipt->result=ResultTopologyMismatch;
                 SetTargetNullClipFailure(receipt,current,currentCount,i,20,0,currentInput->entryPlayable);return false;}
             bool targetDuplicate=false;
             const AnimatorOwnerGraphRecord* targetChild=FindOwnerChild(target,targetCount,outer.layerIndex,
-                outer.stateMachineIndex,1u,targetInput->entryPlayable,targetDuplicate);
+                outer.stateMachineIndex,branchIndex,targetInput->entryPlayable,targetDuplicate);
             if(targetDuplicate||!currentChild||!targetChild||
                !SameDirectPlayableTopology(*currentChild,*targetChild)){
                 receipt->result=ResultTopologyMismatch;
@@ -3281,17 +3423,17 @@ static bool BuildDirectClipClearPlan(uintptr_t unityBase,uintptr_t controller,
             // deliberately equivalent to the former compound predicate; the
             // split changes no accepted topology and prevents a true final
             // dirty-word comparison from masking an earlier failed guard.
-            if(currentOuterInputs[1]->entryWeightBits!=0u){
+            if(currentOuterInputs[branchIndex]->entryWeightBits!=0u){
                 receipt->result=ResultTopologyMismatch;
                 SetTargetNullClipFailure(receipt,current,currentCount,
-                    static_cast<uint32_t>(currentOuterInputs[1]-current),88,0,
-                    currentOuterInputs[1]->entryWeightBits);return false;
+                    static_cast<uint32_t>(currentOuterInputs[branchIndex]-current),88,0,
+                    currentOuterInputs[branchIndex]->entryWeightBits);return false;
             }
-            if(targetOuterInputs[1]->entryWeightBits!=0u){
+            if(targetOuterInputs[branchIndex]->entryWeightBits!=0u){
                 receipt->result=ResultTopologyMismatch;
                 SetTargetNullClipFailure(receipt,target,targetCount,
-                    static_cast<uint32_t>(targetOuterInputs[1]-target),88,0,
-                    targetOuterInputs[1]->entryWeightBits);return false;
+                    static_cast<uint32_t>(targetOuterInputs[branchIndex]-target),88,0,
+                    targetOuterInputs[branchIndex]->entryWeightBits);return false;
             }
             if(targetInput->entryWeightBits!=0u){
                 receipt->result=ResultTopologyMismatch;
@@ -3360,10 +3502,10 @@ static bool BuildDirectClipClearPlan(uintptr_t unityBase,uintptr_t controller,
             }
             DirectClipClearPlan& plan=plans[planCount];
             plan.layerIndex=outer.layerIndex;plan.stateMachineIndex=outer.stateMachineIndex;
-            plan.branchIndex=1u;plan.inputIndex=input;plan.currentRecord=childRecord;
+            plan.branchIndex=branchIndex;plan.inputIndex=input;plan.currentRecord=childRecord;
             plan.targetRecord=targetRecord;plan.playable=currentChild->self;
             plan.expectedClip=currentChild->clip108;plan.dirtyRoot=root;
-            plan.outerWeightAddress=currentOuterInputs[1]->entryAddress;
+            plan.outerWeightAddress=currentOuterInputs[branchIndex]->entryAddress;
             plan.branchMixer=currentBranch->self;plan.branchInternal=currentBranch->internal;
             plan.branchInputEntries=currentBranch->inputEntries;
             plan.branchInputCount=currentBranch->inputCount;
@@ -3376,7 +3518,7 @@ static bool BuildDirectClipClearPlan(uintptr_t unityBase,uintptr_t controller,
             plan.rootDirtyBefore=rootDirty;
             cleared[planCount].layerIndex=outer.layerIndex;
             cleared[planCount].stateMachineIndex=outer.stateMachineIndex;
-            cleared[planCount].targetBranchIndex=1u;
+            cleared[planCount].targetBranchIndex=branchIndex;
             cleared[planCount].inputIndex=input;
             cleared[planCount].currentRecord=childRecord;
             cleared[planCount].requiresPreClear=0u;
@@ -3385,6 +3527,7 @@ static bool BuildDirectClipClearPlan(uintptr_t unityBase,uintptr_t controller,
             cleared[planCount].expectedRawA4A7=currentChild->rawA4A7;
             cleared[planCount].preimage=*currentChild;
             ++planCount;
+            }
         }
     }
     return true;
@@ -4897,6 +5040,7 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_target_null_clip_resto
     receipt->targetOwnerHash=Hash(targetOwnerBlob,targetOwnerSize);
 
     AnimatorOwnerGraphRecord* current=0;
+    AnimatorOwnerGraphRecord* currentWithoutResolvers=0;
     AnimatorOwnerGraphRecord* projected=0;
     AnimatorOwnerGraphRecord* stable=0;
     AnimatorOwnerGraphRecord* after=0;
@@ -4948,27 +5092,46 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_target_null_clip_resto
             receipt->controllerDirtyBefore=
                 *reinterpret_cast<const uint32_t*>(reinterpret_cast<uintptr_t>(controller)+0x90);
 
+            const AnimatorOwnerGraphRecord* planningCurrent=current;
+            uint32_t planningCurrentCount=receipt->currentOwnerCount;
+            if(receipt->currentOwnerCount<receipt->targetOwnerCount){
+                receipt->result=ResultTopologyMismatch;receipt->expectedWord=receipt->targetOwnerCount;
+                receipt->actualWord=receipt->currentOwnerCount;break;
+            }
+            if(receipt->currentOwnerCount>receipt->targetOwnerCount){
+                currentWithoutResolvers=static_cast<AnimatorOwnerGraphRecord*>(
+                    HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,targetOwnerSize));
+                if(!currentWithoutResolvers){
+                    receipt->lastError=GetLastError();receipt->result=ResultFault;break;
+                }
+                if(!FilterTargetNullResolverSuperset(
+                       target,receipt->targetOwnerCount,current,receipt->currentOwnerCount,
+                       currentWithoutResolvers,receipt))break;
+                planningCurrent=currentWithoutResolvers;
+                planningCurrentCount=receipt->targetOwnerCount;
+            }
+
             plans=static_cast<DirectClipClearPlan*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
-                receipt->currentOwnerCount*sizeof(DirectClipClearPlan)));
+                planningCurrentCount*sizeof(DirectClipClearPlan)));
             cleared=static_cast<OwnerClearedClip*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
-                receipt->currentOwnerCount*sizeof(OwnerClearedClip)));
+                planningCurrentCount*sizeof(OwnerClearedClip)));
             nullFinalizePlans=static_cast<AlreadyNullClipFinalizePlan*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
-                receipt->currentOwnerCount*sizeof(AlreadyNullClipFinalizePlan)));
+                planningCurrentCount*sizeof(AlreadyNullClipFinalizePlan)));
             outputFinalizePlans=static_cast<EmptyBranchOutputFinalizePlan*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
-                receipt->currentOwnerCount*sizeof(EmptyBranchOutputFinalizePlan)));
+                planningCurrentCount*sizeof(EmptyBranchOutputFinalizePlan)));
             if(!plans||!cleared||!nullFinalizePlans||!outputFinalizePlans){
                 receipt->lastError=GetLastError();receipt->result=ResultFault;break;
             }
 
             receipt->stage=TargetNullClipStagePlan;
             if(!BuildDirectClipClearPlan(unityBase,reinterpret_cast<uintptr_t>(controller),
-                                         current,receipt->currentOwnerCount,target,receipt->targetOwnerCount,
-                                         plans,cleared,receipt->currentOwnerCount,planCount,receipt))break;
+                                         planningCurrent,planningCurrentCount,target,receipt->targetOwnerCount,
+                                         plans,cleared,planningCurrentCount,planCount,receipt))break;
             receipt->plannedClipCount=planCount;
-            if(!BuildAlreadyNullFinalizePlans(unityBase,current,receipt->currentOwnerCount,
+            if(!BuildAlreadyNullFinalizePlans(unityBase,planningCurrent,planningCurrentCount,
                                               target,receipt->targetOwnerCount,
-                                              nullFinalizePlans,receipt->currentOwnerCount,nullFinalizeCount,
-                                              outputFinalizePlans,receipt->currentOwnerCount,outputFinalizeCount,
+                                              nullFinalizePlans,planningCurrentCount,nullFinalizeCount,
+                                              outputFinalizePlans,planningCurrentCount,outputFinalizeCount,
                                               receipt))break;
             receipt->plannedAlreadyNullClipCount=nullFinalizeCount;
             receipt->plannedEmptyOutputCount=outputFinalizeCount;
@@ -4988,8 +5151,7 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_target_null_clip_resto
             }
             receipt->graphDirtyProjected=receipt->graphDirtyBefore;
             receipt->controllerDirtyProjected=receipt->controllerDirtyBefore|(planCount?0x01000000u:0u);
-            if(receipt->projectedOwnerCount!=receipt->currentOwnerCount||
-               receipt->projectedOwnerCount!=receipt->targetOwnerCount){
+            if(receipt->projectedOwnerCount!=receipt->targetOwnerCount){
                 receipt->result=ResultTopologyMismatch;receipt->expectedWord=receipt->targetOwnerCount;
                 receipt->actualWord=receipt->projectedOwnerCount;break;
             }
@@ -5057,7 +5219,7 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_target_null_clip_resto
                 uintptr_t stableRoot=0;
                 if(!ResolveDirectSetClipRoot(unityBase,plan.playable,
                     reinterpret_cast<uintptr_t>(controller),stableRoot,receipt,
-                    stable,receipt->stableOwnerCount,plan.currentRecord)||stableRoot!=plan.dirtyRoot){
+                    planningCurrent,planningCurrentCount,plan.currentRecord)||stableRoot!=plan.dirtyRoot){
                     if(receipt->result==0){receipt->result=ResultTopologyMismatch;
                         receipt->expectedWord=plan.dirtyRoot;receipt->actualWord=stableRoot;}
                     break;
@@ -5193,6 +5355,7 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_target_null_clip_resto
     if(outputFinalizePlans)HeapFree(GetProcessHeap(),0,outputFinalizePlans);
     if(nullFinalizePlans)HeapFree(GetProcessHeap(),0,nullFinalizePlans);
     if(plans)HeapFree(GetProcessHeap(),0,plans);
+    if(currentWithoutResolvers)HeapFree(GetProcessHeap(),0,currentWithoutResolvers);
     if(current)HeapFree(GetProcessHeap(),0,current);
     return success?1:0;
 }
@@ -5334,6 +5497,7 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_settled_end_transition
     uint32_t weightPlanCount=0;
     SetInputWeight mutationWeightSetter=0;
     bool reversiblePrimeChanged=false;
+    bool admittedResolverSuperset=false;
     bool success=false;
     __try {
         do {
@@ -5469,12 +5633,35 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_settled_end_transition
             }
 
             receipt->stage=EndTransitionStageProjectedCompare;
-            if(projectedOwnerCount!=receipt->targetOwnerCount){
-                receipt->result=ResultTopologyMismatch;receipt->expectedWord=receipt->targetOwnerCount;
-                receipt->actualWord=projectedOwnerCount;break;
+            admittedResolverSuperset=requireNoPlan==0u&&planCount==0u&&clearedCount==0u&&
+                stagedCount==0u&&reboundCount==0u&&weightPlanCount==0u&&
+                projectedOwnerCount>receipt->targetOwnerCount&&
+                projectedOwnerCount==currentOwnerCount;
+            if(admittedResolverSuperset&&
+               (!CompareNormalizationBytes(currentOwner,projectedOwner,
+                    currentOwnerCount*sizeof(AnimatorOwnerGraphRecord),
+                    sizeof(AnimatorOwnerGraphRecord),true,receipt)||
+                projectedOwnerHash!=currentOwnerHash)){
+                receipt->result=ResultTopologyMismatch;
+                if(receipt->failureRecord==0xFFFFFFFFu){
+                    receipt->expectedWord=currentOwnerHash;receipt->actualWord=projectedOwnerHash;
+                }
+                break;
             }
-            if(!CompareOwnerAllowPendingVisit(targetOwner,projectedOwner,targetOwnerSize,&projection,receipt)){
-                receipt->result=ResultTopologyMismatch;break;
+            if(projectedOwnerCount==receipt->targetOwnerCount){
+                if(!CompareOwnerAllowPendingVisit(
+                    targetOwner,projectedOwner,targetOwnerSize,&projection,receipt)){
+                    receipt->result=ResultTopologyMismatch;break;
+                }
+            } else if(!admittedResolverSuperset||
+                      !CompareOwnerResolverSupersetAllowPendingVisit(
+                          targetOwner,receipt->targetOwnerCount,
+                          projectedOwner,projectedOwnerCount,&projection,receipt)){
+                if(receipt->result==0u){
+                    receipt->result=ResultTopologyMismatch;receipt->expectedWord=receipt->targetOwnerCount;
+                    receipt->actualWord=projectedOwnerCount;
+                }
+                break;
             }
 
             // Close the observation-to-mutation gap with a second complete
@@ -5619,7 +5806,10 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_settled_end_transition
                                               afterTopologyCount,afterTopologyHash,receipt))break;
 
             receipt->stage=EndTransitionStageAfterCompare;
-            if(afterOwnerCount!=receipt->targetOwnerCount){receipt->result=ResultWriteMismatch;
+            if(admittedResolverSuperset){
+                if(afterOwnerCount!=projectedOwnerCount){receipt->result=ResultWriteMismatch;
+                    receipt->expectedWord=projectedOwnerCount;receipt->actualWord=afterOwnerCount;break;}
+            } else if(afterOwnerCount!=receipt->targetOwnerCount){receipt->result=ResultWriteMismatch;
                 receipt->expectedWord=receipt->targetOwnerCount;receipt->actualWord=afterOwnerCount;break;}
             if(afterTopologyCount!=receipt->targetTopologyCount){receipt->result=ResultWriteMismatch;
                 receipt->expectedWord=receipt->targetTopologyCount;receipt->actualWord=afterTopologyCount;break;}
@@ -5630,7 +5820,15 @@ extern "C" __declspec(dllexport) int __cdecl oc2_animator_settled_end_transition
             if(receipt->controllerDirtyAfter!=receipt->controllerDirtyProjected){receipt->result=ResultWriteMismatch;
                 receipt->expectedWord=receipt->controllerDirtyProjected;
                 receipt->actualWord=receipt->controllerDirtyAfter;break;}
-            if(!CompareOwnerAllowPendingVisit(targetOwner,afterOwner,targetOwnerSize,&projection,receipt)||
+            const bool ownerPostimageExact=admittedResolverSuperset?
+                (afterOwnerHash==projectedOwnerHash&&
+                 CompareNormalizationBytes(projectedOwner,afterOwner,
+                    projectedOwnerCount*sizeof(AnimatorOwnerGraphRecord),
+                    sizeof(AnimatorOwnerGraphRecord),true,receipt)&&
+                 CompareOwnerResolverSupersetAllowPendingVisit(
+                    targetOwner,receipt->targetOwnerCount,afterOwner,afterOwnerCount,&projection,receipt)):
+                CompareOwnerAllowPendingVisit(targetOwner,afterOwner,targetOwnerSize,&projection,receipt);
+            if(!ownerPostimageExact||
                !CompareNormalizationBytes(targetTopology,afterTopology,targetTopologySize,
                                            sizeof(AnimatorTransitionTopologyLayer),false,receipt)){
                 receipt->result=ResultWriteMismatch;break;
