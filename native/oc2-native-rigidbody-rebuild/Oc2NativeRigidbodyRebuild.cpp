@@ -222,6 +222,178 @@ struct ContactContextObserverReceipt {
     uint32_t installed;
 };
 
+// One rewind-only allocation row.  Endpoint identity is the canonical
+// unordered PxsShapeCore pair from PxvManagerDescRigidRigid.  The shipped
+// allocator still performs every initialization; the hook only selects which
+// already-free manager and manifold it will pop for this pair.
+struct ContactRecreatePlanRow {
+    uintptr_t pxsShapeCoreLow;
+    uintptr_t pxsShapeCoreHigh;
+    uintptr_t targetManager;
+    uintptr_t targetManifold;
+    uintptr_t targetSip;
+    uint32_t targetSlot;
+    uint32_t manifoldBytes;
+    uint32_t targetManagerFlags;
+    uint32_t flags;
+};
+
+struct ContactRecreateReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t context;
+    uintptr_t freeArray;
+    uintptr_t largePool;
+    uint32_t state;
+    uint32_t rowCount;
+    uint32_t matchedCount;
+    uint32_t remainingCount;
+    uint32_t contactCountBefore;
+    uint32_t targetContactCount;
+    uint32_t contactCountCurrent;
+    uint32_t contactHashBefore;
+    uint32_t targetContactHash;
+    uint32_t contactHashCurrent;
+    uint32_t largeCountBefore;
+    uint32_t targetLargeCount;
+    uint32_t largeCountCurrent;
+    uint32_t largeHashBefore;
+    uint32_t targetLargeHash;
+    uint32_t largeHashCurrent;
+    uint32_t largeUsedBefore;
+    uint32_t targetLargeUsed;
+    uint32_t largeUsedCurrent;
+    uint32_t largeUnreleasedBefore;
+    uint32_t targetLargeUnreleased;
+    uint32_t largeUnreleasedCurrent;
+    uint32_t matchedMask;
+    uint32_t threadId;
+    uintptr_t lastSip;
+    uintptr_t lastShapeLow;
+    uintptr_t lastShapeHigh;
+    uintptr_t lastManager;
+    uintptr_t lastManifold;
+    uint32_t invalidRow;
+    uint32_t detail;
+    uint32_t installed;
+    uint32_t armed;
+    uint32_t observerEntries;
+    uint32_t attemptOrdinal;
+    uintptr_t attemptSip;
+    uintptr_t attemptShapeLow;
+    uintptr_t attemptShapeHigh;
+    uint32_t attemptRow;
+    uint32_t attemptMatchedMask;
+    uint32_t attemptFreeCount;
+    uint32_t attemptManagerIndex;
+    uintptr_t attemptLargeHead;
+    uint32_t attemptManifoldIndex;
+    uintptr_t nphaseCore;
+    uintptr_t sipPool;
+    uint32_t sipMatchedCount;
+    uint32_t sipRemainingCount;
+    uint32_t targetSipCount;
+    uint32_t targetSipHash;
+    uint32_t targetSipUsed;
+    uint32_t targetSipUnreleased;
+    uint32_t sipCountCurrent;
+    uint32_t sipHashCurrent;
+    uint32_t sipUsedCurrent;
+    uint32_t sipUnreleasedCurrent;
+    uint32_t sipMatchedMask;
+    uint32_t sipObserverEntries;
+    uintptr_t lastAllocatedSip;
+};
+
+// Pure planning receipt for the contact/SIP/large-manifold portion of a
+// rewind.  Unlike ContactRecreateReceipt this is never backed by process-wide
+// hook state: the audit writes only this caller-owned receipt and performs no
+// allocator, bitmap, hook, or PhysX writes.  evaluatedMask distinguishes a
+// passed check from one whose prerequisites made it unsafe to evaluate.
+struct ContactRecreateAuditReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t context;
+    uintptr_t nphaseCore;
+    uintptr_t sipPool;
+    uintptr_t freeArray;
+    uintptr_t largePool;
+    uint32_t evaluatedMask;
+    uint32_t issueMask;
+    uint32_t recreateState;
+    uint32_t observerInstalled;
+    uint32_t rowCount;
+    uint32_t invalidRowCount;
+    uint32_t duplicateRowCount;
+    uint32_t targetFreeSipRowCount;
+    uint32_t activeSipRowCount;
+    uint32_t targetSipCount;
+    uint32_t targetSipHash;
+    uint32_t targetSipUsed;
+    uint32_t targetSipUnreleased;
+    uint32_t liveSipCount;
+    uint32_t liveSipHash;
+    uint32_t liveSipUsed;
+    uint32_t liveSipUnreleased;
+    uint32_t expectedSemanticSipCount;
+    uint32_t expectedLegacySipCount;
+    uint32_t sipMissingCount;
+    uint32_t sipExtraCount;
+    uint32_t targetContactCount;
+    uint32_t targetContactHash;
+    uint32_t liveContactCount;
+    uint32_t liveContactHash;
+    uint32_t expectedContactCount;
+    uint32_t contactMissingCount;
+    uint32_t contactExtraCount;
+    uint32_t useBitmapCount;
+    uint32_t activeBitmapCount;
+    uint32_t touchBitmapCount;
+    uint32_t modifiableBitmapCount;
+    uint32_t targetLargeCount;
+    uint32_t targetLargeHash;
+    uint32_t targetLargeUsed;
+    uint32_t targetLargeUnreleased;
+    uint32_t liveLargeCount;
+    uint32_t liveLargeHash;
+    uint32_t liveLargeUsed;
+    uint32_t liveLargeUnreleased;
+    uint32_t expectedLargeCount;
+    uint32_t largeMissingCount;
+    uint32_t largeExtraCount;
+    uint32_t unwritableCount;
+    uint32_t firstResult;
+    uint32_t firstError;
+    uint32_t firstRow;
+    uint32_t firstDetail;
+};
+
+struct SipPoolReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t pool;
+    uintptr_t freeHead;
+    uint32_t elementSize;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t slabSize;
+    uint32_t traversedCount;
+    uint32_t orderHash;
+    uint32_t validationFlags;
+    uintptr_t top[16];
+};
+
 struct ManifoldPoolReceipt {
     uint32_t apiVersion;
     uint32_t structSize;
@@ -558,6 +730,14 @@ static_assert(sizeof(ContactManagerOwnerRecord) == 132,
     "Unexpected Win32 contact-manager owner record ABI");
 static_assert(sizeof(ContactManagerOwnerReceipt) == 156,
     "Unexpected Win32 contact-manager owner receipt ABI");
+static_assert(sizeof(ContactRecreatePlanRow) == 36,
+    "Unexpected Win32 contact-recreate plan-row ABI");
+static_assert(sizeof(ContactRecreateReceipt) == 268,
+    "Unexpected Win32 contact-recreate receipt ABI");
+static_assert(sizeof(ContactRecreateAuditReceipt) == 232,
+    "Unexpected Win32 contact-recreate audit receipt ABI");
+static_assert(sizeof(SipPoolReceipt) == 128,
+    "Unexpected Win32 SIP-pool receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -620,6 +800,76 @@ enum ContactContextObserverResult : uint32_t {
     ContactContextObserverAllocationFailed = 6,
     ContactContextObserverProtectFailed = 7,
     ContactContextObserverPatchChanged = 8
+};
+
+enum ContactRecreateResult : uint32_t {
+    ContactRecreateOk = 1,
+    ContactRecreateBadArgument = 2,
+    ContactRecreateRevisionMismatch = 3,
+    ContactRecreateObserverMissing = 4,
+    ContactRecreateAlreadyArmed = 5,
+    ContactRecreateInvalidPlan = 6,
+    ContactRecreateContactMembership = 7,
+    ContactRecreateManifoldMembership = 8,
+    ContactRecreateMetadataMismatch = 9,
+    ContactRecreateNotWritable = 10,
+    ContactRecreateWriteVerificationFailed = 11,
+    ContactRecreateUnexpectedPair = 12,
+    ContactRecreateDuplicatePair = 13,
+    ContactRecreateManagerUnavailable = 14,
+    ContactRecreateManifoldUnavailable = 15,
+    ContactRecreateThreadChanged = 16,
+    ContactRecreateContextChanged = 17,
+    ContactRecreateSipMembership = 18,
+    ContactRecreateSipUnavailable = 19,
+    ContactRecreateSipResultMismatch = 20
+};
+
+enum SipPoolResult : uint32_t {
+    SipPoolOk = 1,
+    SipPoolBadArgument = 2,
+    SipPoolRevisionMismatch = 3,
+    SipPoolUnreadable = 4,
+    SipPoolInvalidMetadata = 5,
+    SipPoolInvalidNode = 6,
+    SipPoolDuplicateNode = 7,
+    SipPoolCapacityTooSmall = 8
+};
+
+enum ContactRecreateState : uint32_t {
+    ContactRecreateIdle = 0,
+    ContactRecreateArmed = 1,
+    ContactRecreateComplete = 2,
+    ContactRecreatePoisoned = 3
+};
+
+enum ContactRecreateAuditResult : uint32_t {
+    ContactRecreateAuditClean = 1,
+    ContactRecreateAuditHasIssues = 2
+};
+
+enum ContactRecreateAuditCheck : uint32_t {
+    ContactAuditArguments = 1u << 0,
+    ContactAuditObserver = 1u << 1,
+    ContactAuditRecreateState = 1u << 2,
+    ContactAuditRevisions = 1u << 3,
+    ContactAuditTargetBuffers = 1u << 4,
+    ContactAuditTargetUniqueness = 1u << 5,
+    ContactAuditRows = 1u << 6,
+    ContactAuditRowUniqueness = 1u << 7,
+    ContactAuditSipCapture = 1u << 8,
+    ContactAuditSipIdentity = 1u << 9,
+    ContactAuditSipSemanticCounts = 1u << 10,
+    ContactAuditSipMembership = 1u << 11,
+    ContactAuditSipLegacyArm = 1u << 12,
+    ContactAuditContactCapture = 1u << 13,
+    ContactAuditContactIdentity = 1u << 14,
+    ContactAuditContactBitmaps = 1u << 15,
+    ContactAuditContactMembership = 1u << 16,
+    ContactAuditLargeCapture = 1u << 17,
+    ContactAuditLargeIdentity = 1u << 18,
+    ContactAuditLargeMembership = 1u << 19,
+    ContactAuditWritability = 1u << 20
 };
 
 enum ManifoldPoolResult : uint32_t {
@@ -777,6 +1027,8 @@ static const uint32_t kApiVersion = 11;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
+static const uint32_t kMaximumShapeInstancePairs = 4096;
+static const uint32_t kMaximumContactRecreateRows = 32;
 static const uint32_t kMaximumDirtyInteractions = 4096;
 static const uint32_t kMaximumDirtyHashSize = 8192;
 static const uint32_t kCleanupRva = 0x481ED0;
@@ -785,6 +1037,7 @@ static const uint32_t kGetShapesRva = 0xA10740;
 static const uint32_t kCreateContactManagerRva = 0xA69E80;
 static const uint32_t kInitContactManagerRva = 0xA7E5F0;
 static const uint32_t kShapeInstancePairCreateManagerRva = 0xA54430;
+static const uint32_t kCreateShapeInstancePairRva = 0xA4E560;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
@@ -820,6 +1073,13 @@ static const uint8_t kCleanupBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x74,0x53,0x8B,
 static const uint8_t kCreateBytes[] = {0x55,0x8B,0xEC,0x81,0xEC,0x90,0x00,0x00,0x00,0x53,0x8B,0xD9};
 static const uint8_t kGetShapesBytes[] = {0x55,0x8B,0xEC,0x83,0xC1,0x14,0x5D,0xE9};
 static const uint8_t kCreateContactManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
+static const uint8_t kCreateShapeInstancePairBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
+};
+static const uint8_t kCreateShapeInstancePairPoolBytes[] = {
+    0x81,0xC6,0xE0,0x02,0x00,0x00,0x8B,0xD8,
+    0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x07,0x8B,0xCE
+};
 static const uint8_t kCreateContactManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
 };
@@ -1003,7 +1263,72 @@ static volatile LONG g_observedContactManagerContext = 0;
 static volatile LONG g_contactManagerContextObservations = 0;
 static void* g_contactManagerContextTrampoline = 0;
 static uint8_t g_contactManagerContextOriginal[sizeof(kCreateContactManagerBytes)] = {};
+static void* g_shapeInstancePairTrampoline = 0;
+static uint8_t g_shapeInstancePairOriginal[sizeof(kCreateShapeInstancePairBytes)] = {};
 static bool g_contactManagerContextObserverInstalled = false;
+static volatile LONG g_contactRecreateState = ContactRecreateIdle;
+static volatile LONG g_contactRecreateResult = ContactRecreateOk;
+static volatile LONG g_contactRecreateError = ERROR_SUCCESS;
+static uintptr_t g_contactRecreateUnityBase = 0;
+static uintptr_t g_contactRecreateContext = 0;
+static uintptr_t g_contactRecreateFreeArray = 0;
+static uintptr_t g_contactRecreateLargePool = 0;
+static uint32_t g_contactRecreateRowCount = 0;
+static uint32_t g_contactRecreateMatchedCount = 0;
+static uint32_t g_contactRecreateMatchedMask = 0;
+static uint32_t g_contactRecreateThreadId = 0;
+static volatile LONG g_contactRecreateHookLock = 0;
+static volatile LONG g_sipRecreateHookLock = 0;
+static volatile LONG g_contactRecreateObserverEntries = 0;
+static volatile LONG g_sipRecreateObserverEntries = 0;
+static uint32_t g_contactRecreateContactCountBefore = 0;
+static uint32_t g_contactRecreateTargetContactCount = 0;
+static uint32_t g_contactRecreateContactHashBefore = 0;
+static uint32_t g_contactRecreateTargetContactHash = 0;
+static uint32_t g_contactRecreateLargeCountBefore = 0;
+static uint32_t g_contactRecreateTargetLargeCount = 0;
+static uint32_t g_contactRecreateLargeHashBefore = 0;
+static uint32_t g_contactRecreateTargetLargeHash = 0;
+static uint32_t g_contactRecreateLargeUsedBefore = 0;
+static uint32_t g_contactRecreateTargetLargeUsed = 0;
+static uint32_t g_contactRecreateLargeUnreleasedBefore = 0;
+static uint32_t g_contactRecreateTargetLargeUnreleased = 0;
+static uintptr_t g_contactRecreateLastSip = 0;
+static uintptr_t g_contactRecreateLastShapeLow = 0;
+static uintptr_t g_contactRecreateLastShapeHigh = 0;
+static uintptr_t g_contactRecreateLastManager = 0;
+static uintptr_t g_contactRecreateLastManifold = 0;
+static uint32_t g_contactRecreateInvalidRow = 0xFFFFFFFFu;
+static uint32_t g_contactRecreateDetail = 0;
+static uint32_t g_contactRecreateAttemptOrdinal = 0;
+static uintptr_t g_contactRecreateAttemptSip = 0;
+static uintptr_t g_contactRecreateAttemptShapeLow = 0;
+static uintptr_t g_contactRecreateAttemptShapeHigh = 0;
+static uint32_t g_contactRecreateAttemptRow = 0xFFFFFFFFu;
+static uint32_t g_contactRecreateAttemptMatchedMask = 0;
+static uint32_t g_contactRecreateAttemptFreeCount = 0xFFFFFFFFu;
+static uint32_t g_contactRecreateAttemptManagerIndex = 0xFFFFFFFFu;
+static uintptr_t g_contactRecreateAttemptLargeHead = 0;
+static uint32_t g_contactRecreateAttemptManifoldIndex = 0xFFFFFFFFu;
+static uintptr_t g_contactRecreateNPhaseCore = 0;
+static uintptr_t g_contactRecreateSipPool = 0;
+static uint32_t g_contactRecreateSipMatchedCount = 0;
+static uint32_t g_contactRecreateSipMatchedMask = 0;
+static uint32_t g_contactRecreateTargetSipCount = 0;
+static uint32_t g_contactRecreateTargetSipHash = 0;
+static uint32_t g_contactRecreateTargetSipUsed = 0;
+static uint32_t g_contactRecreateTargetSipUnreleased = 0;
+static uintptr_t g_contactRecreateLastAllocatedSip = 0;
+static uint32_t g_sipRecreateAttemptRow = 0xFFFFFFFFu;
+static ContactRecreatePlanRow g_contactRecreateRows[kMaximumContactRecreateRows] = {};
+static uintptr_t g_contactRecreateTargetContact[kMaximumContactManagers] = {};
+static uintptr_t g_contactRecreateTargetLarge[kMaximumManifolds] = {};
+static uintptr_t g_contactRecreateScratchContact[kMaximumContactManagers] = {};
+static uintptr_t g_contactRecreateScratchLarge[kMaximumManifolds] = {};
+static uintptr_t g_contactRecreatePrimedLarge[kMaximumManifolds] = {};
+static uintptr_t g_contactRecreateTargetSip[kMaximumShapeInstancePairs] = {};
+static uintptr_t g_contactRecreateScratchSip[kMaximumShapeInstancePairs] = {};
+static uintptr_t g_contactRecreatePrimedSip[kMaximumShapeInstancePairs] = {};
 static uintptr_t g_dirtyInteractionUnityBase = 0;
 static void* g_dirtyInteractionTrampoline = 0;
 static uint8_t g_dirtyInteractionOriginal[sizeof(kUpdateDirtyInteractionsBytes)] = {};
@@ -1013,6 +1338,8 @@ static volatile LONG g_dirtyInteractionError = ERROR_INVALID_STATE;
 static volatile LONG g_dirtyInteractionCaptures = 0;
 static volatile LONG g_dirtyInteractionRestores = 0;
 static bool g_dirtyInteractionInstalled = false;
+static uintptr_t g_lastObservedNPhaseCore = 0;
+static volatile LONG g_dirtyNPhaseObservations = 0;
 static uintptr_t g_dirtyInteractionNPhaseCore = 0;
 static uintptr_t g_dirtyInteractionSet = 0;
 static uintptr_t g_dirtyInteractionEntries = 0;
@@ -1073,8 +1400,36 @@ static int FailContactContextObserver(ContactContextObserverReceipt* receipt,
     return 0;
 }
 
+static int FailContactRecreate(ContactRecreateReceipt* receipt,
+    ContactRecreateResult result, uint32_t error, uint32_t invalidRow,
+    uint32_t detail) {
+    InterlockedExchange(&g_contactRecreateResult, result);
+    InterlockedExchange(&g_contactRecreateError, static_cast<LONG>(error));
+    InterlockedExchange(&g_contactRecreateState, ContactRecreatePoisoned);
+    g_contactRecreateInvalidRow = invalidRow;
+    g_contactRecreateDetail = detail;
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->state = ContactRecreatePoisoned;
+        receipt->invalidRow = invalidRow;
+        receipt->detail = detail;
+        receipt->armed = 0;
+    }
+    return 0;
+}
+
 static int FailManifoldPool(ManifoldPoolReceipt* receipt,
     ManifoldPoolResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailSipPool(SipPoolReceipt* receipt, SipPoolResult result,
+    uint32_t error) {
     if (receipt) {
         receipt->result = result;
         receipt->lastError = error;
@@ -1836,6 +2191,114 @@ static void InitializeContactContextObserverReceipt(ContactContextObserverReceip
     receipt->installed = g_contactManagerContextObserverInstalled ? 1u : 0u;
 }
 
+static void InitializeContactRecreateReceipt(ContactRecreateReceipt* receipt,
+    uintptr_t unityBase, uintptr_t context) {
+    *receipt = {};
+    receipt->apiVersion = 2;
+    receipt->structSize = sizeof(ContactRecreateReceipt);
+    receipt->result = static_cast<uint32_t>(g_contactRecreateResult);
+    receipt->lastError = static_cast<uint32_t>(g_contactRecreateError);
+    receipt->unityBase = unityBase;
+    receipt->context = context;
+    receipt->freeArray = g_contactRecreateFreeArray;
+    receipt->largePool = g_contactRecreateLargePool;
+    receipt->state = static_cast<uint32_t>(g_contactRecreateState);
+    receipt->rowCount = g_contactRecreateRowCount;
+    receipt->matchedCount = g_contactRecreateMatchedCount;
+    receipt->remainingCount = g_contactRecreateRowCount -
+        g_contactRecreateMatchedCount;
+    receipt->contactCountBefore = g_contactRecreateContactCountBefore;
+    receipt->targetContactCount = g_contactRecreateTargetContactCount;
+    receipt->contactHashBefore = g_contactRecreateContactHashBefore;
+    receipt->targetContactHash = g_contactRecreateTargetContactHash;
+    receipt->largeCountBefore = g_contactRecreateLargeCountBefore;
+    receipt->targetLargeCount = g_contactRecreateTargetLargeCount;
+    receipt->largeHashBefore = g_contactRecreateLargeHashBefore;
+    receipt->targetLargeHash = g_contactRecreateTargetLargeHash;
+    receipt->largeUsedBefore = g_contactRecreateLargeUsedBefore;
+    receipt->targetLargeUsed = g_contactRecreateTargetLargeUsed;
+    receipt->largeUnreleasedBefore =
+        g_contactRecreateLargeUnreleasedBefore;
+    receipt->targetLargeUnreleased =
+        g_contactRecreateTargetLargeUnreleased;
+    receipt->matchedMask = g_contactRecreateMatchedMask;
+    receipt->threadId = g_contactRecreateThreadId;
+    receipt->lastSip = g_contactRecreateLastSip;
+    receipt->lastShapeLow = g_contactRecreateLastShapeLow;
+    receipt->lastShapeHigh = g_contactRecreateLastShapeHigh;
+    receipt->lastManager = g_contactRecreateLastManager;
+    receipt->lastManifold = g_contactRecreateLastManifold;
+    receipt->invalidRow = g_contactRecreateInvalidRow;
+    receipt->detail = g_contactRecreateDetail;
+    receipt->installed = g_contactManagerContextObserverInstalled ? 1u : 0u;
+    receipt->armed = g_contactRecreateState == ContactRecreateArmed ? 1u : 0u;
+    receipt->observerEntries = static_cast<uint32_t>(
+        g_contactRecreateObserverEntries);
+    receipt->attemptOrdinal = g_contactRecreateAttemptOrdinal;
+    receipt->attemptSip = g_contactRecreateAttemptSip;
+    receipt->attemptShapeLow = g_contactRecreateAttemptShapeLow;
+    receipt->attemptShapeHigh = g_contactRecreateAttemptShapeHigh;
+    receipt->attemptRow = g_contactRecreateAttemptRow;
+    receipt->attemptMatchedMask = g_contactRecreateAttemptMatchedMask;
+    receipt->attemptFreeCount = g_contactRecreateAttemptFreeCount;
+    receipt->attemptManagerIndex = g_contactRecreateAttemptManagerIndex;
+    receipt->attemptLargeHead = g_contactRecreateAttemptLargeHead;
+    receipt->attemptManifoldIndex = g_contactRecreateAttemptManifoldIndex;
+    receipt->nphaseCore = g_contactRecreateNPhaseCore;
+    receipt->sipPool = g_contactRecreateSipPool;
+    receipt->sipMatchedCount = g_contactRecreateSipMatchedCount;
+    receipt->sipRemainingCount = g_contactRecreateRowCount -
+        g_contactRecreateSipMatchedCount;
+    receipt->targetSipCount = g_contactRecreateTargetSipCount;
+    receipt->targetSipHash = g_contactRecreateTargetSipHash;
+    receipt->targetSipUsed = g_contactRecreateTargetSipUsed;
+    receipt->targetSipUnreleased = g_contactRecreateTargetSipUnreleased;
+    receipt->sipMatchedMask = g_contactRecreateSipMatchedMask;
+    receipt->sipObserverEntries = static_cast<uint32_t>(
+        g_sipRecreateObserverEntries);
+    receipt->lastAllocatedSip = g_contactRecreateLastAllocatedSip;
+    const uintptr_t sipPool = g_contactRecreateSipPool;
+    if (sipPool && Readable(reinterpret_cast<const void*>(sipPool + 0x118),
+            0x10)) {
+        receipt->sipUsedCurrent = *reinterpret_cast<const uint32_t*>(
+            sipPool + 0x118);
+        receipt->sipUnreleasedCurrent = *reinterpret_cast<const uint32_t*>(
+            sipPool + 0x11C);
+        uintptr_t current = *reinterpret_cast<const uintptr_t*>(
+            sipPool + 0x124);
+        uint32_t hash = 2166136261u;
+        while (current && receipt->sipCountCurrent <
+                kMaximumShapeInstancePairs) {
+            hash ^= static_cast<uint32_t>(current);
+            hash *= 16777619u;
+            ++receipt->sipCountCurrent;
+            if (!Readable(reinterpret_cast<const void*>(current),
+                    sizeof(uintptr_t))) {
+                receipt->sipCountCurrent = 0;
+                hash = 0;
+                break;
+            }
+            current = *reinterpret_cast<const uintptr_t*>(current);
+        }
+        if (current) {
+            receipt->sipCountCurrent = 0;
+            hash = 0;
+        }
+        receipt->sipHashCurrent = hash;
+    }
+}
+
+static void InitializeSipPoolReceipt(SipPoolReceipt* receipt,
+    uintptr_t unityBase, uintptr_t nphaseCore) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(SipPoolReceipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
+    receipt->pool = nphaseCore ? nphaseCore + 0x2E0 : 0;
+    receipt->elementSize = 0x44;
+}
+
 static void InitializeManifoldPoolReceipt(ManifoldPoolReceipt* receipt,
     uintptr_t unityBase, uintptr_t context, uint32_t poolKind) {
     *receipt = {};
@@ -1880,18 +2343,624 @@ static void __cdecl ObserveContactManagerContext(uintptr_t context) {
     InterlockedIncrement(&g_contactManagerContextObservations);
 }
 
-// This pass-through observer records only PxsContext's this pointer. It runs
-// before the untouched shipped createContactManager body and changes no
-// allocator, descriptor, manager or return value.
-__declspec(naked) static void HookCreateContactManagerContext() {
+static bool ReadContactRecreateBitmapBit(uintptr_t bitmap, uint32_t slot,
+    bool& value) {
+    value = false;
+    if (!Readable(reinterpret_cast<const void*>(bitmap), 8)) return false;
+    const uintptr_t map = *reinterpret_cast<const uintptr_t*>(bitmap);
+    const uint32_t wordCount = *reinterpret_cast<const uint32_t*>(bitmap + 4) &
+        0x7FFFFFFFu;
+    const uint32_t word = slot >> 5;
+    if (!map || word >= wordCount || wordCount > 0x20000u ||
+        !Readable(reinterpret_cast<const void*>(map + word * 4), 4))
+        return false;
+    value = (*reinterpret_cast<const uint32_t*>(map + word * 4) &
+        (1u << (slot & 31u))) != 0;
+    return true;
+}
+
+static bool ContactRecreateManifoldFreeIndex(uintptr_t pool,
+    uintptr_t target, uint32_t& index) {
+    index = 0xFFFFFFFFu;
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x124),
+            sizeof(uintptr_t))) return false;
+    uintptr_t current = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    for (uint32_t i = 0; current && i < kMaximumManifolds; ++i) {
+        if (current == target) {
+            index = i;
+            return true;
+        }
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t))) return false;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    return current == 0;
+}
+
+static bool ContactRecreateSipFreeIndex(uintptr_t target, uint32_t& index) {
+    index = 0xFFFFFFFFu;
+    const uintptr_t pool = g_contactRecreateSipPool;
+    if (!pool || !Readable(reinterpret_cast<const void*>(pool + 0x124),
+            sizeof(uintptr_t))) return false;
+    uintptr_t current = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    for (uint32_t i = 0; current && i < kMaximumShapeInstancePairs; ++i) {
+        if (current == target) {
+            index = i;
+            return true;
+        }
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t))) return false;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    return current == 0;
+}
+
+static void RefreshContactRecreateCompletion() {
+    if (g_contactRecreateMatchedCount == g_contactRecreateRowCount &&
+        g_contactRecreateSipMatchedCount == g_contactRecreateRowCount)
+        InterlockedExchange(&g_contactRecreateState,
+            ContactRecreateComplete);
+    else if (g_contactRecreateState == ContactRecreateComplete)
+        InterlockedExchange(&g_contactRecreateState, ContactRecreateArmed);
+}
+
+static bool ReconcileReturnedSipRecreateRows() {
+    const uintptr_t pool = g_contactRecreateSipPool;
+    if (!pool || pool != g_contactRecreateNPhaseCore + 0x2E0 ||
+        !Readable(reinterpret_cast<const void*>(pool + 0x118), 0x10))
+        return false;
+    for (uint32_t rowIndex = 0; rowIndex < g_contactRecreateRowCount;
+        ++rowIndex) {
+        const uint32_t bit = 1u << rowIndex;
+        if ((g_contactRecreateSipMatchedMask & bit) == 0) continue;
+        uint32_t index = 0xFFFFFFFFu;
+        if (!ContactRecreateSipFreeIndex(
+                g_contactRecreateRows[rowIndex].targetSip, index))
+            return false;
+        if (index == 0xFFFFFFFFu) continue;
+        g_contactRecreateSipMatchedMask &= ~bit;
+        --g_contactRecreateSipMatchedCount;
+    }
+    RefreshContactRecreateCompletion();
+    return true;
+}
+
+static bool ReconcileReturnedContactRecreateRows(uintptr_t context) {
+    if (!Readable(reinterpret_cast<const void*>(context + 0x2C8), 8) ||
+        *reinterpret_cast<const uintptr_t*>(context + 0x2C8) !=
+            g_contactRecreateFreeArray)
+        return false;
+    const uint32_t freeCount = *reinterpret_cast<const uint32_t*>(
+        context + 0x2CC);
+    if (freeCount > kMaximumContactManagers ||
+        !Readable(reinterpret_cast<const void*>(g_contactRecreateFreeArray),
+            freeCount * sizeof(uintptr_t))) return false;
+    const uintptr_t* freeArray = reinterpret_cast<const uintptr_t*>(
+        g_contactRecreateFreeArray);
+    for (uint32_t rowIndex = 0; rowIndex < g_contactRecreateRowCount;
+        ++rowIndex) {
+        const uint32_t bit = 1u << rowIndex;
+        if ((g_contactRecreateMatchedMask & bit) == 0) continue;
+        const ContactRecreatePlanRow& row = g_contactRecreateRows[rowIndex];
+        bool managerFree = false;
+        for (uint32_t i = 0; i < freeCount; ++i)
+            if (freeArray[i] == row.targetManager) {
+                managerFree = true;
+                break;
+            }
+        uint32_t manifoldIndex = 0xFFFFFFFFu;
+        if (!ContactRecreateManifoldFreeIndex(g_contactRecreateLargePool,
+                row.targetManifold, manifoldIndex)) return false;
+        const bool manifoldFree = manifoldIndex != 0xFFFFFFFFu;
+        if (managerFree != manifoldFree) return false;
+        if (!managerFree) continue;
+        bool use = false, active = false, touch = false, modifiable = false;
+        if (!ReadContactRecreateBitmapBit(context + 0x2B8 + 0x20,
+                row.targetSlot, use) ||
+            !ReadContactRecreateBitmapBit(context + 0x534,
+                row.targetSlot, active) ||
+            !ReadContactRecreateBitmapBit(context + 0x540,
+                row.targetSlot, touch) ||
+            !ReadContactRecreateBitmapBit(context + 0x16D0,
+                row.targetSlot, modifiable) || use || active || touch ||
+            modifiable) return false;
+        g_contactRecreateMatchedMask &= ~bit;
+        --g_contactRecreateMatchedCount;
+    }
+    RefreshContactRecreateCompletion();
+    return true;
+}
+
+static bool CountUsedContactManagersForPair(uintptr_t context,
+    uintptr_t shapeLow, uintptr_t shapeHigh, uint32_t& count) {
+    count = 0;
+    const uintptr_t pool = context + 0x2B8;
+    if (!Readable(reinterpret_cast<const void*>(pool), 0x28)) return false;
+    const uint32_t elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        pool + 0x00);
+    const uint32_t slabCount = *reinterpret_cast<const uint32_t*>(pool + 0x08);
+    const uintptr_t slabs = *reinterpret_cast<const uintptr_t*>(pool + 0x18);
+    const uintptr_t useMap = *reinterpret_cast<const uintptr_t*>(pool + 0x20);
+    const uint32_t useWords = *reinterpret_cast<const uint32_t*>(pool + 0x24) &
+        0x7FFFFFFFu;
+    if (elementsPerSlab != 256u || !slabCount ||
+        slabCount > kMaximumContactManagers / elementsPerSlab || !slabs ||
+        !useMap || useWords < ((slabCount * elementsPerSlab + 31u) >> 5) ||
+        !Readable(reinterpret_cast<const void*>(slabs),
+            slabCount * sizeof(uintptr_t)) ||
+        !Readable(reinterpret_cast<const void*>(useMap),
+            ((slabCount * elementsPerSlab + 31u) >> 5) * 4)) return false;
+    const uint32_t totalSlots = slabCount * elementsPerSlab;
+    for (uint32_t slot = 0; slot < totalSlots; ++slot) {
+        if ((*reinterpret_cast<const uint32_t*>(useMap +
+                (slot >> 5) * 4) & (1u << (slot & 31u))) == 0) continue;
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(slabs)[
+            slot >> 8];
+        const uintptr_t manager = slab + (slot & 0xFFu) * kContactManagerSize;
+        if (!slab || !Readable(reinterpret_cast<const void*>(manager + 0x5C),
+                sizeof(uintptr_t))) return false;
+        const uintptr_t shape0 = *reinterpret_cast<const uintptr_t*>(
+            manager + 0x58);
+        const uintptr_t shape1 = *reinterpret_cast<const uintptr_t*>(
+            manager + 0x5C);
+        const uintptr_t low = shape0 < shape1 ? shape0 : shape1;
+        const uintptr_t high = shape0 < shape1 ? shape1 : shape0;
+        if (low == shapeLow && high == shapeHigh) ++count;
+    }
+    return true;
+}
+
+static void ReleaseContactRecreateHookLock() {
+    MemoryBarrier();
+    InterlockedExchange(&g_contactRecreateHookLock, 0);
+}
+
+static void ReleaseSipRecreateHookLock() {
+    MemoryBarrier();
+    InterlockedExchange(&g_sipRecreateHookLock, 0);
+}
+
+static bool ReadShapeSimPxsShapeCore(uintptr_t shapeSim,
+    uintptr_t& pxsShapeCore) {
+    pxsShapeCore = 0;
+    if (!shapeSim || !Readable(reinterpret_cast<const void*>(shapeSim + 0x1C),
+            sizeof(uintptr_t))) return false;
+    const uintptr_t shapeCore = *reinterpret_cast<const uintptr_t*>(
+        shapeSim + 0x1C);
+    if (!shapeCore || !Readable(reinterpret_cast<const void*>(shapeCore + 0x20),
+            sizeof(uintptr_t))) return false;
+    pxsShapeCore = shapeCore + 0x20;
+    return true;
+}
+
+static int __cdecl ObserveAndPrepareShapeInstancePair(uintptr_t nphaseCore,
+    uintptr_t shapeSim0, uintptr_t shapeSim1) {
+    LONG state = g_contactRecreateState;
+    if (state != ContactRecreateArmed && state != ContactRecreateComplete &&
+        InterlockedCompareExchange(&g_sipRecreateHookLock, 0, 0) == 0)
+        return 0;
+    while (InterlockedCompareExchange(&g_sipRecreateHookLock, 1, 0) != 0)
+        SwitchToThread();
+    state = g_contactRecreateState;
+    if (state != ContactRecreateArmed && state != ContactRecreateComplete) {
+        ReleaseSipRecreateHookLock();
+        return 0;
+    }
+    InterlockedIncrement(&g_sipRecreateObserverEntries);
+    g_sipRecreateAttemptRow = 0xFFFFFFFFu;
+    if (nphaseCore != g_contactRecreateNPhaseCore ||
+        nphaseCore + 0x2E0 != g_contactRecreateSipPool) {
+        FailContactRecreate(0, ContactRecreateContextChanged,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu,
+            static_cast<uint32_t>(nphaseCore));
+        return 1;
+    }
+    uintptr_t shape0 = 0, shape1 = 0;
+    if (!ReadShapeSimPxsShapeCore(shapeSim0, shape0) ||
+        !ReadShapeSimPxsShapeCore(shapeSim1, shape1) || shape0 == shape1) {
+        FailContactRecreate(0, ContactRecreateBadArgument, ERROR_NOACCESS,
+            0xFFFFFFFFu, 25);
+        return 1;
+    }
+    const uintptr_t shapeLow = shape0 < shape1 ? shape0 : shape1;
+    const uintptr_t shapeHigh = shape0 < shape1 ? shape1 : shape0;
+    if (!ReconcileReturnedSipRecreateRows()) {
+        FailContactRecreate(0, ContactRecreateMetadataMismatch,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 26);
+        return 1;
+    }
+    uint32_t rowIndex = 0xFFFFFFFFu;
+    for (uint32_t i = 0; i < g_contactRecreateRowCount; ++i) {
+        if (g_contactRecreateRows[i].pxsShapeCoreLow == shapeLow &&
+            g_contactRecreateRows[i].pxsShapeCoreHigh == shapeHigh) {
+            rowIndex = i;
+            break;
+        }
+    }
+    g_sipRecreateAttemptRow = rowIndex;
+    if (rowIndex == 0xFFFFFFFFu) return 1;
+    const uint32_t bit = 1u << rowIndex;
+    if ((g_contactRecreateSipMatchedMask & bit) != 0) {
+        FailContactRecreate(0, ContactRecreateDuplicatePair,
+            ERROR_ALREADY_EXISTS, rowIndex, 27);
+        return 1;
+    }
+    const ContactRecreatePlanRow& row = g_contactRecreateRows[rowIndex];
+    const uintptr_t pool = g_contactRecreateSipPool;
+    const uint32_t remaining = g_contactRecreateRowCount -
+        g_contactRecreateSipMatchedCount;
+    const uint32_t used = *reinterpret_cast<const uint32_t*>(pool + 0x118);
+    const uint32_t unreleased = *reinterpret_cast<const uint32_t*>(
+        pool + 0x11C);
+    if (unreleased != g_contactRecreateTargetSipCount + remaining ||
+        used + remaining != g_contactRecreateTargetSipUsed ||
+        unreleased != g_contactRecreateTargetSipUnreleased + remaining) {
+        FailContactRecreate(0, ContactRecreateSipUnavailable,
+            ERROR_INVALID_STATE, rowIndex, 28);
+        return 1;
+    }
+    uintptr_t head = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    uintptr_t previous = 0;
+    uintptr_t current = head;
+    uint32_t traversed = 0;
+    while (current && current != row.targetSip && traversed < unreleased) {
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t))) break;
+        previous = current;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+        ++traversed;
+    }
+    if (current != row.targetSip || traversed >= unreleased ||
+        !Readable(reinterpret_cast<const void*>(current), sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(pool + 0x124), sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(current), sizeof(uintptr_t)) ||
+        (previous && !Writable(reinterpret_cast<void*>(previous),
+            sizeof(uintptr_t)))) {
+        FailContactRecreate(0, ContactRecreateSipUnavailable,
+            ERROR_NOACCESS, rowIndex, 29);
+        return 1;
+    }
+    if (previous) {
+        const uintptr_t next = *reinterpret_cast<const uintptr_t*>(current);
+        *reinterpret_cast<uintptr_t*>(previous) = next;
+        *reinterpret_cast<uintptr_t*>(current) = head;
+        *reinterpret_cast<uintptr_t*>(pool + 0x124) = current;
+    }
+    MemoryBarrier();
+    if (*reinterpret_cast<const uintptr_t*>(pool + 0x124) != row.targetSip) {
+        FailContactRecreate(0, ContactRecreateWriteVerificationFailed,
+            ERROR_WRITE_FAULT, rowIndex, 30);
+        return 1;
+    }
+    return 1;
+}
+
+static void __cdecl FinishShapeInstancePair(uintptr_t allocatedSip) {
+    const uint32_t rowIndex = g_sipRecreateAttemptRow;
+    g_contactRecreateLastAllocatedSip = allocatedSip;
+    if (rowIndex != 0xFFFFFFFFu && rowIndex < g_contactRecreateRowCount) {
+        const ContactRecreatePlanRow& row = g_contactRecreateRows[rowIndex];
+        if (allocatedSip != row.targetSip) {
+            FailContactRecreate(0, ContactRecreateSipResultMismatch,
+                ERROR_INVALID_STATE, rowIndex,
+                static_cast<uint32_t>(allocatedSip));
+        } else {
+            const uint32_t bit = 1u << rowIndex;
+            g_contactRecreateSipMatchedMask |= bit;
+            ++g_contactRecreateSipMatchedCount;
+            RefreshContactRecreateCompletion();
+        }
+    }
+    g_sipRecreateAttemptRow = 0xFFFFFFFFu;
+    ReleaseSipRecreateHookLock();
+}
+
+static int __cdecl ObserveAndPrepareContactManager(uintptr_t context,
+    uintptr_t descriptor) {
+    ObserveContactManagerContext(context);
+    LONG state = g_contactRecreateState;
+    if (state != ContactRecreateArmed && state != ContactRecreateComplete &&
+        InterlockedCompareExchange(&g_contactRecreateHookLock, 0, 0) == 0)
+        return 0;
+    while (InterlockedCompareExchange(&g_contactRecreateHookLock, 1, 0) != 0)
+        SwitchToThread();
+    state = g_contactRecreateState;
+    if (state != ContactRecreateArmed && state != ContactRecreateComplete) {
+        ReleaseContactRecreateHookLock();
+        return 0;
+    }
+    // This is a pre-hook and always passes through to the shipped function.
+    // While a rewind plan is active, the hook lock remains held through the
+    // untouched shipped function so a worker-thread handoff cannot observe or
+    // consume a different prepared allocator top.  Inactive calls retain the
+    // original direct trampoline path without taking this lock.
+    InterlockedIncrement(&g_contactRecreateObserverEntries);
+    const uint32_t threadId = GetCurrentThreadId();
+    g_contactRecreateThreadId = threadId;
+    if (context != g_contactRecreateContext) {
+        FailContactRecreate(0, ContactRecreateContextChanged,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu,
+            static_cast<uint32_t>(context));
+        return 1;
+    }
+    if (!Readable(reinterpret_cast<const void*>(descriptor), 28)) {
+        FailContactRecreate(0, ContactRecreateBadArgument, ERROR_NOACCESS,
+            0xFFFFFFFFu, 1);
+        return 1;
+    }
+    const uintptr_t sip = *reinterpret_cast<const uintptr_t*>(descriptor);
+    uintptr_t shape0 = *reinterpret_cast<const uintptr_t*>(descriptor + 20);
+    uintptr_t shape1 = *reinterpret_cast<const uintptr_t*>(descriptor + 24);
+    if (!sip || !shape0 || !shape1 || shape0 == shape1) {
+        FailContactRecreate(0, ContactRecreateBadArgument,
+            ERROR_INVALID_DATA, 0xFFFFFFFFu, 2);
+        return 1;
+    }
+    const uintptr_t shapeLow = shape0 < shape1 ? shape0 : shape1;
+    const uintptr_t shapeHigh = shape0 < shape1 ? shape1 : shape0;
+    if (!ReconcileReturnedContactRecreateRows(context)) {
+        FailContactRecreate(0, ContactRecreateMetadataMismatch,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 21);
+        return 1;
+    }
+    uint32_t rowIndex = 0xFFFFFFFFu;
+    for (uint32_t i = 0; i < g_contactRecreateRowCount; ++i) {
+        if (g_contactRecreateRows[i].pxsShapeCoreLow == shapeLow &&
+            g_contactRecreateRows[i].pxsShapeCoreHigh == shapeHigh) {
+            rowIndex = i;
+            break;
+        }
+    }
+    g_contactRecreateAttemptOrdinal = static_cast<uint32_t>(
+        g_contactRecreateObserverEntries);
+    g_contactRecreateAttemptSip = sip;
+    g_contactRecreateAttemptShapeLow = shapeLow;
+    g_contactRecreateAttemptShapeHigh = shapeHigh;
+    g_contactRecreateAttemptRow = rowIndex;
+    g_contactRecreateAttemptMatchedMask = g_contactRecreateMatchedMask;
+    g_contactRecreateAttemptFreeCount = 0xFFFFFFFFu;
+    g_contactRecreateAttemptManagerIndex = 0xFFFFFFFFu;
+    g_contactRecreateAttemptLargeHead = 0;
+    g_contactRecreateAttemptManifoldIndex = 0xFFFFFFFFu;
+    if (Readable(reinterpret_cast<const void*>(context + 0x2C8), 8) &&
+        *reinterpret_cast<const uintptr_t*>(context + 0x2C8) ==
+            g_contactRecreateFreeArray) {
+        const uint32_t diagnosticFreeCount =
+            *reinterpret_cast<const uint32_t*>(context + 0x2CC);
+        g_contactRecreateAttemptFreeCount = diagnosticFreeCount;
+    }
+    const uintptr_t diagnosticPool = context + 0x2E4;
+    if (diagnosticPool == g_contactRecreateLargePool &&
+        Readable(reinterpret_cast<const void*>(diagnosticPool + 0x124),
+            sizeof(uintptr_t)))
+        g_contactRecreateAttemptLargeHead =
+            *reinterpret_cast<const uintptr_t*>(diagnosticPool + 0x124);
+
+    // The maintenance pass may create short-lived pairs that were absent at
+    // the checkpoint.  They receive the untouched allocator behavior.  If
+    // one survives or consumes a checkpoint-owned entry, the exact count,
+    // order, membership, and owner checks reject the final boundary or the
+    // next tracked allocation; a transient that is destroyed first restores
+    // the LIFO tops and is behaviorally invisible.
+    if (rowIndex == 0xFFFFFFFFu) return 1;
+
+    const ContactRecreatePlanRow& row = g_contactRecreateRows[rowIndex];
+    if (sip != row.targetSip) {
+        FailContactRecreate(0, ContactRecreateSipResultMismatch,
+            ERROR_INVALID_STATE, rowIndex, static_cast<uint32_t>(sip));
+        return 1;
+    }
+    if (!Readable(reinterpret_cast<const void*>(sip + 0x38),
+            sizeof(uintptr_t)) ||
+        *reinterpret_cast<const uintptr_t*>(sip + 0x38) != 0) {
+        FailContactRecreate(0, ContactRecreateDuplicatePair,
+            ERROR_ALREADY_EXISTS, rowIndex, 22);
+        return 1;
+    }
+    uint32_t usedPairCount = 0;
+    if (!CountUsedContactManagersForPair(context, shapeLow, shapeHigh,
+            usedPairCount) || usedPairCount != 0) {
+        FailContactRecreate(0, ContactRecreateDuplicatePair,
+            ERROR_ALREADY_EXISTS, rowIndex, 23);
+        return 1;
+    }
+    if (g_contactRecreateAttemptFreeCount <= kMaximumContactManagers &&
+        Readable(reinterpret_cast<const void*>(g_contactRecreateFreeArray),
+            g_contactRecreateAttemptFreeCount * sizeof(uintptr_t))) {
+        const uintptr_t* diagnosticFree =
+            reinterpret_cast<const uintptr_t*>(g_contactRecreateFreeArray);
+        for (uint32_t i = 0; i < g_contactRecreateAttemptFreeCount; ++i) {
+            if (diagnosticFree[i] == row.targetManager) {
+                g_contactRecreateAttemptManagerIndex = i;
+                break;
+            }
+        }
+    }
+    if (g_contactRecreateAttemptLargeHead) {
+        uintptr_t diagnosticCurrent = g_contactRecreateAttemptLargeHead;
+        for (uint32_t i = 0; diagnosticCurrent &&
+            i < kMaximumManifolds; ++i) {
+            if (diagnosticCurrent == row.targetManifold) {
+                g_contactRecreateAttemptManifoldIndex = i;
+                break;
+            }
+            if (!Readable(reinterpret_cast<const void*>(diagnosticCurrent),
+                    sizeof(uintptr_t))) break;
+            diagnosticCurrent = *reinterpret_cast<const uintptr_t*>(
+                diagnosticCurrent);
+        }
+    }
+    const uint32_t bit = 1u << rowIndex;
+    if ((g_contactRecreateMatchedMask & bit) != 0) {
+        FailContactRecreate(0, ContactRecreateDuplicatePair,
+            ERROR_ALREADY_EXISTS, rowIndex, 4);
+        return 1;
+    }
+
+    if (!Readable(reinterpret_cast<const void*>(context + 0x2C8), 8) ||
+        *reinterpret_cast<const uintptr_t*>(context + 0x2C8) !=
+            g_contactRecreateFreeArray) {
+        FailContactRecreate(0, ContactRecreateContextChanged,
+            ERROR_INVALID_STATE, rowIndex, 5);
+        return 1;
+    }
+    uintptr_t* freeArray = reinterpret_cast<uintptr_t*>(
+        g_contactRecreateFreeArray);
+    const uint32_t remaining = g_contactRecreateRowCount -
+        g_contactRecreateMatchedCount;
+    const uint32_t freeCount = *reinterpret_cast<const uint32_t*>(
+        context + 0x2CC);
+    if (freeCount != g_contactRecreateTargetContactCount + remaining ||
+        !Readable(freeArray, freeCount * sizeof(uintptr_t))) {
+        FailContactRecreate(0, ContactRecreateManagerUnavailable,
+            ERROR_INVALID_STATE, rowIndex, 6);
+        return 1;
+    }
+    uint32_t managerIndex = 0xFFFFFFFFu;
+    for (uint32_t i = g_contactRecreateTargetContactCount;
+        i < freeCount; ++i) {
+        if (freeArray[i] == row.targetManager) {
+            managerIndex = i;
+            break;
+        }
+    }
+    if (managerIndex == 0xFFFFFFFFu ||
+        !Writable(freeArray + managerIndex, sizeof(uintptr_t)) ||
+        !Writable(freeArray + freeCount - 1, sizeof(uintptr_t))) {
+        FailContactRecreate(0, ContactRecreateManagerUnavailable,
+            ERROR_NOACCESS, rowIndex, 7);
+        return 1;
+    }
+
+    const uintptr_t pool = context + 0x2E4;
+    if (pool != g_contactRecreateLargePool ||
+        !Readable(reinterpret_cast<const void*>(pool + 0x118), 0x10)) {
+        FailContactRecreate(0, ContactRecreateContextChanged,
+            ERROR_INVALID_STATE, rowIndex, 8);
+        return 1;
+    }
+    uintptr_t head = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    uintptr_t previous = 0;
+    uintptr_t current = head;
+    uint32_t manifoldIndex = 0;
+    const uint32_t expectedLargeCount =
+        g_contactRecreateTargetLargeCount + remaining;
+    while (current && current != row.targetManifold &&
+        manifoldIndex < expectedLargeCount) {
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t))) break;
+        previous = current;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+        ++manifoldIndex;
+    }
+    if (current != row.targetManifold || manifoldIndex >= remaining ||
+        !Readable(reinterpret_cast<const void*>(current), sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(pool + 0x124), sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(current), sizeof(uintptr_t)) ||
+        (previous && !Writable(reinterpret_cast<void*>(previous),
+            sizeof(uintptr_t)))) {
+        FailContactRecreate(0, ContactRecreateManifoldUnavailable,
+            ERROR_NOACCESS, rowIndex, 9);
+        return 1;
+    }
+
+    const uintptr_t displacedManager = freeArray[freeCount - 1];
+    freeArray[managerIndex] = displacedManager;
+    freeArray[freeCount - 1] = row.targetManager;
+    if (previous) {
+        const uintptr_t next = *reinterpret_cast<const uintptr_t*>(current);
+        *reinterpret_cast<uintptr_t*>(previous) = next;
+        *reinterpret_cast<uintptr_t*>(current) = head;
+        *reinterpret_cast<uintptr_t*>(pool + 0x124) = current;
+    }
+    MemoryBarrier();
+    if (freeArray[freeCount - 1] != row.targetManager ||
+        *reinterpret_cast<const uintptr_t*>(pool + 0x124) !=
+            row.targetManifold) {
+        FailContactRecreate(0, ContactRecreateWriteVerificationFailed,
+            ERROR_WRITE_FAULT, rowIndex, 10);
+        return 1;
+    }
+
+    g_contactRecreateMatchedMask |= bit;
+    ++g_contactRecreateMatchedCount;
+    g_contactRecreateLastSip = sip;
+    g_contactRecreateLastShapeLow = shapeLow;
+    g_contactRecreateLastShapeHigh = shapeHigh;
+    g_contactRecreateLastManager = row.targetManager;
+    g_contactRecreateLastManifold = row.targetManifold;
+    RefreshContactRecreateCompletion();
+    return 1;
+}
+
+// The shape-pair hook selects only the identity popped by PhysX's own pool.
+// Construction, overlap filtering, manager creation, and every side effect
+// remain inside the untouched shipped implementation.
+__declspec(naked) static void HookCreateShapeInstancePair() {
     __asm pushfd
     __asm pushad
+    __asm mov eax, dword ptr [esp + 0x28]
+    __asm mov edx, dword ptr [esp + 0x2C]
+    __asm push edx
+    __asm push eax
     __asm push ecx
-    __asm call ObserveContactManagerContext
+    __asm call ObserveAndPrepareShapeInstancePair
+    __asm add esp, 0x0C
+    __asm mov dword ptr [esp + 0x0C], eax
+    __asm popad
+    __asm popfd
+    __asm cmp dword ptr [esp - 0x18], 0
+    __asm jne locked_sip_call
+    __asm jmp dword ptr [g_shapeInstancePairTrampoline]
+locked_sip_call:
+    __asm push dword ptr [esp + 0x0C]
+    __asm push dword ptr [esp + 0x0C]
+    __asm push dword ptr [esp + 0x0C]
+    __asm call dword ptr [g_shapeInstancePairTrampoline]
+    __asm pushfd
+    __asm pushad
+    __asm mov ecx, dword ptr [esp + 0x1C]
+    __asm push ecx
+    __asm call FinishShapeInstancePair
     __asm add esp, 4
     __asm popad
     __asm popfd
+    __asm ret 0x0C
+}
+
+// This observer is a pass-through during ordinary play.  Only an explicitly
+// armed rewind plan may reorder still-free allocator entries before the
+// untouched shipped createContactManager body consumes them.
+__declspec(naked) static void HookCreateContactManagerContext() {
+    __asm pushfd
+    __asm pushad
+    __asm mov eax, dword ptr [esp + 0x28]
+    __asm push eax
+    __asm push ecx
+    __asm call ObserveAndPrepareContactManager
+    __asm add esp, 8
+    // POPAD deliberately ignores its saved-ESP slot.  Reuse that slot to
+    // carry the helper's lock-ownership result while restoring every register
+    // and flag exactly as the shipped function received them.
+    __asm mov dword ptr [esp + 0x0C], eax
+    __asm popad
+    __asm popfd
+    __asm cmp dword ptr [esp - 0x18], 0
+    __asm jne locked_recreate_call
     __asm jmp dword ptr [g_contactManagerContextTrampoline]
+locked_recreate_call:
+    // Rebuild the original thiscall argument list beneath a private return
+    // address.  The trampoline executes the untouched shipped function and
+    // its RET 8 returns here with the original caller stack restored.
+    __asm push dword ptr [esp + 8]
+    __asm push dword ptr [esp + 8]
+    __asm call dword ptr [g_contactManagerContextTrampoline]
+    __asm pushfd
+    __asm pushad
+    __asm call ReleaseContactRecreateHookLock
+    __asm popad
+    __asm popfd
+    __asm ret 8
 }
 
 static DirtyInteractionKey ReadDirtyInteractionKey(uintptr_t interaction) {
@@ -1949,6 +3018,12 @@ static void CompleteDirtyInteractionOrder(DirtyInteractionOrderResult result,
 // hook is inert unless explicitly armed while the authoring pause fence is
 // held.  All validation completes before a restore writes any PhysX state.
 static void __cdecl ProcessDirtyInteractionOrder(const uintptr_t* saved) {
+    const uintptr_t observedNPhase = saved ? saved[6] : 0;
+    if (observedNPhase) {
+        g_lastObservedNPhaseCore = observedNPhase;
+        MemoryBarrier();
+        InterlockedIncrement(&g_dirtyNPhaseObservations);
+    }
     const LONG action = g_dirtyInteractionAction;
     if (action != DirtyInteractionOrderCapture &&
         action != DirtyInteractionOrderRestore) return;
@@ -2316,6 +3391,8 @@ static int InstallDirtyInteractionOrderHook(uintptr_t unityBase,
     }
     g_dirtyInteractionUnityBase = unityBase;
     g_dirtyInteractionInstalled = true;
+    g_lastObservedNPhaseCore = 0;
+    InterlockedExchange(&g_dirtyNPhaseObservations, 0);
     InterlockedExchange(&g_dirtyInteractionAction,
         DirtyInteractionOrderIdle);
     InterlockedExchange(&g_dirtyInteractionResult,
@@ -2339,6 +3416,31 @@ static int ReadDirtyInteractionOrderStatus(uintptr_t unityBase,
         unityBase != g_dirtyInteractionUnityBase)
         return FailDirtyInteractionOrder(receipt,
             DirtyInteractionOrderNotInstalled, ERROR_INVALID_STATE);
+    return 1;
+}
+
+static int ReadLastObservedNPhaseCore(uintptr_t unityBase,
+    uintptr_t* nphaseCore, uint32_t* observations) {
+    if (!nphaseCore || !observations ||
+        !Writable(nphaseCore, sizeof(*nphaseCore)) ||
+        !Writable(observations, sizeof(*observations))) return 0;
+    *nphaseCore = 0;
+    *observations = 0;
+    if (!g_dirtyInteractionInstalled ||
+        unityBase != g_dirtyInteractionUnityBase) return 0;
+    LONG before = 0;
+    LONG after = 0;
+    uintptr_t observed = 0;
+    do {
+        before = InterlockedCompareExchange(&g_dirtyNPhaseObservations, 0, 0);
+        MemoryBarrier();
+        observed = g_lastObservedNPhaseCore;
+        MemoryBarrier();
+        after = InterlockedCompareExchange(&g_dirtyNPhaseObservations, 0, 0);
+    } while (before != after);
+    if (before <= 0 || !observed) return 0;
+    *nphaseCore = observed;
+    *observations = static_cast<uint32_t>(before);
     return 1;
 }
 
@@ -2531,6 +3633,8 @@ static int UninstallDirtyInteractionOrderHook(uintptr_t unityBase,
     g_dirtyInteractionTrampoline = 0;
     g_dirtyInteractionInstalled = false;
     g_dirtyInteractionUnityBase = 0;
+    g_lastObservedNPhaseCore = 0;
+    InterlockedExchange(&g_dirtyNPhaseObservations, 0);
     g_dirtyInteractionRestoreMode = DirtyInteractionRestoreNone;
     g_dirtyInteractionMatchedCount = 0;
     g_dirtyInteractionCapturedOnlyCount = 0;
@@ -2552,6 +3656,30 @@ static bool HasObserverJump(const void* source) {
     return destination == reinterpret_cast<uintptr_t>(HookCreateContactManagerContext);
 }
 
+static bool HasShapeInstancePairJump(const void* source) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(source);
+    if (bytes[0] != 0xE9 || bytes[5] != 0x90 || bytes[6] != 0x90 ||
+        bytes[7] != 0x90) return false;
+    const int32_t displacement = *reinterpret_cast<const int32_t*>(bytes + 1);
+    const uintptr_t destination = reinterpret_cast<uintptr_t>(source) + 5 +
+        displacement;
+    return destination == reinterpret_cast<uintptr_t>(
+        HookCreateShapeInstancePair);
+}
+
+static bool ShapeInstancePairPoolRevisionMatches(uintptr_t unityBase);
+
+static bool RestoreHookBytes(void* source, const uint8_t* original,
+    uint32_t size) {
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(source, size, PAGE_EXECUTE_READWRITE, &oldProtect))
+        return false;
+    CopyBytes(source, original, size);
+    FlushInstructionCache(GetCurrentProcess(), source, size);
+    DWORD ignored = 0;
+    return VirtualProtect(source, size, oldProtect, &ignored) != FALSE;
+}
+
 static int InstallContactManagerContextObserver(uintptr_t unityBase,
     ContactContextObserverReceipt* receipt) {
     if (!receipt) return 0;
@@ -2562,9 +3690,14 @@ static int InstallContactManagerContextObserver(uintptr_t unityBase,
     if (g_contactManagerContextObserverInstalled)
         return FailContactContextObserver(receipt, ContactContextObserverAlreadyInstalled,
             ERROR_ALREADY_EXISTS);
-    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase + kCreateContactManagerRva);
+    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase +
+        kCreateContactManagerRva);
+    uint8_t* sipSource = reinterpret_cast<uint8_t*>(unityBase +
+        kCreateShapeInstancePairRva);
     if (!Readable(source, sizeof(kCreateContactManagerBytes)) ||
-        !EqualBytes(source, kCreateContactManagerBytes, sizeof(kCreateContactManagerBytes)))
+        !EqualBytes(source, kCreateContactManagerBytes,
+            sizeof(kCreateContactManagerBytes)) ||
+        !ShapeInstancePairPoolRevisionMatches(unityBase))
         return FailContactContextObserver(receipt, ContactContextObserverRevisionMismatch,
             ERROR_REVISION_MISMATCH);
     uint8_t* trampoline = static_cast<uint8_t*>(VirtualAlloc(0,
@@ -2573,6 +3706,15 @@ static int InstallContactManagerContextObserver(uintptr_t unityBase,
     if (!trampoline)
         return FailContactContextObserver(receipt, ContactContextObserverAllocationFailed,
             GetLastError());
+    uint8_t* sipTrampoline = static_cast<uint8_t*>(VirtualAlloc(0,
+        sizeof(kCreateShapeInstancePairBytes) + 5,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    if (!sipTrampoline) {
+        const DWORD error = GetLastError();
+        VirtualFree(trampoline, 0, MEM_RELEASE);
+        return FailContactContextObserver(receipt,
+            ContactContextObserverAllocationFailed, error);
+    }
     CopyBytes(g_contactManagerContextOriginal, source, sizeof(kCreateContactManagerBytes));
     CopyBytes(trampoline, source, sizeof(kCreateContactManagerBytes));
     trampoline[sizeof(kCreateContactManagerBytes)] = 0xE9;
@@ -2581,13 +3723,41 @@ static int InstallContactManagerContextObserver(uintptr_t unityBase,
         reinterpret_cast<uintptr_t>(trampoline + sizeof(kCreateContactManagerBytes)) - 5);
     FlushInstructionCache(GetCurrentProcess(), trampoline,
         sizeof(kCreateContactManagerBytes) + 5);
+    CopyBytes(g_shapeInstancePairOriginal, sipSource,
+        sizeof(kCreateShapeInstancePairBytes));
+    CopyBytes(sipTrampoline, sipSource,
+        sizeof(kCreateShapeInstancePairBytes));
+    sipTrampoline[sizeof(kCreateShapeInstancePairBytes)] = 0xE9;
+    *reinterpret_cast<int32_t*>(sipTrampoline +
+        sizeof(kCreateShapeInstancePairBytes) + 1) = static_cast<int32_t>(
+        reinterpret_cast<uintptr_t>(sipSource +
+            sizeof(kCreateShapeInstancePairBytes)) -
+        reinterpret_cast<uintptr_t>(sipTrampoline +
+            sizeof(kCreateShapeInstancePairBytes)) - 5);
+    FlushInstructionCache(GetCurrentProcess(), sipTrampoline,
+        sizeof(kCreateShapeInstancePairBytes) + 5);
     g_contactManagerContextTrampoline = trampoline;
-    if (!WriteJump(source, HookCreateContactManagerContext,
-        sizeof(kCreateContactManagerBytes))) {
+    g_shapeInstancePairTrampoline = sipTrampoline;
+    if (!WriteJump(sipSource, HookCreateShapeInstancePair,
+            sizeof(kCreateShapeInstancePairBytes))) {
         const DWORD error = GetLastError();
         g_contactManagerContextTrampoline = 0;
+        g_shapeInstancePairTrampoline = 0;
         VirtualFree(trampoline, 0, MEM_RELEASE);
+        VirtualFree(sipTrampoline, 0, MEM_RELEASE);
         return FailContactContextObserver(receipt, ContactContextObserverProtectFailed, error);
+    }
+    if (!WriteJump(source, HookCreateContactManagerContext,
+            sizeof(kCreateContactManagerBytes))) {
+        const DWORD error = GetLastError();
+        RestoreHookBytes(sipSource, g_shapeInstancePairOriginal,
+            sizeof(kCreateShapeInstancePairBytes));
+        g_contactManagerContextTrampoline = 0;
+        g_shapeInstancePairTrampoline = 0;
+        VirtualFree(trampoline, 0, MEM_RELEASE);
+        VirtualFree(sipTrampoline, 0, MEM_RELEASE);
+        return FailContactContextObserver(receipt,
+            ContactContextObserverProtectFailed, error);
     }
     g_observerUnityBase = unityBase;
     g_contactManagerContextObserverInstalled = true;
@@ -2614,26 +3784,30 @@ static int UninstallContactManagerContextObserver(uintptr_t unityBase,
     if (!g_contactManagerContextObserverInstalled || unityBase != g_observerUnityBase)
         return FailContactContextObserver(receipt, ContactContextObserverNotInstalled,
             ERROR_INVALID_STATE);
-    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase + kCreateContactManagerRva);
-    if (!Readable(source, sizeof(kCreateContactManagerBytes)) || !HasObserverJump(source))
+    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase +
+        kCreateContactManagerRva);
+    uint8_t* sipSource = reinterpret_cast<uint8_t*>(unityBase +
+        kCreateShapeInstancePairRva);
+    if (!Readable(source, sizeof(kCreateContactManagerBytes)) ||
+        !HasObserverJump(source) ||
+        !Readable(sipSource, sizeof(kCreateShapeInstancePairBytes)) ||
+        !HasShapeInstancePairJump(sipSource))
         return FailContactContextObserver(receipt, ContactContextObserverPatchChanged,
             ERROR_INVALID_STATE);
-    DWORD oldProtect = 0;
-    if (!VirtualProtect(source, sizeof(kCreateContactManagerBytes),
-        PAGE_EXECUTE_READWRITE, &oldProtect))
+    if (!RestoreHookBytes(source, g_contactManagerContextOriginal,
+            sizeof(kCreateContactManagerBytes)) ||
+        !RestoreHookBytes(sipSource, g_shapeInstancePairOriginal,
+            sizeof(kCreateShapeInstancePairBytes)))
         return FailContactContextObserver(receipt, ContactContextObserverProtectFailed,
             GetLastError());
-    CopyBytes(source, g_contactManagerContextOriginal,
-        sizeof(kCreateContactManagerBytes));
-    FlushInstructionCache(GetCurrentProcess(), source,
-        sizeof(kCreateContactManagerBytes));
-    DWORD ignored = 0;
-    VirtualProtect(source, sizeof(kCreateContactManagerBytes), oldProtect, &ignored);
     void* trampoline = g_contactManagerContextTrampoline;
+    void* sipTrampoline = g_shapeInstancePairTrampoline;
     g_contactManagerContextTrampoline = 0;
+    g_shapeInstancePairTrampoline = 0;
     g_contactManagerContextObserverInstalled = false;
     g_observerUnityBase = 0;
     if (trampoline) VirtualFree(trampoline, 0, MEM_RELEASE);
+    if (sipTrampoline) VirtualFree(sipTrampoline, 0, MEM_RELEASE);
     InitializeContactContextObserverReceipt(receipt, unityBase);
     receipt->result = ContactContextObserverOk;
     return 1;
@@ -3475,6 +4649,1036 @@ static int RestoreManifoldPoolSnapshot(uintptr_t unityBase,
             ERROR_WRITE_FAULT);
     RecordManifoldPoolOrder(receipt, snapshot, snapshotCount, true);
     receipt->result = ManifoldPoolOk;
+    return 1;
+}
+
+static bool ShapeInstancePairPoolRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* entry = reinterpret_cast<const void*>(
+        unityBase + kCreateShapeInstancePairRva);
+    const void* allocation = reinterpret_cast<const void*>(
+        unityBase + kCreateShapeInstancePairRva + 0x65);
+    const bool entryMatches =
+        Readable(entry, sizeof(kCreateShapeInstancePairBytes)) &&
+        (EqualBytes(entry, kCreateShapeInstancePairBytes,
+            sizeof(kCreateShapeInstancePairBytes)) ||
+         (g_contactManagerContextObserverInstalled &&
+            unityBase == g_observerUnityBase &&
+            HasShapeInstancePairJump(entry)));
+    return entryMatches &&
+        Readable(allocation, sizeof(kCreateShapeInstancePairPoolBytes)) &&
+        EqualBytes(allocation, kCreateShapeInstancePairPoolBytes,
+            sizeof(kCreateShapeInstancePairPoolBytes));
+}
+
+static int CaptureShapeInstancePairPool(uintptr_t unityBase,
+    uintptr_t nphaseCore, uintptr_t* snapshot, uint32_t capacity,
+    SipPoolReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeSipPoolReceipt(receipt, unityBase, nphaseCore);
+    if (!unityBase || !nphaseCore)
+        return FailSipPool(receipt, SipPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!ShapeInstancePairPoolRevisionMatches(unityBase))
+        return FailSipPool(receipt, SipPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+    const uintptr_t pool = nphaseCore + 0x2E0;
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x114), 0x14))
+        return FailSipPool(receipt, SipPoolUnreadable, ERROR_NOACCESS);
+    receipt->elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        pool + 0x114);
+    receipt->used = *reinterpret_cast<const uint32_t*>(pool + 0x118);
+    receipt->unreleased = *reinterpret_cast<const uint32_t*>(pool + 0x11C);
+    receipt->slabSize = *reinterpret_cast<const uint32_t*>(pool + 0x120);
+    receipt->freeHead = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    if (receipt->elementsPerSlab != 32u || receipt->slabSize != 0x880u ||
+        receipt->used > kMaximumShapeInstancePairs ||
+        receipt->unreleased > kMaximumShapeInstancePairs ||
+        receipt->used + receipt->unreleased >
+            kMaximumShapeInstancePairs ||
+        ((receipt->used + receipt->unreleased) & 31u) != 0)
+        return FailSipPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+
+    uintptr_t order[kMaximumShapeInstancePairs] = {};
+    receipt->orderHash = 2166136261u;
+    uintptr_t current = receipt->freeHead;
+    while (current) {
+        const uint32_t index = receipt->traversedCount;
+        if (index >= kMaximumShapeInstancePairs)
+            return FailSipPool(receipt, SipPoolInvalidMetadata,
+                ERROR_INSUFFICIENT_BUFFER);
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t)))
+            return FailSipPool(receipt, SipPoolInvalidNode,
+                ERROR_NOACCESS);
+        for (uint32_t i = 0; i < index; ++i)
+            if (order[i] == current)
+                return FailSipPool(receipt, SipPoolDuplicateNode,
+                    ERROR_DUP_NAME);
+        order[index] = current;
+        if (index < 16) receipt->top[index] = current;
+        receipt->orderHash ^= static_cast<uint32_t>(current);
+        receipt->orderHash *= 16777619u;
+        ++receipt->traversedCount;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (receipt->traversedCount != receipt->unreleased)
+        return FailSipPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_STATE);
+    if (capacity < receipt->traversedCount)
+        return FailSipPool(receipt, SipPoolCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER);
+    if (receipt->traversedCount && (!snapshot ||
+        !Writable(snapshot, receipt->traversedCount * sizeof(uintptr_t))))
+        return FailSipPool(receipt, SipPoolBadArgument, ERROR_NOACCESS);
+    if (receipt->traversedCount)
+        CopyWords(snapshot, order, receipt->traversedCount);
+    receipt->validationFlags = 0x1Fu;
+    receipt->result = SipPoolOk;
+    return 1;
+}
+
+static bool ContainsPointer(const uintptr_t* values, uint32_t count,
+    uintptr_t value) {
+    for (uint32_t i = 0; i < count; ++i)
+        if (values[i] == value) return true;
+    return false;
+}
+
+static bool UniqueNonzeroPointers(const uintptr_t* values, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!values[i]) return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (values[i] == values[j]) return false;
+    }
+    return true;
+}
+
+static int AuditContactRecreate(uintptr_t unityBase, uintptr_t context,
+    uintptr_t nphaseCore, uintptr_t expectedSipPool,
+    const uintptr_t* targetSip, uint32_t targetSipCount,
+    uint32_t targetSipUsed, uint32_t targetSipUnreleased,
+    uintptr_t expectedFreeArray, const uintptr_t* targetContact,
+    uint32_t targetContactCount, uintptr_t expectedLargePool,
+    const uintptr_t* targetLarge, uint32_t targetLargeCount,
+    uint32_t targetLargeUsed, uint32_t targetLargeUnreleased,
+    const ContactRecreatePlanRow* rows, uint32_t rowCount,
+    ContactRecreateAuditReceipt* receipt) {
+    if (!receipt) return 0;
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = 1;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = unityBase;
+    receipt->context = context;
+    receipt->nphaseCore = nphaseCore;
+    receipt->sipPool = expectedSipPool;
+    receipt->freeArray = expectedFreeArray;
+    receipt->largePool = expectedLargePool;
+    receipt->recreateState = static_cast<uint32_t>(g_contactRecreateState);
+    receipt->observerInstalled = g_contactManagerContextObserverInstalled &&
+        unityBase == g_observerUnityBase ? 1u : 0u;
+    receipt->rowCount = rowCount;
+    receipt->targetSipCount = targetSipCount;
+    receipt->targetSipUsed = targetSipUsed;
+    receipt->targetSipUnreleased = targetSipUnreleased;
+    receipt->targetContactCount = targetContactCount;
+    receipt->targetLargeCount = targetLargeCount;
+    receipt->targetLargeUsed = targetLargeUsed;
+    receipt->targetLargeUnreleased = targetLargeUnreleased;
+    receipt->firstRow = 0xFFFFFFFFu;
+
+    const auto issue = [&](uint32_t check, ContactRecreateResult result,
+        uint32_t error, uint32_t row, uint32_t detail) {
+        receipt->issueMask |= check;
+        if (!receipt->firstResult) {
+            receipt->firstResult = result;
+            receipt->firstError = error;
+            receipt->firstRow = row;
+            receipt->firstDetail = detail;
+        }
+    };
+
+    receipt->evaluatedMask |= ContactAuditArguments;
+    const bool basicArguments = unityBase && context && nphaseCore &&
+        expectedSipPool && expectedFreeArray && expectedLargePool &&
+        targetContact && targetContactCount && rows && rowCount &&
+        rowCount <= kMaximumContactRecreateRows &&
+        targetSipCount <= kMaximumShapeInstancePairs &&
+        targetContactCount <= kMaximumContactManagers &&
+        targetLargeCount <= kMaximumManifolds &&
+        targetSipCount + rowCount <= kMaximumShapeInstancePairs &&
+        targetContactCount + rowCount <= kMaximumContactManagers &&
+        targetLargeCount + rowCount <= kMaximumManifolds &&
+        (!targetSipCount || targetSip) &&
+        (!targetLargeCount || targetLarge);
+    if (!basicArguments)
+        issue(ContactAuditArguments, ContactRecreateBadArgument,
+            ERROR_INVALID_PARAMETER, 0xFFFFFFFFu, 1);
+
+    receipt->evaluatedMask |= ContactAuditObserver;
+    if (!receipt->observerInstalled)
+        issue(ContactAuditObserver, ContactRecreateObserverMissing,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 2);
+
+    receipt->evaluatedMask |= ContactAuditRecreateState;
+    if (g_contactRecreateState != ContactRecreateIdle)
+        issue(ContactAuditRecreateState, ContactRecreateAlreadyArmed,
+            ERROR_BUSY, 0xFFFFFFFFu, 3);
+
+    receipt->evaluatedMask |= ContactAuditRevisions;
+    if (!unityBase || !ContactManagerOwnerRevisionMatches(unityBase) ||
+        !ShapeInstancePairPoolRevisionMatches(unityBase) ||
+        !ManifoldPoolRevisionMatches(unityBase))
+        issue(ContactAuditRevisions, ContactRecreateRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 0xFFFFFFFFu, 4);
+
+    bool readableTargets = false;
+    if (basicArguments) {
+        receipt->evaluatedMask |= ContactAuditTargetBuffers;
+        readableTargets = (!targetSipCount || Readable(targetSip,
+                targetSipCount * sizeof(uintptr_t))) &&
+            Readable(targetContact,
+                targetContactCount * sizeof(uintptr_t)) &&
+            (!targetLargeCount || Readable(targetLarge,
+                targetLargeCount * sizeof(uintptr_t))) &&
+            Readable(rows, rowCount * sizeof(ContactRecreatePlanRow));
+        if (!readableTargets)
+            issue(ContactAuditTargetBuffers, ContactRecreateBadArgument,
+                ERROR_NOACCESS, 0xFFFFFFFFu, 5);
+    }
+
+    if (readableTargets) {
+        receipt->targetSipHash = OrderHash(targetSip, targetSipCount);
+        receipt->targetContactHash = OrderHash(targetContact,
+            targetContactCount);
+        receipt->targetLargeHash = OrderHash(targetLarge, targetLargeCount);
+
+        receipt->evaluatedMask |= ContactAuditTargetUniqueness;
+        if ((targetSipCount && !UniqueNonzeroPointers(targetSip,
+                targetSipCount)) ||
+            !UniqueNonzeroPointers(targetContact, targetContactCount) ||
+            (targetLargeCount && !UniqueNonzeroPointers(targetLarge,
+                targetLargeCount)))
+            issue(ContactAuditTargetUniqueness, ContactRecreateInvalidPlan,
+                ERROR_DUP_NAME, 0xFFFFFFFFu, 6);
+
+        receipt->evaluatedMask |= ContactAuditRows;
+        for (uint32_t i = 0; i < rowCount; ++i) {
+            const ContactRecreatePlanRow& row = rows[i];
+            if (!row.pxsShapeCoreLow ||
+                row.pxsShapeCoreLow >= row.pxsShapeCoreHigh ||
+                !row.targetManager || !row.targetManifold ||
+                !row.targetSip || row.manifoldBytes != 0xF0u ||
+                ContainsPointer(targetContact, targetContactCount,
+                    row.targetManager) ||
+                ContainsPointer(targetLarge, targetLargeCount,
+                    row.targetManifold)) {
+                ++receipt->invalidRowCount;
+                issue(ContactAuditRows, ContactRecreateInvalidPlan,
+                    ERROR_INVALID_DATA, i, 11);
+            }
+            if (ContainsPointer(targetSip, targetSipCount, row.targetSip))
+                ++receipt->targetFreeSipRowCount;
+            else
+                ++receipt->activeSipRowCount;
+        }
+
+        receipt->evaluatedMask |= ContactAuditRowUniqueness;
+        for (uint32_t i = 0; i < rowCount; ++i) {
+            for (uint32_t j = 0; j < i; ++j) {
+                if ((rows[j].pxsShapeCoreLow == rows[i].pxsShapeCoreLow &&
+                        rows[j].pxsShapeCoreHigh ==
+                            rows[i].pxsShapeCoreHigh) ||
+                    rows[j].targetManager == rows[i].targetManager ||
+                    rows[j].targetManifold == rows[i].targetManifold ||
+                    rows[j].targetSip == rows[i].targetSip ||
+                    rows[j].targetSlot == rows[i].targetSlot) {
+                    ++receipt->duplicateRowCount;
+                    issue(ContactAuditRowUniqueness,
+                        ContactRecreateInvalidPlan, ERROR_DUP_NAME, i, 12);
+                    break;
+                }
+            }
+        }
+    }
+
+    uintptr_t liveSip[kMaximumShapeInstancePairs] = {};
+    SipPoolReceipt sipReceipt = {};
+    bool sipCaptured = false;
+    if (nphaseCore && unityBase) {
+        receipt->evaluatedMask |= ContactAuditSipCapture;
+        sipCaptured = CaptureShapeInstancePairPool(unityBase, nphaseCore,
+            liveSip, kMaximumShapeInstancePairs, &sipReceipt) != 0;
+        if (!sipCaptured)
+            issue(ContactAuditSipCapture, ContactRecreateSipMembership,
+                sipReceipt.lastError, 0xFFFFFFFFu, 31);
+        else {
+            receipt->liveSipCount = sipReceipt.traversedCount;
+            receipt->liveSipHash = sipReceipt.orderHash;
+            receipt->liveSipUsed = sipReceipt.used;
+            receipt->liveSipUnreleased = sipReceipt.unreleased;
+        }
+    }
+    if (sipCaptured) {
+        receipt->evaluatedMask |= ContactAuditSipIdentity;
+        if (sipReceipt.pool != expectedSipPool ||
+            sipReceipt.freeHead != (sipReceipt.traversedCount
+                ? liveSip[0] : 0))
+            issue(ContactAuditSipIdentity, ContactRecreateSipMembership,
+                ERROR_INVALID_STATE, 0xFFFFFFFFu, 32);
+    }
+    if (sipCaptured && readableTargets) {
+        receipt->expectedSemanticSipCount = targetSipCount +
+            receipt->activeSipRowCount;
+        receipt->expectedLegacySipCount = targetSipCount + rowCount;
+        receipt->evaluatedMask |= ContactAuditSipSemanticCounts;
+        if (sipReceipt.traversedCount !=
+                receipt->expectedSemanticSipCount ||
+            sipReceipt.used + receipt->activeSipRowCount != targetSipUsed ||
+            sipReceipt.unreleased != targetSipUnreleased +
+                receipt->activeSipRowCount)
+            issue(ContactAuditSipSemanticCounts,
+                ContactRecreateSipMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 35);
+
+        receipt->evaluatedMask |= ContactAuditSipLegacyArm;
+        if (receipt->targetFreeSipRowCount != 0 ||
+            sipReceipt.traversedCount != receipt->expectedLegacySipCount ||
+            sipReceipt.used + rowCount != targetSipUsed ||
+            sipReceipt.unreleased != targetSipUnreleased + rowCount)
+            issue(ContactAuditSipLegacyArm, ContactRecreateSipMembership,
+                ERROR_INVALID_STATE, 0xFFFFFFFFu, 32);
+
+        receipt->evaluatedMask |= ContactAuditSipMembership;
+        for (uint32_t i = 0; i < targetSipCount; ++i)
+            if (!ContainsPointer(liveSip, sipReceipt.traversedCount,
+                    targetSip[i]))
+                ++receipt->sipMissingCount;
+        for (uint32_t i = 0; i < rowCount; ++i)
+            if (!ContainsPointer(targetSip, targetSipCount,
+                    rows[i].targetSip) &&
+                !ContainsPointer(liveSip, sipReceipt.traversedCount,
+                    rows[i].targetSip))
+                ++receipt->sipMissingCount;
+        for (uint32_t i = 0; i < sipReceipt.traversedCount; ++i) {
+            if (ContainsPointer(targetSip, targetSipCount, liveSip[i]))
+                continue;
+            bool rowSip = false;
+            for (uint32_t j = 0; j < rowCount; ++j)
+                if (!ContainsPointer(targetSip, targetSipCount,
+                        rows[j].targetSip) &&
+                    rows[j].targetSip == liveSip[i]) {
+                    rowSip = true;
+                    break;
+                }
+            if (!rowSip) ++receipt->sipExtraCount;
+        }
+        if (receipt->sipMissingCount || receipt->sipExtraCount)
+            issue(ContactAuditSipMembership,
+                ContactRecreateSipMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 33);
+    }
+
+    uintptr_t* liveContact = 0;
+    uint32_t liveContactCount = 0;
+    ContactPoolReceipt contactReceipt = {};
+    InitializeContactPoolReceipt(&contactReceipt, context);
+    bool contactCaptured = false;
+    if (context) {
+        receipt->evaluatedMask |= ContactAuditContactCapture;
+        contactCaptured = ReadContactPool(context, liveContact,
+            liveContactCount, &contactReceipt);
+        if (!contactCaptured)
+            issue(ContactAuditContactCapture,
+                ContactRecreateContactMembership, contactReceipt.lastError,
+                0xFFFFFFFFu, 7);
+        else {
+            receipt->liveContactCount = liveContactCount;
+            receipt->liveContactHash = OrderHash(liveContact,
+                liveContactCount);
+        }
+    }
+
+    uintptr_t contactPool = 0;
+    uintptr_t slabs = 0;
+    uint32_t totalSlots = 0;
+    if (contactCaptured) {
+        receipt->expectedContactCount = targetContactCount + rowCount;
+        receipt->evaluatedMask |= ContactAuditContactIdentity;
+        contactPool = context + 0x2B8;
+        if (!Readable(reinterpret_cast<const void*>(contactPool), 0x2C)) {
+            issue(ContactAuditContactIdentity,
+                ContactRecreateContactMembership, ERROR_NOACCESS,
+                0xFFFFFFFFu, 9);
+        } else {
+            const uint32_t elementsPerSlab =
+                *reinterpret_cast<const uint32_t*>(contactPool + 0x00);
+            const uint32_t slabCount =
+                *reinterpret_cast<const uint32_t*>(contactPool + 0x08);
+            slabs = *reinterpret_cast<const uintptr_t*>(contactPool + 0x18);
+            totalSlots = elementsPerSlab * slabCount;
+            if (reinterpret_cast<uintptr_t>(liveContact) !=
+                    expectedFreeArray ||
+                liveContactCount != receipt->expectedContactCount ||
+                elementsPerSlab != 256u || !slabCount ||
+                totalSlots != liveContactCount || !slabs ||
+                !Readable(reinterpret_cast<const void*>(slabs),
+                    slabCount * sizeof(uintptr_t)))
+                issue(ContactAuditContactIdentity,
+                    ContactRecreateContactMembership, ERROR_INVALID_STATE,
+                    0xFFFFFFFFu, 8);
+        }
+    }
+
+    if (contactCaptured && totalSlots) {
+        receipt->evaluatedMask |= ContactAuditContactBitmaps;
+        uintptr_t useMap = 0, activeMap = 0, touchMap = 0,
+            modifiableMap = 0;
+        uint32_t useWords = 0, activeWords = 0, touchWords = 0,
+            modifiableWords = 0;
+        const bool bitmapsReadable =
+            ReadContactBitmap(contactPool + 0x20, totalSlots, useMap,
+                useWords) &&
+            ReadContactBitmap(context + 0x534, totalSlots, activeMap,
+                activeWords) &&
+            ReadContactBitmap(context + 0x540, totalSlots, touchMap,
+                touchWords) &&
+            ReadContactBitmap(context + 0x16D0, totalSlots,
+                modifiableMap, modifiableWords);
+        if (bitmapsReadable) {
+            receipt->useBitmapCount = ContactBitmapCount(useMap, totalSlots);
+            receipt->activeBitmapCount = ContactBitmapCount(activeMap,
+                totalSlots);
+            receipt->touchBitmapCount = ContactBitmapCount(touchMap,
+                totalSlots);
+            receipt->modifiableBitmapCount = ContactBitmapCount(
+                modifiableMap, totalSlots);
+        }
+        if (!bitmapsReadable || receipt->useBitmapCount ||
+            receipt->activeBitmapCount || receipt->touchBitmapCount ||
+            receipt->modifiableBitmapCount)
+            issue(ContactAuditContactBitmaps,
+                ContactRecreateContactMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 10);
+    }
+
+    if (contactCaptured && readableTargets) {
+        receipt->evaluatedMask |= ContactAuditContactMembership;
+        for (uint32_t i = 0; i < targetContactCount; ++i)
+            if (!ContainsPointer(liveContact, liveContactCount,
+                    targetContact[i]))
+                ++receipt->contactMissingCount;
+        for (uint32_t i = 0; i < rowCount; ++i)
+            if (!ContainsPointer(liveContact, liveContactCount,
+                    rows[i].targetManager))
+                ++receipt->contactMissingCount;
+        for (uint32_t i = 0; i < liveContactCount; ++i) {
+            if (ContainsPointer(targetContact, targetContactCount,
+                    liveContact[i])) continue;
+            bool rowManager = false;
+            for (uint32_t j = 0; j < rowCount; ++j)
+                if (rows[j].targetManager == liveContact[i]) {
+                    rowManager = true;
+                    break;
+                }
+            if (!rowManager) ++receipt->contactExtraCount;
+        }
+        if (receipt->contactMissingCount || receipt->contactExtraCount)
+            issue(ContactAuditContactMembership,
+                ContactRecreateContactMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 14);
+
+        if (slabs && totalSlots) {
+            for (uint32_t i = 0; i < rowCount; ++i) {
+                const ContactRecreatePlanRow& row = rows[i];
+                if (row.targetSlot >= totalSlots) {
+                    ++receipt->invalidRowCount;
+                    issue(ContactAuditRows, ContactRecreateInvalidPlan,
+                        ERROR_INVALID_DATA, i, 13);
+                    continue;
+                }
+                const uintptr_t slab =
+                    reinterpret_cast<const uintptr_t*>(slabs)[
+                        row.targetSlot >> 8];
+                if (!slab || row.targetManager != slab +
+                        (row.targetSlot & 0xFFu) * kContactManagerSize ||
+                    !Readable(reinterpret_cast<const void*>(
+                        row.targetManager + 0x4C), 4) ||
+                    *reinterpret_cast<const uint32_t*>(
+                        row.targetManager + 0x4C) != row.targetSlot) {
+                    ++receipt->invalidRowCount;
+                    issue(ContactAuditRows, ContactRecreateInvalidPlan,
+                        ERROR_INVALID_DATA, i, 13);
+                }
+            }
+        }
+    }
+
+    uintptr_t liveLarge[kMaximumManifolds] = {};
+    uint32_t liveLargeCount = 0;
+    ManifoldPoolReceipt manifoldReceipt = {};
+    InitializeManifoldPoolReceipt(&manifoldReceipt, unityBase, context, 0);
+    bool largeCaptured = false;
+    if (unityBase && context) {
+        receipt->evaluatedMask |= ContactAuditLargeCapture;
+        largeCaptured = ReadManifoldPool(context, 0, liveLarge,
+            liveLargeCount, &manifoldReceipt);
+        if (!largeCaptured)
+            issue(ContactAuditLargeCapture,
+                ContactRecreateManifoldMembership,
+                manifoldReceipt.lastError, 0xFFFFFFFFu, 15);
+        else {
+            receipt->liveLargeCount = liveLargeCount;
+            receipt->liveLargeHash = OrderHash(liveLarge, liveLargeCount);
+            receipt->liveLargeUsed = manifoldReceipt.used;
+            receipt->liveLargeUnreleased = manifoldReceipt.unreleased;
+        }
+    }
+    if (largeCaptured) {
+        receipt->expectedLargeCount = targetLargeCount + rowCount;
+        receipt->evaluatedMask |= ContactAuditLargeIdentity;
+        if (manifoldReceipt.pool != expectedLargePool ||
+            liveLargeCount != receipt->expectedLargeCount ||
+            manifoldReceipt.used + rowCount != targetLargeUsed ||
+            manifoldReceipt.unreleased != targetLargeUnreleased + rowCount)
+            issue(ContactAuditLargeIdentity,
+                ContactRecreateMetadataMismatch, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 16);
+    }
+    if (largeCaptured && readableTargets) {
+        receipt->evaluatedMask |= ContactAuditLargeMembership;
+        for (uint32_t i = 0; i < targetLargeCount; ++i)
+            if (!ContainsPointer(liveLarge, liveLargeCount, targetLarge[i]))
+                ++receipt->largeMissingCount;
+        for (uint32_t i = 0; i < rowCount; ++i)
+            if (!ContainsPointer(liveLarge, liveLargeCount,
+                    rows[i].targetManifold))
+                ++receipt->largeMissingCount;
+        for (uint32_t i = 0; i < liveLargeCount; ++i) {
+            if (ContainsPointer(targetLarge, targetLargeCount,
+                    liveLarge[i])) continue;
+            bool rowManifold = false;
+            for (uint32_t j = 0; j < rowCount; ++j)
+                if (rows[j].targetManifold == liveLarge[i]) {
+                    rowManifold = true;
+                    break;
+                }
+            if (!rowManifold) ++receipt->largeExtraCount;
+        }
+        if (receipt->largeMissingCount || receipt->largeExtraCount)
+            issue(ContactAuditLargeMembership,
+                ContactRecreateManifoldMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 17);
+    }
+
+    if (sipCaptured && contactCaptured && largeCaptured) {
+        receipt->evaluatedMask |= ContactAuditWritability;
+        if (!Writable(liveContact,
+                liveContactCount * sizeof(uintptr_t)))
+            ++receipt->unwritableCount;
+        if (!Writable(reinterpret_cast<void*>(expectedSipPool + 0x124),
+                sizeof(uintptr_t)))
+            ++receipt->unwritableCount;
+        if (!Writable(reinterpret_cast<void*>(expectedLargePool + 0x124),
+                sizeof(uintptr_t)))
+            ++receipt->unwritableCount;
+        for (uint32_t i = 0; i < sipReceipt.traversedCount; ++i)
+            if (!Writable(reinterpret_cast<void*>(liveSip[i]),
+                    sizeof(uintptr_t)))
+                ++receipt->unwritableCount;
+        for (uint32_t i = 0; i < liveLargeCount; ++i)
+            if (!Writable(reinterpret_cast<void*>(liveLarge[i]),
+                    sizeof(uintptr_t)))
+                ++receipt->unwritableCount;
+        if (receipt->unwritableCount)
+            issue(ContactAuditWritability, ContactRecreateNotWritable,
+                ERROR_NOACCESS, 0xFFFFFFFFu, 18);
+    }
+
+    receipt->result = receipt->issueMask
+        ? ContactRecreateAuditHasIssues : ContactRecreateAuditClean;
+    receipt->lastError = receipt->firstError;
+    return 1;
+}
+
+static void WriteManifoldOrder(uintptr_t pool, const uintptr_t* order,
+    uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i)
+        *reinterpret_cast<uintptr_t*>(order[i]) =
+            i + 1 < count ? order[i + 1] : 0;
+    *reinterpret_cast<uintptr_t*>(pool + 0x124) = count ? order[0] : 0;
+}
+
+static void ClearContactRecreateState() {
+    InterlockedExchange(&g_contactRecreateState, ContactRecreateIdle);
+    InterlockedExchange(&g_contactRecreateResult, ContactRecreateOk);
+    InterlockedExchange(&g_contactRecreateError, ERROR_SUCCESS);
+    g_contactRecreateUnityBase = 0;
+    g_contactRecreateContext = 0;
+    g_contactRecreateFreeArray = 0;
+    g_contactRecreateLargePool = 0;
+    g_contactRecreateRowCount = 0;
+    g_contactRecreateMatchedCount = 0;
+    g_contactRecreateMatchedMask = 0;
+    g_contactRecreateThreadId = 0;
+    InterlockedExchange(&g_contactRecreateObserverEntries, 0);
+    g_contactRecreateContactCountBefore = 0;
+    g_contactRecreateTargetContactCount = 0;
+    g_contactRecreateContactHashBefore = 0;
+    g_contactRecreateTargetContactHash = 0;
+    g_contactRecreateLargeCountBefore = 0;
+    g_contactRecreateTargetLargeCount = 0;
+    g_contactRecreateLargeHashBefore = 0;
+    g_contactRecreateTargetLargeHash = 0;
+    g_contactRecreateLargeUsedBefore = 0;
+    g_contactRecreateTargetLargeUsed = 0;
+    g_contactRecreateLargeUnreleasedBefore = 0;
+    g_contactRecreateTargetLargeUnreleased = 0;
+    g_contactRecreateLastSip = 0;
+    g_contactRecreateLastShapeLow = 0;
+    g_contactRecreateLastShapeHigh = 0;
+    g_contactRecreateLastManager = 0;
+    g_contactRecreateLastManifold = 0;
+    g_contactRecreateInvalidRow = 0xFFFFFFFFu;
+    g_contactRecreateDetail = 0;
+    g_contactRecreateAttemptOrdinal = 0;
+    g_contactRecreateAttemptSip = 0;
+    g_contactRecreateAttemptShapeLow = 0;
+    g_contactRecreateAttemptShapeHigh = 0;
+    g_contactRecreateAttemptRow = 0xFFFFFFFFu;
+    g_contactRecreateAttemptMatchedMask = 0;
+    g_contactRecreateAttemptFreeCount = 0xFFFFFFFFu;
+    g_contactRecreateAttemptManagerIndex = 0xFFFFFFFFu;
+    g_contactRecreateAttemptLargeHead = 0;
+    g_contactRecreateAttemptManifoldIndex = 0xFFFFFFFFu;
+    g_contactRecreateNPhaseCore = 0;
+    g_contactRecreateSipPool = 0;
+    g_contactRecreateSipMatchedCount = 0;
+    g_contactRecreateSipMatchedMask = 0;
+    g_contactRecreateTargetSipCount = 0;
+    g_contactRecreateTargetSipHash = 0;
+    g_contactRecreateTargetSipUsed = 0;
+    g_contactRecreateTargetSipUnreleased = 0;
+    g_contactRecreateLastAllocatedSip = 0;
+    g_sipRecreateAttemptRow = 0xFFFFFFFFu;
+    InterlockedExchange(&g_sipRecreateObserverEntries, 0);
+}
+
+static int ArmContactRecreate(uintptr_t unityBase, uintptr_t context,
+    uintptr_t nphaseCore, uintptr_t expectedSipPool,
+    const uintptr_t* targetSip, uint32_t targetSipCount,
+    uint32_t targetSipUsed, uint32_t targetSipUnreleased,
+    uintptr_t expectedFreeArray, const uintptr_t* targetContact,
+    uint32_t targetContactCount, uintptr_t expectedLargePool,
+    const uintptr_t* targetLarge, uint32_t targetLargeCount,
+    uint32_t targetLargeUsed, uint32_t targetLargeUnreleased,
+    const ContactRecreatePlanRow* rows, uint32_t rowCount,
+    ContactRecreateReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeContactRecreateReceipt(receipt, unityBase, context);
+    if (!unityBase || !context || !nphaseCore || !expectedSipPool ||
+        !expectedFreeArray || !expectedLargePool ||
+        !targetContact || !targetContactCount || !rows || !rowCount ||
+        rowCount > kMaximumContactRecreateRows ||
+        targetSipCount > kMaximumShapeInstancePairs - rowCount ||
+        targetContactCount > kMaximumContactManagers - rowCount ||
+        targetLargeCount > kMaximumManifolds - rowCount ||
+        (targetSipCount && !targetSip) ||
+        (targetLargeCount && !targetLarge))
+        return FailContactRecreate(receipt, ContactRecreateBadArgument,
+            ERROR_INVALID_PARAMETER, 0xFFFFFFFFu, 1);
+    if (!g_contactManagerContextObserverInstalled ||
+        unityBase != g_observerUnityBase)
+        return FailContactRecreate(receipt, ContactRecreateObserverMissing,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 2);
+    if (g_contactRecreateState == ContactRecreateArmed)
+        return FailContactRecreate(receipt, ContactRecreateAlreadyArmed,
+            ERROR_ALREADY_EXISTS, 0xFFFFFFFFu, 3);
+    if (!ContactManagerOwnerRevisionMatches(unityBase) ||
+        !ShapeInstancePairPoolRevisionMatches(unityBase) ||
+        !ManifoldPoolRevisionMatches(unityBase))
+        return FailContactRecreate(receipt, ContactRecreateRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 0xFFFFFFFFu, 4);
+    if ((targetSipCount && !Readable(targetSip,
+            targetSipCount * sizeof(uintptr_t))) ||
+        !Readable(targetContact, targetContactCount * sizeof(uintptr_t)) ||
+        (targetLargeCount && !Readable(targetLarge,
+            targetLargeCount * sizeof(uintptr_t))) ||
+        !Readable(rows, rowCount * sizeof(ContactRecreatePlanRow)))
+        return FailContactRecreate(receipt, ContactRecreateBadArgument,
+            ERROR_NOACCESS, 0xFFFFFFFFu, 5);
+    if ((targetSipCount && !UniqueNonzeroPointers(targetSip,
+            targetSipCount)) ||
+        !UniqueNonzeroPointers(targetContact, targetContactCount) ||
+        (targetLargeCount && !UniqueNonzeroPointers(targetLarge,
+            targetLargeCount)))
+        return FailContactRecreate(receipt, ContactRecreateInvalidPlan,
+            ERROR_DUP_NAME, 0xFFFFFFFFu, 6);
+
+    uintptr_t liveSip[kMaximumShapeInstancePairs] = {};
+    SipPoolReceipt sipReceipt = {};
+    if (!CaptureShapeInstancePairPool(unityBase, nphaseCore, liveSip,
+            kMaximumShapeInstancePairs, &sipReceipt))
+        return FailContactRecreate(receipt, ContactRecreateSipMembership,
+            sipReceipt.lastError, 0xFFFFFFFFu, 31);
+    if (sipReceipt.pool != expectedSipPool ||
+        liveSip[0] != sipReceipt.freeHead ||
+        sipReceipt.traversedCount != targetSipCount + rowCount ||
+        sipReceipt.used + rowCount != targetSipUsed ||
+        sipReceipt.unreleased != targetSipUnreleased + rowCount)
+        return FailContactRecreate(receipt, ContactRecreateSipMembership,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 32);
+
+    uintptr_t* liveContact = 0;
+    uint32_t liveContactCount = 0;
+    ContactPoolReceipt contactReceipt = {};
+    InitializeContactPoolReceipt(&contactReceipt, context);
+    if (!ReadContactPool(context, liveContact, liveContactCount,
+            &contactReceipt))
+        return FailContactRecreate(receipt, ContactRecreateContactMembership,
+            contactReceipt.lastError, 0xFFFFFFFFu, 7);
+    if (reinterpret_cast<uintptr_t>(liveContact) != expectedFreeArray ||
+        liveContactCount != targetContactCount + rowCount)
+        return FailContactRecreate(receipt, ContactRecreateContactMembership,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 8);
+
+    const uintptr_t contactPool = context + 0x2B8;
+    if (!Readable(reinterpret_cast<const void*>(contactPool), 0x2C))
+        return FailContactRecreate(receipt, ContactRecreateContactMembership,
+            ERROR_NOACCESS, 0xFFFFFFFFu, 9);
+    const uint32_t elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        contactPool + 0x00);
+    const uint32_t slabCount = *reinterpret_cast<const uint32_t*>(
+        contactPool + 0x08);
+    const uintptr_t slabs = *reinterpret_cast<const uintptr_t*>(
+        contactPool + 0x18);
+    const uint32_t totalSlots = elementsPerSlab * slabCount;
+    uintptr_t useMap = 0, activeMap = 0, touchMap = 0, modifiableMap = 0;
+    uint32_t useWords = 0, activeWords = 0, touchWords = 0,
+        modifiableWords = 0;
+    if (elementsPerSlab != 256u || !slabCount ||
+        totalSlots != liveContactCount || !slabs ||
+        !Readable(reinterpret_cast<const void*>(slabs),
+            slabCount * sizeof(uintptr_t)) ||
+        !ReadContactBitmap(contactPool + 0x20, totalSlots, useMap, useWords) ||
+        !ReadContactBitmap(context + 0x534, totalSlots, activeMap,
+            activeWords) ||
+        !ReadContactBitmap(context + 0x540, totalSlots, touchMap,
+            touchWords) ||
+        !ReadContactBitmap(context + 0x16D0, totalSlots, modifiableMap,
+            modifiableWords) || ContactBitmapCount(useMap, totalSlots) != 0 ||
+        ContactBitmapCount(activeMap, totalSlots) != 0 ||
+        ContactBitmapCount(touchMap, totalSlots) != 0 ||
+        ContactBitmapCount(modifiableMap, totalSlots) != 0)
+        return FailContactRecreate(receipt, ContactRecreateContactMembership,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 10);
+
+    for (uint32_t i = 0; i < rowCount; ++i) {
+        const ContactRecreatePlanRow& row = rows[i];
+        if (!row.pxsShapeCoreLow ||
+            row.pxsShapeCoreLow >= row.pxsShapeCoreHigh ||
+            !row.targetManager || !row.targetManifold || !row.targetSip ||
+            row.targetSlot >= totalSlots || row.manifoldBytes != 0xF0u ||
+            ContainsPointer(targetSip, targetSipCount, row.targetSip) ||
+            ContainsPointer(targetContact, targetContactCount,
+                row.targetManager) ||
+            ContainsPointer(targetLarge, targetLargeCount,
+                row.targetManifold))
+            return FailContactRecreate(receipt, ContactRecreateInvalidPlan,
+                ERROR_INVALID_DATA, i, 11);
+        for (uint32_t j = 0; j < i; ++j)
+            if ((rows[j].pxsShapeCoreLow == row.pxsShapeCoreLow &&
+                    rows[j].pxsShapeCoreHigh == row.pxsShapeCoreHigh) ||
+                rows[j].targetManager == row.targetManager ||
+                rows[j].targetManifold == row.targetManifold ||
+                rows[j].targetSip == row.targetSip ||
+                rows[j].targetSlot == row.targetSlot)
+                return FailContactRecreate(receipt,
+                    ContactRecreateInvalidPlan, ERROR_DUP_NAME, i, 12);
+        const uintptr_t slab = reinterpret_cast<const uintptr_t*>(slabs)[
+            row.targetSlot >> 8];
+        if (!slab || row.targetManager != slab +
+                (row.targetSlot & 0xFFu) * kContactManagerSize ||
+            !Readable(reinterpret_cast<const void*>(row.targetManager +
+                0x4C), 4) || *reinterpret_cast<const uint32_t*>(
+                row.targetManager + 0x4C) != row.targetSlot)
+            return FailContactRecreate(receipt,
+                ContactRecreateInvalidPlan, ERROR_INVALID_DATA, i, 13);
+    }
+    for (uint32_t i = 0; i < sipReceipt.traversedCount; ++i) {
+        if (ContainsPointer(targetSip, targetSipCount, liveSip[i])) continue;
+        bool rowSip = false;
+        for (uint32_t j = 0; j < rowCount; ++j)
+            if (rows[j].targetSip == liveSip[i]) {
+                rowSip = true;
+                break;
+            }
+        if (!rowSip)
+            return FailContactRecreate(receipt,
+                ContactRecreateSipMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 33);
+    }
+    for (uint32_t i = 0; i < liveContactCount; ++i) {
+        if (ContainsPointer(targetContact, targetContactCount,
+                liveContact[i])) continue;
+        bool rowManager = false;
+        for (uint32_t j = 0; j < rowCount; ++j)
+            if (rows[j].targetManager == liveContact[i]) {
+                rowManager = true;
+                break;
+            }
+        if (!rowManager)
+            return FailContactRecreate(receipt,
+                ContactRecreateContactMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 14);
+    }
+
+    uintptr_t liveLarge[kMaximumManifolds] = {};
+    uint32_t liveLargeCount = 0;
+    ManifoldPoolReceipt manifoldReceipt = {};
+    InitializeManifoldPoolReceipt(&manifoldReceipt, unityBase, context, 0);
+    if (!ReadManifoldPool(context, 0, liveLarge, liveLargeCount,
+            &manifoldReceipt))
+        return FailContactRecreate(receipt,
+            ContactRecreateManifoldMembership, manifoldReceipt.lastError,
+            0xFFFFFFFFu, 15);
+    if (manifoldReceipt.pool != expectedLargePool ||
+        liveLargeCount != targetLargeCount + rowCount ||
+        manifoldReceipt.used + rowCount != targetLargeUsed ||
+        manifoldReceipt.unreleased != targetLargeUnreleased + rowCount)
+        return FailContactRecreate(receipt,
+            ContactRecreateMetadataMismatch, ERROR_INVALID_STATE,
+            0xFFFFFFFFu, 16);
+    for (uint32_t i = 0; i < liveLargeCount; ++i) {
+        if (ContainsPointer(targetLarge, targetLargeCount,
+                liveLarge[i])) continue;
+        bool rowManifold = false;
+        for (uint32_t j = 0; j < rowCount; ++j)
+            if (rows[j].targetManifold == liveLarge[i]) {
+                rowManifold = true;
+                break;
+            }
+        if (!rowManifold)
+            return FailContactRecreate(receipt,
+                ContactRecreateManifoldMembership, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 17);
+    }
+
+    if (!Writable(liveContact, liveContactCount * sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(expectedSipPool + 0x124),
+            sizeof(uintptr_t)) ||
+        !Writable(reinterpret_cast<void*>(expectedLargePool + 0x124),
+            sizeof(uintptr_t)))
+        return FailContactRecreate(receipt, ContactRecreateNotWritable,
+            ERROR_NOACCESS, 0xFFFFFFFFu, 18);
+    for (uint32_t i = 0; i < sipReceipt.traversedCount; ++i)
+        if (!Writable(reinterpret_cast<void*>(liveSip[i]),
+                sizeof(uintptr_t)))
+            return FailContactRecreate(receipt, ContactRecreateNotWritable,
+                ERROR_NOACCESS, 0xFFFFFFFFu, 34);
+    for (uint32_t i = 0; i < liveLargeCount; ++i)
+        if (!Writable(reinterpret_cast<void*>(liveLarge[i]),
+                sizeof(uintptr_t)))
+            return FailContactRecreate(receipt, ContactRecreateNotWritable,
+                ERROR_NOACCESS, 0xFFFFFFFFu, 19);
+
+    CopyWords(g_contactRecreateScratchSip, liveSip,
+        sipReceipt.traversedCount);
+    if (targetSipCount) CopyWords(g_contactRecreateTargetSip, targetSip,
+        targetSipCount);
+    CopyWords(g_contactRecreateScratchContact, liveContact,
+        liveContactCount);
+    CopyWords(g_contactRecreateScratchLarge, liveLarge, liveLargeCount);
+    CopyWords(g_contactRecreateTargetContact, targetContact,
+        targetContactCount);
+    if (targetLargeCount) CopyWords(g_contactRecreateTargetLarge,
+        targetLarge, targetLargeCount);
+    for (uint32_t i = 0; i < rowCount; ++i)
+        g_contactRecreateRows[i] = rows[i];
+
+    for (uint32_t i = 0; i < targetSipCount; ++i)
+        g_contactRecreatePrimedSip[i] = targetSip[i];
+    for (uint32_t i = 0; i < rowCount; ++i)
+        g_contactRecreatePrimedSip[targetSipCount + i] = rows[i].targetSip;
+    WriteManifoldOrder(expectedSipPool, g_contactRecreatePrimedSip,
+        sipReceipt.traversedCount);
+    for (uint32_t i = 0; i < targetContactCount; ++i)
+        liveContact[i] = targetContact[i];
+    for (uint32_t i = 0; i < rowCount; ++i)
+        liveContact[targetContactCount + i] = rows[i].targetManager;
+    for (uint32_t i = 0; i < rowCount; ++i)
+        g_contactRecreatePrimedLarge[i] = rows[i].targetManifold;
+    for (uint32_t i = 0; i < targetLargeCount; ++i)
+        g_contactRecreatePrimedLarge[rowCount + i] = targetLarge[i];
+    WriteManifoldOrder(expectedLargePool, g_contactRecreatePrimedLarge,
+        liveLargeCount);
+    MemoryBarrier();
+    bool contactVerified = true;
+    for (uint32_t i = 0; i < targetContactCount; ++i)
+        if (liveContact[i] != targetContact[i]) contactVerified = false;
+    for (uint32_t i = 0; i < rowCount; ++i)
+        if (liveContact[targetContactCount + i] != rows[i].targetManager)
+            contactVerified = false;
+    bool sipVerified =
+        *reinterpret_cast<const uintptr_t*>(expectedSipPool + 0x124) ==
+            (targetSipCount ? targetSip[0] : rows[0].targetSip);
+    if (!contactVerified || !sipVerified ||
+        *reinterpret_cast<const uintptr_t*>(expectedLargePool + 0x124) !=
+            rows[0].targetManifold) {
+        WriteManifoldOrder(expectedSipPool, liveSip,
+            sipReceipt.traversedCount);
+        CopyWords(liveContact, g_contactRecreateScratchContact,
+            liveContactCount);
+        WriteManifoldOrder(expectedLargePool, liveLarge, liveLargeCount);
+        return FailContactRecreate(receipt,
+            ContactRecreateWriteVerificationFailed, ERROR_WRITE_FAULT,
+            0xFFFFFFFFu, 20);
+    }
+
+    g_contactRecreateUnityBase = unityBase;
+    g_contactRecreateContext = context;
+    g_contactRecreateNPhaseCore = nphaseCore;
+    g_contactRecreateSipPool = expectedSipPool;
+    g_contactRecreateFreeArray = expectedFreeArray;
+    g_contactRecreateLargePool = expectedLargePool;
+    g_contactRecreateRowCount = rowCount;
+    g_contactRecreateMatchedCount = 0;
+    g_contactRecreateMatchedMask = 0;
+    g_contactRecreateSipMatchedCount = 0;
+    g_contactRecreateSipMatchedMask = 0;
+    g_contactRecreateThreadId = 0;
+    InterlockedExchange(&g_contactRecreateObserverEntries, 0);
+    InterlockedExchange(&g_sipRecreateObserverEntries, 0);
+    g_contactRecreateTargetSipCount = targetSipCount;
+    g_contactRecreateTargetSipHash = OrderHash(targetSip, targetSipCount);
+    g_contactRecreateTargetSipUsed = targetSipUsed;
+    g_contactRecreateTargetSipUnreleased = targetSipUnreleased;
+    g_contactRecreateContactCountBefore = liveContactCount;
+    g_contactRecreateTargetContactCount = targetContactCount;
+    g_contactRecreateContactHashBefore = OrderHash(
+        g_contactRecreateScratchContact, liveContactCount);
+    g_contactRecreateTargetContactHash = OrderHash(targetContact,
+        targetContactCount);
+    g_contactRecreateLargeCountBefore = liveLargeCount;
+    g_contactRecreateTargetLargeCount = targetLargeCount;
+    g_contactRecreateLargeHashBefore = OrderHash(liveLarge, liveLargeCount);
+    g_contactRecreateTargetLargeHash = OrderHash(targetLarge,
+        targetLargeCount);
+    g_contactRecreateLargeUsedBefore = manifoldReceipt.used;
+    g_contactRecreateTargetLargeUsed = targetLargeUsed;
+    g_contactRecreateLargeUnreleasedBefore = manifoldReceipt.unreleased;
+    g_contactRecreateTargetLargeUnreleased = targetLargeUnreleased;
+    g_contactRecreateLastSip = 0;
+    g_contactRecreateLastShapeLow = 0;
+    g_contactRecreateLastShapeHigh = 0;
+    g_contactRecreateLastManager = 0;
+    g_contactRecreateLastManifold = 0;
+    g_contactRecreateInvalidRow = 0xFFFFFFFFu;
+    g_contactRecreateDetail = 0;
+    g_contactRecreateAttemptOrdinal = 0;
+    g_contactRecreateAttemptSip = 0;
+    g_contactRecreateAttemptShapeLow = 0;
+    g_contactRecreateAttemptShapeHigh = 0;
+    g_contactRecreateAttemptRow = 0xFFFFFFFFu;
+    g_contactRecreateAttemptMatchedMask = 0;
+    g_contactRecreateAttemptFreeCount = 0xFFFFFFFFu;
+    g_contactRecreateAttemptManagerIndex = 0xFFFFFFFFu;
+    g_contactRecreateAttemptLargeHead = 0;
+    g_contactRecreateAttemptManifoldIndex = 0xFFFFFFFFu;
+    g_contactRecreateLastAllocatedSip = 0;
+    g_sipRecreateAttemptRow = 0xFFFFFFFFu;
+    InterlockedExchange(&g_contactRecreateResult, ContactRecreateOk);
+    InterlockedExchange(&g_contactRecreateError, ERROR_SUCCESS);
+    InterlockedExchange(&g_contactRecreateState, ContactRecreateArmed);
+    InitializeContactRecreateReceipt(receipt, unityBase, context);
+    receipt->result = ContactRecreateOk;
+    return 1;
+}
+
+static int ReadContactRecreateStatus(uintptr_t unityBase, uintptr_t context,
+    ContactRecreateReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeContactRecreateReceipt(receipt, unityBase, context);
+    if (g_contactRecreateState == ContactRecreateIdle ||
+        unityBase != g_contactRecreateUnityBase ||
+        context != g_contactRecreateContext)
+        return FailContactRecreate(receipt, ContactRecreateBadArgument,
+            ERROR_INVALID_STATE, 0xFFFFFFFFu, 21);
+    if (g_contactRecreateState == ContactRecreateArmed ||
+        g_contactRecreateState == ContactRecreateComplete) {
+        while (InterlockedCompareExchange(&g_sipRecreateHookLock, 1, 0) != 0)
+            SwitchToThread();
+        while (InterlockedCompareExchange(&g_contactRecreateHookLock, 1, 0) != 0)
+            SwitchToThread();
+        const bool sipReconciled = ReconcileReturnedSipRecreateRows();
+        const bool contactReconciled =
+            ReconcileReturnedContactRecreateRows(context);
+        ReleaseContactRecreateHookLock();
+        ReleaseSipRecreateHookLock();
+        if (!sipReconciled || !contactReconciled)
+            return FailContactRecreate(receipt,
+                ContactRecreateMetadataMismatch, ERROR_INVALID_STATE,
+                0xFFFFFFFFu, 24);
+        InitializeContactRecreateReceipt(receipt, unityBase, context);
+    }
+    if (Readable(reinterpret_cast<const void*>(context + 0x2C8), 8) &&
+        *reinterpret_cast<const uintptr_t*>(context + 0x2C8) ==
+            g_contactRecreateFreeArray) {
+        receipt->contactCountCurrent = *reinterpret_cast<const uint32_t*>(
+            context + 0x2CC);
+        if (receipt->contactCountCurrent <= kMaximumContactManagers &&
+            Readable(reinterpret_cast<const void*>(
+                g_contactRecreateFreeArray),
+                receipt->contactCountCurrent * sizeof(uintptr_t)))
+            receipt->contactHashCurrent = OrderHash(
+                reinterpret_cast<const uintptr_t*>(
+                    g_contactRecreateFreeArray),
+                receipt->contactCountCurrent);
+    }
+    ManifoldPoolReceipt manifoldReceipt = {};
+    uintptr_t order[kMaximumManifolds] = {};
+    uint32_t count = 0;
+    InitializeManifoldPoolReceipt(&manifoldReceipt, unityBase, context, 0);
+    if (ReadManifoldPool(context, 0, order, count, &manifoldReceipt)) {
+        receipt->largeCountCurrent = count;
+        receipt->largeHashCurrent = OrderHash(order, count);
+        receipt->largeUsedCurrent = manifoldReceipt.used;
+        receipt->largeUnreleasedCurrent = manifoldReceipt.unreleased;
+    }
+    return receipt->result == ContactRecreateOk ? 1 : 0;
+}
+
+static int CancelContactRecreate(uintptr_t unityBase,
+    ContactRecreateReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeContactRecreateReceipt(receipt, unityBase,
+        g_contactRecreateContext);
+    // Only a plan that never entered the pass-through hook is reversible.
+    // matchedCount is insufficient because a rejected callback still returns
+    // into shipped createContactManager and can consume the primed tops.
+    if ((g_contactRecreateState == ContactRecreateArmed ||
+            g_contactRecreateState == ContactRecreatePoisoned) &&
+        g_contactRecreateObserverEntries == 0 &&
+        g_sipRecreateObserverEntries == 0 &&
+        g_contactRecreateFreeArray && g_contactRecreateLargePool &&
+        g_contactRecreateSipPool) {
+        uintptr_t* freeArray = reinterpret_cast<uintptr_t*>(
+            g_contactRecreateFreeArray);
+        if (Writable(freeArray, g_contactRecreateContactCountBefore *
+                sizeof(uintptr_t)))
+            CopyWords(freeArray, g_contactRecreateScratchContact,
+                g_contactRecreateContactCountBefore);
+        WriteManifoldOrder(g_contactRecreateLargePool,
+            g_contactRecreateScratchLarge,
+            g_contactRecreateLargeCountBefore);
+        WriteManifoldOrder(g_contactRecreateSipPool,
+            g_contactRecreateScratchSip,
+            g_contactRecreateTargetSipCount + g_contactRecreateRowCount);
+    }
+    ClearContactRecreateState();
+    InitializeContactRecreateReceipt(receipt, unityBase, 0);
+    receipt->result = ContactRecreateOk;
     return 1;
 }
 
@@ -4726,6 +6930,14 @@ extern "C" __declspec(dllexport) int __cdecl oc2_manifold_pool_restore_snapshot(
         expectedPool, snapshot, count, receipt);
 }
 
+extern "C" __declspec(dllexport) int __cdecl
+oc2_shape_instance_pair_pool_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore, uintptr_t* snapshot,
+    uint32_t capacity, SipPoolReceipt* receipt) {
+    return CaptureShapeInstancePairPool(unityBase, nphaseCore, snapshot,
+        capacity, receipt);
+}
+
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(
     uintptr_t unityBase, ContactContextObserverReceipt* receipt) {
     return InstallContactManagerContextObserver(unityBase, receipt);
@@ -4741,6 +6953,62 @@ extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observe
     return UninstallContactManagerContextObserver(unityBase, receipt);
 }
 
+extern "C" __declspec(dllexport) uint32_t __cdecl oc2_contact_recreate_api_version() {
+    return 2;
+}
+
+extern "C" __declspec(dllexport) uint32_t __cdecl
+oc2_contact_recreate_audit_api_version() {
+    return 1;
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_contact_recreate_audit(
+    uintptr_t unityBase, uintptr_t context, uintptr_t nphaseCore,
+    uintptr_t expectedSipPool, const uintptr_t* targetSip,
+    uint32_t targetSipCount, uint32_t targetSipUsed,
+    uint32_t targetSipUnreleased, uintptr_t expectedFreeArray,
+    const uintptr_t* targetContact, uint32_t targetContactCount,
+    uintptr_t expectedLargePool, const uintptr_t* targetLarge,
+    uint32_t targetLargeCount, uint32_t targetLargeUsed,
+    uint32_t targetLargeUnreleased, const ContactRecreatePlanRow* rows,
+    uint32_t rowCount, ContactRecreateAuditReceipt* receipt) {
+    return AuditContactRecreate(unityBase, context, nphaseCore,
+        expectedSipPool, targetSip, targetSipCount, targetSipUsed,
+        targetSipUnreleased, expectedFreeArray, targetContact,
+        targetContactCount, expectedLargePool, targetLarge,
+        targetLargeCount, targetLargeUsed, targetLargeUnreleased, rows,
+        rowCount, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_contact_recreate_arm(
+    uintptr_t unityBase, uintptr_t context, uintptr_t nphaseCore,
+    uintptr_t expectedSipPool, const uintptr_t* targetSip,
+    uint32_t targetSipCount, uint32_t targetSipUsed,
+    uint32_t targetSipUnreleased, uintptr_t expectedFreeArray,
+    const uintptr_t* targetContact, uint32_t targetContactCount,
+    uintptr_t expectedLargePool, const uintptr_t* targetLarge,
+    uint32_t targetLargeCount, uint32_t targetLargeUsed,
+    uint32_t targetLargeUnreleased, const ContactRecreatePlanRow* rows,
+    uint32_t rowCount, ContactRecreateReceipt* receipt) {
+    return ArmContactRecreate(unityBase, context, nphaseCore,
+        expectedSipPool, targetSip, targetSipCount, targetSipUsed,
+        targetSipUnreleased, expectedFreeArray,
+        targetContact, targetContactCount, expectedLargePool, targetLarge,
+        targetLargeCount, targetLargeUsed, targetLargeUnreleased, rows,
+        rowCount, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_contact_recreate_status(
+    uintptr_t unityBase, uintptr_t context,
+    ContactRecreateReceipt* receipt) {
+    return ReadContactRecreateStatus(unityBase, context, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_contact_recreate_cancel(
+    uintptr_t unityBase, ContactRecreateReceipt* receipt) {
+    return CancelContactRecreate(unityBase, receipt);
+}
+
 extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_install(
     uintptr_t unityBase, DirtyInteractionOrderReceipt* receipt) {
     return InstallDirtyInteractionOrderHook(unityBase, receipt);
@@ -4749,6 +7017,11 @@ extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_install
 extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_status(
     uintptr_t unityBase, DirtyInteractionOrderReceipt* receipt) {
     return ReadDirtyInteractionOrderStatus(unityBase, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_last_nphase(
+    uintptr_t unityBase, uintptr_t* nphaseCore, uint32_t* observations) {
+    return ReadLastObservedNPhaseCore(unityBase, nphaseCore, observations);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_capture_arm(

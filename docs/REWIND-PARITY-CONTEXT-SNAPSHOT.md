@@ -6,6 +6,50 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — aggregate readiness is blocker-free through restored f444
+
+The first read-only “plan everything” pass found that the apparent SIP count
+and free-membership failures had one cause: the f444 sidecar combined
+same-boundary manager/manifold observations with a SIP allocator snapshot
+taken when the pending dirty-interaction capture was finalized much later.
+Four f444 owner SIP pointers were consequently recorded in the saved free
+list, producing the misleading 12-manager / 8-used-SIP state and native arm
+detail 32.
+
+Managed RigidbodyActorRebuild r14u and native r29 fix the checkpoint boundary,
+not the symptoms.  The dirty-update hook now publishes passive NPhaseCore
+identity plus an observation ordinal even while no transaction is armed.
+Managed capture brackets the synchronous manager, SIP, large/sphere manifold,
+and Transform-dispatch reads with the same unchanged observation.  Dirty-list
+finalization later attaches only semantic dirty keys and must match the sealed
+NPhaseCore.  Cross-pool coherence is validated both before arming the dirty
+sample and before sidecar publication; no count substitution, pointer
+filtering, or route-specific exception was added.
+
+Fresh minimized v70 audit-only evidence is under
+`artifacts/readiness-plan-atomic-sip-f1048-to-f444-r1/`.  Source readiness has
+20 passes / zero failures; restored-target readiness has 44 passes / zero
+failures.  The exact f444 state is 12 active manager rows, 12 active SIPs and
+12 active large manifolds; their saved free counts are 244, 20, and 20
+respectively.  The native planner evaluates all 21 current checks twice with
+issue mask zero, identical receipts, no missing/extra membership, no owner
+pointer in a free partition, no unwritable target, idle recreation state, and
+no tracked game/module/native mutation.  Target report SHA-256 is
+`337D82B0ABDB02066323879E23CF3333D5016A09D4125DBFA73DC69E5A82F18F`.
+
+The aggregate also removed the recursive key-name heuristic that misclassified
+Animator diagnostic byte offsets and BodyRestore's lack of an `active` field.
+Provider availability and declared terminal state are now distinct; missing
+versioned health/readiness providers remain deferred rather than guessed.
+
+This clears every implemented pre-replay admission check, but `complete` is
+still false.  ActorPair reachability/allocation order is the highest-risk next
+read-only family because PhysX resolves or allocates ActorPairs before SIPs and
+the final SIP hash requires exact ActorPair identity.  Island edge queues,
+Transform-cache allocation, interaction-array order, broadphase order, dirty
+live projection, and first-output convergence follow.  Do not run route search
+or claim full rewind parity yet.
+
 ## Latest result — pending PhysX sleep notification is an admitted intermediate
 
 BodyRestore r49 clears the fresh v91 entity-49 restore failure.  The automatic

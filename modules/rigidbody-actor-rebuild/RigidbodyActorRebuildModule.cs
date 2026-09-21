@@ -27,6 +27,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int AutomaticCanonicalCycles=5;
         private const int MaximumContactManagers=4096;
         private const int MaximumManifolds=4096;
+        private const int MaximumShapeInstancePairs=4096;
         private const int MaximumDirtyInteractions=4096;
         private const uint DirtyInteractionRestoreExact=1;
         private const uint DirtyInteractionRestoreProjection=2;
@@ -99,6 +100,73 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeContactRecreatePlanRow
+        {
+            public UIntPtr PxsShapeCoreLow,PxsShapeCoreHigh,TargetManager,TargetManifold,TargetSip;
+            public uint TargetSlot,ManifoldBytes,TargetManagerFlags,Flags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeContactRecreateReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,Context,FreeArray,LargePool;
+            public uint State,RowCount,MatchedCount,RemainingCount;
+            public uint ContactCountBefore,TargetContactCount,ContactCountCurrent;
+            public uint ContactHashBefore,TargetContactHash,ContactHashCurrent;
+            public uint LargeCountBefore,TargetLargeCount,LargeCountCurrent;
+            public uint LargeHashBefore,TargetLargeHash,LargeHashCurrent;
+            public uint LargeUsedBefore,TargetLargeUsed,LargeUsedCurrent;
+            public uint LargeUnreleasedBefore,TargetLargeUnreleased,LargeUnreleasedCurrent;
+            public uint MatchedMask,ThreadId;
+            public UIntPtr LastSip,LastShapeLow,LastShapeHigh,LastManager,LastManifold;
+            public uint InvalidRow,Detail,Installed,Armed;
+            public uint ObserverEntries,AttemptOrdinal;
+            public UIntPtr AttemptSip,AttemptShapeLow,AttemptShapeHigh;
+            public uint AttemptRow,AttemptMatchedMask,AttemptFreeCount,AttemptManagerIndex;
+            public UIntPtr AttemptLargeHead;
+            public uint AttemptManifoldIndex;
+            public UIntPtr NPhaseCore,SipPool;
+            public uint SipMatchedCount,SipRemainingCount;
+            public uint TargetSipCount,TargetSipHash,TargetSipUsed,TargetSipUnreleased;
+            public uint SipCountCurrent,SipHashCurrent,SipUsedCurrent,SipUnreleasedCurrent;
+            public uint SipMatchedMask,SipObserverEntries;
+            public UIntPtr LastAllocatedSip;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeContactRecreateAuditReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,Context,NPhaseCore,SipPool,FreeArray,LargePool;
+            public uint EvaluatedMask,IssueMask,RecreateState,ObserverInstalled;
+            public uint RowCount,InvalidRowCount,DuplicateRowCount;
+            public uint TargetFreeSipRowCount,ActiveSipRowCount;
+            public uint TargetSipCount,TargetSipHash,TargetSipUsed,TargetSipUnreleased;
+            public uint LiveSipCount,LiveSipHash,LiveSipUsed,LiveSipUnreleased;
+            public uint ExpectedSemanticSipCount,ExpectedLegacySipCount;
+            public uint SipMissingCount,SipExtraCount;
+            public uint TargetContactCount,TargetContactHash;
+            public uint LiveContactCount,LiveContactHash,ExpectedContactCount;
+            public uint ContactMissingCount,ContactExtraCount;
+            public uint UseBitmapCount,ActiveBitmapCount,TouchBitmapCount,ModifiableBitmapCount;
+            public uint TargetLargeCount,TargetLargeHash,TargetLargeUsed,TargetLargeUnreleased;
+            public uint LiveLargeCount,LiveLargeHash,LiveLargeUsed,LiveLargeUnreleased;
+            public uint ExpectedLargeCount,LargeMissingCount,LargeExtraCount;
+            public uint UnwritableCount,FirstResult,FirstError,FirstRow,FirstDetail;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeSipPoolReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,Pool,FreeHead;
+            public uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize;
+            public uint TraversedCount,OrderHash,ValidationFlags;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] Top;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeDirtyInteractionKey
         {
             public UIntPtr ElementLow,ElementHigh,PrimaryVtable;
@@ -130,10 +198,31 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr unityBase,UIntPtr context,uint poolKind,IntPtr snapshot,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeManifoldPoolRestoreSnapshot(
             UIntPtr unityBase,UIntPtr context,uint poolKind,UIntPtr expectedPool,IntPtr snapshot,uint count,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeSipPoolCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr snapshot,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
+            UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateArm(
+            UIntPtr unityBase,UIntPtr context,UIntPtr nphaseCore,UIntPtr expectedSipPool,
+            IntPtr targetSip,uint targetSipCount,uint targetSipUsed,uint targetSipUnreleased,
+            UIntPtr expectedFreeArray,
+            IntPtr targetContact,uint targetContactCount,UIntPtr expectedLargePool,
+            IntPtr targetLarge,uint targetLargeCount,uint targetLargeUsed,uint targetLargeUnreleased,
+            IntPtr rows,uint rowCount,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateAudit(
+            UIntPtr unityBase,UIntPtr context,UIntPtr nphaseCore,UIntPtr expectedSipPool,
+            IntPtr targetSip,uint targetSipCount,uint targetSipUsed,uint targetSipUnreleased,
+            UIntPtr expectedFreeArray,IntPtr targetContact,uint targetContactCount,
+            UIntPtr expectedLargePool,IntPtr targetLarge,uint targetLargeCount,
+            uint targetLargeUsed,uint targetLargeUnreleased,IntPtr rows,uint rowCount,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateStatus(
+            UIntPtr unityBase,UIntPtr context,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateCancel(
             UIntPtr unityBase,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionAction(
             UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionLastNPhase(
+            UIntPtr unityBase,out UIntPtr nphaseCore,out uint observations);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionCaptureCopy(
             UIntPtr unityBase,IntPtr keys,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionRestoreArm(
@@ -182,8 +271,22 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private sealed class ManifoldPoolState
         {
-            internal uint PoolKind,Pool,OrderHash;
+            internal uint PoolKind,Pool,OrderHash,ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize;
             internal uint[] Order;
+        }
+
+        private sealed class SipPoolState
+        {
+            internal uint NPhaseCore,Pool,OrderHash,ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize;
+            internal uint[] Order;
+        }
+
+        private sealed class ColliderEndpointState
+        {
+            internal Collider Collider;
+            internal int InstanceId;
+            internal string Path,TypeName,Identity;
+            internal uint PxShape;
         }
 
         private sealed class DirtyInteractionState
@@ -197,6 +300,13 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeContactManagerOwnerReceipt Receipt;
             internal NativeContactManagerOwnerRecord[] Records;
             internal string[] ShapeOwners0,ShapeOwners1;
+            internal ColliderEndpointState[] Endpoints0,Endpoints1;
+        }
+
+        private sealed class LiveContactPoolState
+        {
+            internal NativeContactPoolReceipt Receipt;
+            internal uint[] Order;
         }
 
         private sealed class CheckpointSidecar
@@ -205,6 +315,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint Context,FreeArray,OrderHash;
             internal uint[] ContactPoolOrder;
             internal ContactManagerOwnerState ContactManagerOwners;
+            internal SipPoolState ShapeInstancePairPool;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -225,18 +336,28 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeContactManagerActiveOwners captureContactManagerActiveOwners;
         private NativeManifoldPoolCaptureSnapshot captureManifoldPoolSnapshot;
         private NativeManifoldPoolRestoreSnapshot restoreManifoldPoolSnapshot;
+        private NativeSipPoolCaptureSnapshot captureSipPoolSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
+        private NativeApiVersion contactRecreateApiVersion;
+        private NativeApiVersion contactRecreateAuditApiVersion;
+        private NativeContactRecreateAudit auditContactRecreate;
+        private NativeContactRecreateArm armContactRecreate;
+        private NativeContactRecreateStatus statusContactRecreate;
+        private NativeContactRecreateCancel cancelContactRecreate;
         private NativeDirtyInteractionAction installDirtyInteractionOrder,statusDirtyInteractionOrder;
+        private NativeDirtyInteractionLastNPhase lastObservedDirtyNPhase;
         private NativeDirtyInteractionAction armDirtyInteractionCapture,cancelDirtyInteractionOrder,uninstallDirtyInteractionOrder;
         private NativeDirtyInteractionCaptureCopy copyDirtyInteractionCapture;
         private NativeDirtyInteractionRestoreArm armDirtyInteractionRestore;
         private uint unityPlayerBase;
+        private uint dirtyNPhaseObservationFloor;
         private uint dirtyInteractionRestoreMode=DirtyInteractionRestoreExact;
         private uint contactManagerContext,contextObservations;
         private string nativePath,nativeSha256,failure;
         private bool automatic,automaticGroundCollider,observeContactManagerContext,contextObserverInstalled;
         private bool automaticContactPoolRestore,automaticTransformDispatchRestore,automaticRestorePending,warpInProgress,warpTargetRestoreEligible,disposed;
         private bool dirtyInteractionHookInstalled,dirtyRestorePendingValidation;
+        private bool contactRecreatePendingValidation;
         private int pendingContactPoolAction;
         private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
         private int scheduledContactPoolCaptureFrame=-1,scheduledContactPoolLastObservedFrame=-1;
@@ -249,6 +370,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> manifoldPoolReceipts=new List<object>();
         private readonly Dictionary<int,CheckpointSidecar> checkpointSidecars=new Dictionary<int,CheckpointSidecar>();
         private CheckpointSidecar warpTargetSidecar;
+        private CheckpointSidecar pendingContactRecreateSidecar;
         private CheckpointSidecar pendingDirtyCaptureSidecar;
         private DirtyInteractionState pendingDirtyRestoreState;
         private uint pendingDirtyCaptureOrdinal,pendingDirtyRestoreOrdinal;
@@ -256,6 +378,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> transformDispatchReceipts=new List<object>();
         private object lastContextObserverReceipt,lastSceneOwnedReset;
         private readonly List<object> dirtyInteractionReceipts=new List<object>();
+        private readonly List<object> contactRecreateReceipts=new List<object>();
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
         private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
@@ -266,6 +389,10 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(disposed)throw new ObjectDisposedException("RigidbodyActorRebuildModule");
             if(args==null)args=new Dictionary<string,object>();
+            // This operation intentionally bypasses Status(): several status
+            // providers refresh diagnostic state.  A readiness audit must be
+            // repeatable without touching module or native hook state.
+            if(operation=="audit-restore-readiness")return AuditRestoreReadiness(args);
             object result=null;
             if(operation=="activate")Activate(args);
             else if(operation=="rebuild")result=RebuildOne(args);
@@ -275,7 +402,7 @@ namespace SuperchargedPatch.Authoring.Modules
             else if(operation=="cancel-contact-pool-next")result=CancelContactPoolAction(args);
             else if(operation=="checkpoint-status")result=CheckpointStatus(args);
             else if(operation=="deactivate")Deactivate();
-            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, capture-contact-pool-at-frame, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, status or deactivate.");
+            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, capture-contact-pool-at-frame, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, audit-restore-readiness, status or deactivate.");
             else RequireNoArgs(args);
             return Status(operation,result);
         }
@@ -321,17 +448,27 @@ namespace SuperchargedPatch.Authoring.Modules
                 captureContactManagerActiveOwners=Export<NativeContactManagerActiveOwners>("oc2_contact_manager_active_owners");
                 captureManifoldPoolSnapshot=Export<NativeManifoldPoolCaptureSnapshot>("oc2_manifold_pool_capture_snapshot");
                 restoreManifoldPoolSnapshot=Export<NativeManifoldPoolRestoreSnapshot>("oc2_manifold_pool_restore_snapshot");
+                captureSipPoolSnapshot=Export<NativeSipPoolCaptureSnapshot>("oc2_shape_instance_pair_pool_capture_snapshot");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
+                contactRecreateApiVersion=Export<NativeApiVersion>("oc2_contact_recreate_api_version");
+                contactRecreateAuditApiVersion=Export<NativeApiVersion>("oc2_contact_recreate_audit_api_version");
+                auditContactRecreate=Export<NativeContactRecreateAudit>("oc2_contact_recreate_audit");
+                armContactRecreate=Export<NativeContactRecreateArm>("oc2_contact_recreate_arm");
+                statusContactRecreate=Export<NativeContactRecreateStatus>("oc2_contact_recreate_status");
+                cancelContactRecreate=Export<NativeContactRecreateCancel>("oc2_contact_recreate_cancel");
                 installDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_install");
                 statusDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_status");
+                lastObservedDirtyNPhase=Export<NativeDirtyInteractionLastNPhase>("oc2_dirty_interaction_last_nphase");
                 armDirtyInteractionCapture=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_capture_arm");
                 copyDirtyInteractionCapture=Export<NativeDirtyInteractionCaptureCopy>("oc2_dirty_interaction_order_capture_copy");
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
                 if(apiVersion()!=11)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(contactRecreateApiVersion()!=2)throw new InvalidOperationException("Native contact-recreate API version mismatch.");
+                if(contactRecreateAuditApiVersion()!=1)throw new InvalidOperationException("Native contact-recreate audit API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
                 observeContactManagerContext=observeContext;automaticContactPoolRestore=autoPoolRestore;
                 dirtyInteractionRestoreMode=projectDirtyInteractions?
@@ -400,6 +537,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     try
                     {
                         module.FinalizePendingDirtyInteractionCapture();
+                        module.ValidatePendingContactRecreate("status-paused",-1,false);
                         module.ValidatePendingDirtyInteractionRestore();
                         module.failure=null;
                     }
@@ -469,21 +607,33 @@ namespace SuperchargedPatch.Authoring.Modules
             if(module==null||!module.automaticContactPoolRestore)return;
             module.automaticRestorePending=false;module.warpTargetRestoreEligible=false;
             module.warpTargetSidecar=null;
+            module.CancelContactRecreateWork();
             module.CancelDirtyInteractionWork();
         }
 
         public static void AfterCaptureFrame(int __0)
         {
             var module=active;
-            if(module==null||!module.automaticContactPoolRestore||module.scheduledContactPoolCaptureFrame<0)return;
+            if(module==null||!module.automaticContactPoolRestore||
+                (!module.contactRecreatePendingValidation&&module.scheduledContactPoolCaptureFrame<0))return;
             try
             {
                 module.ObserveSceneGeneration();
                 module.ObserveCoreRoundIdentity();
                 // Either observer may have recognized a new scene/round and
-                // transactionally cancelled scene-owned scheduled work.
-                if(module.scheduledContactPoolCaptureFrame<0)return;
-                module.CaptureContactPoolAtScheduledFrame(__0);
+                // transactionally cancelled scene-owned work.  Contact owners
+                // are an advancing-output property: the recreation hook runs
+                // during the first replayed physics step, and those contacts
+                // may all be returned again before the later authoring pause.
+                // Validate here, after the core has published that output, at
+                // the same lifecycle boundary used to capture the sidecar.
+                if(module.contactRecreatePendingValidation)
+                {
+                    if(module.ValidatePendingContactRecreate("status-output",__0,true))
+                        module.ValidatePendingDirtyInteractionRestore();
+                }
+                if(module.scheduledContactPoolCaptureFrame>=0)
+                    module.CaptureContactPoolAtScheduledFrame(__0);
                 module.failure=null;
             }
             catch(Exception error)
@@ -554,7 +704,8 @@ namespace SuperchargedPatch.Authoring.Modules
             if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0||
                 pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar!=null||
                 pendingDirtyCaptureOrdinal!=0||dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||
-                pendingDirtyRestoreState!=null||automaticRestorePending||warpInProgress)
+                pendingDirtyRestoreState!=null||contactRecreatePendingValidation||
+                pendingContactRecreateSidecar!=null||automaticRestorePending||warpInProgress)
                 throw new InvalidOperationException("Another contact-pool capture, restore, or dirty-interaction action is pending or scheduled.");
             int target=(int)requestedFrame;
             int current=CurrentCheckpointFrame();
@@ -579,6 +730,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(pendingContactPoolAction!=0||pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||
                 pendingDirtyCaptureSidecar!=null||pendingDirtyCaptureOrdinal!=0||
                 dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||pendingDirtyRestoreState!=null||
+                contactRecreatePendingValidation||pendingContactRecreateSidecar!=null||
                 automaticRestorePending||warpInProgress)
                 throw new InvalidOperationException("Scheduled contact-pool capture reached its target while another native checkpoint action was pending.");
 
@@ -600,6 +752,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(pendingContactPoolFrame!=-1||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar==null||
                     pendingDirtyCaptureSidecar.Frame!=target||
                     !ReferenceEquals(pendingDirtyCaptureSidecar.CoreSnapshot,core)||
+                    pendingDirtyCaptureSidecar.ShapeInstancePairPool==null||
                     pendingDirtyCaptureSidecar.TransformDispatch==null)
                     throw new InvalidOperationException("Scheduled contact-pool capture did not stage one complete exact-frame sidecar transaction.");
                 // Clear only after all synchronous read-only captures succeeded
@@ -631,6 +784,13 @@ namespace SuperchargedPatch.Authoring.Modules
         private void RunContactPoolAction(int action,bool automaticAction,bool requireTransformCapture=false)
         {
             if(action==1)FinalizePendingDirtyInteractionCapture();
+            uint captureNPhase=0,captureNPhaseObservation=0;
+            if(action==1)
+            {
+                captureNPhase=ReadObservedNPhaseCore(out captureNPhaseObservation);
+                if(captureNPhaseObservation<=dirtyNPhaseObservationFloor)
+                    throw new InvalidOperationException("No current-scene NPhaseCore observation is available for an exact pool checkpoint.");
+            }
             RefreshObservedContactManagerContext();
             CheckpointSidecar selected=null;
             if(action==2)
@@ -643,10 +803,17 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null||
                 captureContactManagerActiveOwners==null||captureManifoldPoolSnapshot==null||
-                restoreManifoldPoolSnapshot==null)
+                restoreManifoldPoolSnapshot==null||captureSipPoolSnapshot==null)
                 throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
+            if(action==2&&automaticAction&&RequiresContactRecreate(selected))
+            {
+                RunContactRecreateRestore(selected,actionFrame);
+                contactPoolRestores++;
+                warpTargetSidecar=null;warpTargetRestoreEligible=false;
+                return;
+            }
             int size=Marshal.SizeOf(typeof(NativeContactPoolReceipt));
             int capacity=action==1?MaximumContactManagers:selected.ContactPoolOrder.Length;
             if(capacity<1||capacity>MaximumContactManagers)
@@ -711,6 +878,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(orderHash!=receipt.OrderHashBefore||receipt.OrderHashAfter!=receipt.OrderHashBefore)
                     throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
                 ContactManagerOwnerState owners=CaptureContactManagerOwners(actionFrame);
+                SipPoolState sip=CaptureSipPoolState(captureNPhase,actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -719,8 +887,14 @@ namespace SuperchargedPatch.Authoring.Modules
                     Context=contactManagerContext,FreeArray=receipt.FreeArray.ToUInt32(),
                     OrderHash=orderHash,ContactPoolOrder=capturedOrder,
                     ContactManagerOwners=owners,
+                    ShapeInstancePairPool=sip,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
+                uint afterObservation;
+                uint afterNPhase=ReadObservedNPhaseCore(out afterObservation);
+                if(afterNPhase!=captureNPhase||afterObservation!=captureNPhaseObservation)
+                    throw new InvalidOperationException("A physics update crossed the synchronous checkpoint pool-capture interval.");
+                ValidateCheckpointPoolCoherence(captured);
                 // Do not publish a partially captured sidecar.  The native
                 // dirty-list sample completes on the next physics update and
                 // FinalizePendingDirtyInteractionCapture publishes the whole
@@ -791,6 +965,814 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
+        private LiveContactPoolState CaptureLiveContactPoolState()
+        {
+            int size=Marshal.SizeOf(typeof(NativeContactPoolReceipt));
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr orderBuffer=Marshal.AllocHGlobal(MaximumContactManagers*IntPtr.Size);
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureContactPoolSnapshot(new UIntPtr(contactManagerContext),orderBuffer,
+                    MaximumContactManagers,receiptBuffer);
+                var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeContactPoolReceipt));
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=11||
+                    receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
+                    receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
+                    throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
+                        receipt.Result+", error="+receipt.LastError+", count="+receipt.FreeCount+".");
+                var order=new uint[receipt.FreeCount];
+                for(int i=0;i<order.Length;i++)order[i]=unchecked((uint)Marshal.ReadInt32(
+                    orderBuffer,i*IntPtr.Size));
+                if(order.Any(pointer=>pointer==0)||order.Distinct().Count()!=order.Length||
+                    ContactPoolOrderHash(order)!=receipt.OrderHashBefore||
+                    receipt.OrderHashAfter!=receipt.OrderHashBefore)
+                    throw new InvalidOperationException("Read-only live contact-pool capture returned an invalid ordered set.");
+                return new LiveContactPoolState {Receipt=receipt,Order=order};
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(orderBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+        }
+
+        private bool RequiresContactRecreate(CheckpointSidecar selected)
+        {
+            if(contactRecreatePendingValidation||pendingContactRecreateSidecar!=null)
+                throw new InvalidOperationException("A contact-manager recreation plan is already pending validation.");
+            LiveContactPoolState live=CaptureLiveContactPoolState();
+            if(live.Receipt.FreeArray.ToUInt32()!=selected.FreeArray)
+                throw new InvalidOperationException("Live contact-manager free-array identity differs from the rewind checkpoint.");
+            if(live.Order.Length==selected.ContactPoolOrder.Length)return false;
+            ValidateContactManagerOwnerState(selected.ContactManagerOwners);
+            uint[] managers=selected.ContactManagerOwners.Records.Select(
+                value=>value.Manager.ToUInt32()).ToArray();
+            if(live.Order.Length!=selected.ContactPoolOrder.Length+managers.Length)
+                throw new InvalidOperationException("Live contact-manager membership is neither exact nor the checkpoint-owner loss shape.");
+            var expected=new HashSet<uint>(selected.ContactPoolOrder);
+            if(expected.Count!=selected.ContactPoolOrder.Length||managers.Any(value=>!expected.Add(value))||
+                live.Order.Any(value=>!expected.Contains(value))||live.Order.Distinct().Count()!=live.Order.Length)
+                throw new InvalidOperationException("Live contact-manager membership is not the exact checkpoint-free union checkpoint-owned-manager set.");
+            return true;
+        }
+
+        private void RunContactRecreateRestore(CheckpointSidecar selected,int frame)
+        {
+            if(armContactRecreate==null||statusContactRecreate==null||cancelContactRecreate==null)
+                throw new InvalidOperationException("Native contact-manager recreation exports are unavailable.");
+            ValidateContactManagerOwnerState(selected.ContactManagerOwners);
+            ValidateSipPoolState(selected.ShapeInstancePairPool);
+            ValidateManifoldPoolState(selected.LargeManifoldPool,LargeManifoldPoolKind,"large");
+            NativeContactRecreatePlanRow[] rows=BuildContactRecreateRows(selected);
+            int receiptSize=Marshal.SizeOf(typeof(NativeContactRecreateReceipt));
+            int rowSize=Marshal.SizeOf(typeof(NativeContactRecreatePlanRow));
+            if(receiptSize!=268||rowSize!=36)
+                throw new InvalidOperationException("Managed contact-recreate ABI size differs.");
+            // Capture the two independently restored structures before native
+            // contact/large-manifold priming.  A later arm or validation
+            // failure can then return the entire pre-attempt paused state,
+            // rather than only rolling back the two native allocators.
+            ManifoldPoolState sphereBefore=RunManifoldPoolAction(
+                1,SphereManifoldPoolKind,null,frame);
+            TransformDispatchState dispatchBefore=automaticTransformDispatchRestore
+                ?RunTransformDispatchAction(1,null):null;
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr sipBuffer=Marshal.AllocHGlobal(Math.Max(1,
+                selected.ShapeInstancePairPool.Order.Length)*IntPtr.Size);
+            IntPtr contactBuffer=Marshal.AllocHGlobal(selected.ContactPoolOrder.Length*IntPtr.Size);
+            IntPtr largeBuffer=Marshal.AllocHGlobal(Math.Max(1,selected.LargeManifoldPool.Order.Length)*IntPtr.Size);
+            IntPtr rowBuffer=Marshal.AllocHGlobal(rows.Length*rowSize);
+            NativeContactRecreateReceipt receipt;
+            int ok;
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                for(int i=0;i<selected.ShapeInstancePairPool.Order.Length;i++)Marshal.WriteInt32(
+                    sipBuffer,i*IntPtr.Size,unchecked((int)selected.ShapeInstancePairPool.Order[i]));
+                for(int i=0;i<selected.ContactPoolOrder.Length;i++)Marshal.WriteInt32(
+                    contactBuffer,i*IntPtr.Size,unchecked((int)selected.ContactPoolOrder[i]));
+                for(int i=0;i<selected.LargeManifoldPool.Order.Length;i++)Marshal.WriteInt32(
+                    largeBuffer,i*IntPtr.Size,unchecked((int)selected.LargeManifoldPool.Order[i]));
+                for(int i=0;i<rows.Length;i++)Marshal.StructureToPtr(rows[i],
+                    new IntPtr(rowBuffer.ToInt64()+i*rowSize),false);
+                ok=armContactRecreate(new UIntPtr(unityPlayerBase),new UIntPtr(contactManagerContext),
+                    new UIntPtr(selected.ShapeInstancePairPool.NPhaseCore),
+                    new UIntPtr(selected.ShapeInstancePairPool.Pool),sipBuffer,
+                    (uint)selected.ShapeInstancePairPool.Order.Length,
+                    selected.ShapeInstancePairPool.Used,selected.ShapeInstancePairPool.Unreleased,
+                    new UIntPtr(selected.FreeArray),contactBuffer,(uint)selected.ContactPoolOrder.Length,
+                    new UIntPtr(selected.LargeManifoldPool.Pool),largeBuffer,
+                    (uint)selected.LargeManifoldPool.Order.Length,selected.LargeManifoldPool.Used,
+                    selected.LargeManifoldPool.Unreleased,rowBuffer,(uint)rows.Length,receiptBuffer);
+                receipt=(NativeContactRecreateReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeContactRecreateReceipt));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(rowBuffer);Marshal.FreeHGlobal(largeBuffer);
+                Marshal.FreeHGlobal(contactBuffer);Marshal.FreeHGlobal(sipBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            RecordContactRecreateReceipt("arm",frame,receipt);
+            bool nativeArmed=ok!=0&&receipt.Result==1&&receipt.State==1&&receipt.Armed==1;
+            if(nativeArmed)
+            {
+                // Establish managed ownership before checking the rest of the
+                // receipt so every later exception can cancel native priming.
+                pendingContactRecreateSidecar=selected;
+                contactRecreatePendingValidation=true;
+            }
+            try
+            {
+                if(!nativeArmed||receipt.ApiVersion!=2||
+                    receipt.StructSize!=(uint)receiptSize||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
+                    receipt.NPhaseCore.ToUInt32()!=selected.ShapeInstancePairPool.NPhaseCore||
+                    receipt.SipPool.ToUInt32()!=selected.ShapeInstancePairPool.Pool||
+                    receipt.FreeArray.ToUInt32()!=selected.FreeArray||
+                    receipt.LargePool.ToUInt32()!=selected.LargeManifoldPool.Pool||
+                    receipt.RowCount!=(uint)rows.Length||receipt.MatchedCount!=0||
+                    receipt.SipMatchedCount!=0)
+                    throw new InvalidOperationException("Native contact-manager recreation arm failed: result="+
+                        receipt.Result+", error="+receipt.LastError+", state="+receipt.State+
+                        ", invalidRow="+receipt.InvalidRow+", detail="+receipt.Detail+".");
+                // The admitted delta contains only large manifolds.  The sphere
+                // pool remains an ordinary exact checkpoint restore.
+                RunManifoldPoolAction(2,SphereManifoldPoolKind,selected.SphereManifoldPool,frame);
+                if(automaticTransformDispatchRestore)RunTransformDispatchAction(2,selected.TransformDispatch);
+                ArmDirtyInteractionRestore(selected.DirtyInteractions);
+            }
+            catch
+            {
+                if(nativeArmed)
+                {
+                    // Dirty restoration is only an armed one-shot at this
+                    // point, so cancel it before restoring its input queues.
+                    try{CancelDirtyInteractionWork();}catch{}
+                    if(automaticTransformDispatchRestore)
+                        try{RunTransformDispatchAction(2,dispatchBefore);}catch{}
+                    try{RunManifoldPoolAction(2,SphereManifoldPoolKind,sphereBefore,frame);}catch{}
+                    try{CancelContactRecreateWork();}catch{}
+                }
+                else
+                {
+                    // A rejected arm may leave a diagnostic Poisoned state,
+                    // but it has not acquired managed pending ownership and
+                    // has not changed either target structure.
+                    try{CallContactRecreateCancel("rejected-arm",frame);}catch{}
+                }
+                throw;
+            }
+        }
+
+        private NativeContactRecreatePlanRow[] BuildContactRecreateRows(CheckpointSidecar selected)
+        {
+            if(selected==null)throw new ArgumentNullException("selected");
+            ValidateContactManagerOwnerState(selected.ContactManagerOwners);
+            NativeContactManagerOwnerRecord[] owners=selected.ContactManagerOwners.Records;
+            if(owners.Length<1||owners.Length>32)
+                throw new InvalidOperationException("Contact-manager recreation row count is outside the supported range.");
+            var rows=new NativeContactRecreatePlanRow[owners.Length];
+            for(int i=0;i<owners.Length;i++)
+            {
+                NativeContactManagerOwnerRecord owner=owners[i];
+                if(owner.Membership!=3u||owner.ContactCount!=0||owner.CacheSize!=0||
+                    owner.ManifoldBytes!=0xF0u||(owner.ManagerFlags&1u)!=0||
+                    owner.Manifold==UIntPtr.Zero)
+                    throw new InvalidOperationException("Checkpoint contact owner "+owner.Slot+
+                        " is outside the narrow zero-touch, cacheless large-manifold recreation contract.");
+                uint shape0=ResolveCurrentPxShape(selected.ContactManagerOwners.Endpoints0[i]);
+                uint shape1=ResolveCurrentPxShape(selected.ContactManagerOwners.Endpoints1[i]);
+                uint core0=checked(shape0+0x50u),core1=checked(shape1+0x50u);
+                rows[i]=new NativeContactRecreatePlanRow {
+                    PxsShapeCoreLow=new UIntPtr(Math.Min(core0,core1)),
+                    PxsShapeCoreHigh=new UIntPtr(Math.Max(core0,core1)),
+                    TargetManager=owner.Manager,TargetManifold=owner.Manifold,TargetSip=owner.Sip,
+                    TargetSlot=owner.Slot,ManifoldBytes=owner.ManifoldBytes,
+                    TargetManagerFlags=owner.ManagerFlags,Flags=0
+                };
+            }
+            return rows;
+        }
+
+        private object AuditRestoreReadiness(Dictionary<string,object> args)
+        {
+            if(!ReferenceEquals(active,this)||library==IntPtr.Zero||auditContactRecreate==null)
+                throw new InvalidOperationException("The actor-rebuild readiness provider is not active.");
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("Restore-readiness audit requires the authoring pause fence.");
+            if(!args.ContainsKey("frame"))throw new ArgumentException("audit-restore-readiness requires frame.");
+            foreach(string key in args.Keys)
+                if(key!="frame"&&key!="phase"&&key!="sourceFrame")
+                    throw new ArgumentException("Unsupported audit-restore-readiness argument "+key+".");
+            int frame=Convert.ToInt32(args["frame"]);
+            int sourceFrame=args.ContainsKey("sourceFrame")?Convert.ToInt32(args["sourceFrame"]):CurrentCheckpointFrame();
+            string phase=args.ContainsKey("phase")?Convert.ToString(args["phase"]):"target-paused";
+            if(phase!="source-paused"&&phase!="target-paused")
+                throw new ArgumentException("Readiness phase must be source-paused or target-paused.");
+
+            string before=AuditModuleFingerprint();
+            var checks=new List<object>();
+            var blockers=new List<object>();
+            var deferred=new List<object>();
+            CheckpointSidecar selected=null;
+            object core=CoreCheckpointSnapshot(frame);
+            bool found=checkpointSidecars.TryGetValue(frame,out selected);
+            AddReadinessCheck(checks,blockers,deferred,"rigidbody.target-binding",phase,
+                found&&core!=null&&ReferenceEquals(selected.CoreSnapshot,core)?"pass":"fail","blocker",
+                found?"TARGET_CORE_IDENTITY":"TARGET_SIDECAR_MISSING",
+                found?"The retained physics sidecar is bound to the exact core checkpoint object.":
+                    "No retained physics sidecar is available for the requested frame.",
+                new Dictionary<string,object>{{"frame",frame},{"captured",found},
+                    {"coreSnapshotPresent",core!=null},{"coreSnapshotMatches",found&&core!=null&&
+                        ReferenceEquals(selected.CoreSnapshot,core)}});
+
+            NativeContactRecreatePlanRow[] rows=null;
+            if(found)
+            {
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-contact-sidecar",phase,
+                    delegate { ValidateContactManagerOwnerState(selected.ContactManagerOwners); },
+                    "TARGET_CONTACT_SIDECAR_VALID","The contact-manager owner sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-sip-sidecar",phase,
+                    delegate { ValidateSipPoolState(selected.ShapeInstancePairPool); },
+                    "TARGET_SIP_SIDECAR_VALID","The ShapeInstancePair pool sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-large-sidecar",phase,
+                    delegate { ValidateManifoldPoolState(selected.LargeManifoldPool,
+                        LargeManifoldPoolKind,"large"); },
+                    "TARGET_LARGE_SIDECAR_VALID","The large-manifold pool sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-sphere-sidecar",phase,
+                    delegate { ValidateManifoldPoolState(selected.SphereManifoldPool,
+                        SphereManifoldPoolKind,"sphere"); },
+                    "TARGET_SPHERE_SIDECAR_VALID","The sphere-manifold pool sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-dirty-sidecar",phase,
+                    delegate { ValidateDirtyInteractionState(selected.DirtyInteractions); },
+                    "TARGET_DIRTY_SIDECAR_VALID","The dirty-interaction sidecar is structurally valid.");
+
+                try
+                {
+                    NativeContactManagerOwnerRecord[] owners=selected.ContactManagerOwners.Records;
+                    var contactFree=new HashSet<uint>(selected.ContactPoolOrder);
+                    var sipFree=new HashSet<uint>(selected.ShapeInstancePairPool.Order);
+                    var largeFree=new HashSet<uint>(selected.LargeManifoldPool.Order);
+                    uint[] managerOverlap=owners.Select(value=>value.Manager.ToUInt32())
+                        .Where(contactFree.Contains).ToArray();
+                    uint[] sipOverlap=owners.Select(value=>value.Sip.ToUInt32())
+                        .Where(sipFree.Contains).ToArray();
+                    uint[] manifoldOverlap=owners.Select(value=>value.Manifold.ToUInt32())
+                        .Where(largeFree.Contains).ToArray();
+                    bool coherent=managerOverlap.Length==0&&sipOverlap.Length==0&&
+                        manifoldOverlap.Length==0&&
+                        selected.ContactManagerOwners.Receipt.UsedCount==(uint)owners.Length&&
+                        selected.ShapeInstancePairPool.Used>=(uint)owners.Select(value=>value.Sip).Distinct().Count()&&
+                        selected.LargeManifoldPool.Used>=(uint)owners.Select(value=>value.Manifold).Distinct().Count();
+                    AddReadinessCheck(checks,blockers,deferred,
+                        "rigidbody.target-cross-pool-coherence",phase,coherent?"pass":"fail","blocker",
+                        coherent?"TARGET_POOL_OWNERSHIP_COHERENT":"TARGET_POOL_PHASE_MIX",
+                        coherent?"Every saved owner is allocated in the same saved pool partition.":
+                            "The target sidecar combines owner and allocator observations from incompatible physics phases.",
+                        new Dictionary<string,object>{{"managerRows",owners.Length},
+                            {"contactUsed",selected.ContactManagerOwners.Receipt.UsedCount},
+                            {"sipUsed",selected.ShapeInstancePairPool.Used},
+                            {"largeUsed",selected.LargeManifoldPool.Used},
+                            {"managerPointersInTargetFree",HexArray(managerOverlap)},
+                            {"sipPointersInTargetFree",HexArray(sipOverlap)},
+                            {"manifoldPointersInTargetFree",HexArray(manifoldOverlap)}});
+
+                    bool narrow=owners.All(value=>value.ContactCount==0&&value.CacheSize==0&&
+                        value.ManifoldBytes==0xF0u&&(value.ManagerFlags&1u)==0);
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.zero-cache-scope",phase,
+                        narrow?"pass":"fail","blocker",
+                        narrow?"ZERO_CACHE_RECREATE_SCOPE":"UNSUPPORTED_CONTACT_CACHE_STATE",
+                        narrow?"All target pairs are zero-contact, cacheless large-manifold pairs.":
+                            "At least one target pair carries unsupported contact/cache/manifold state.",
+                        new Dictionary<string,object>{{"rows",owners.Length},
+                            {"nonzeroContacts",owners.Count(value=>value.ContactCount!=0)},
+                            {"nonzeroCaches",owners.Count(value=>value.CacheSize!=0)},
+                            {"nonLargeManifolds",owners.Count(value=>value.ManifoldBytes!=0xF0u)}});
+                }
+                catch(Exception error)
+                {
+                    AddReadinessCheck(checks,blockers,deferred,
+                        "rigidbody.target-cross-pool-coherence",phase,"fail","blocker",
+                        "TARGET_POOL_COHERENCE_EXCEPTION",error.GetType().Name+": "+error.Message,null);
+                }
+
+                try
+                {
+                    rows=BuildContactRecreateRows(selected);
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.resolved-plan-rows",phase,
+                        "pass","blocker","PLAN_ROWS_RESOLVED",
+                        "Every target contact row resolves to its current exact Collider/PxShape incarnation.",
+                        new Dictionary<string,object>{{"rowCount",rows.Length}});
+                }
+                catch(Exception error)
+                {
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.resolved-plan-rows",phase,
+                        "fail","blocker","PLAN_ROW_RESOLUTION_FAILED",
+                        error.GetType().Name+": "+error.Message,null);
+                }
+            }
+
+            NativeContactRecreateAuditReceipt nativeAudit=new NativeContactRecreateAuditReceipt();
+            bool nativeAuditAvailable=phase=="target-paused"&&found&&rows!=null;
+            if(nativeAuditAvailable)
+            {
+                try
+                {
+                    nativeAudit=CallContactRecreateAudit(selected,rows);
+                    NativeContactRecreateAuditReceipt repeated=CallContactRecreateAudit(selected,rows);
+                    bool repeatedExact=nativeAudit.Equals(repeated);
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.native-audit-repeatability",phase,
+                        repeatedExact?"pass":"fail","blocker",
+                        repeatedExact?"NATIVE_AUDIT_REPEATABLE":"NATIVE_AUDIT_CHANGED_STATE",
+                        repeatedExact?"Two consecutive native audits returned byte-equivalent receipts.":
+                            "Repeating the native audit changed its receipt, so it is not observationally stable.",
+                        new Dictionary<string,object>{{"first",DescribeContactRecreateAudit(nativeAudit)},
+                            {"second",DescribeContactRecreateAudit(repeated)}});
+                    AppendNativeAuditChecks(checks,blockers,deferred,phase,nativeAudit);
+                }
+                catch(Exception error)
+                {
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.native-contact-plan",phase,
+                        "fail","blocker","NATIVE_AUDIT_CALL_FAILED",
+                        error.GetType().Name+": "+error.Message,null);
+                }
+            }
+            else
+            {
+                AppendDeferredNativeAuditChecks(checks,blockers,deferred,phase,
+                    phase=="source-paused"?"Requires the restored target-paused allocator state.":
+                        "Requires a valid resolved target plan.");
+            }
+
+            if(found&&phase=="target-paused")
+            {
+                try
+                {
+                    ManifoldPoolState sphere=CaptureManifoldPoolStateReadOnly(
+                        SphereManifoldPoolKind,frame);
+                    bool exact=SameManifoldPoolSnapshot(sphere,selected.SphereManifoldPool);
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.sphere-pool",phase,
+                        exact?"pass":"fail","blocker",exact?"SPHERE_POOL_EXACT":"SPHERE_POOL_MISMATCH",
+                        exact?"The live sphere-manifold allocator already has exact target state.":
+                            "The sphere-manifold allocator cannot be restored by an order-only operation.",
+                        new Dictionary<string,object>{{"target",DescribeManifoldPoolState(selected.SphereManifoldPool)},
+                            {"live",DescribeManifoldPoolState(sphere)}});
+                }
+                catch(Exception error)
+                {
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.sphere-pool",phase,
+                        "fail","blocker","SPHERE_POOL_AUDIT_FAILED",
+                        error.GetType().Name+": "+error.Message,null);
+                }
+                try
+                {
+                    TransformDispatchState live=ReadTransformDispatchState();
+                    TransformDispatchState target=selected.TransformDispatch;
+                    bool targetValid=target!=null&&live.Dispatch==target.Dispatch&&
+                        live.Capacity>=target.Count&&target.Entries!=null&&
+                        target.Count==(uint)target.Entries.Length&&
+                        target.Entries.Select(value=>value.Hierarchy).Distinct().Count()==target.Entries.Length;
+                    if(targetValid)foreach(TransformDispatchEntryState entry in target.Entries)
+                    {
+                        ReadWord(entry.Hierarchy+0x1Cu);ReadWord(entry.Hierarchy+0x20u);
+                        ReadWord(entry.Hierarchy+0x24u);
+                    }
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-dispatch",phase,
+                        targetValid?"pass":"fail","blocker",
+                        targetValid?"TRANSFORM_DISPATCH_WRITABLE":"TRANSFORM_DISPATCH_INCOMPATIBLE",
+                        targetValid?"The live dispatch can hold every exact target hierarchy entry.":
+                            "The exact target Transform dispatch cannot be reconstructed in the live container.",
+                        new Dictionary<string,object>{{"target",target==null?null:DescribeTransformDispatchState(target)},
+                            {"live",DescribeTransformDispatchState(live)}});
+                }
+                catch(Exception error)
+                {
+                    AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-dispatch",phase,
+                        "fail","blocker","TRANSFORM_DISPATCH_AUDIT_FAILED",
+                        error.GetType().Name+": "+error.Message,null);
+                }
+            }
+            else
+            {
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.sphere-pool",phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",
+                    "Sphere-manifold live admission requires the restored target-paused state.",null);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-dispatch",phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",
+                    "Transform-dispatch live admission requires the restored target-paused state.",null);
+            }
+
+            string[] futureFamilies={"actor-pair-pool","interaction-registration-order",
+                "island-edge-allocator-and-change-queues","transform-cache-id-pool",
+                "broadphase-created-overlap-order","dirty-interaction-live-projection",
+                "first-output-owner-convergence"};
+            foreach(string family in futureFamilies)
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody."+family,phase,
+                    "deferred","blocker","INSTRUMENTATION_REQUIRED",
+                    "This PhysX history family is source-proven relevant but has no read-only live planner yet.",
+                    new Dictionary<string,object>{{"requiredPhase",family.StartsWith("first-")?
+                        "first-advancing-output":"target-paused"}});
+
+            string after=AuditModuleFingerprint();
+            bool stateExact=before==after;
+            AddReadinessCheck(checks,blockers,deferred,"rigidbody.audit-state-proof",phase,
+                stateExact?"pass":"fail","blocker",
+                stateExact?"AUDIT_STATE_UNCHANGED":"AUDIT_MUTATED_MODULE_STATE",
+                stateExact?"The audit left all tracked managed pending state and receipt counters unchanged.":
+                    "The audit changed tracked module state.",
+                new Dictionary<string,object>{{"before",before},{"after",after}});
+
+            return new Dictionary<string,object>{{"schemaVersion",1},{"provider",Name},
+                {"operation","audit-restore-readiness"},{"phase",phase},{"sourceFrame",sourceFrame},
+                {"targetFrame",frame},{"currentFrame",CurrentCheckpointFrame()},
+                {"passed",blockers.Count==0},{"complete",deferred.Count==0},
+                {"checks",checks.ToArray()},{"blockers",blockers.ToArray()},
+                {"deferred",deferred.ToArray()},
+                {"mutation",new Dictionary<string,object>{{"gameState",false},
+                    {"moduleState",!stateExact},{"nativeState",false}}},
+                {"targetBinding",new Dictionary<string,object>{{"frame",frame},
+                    {"coreSnapshotIdentity",found&&core!=null&&ReferenceEquals(selected.CoreSnapshot,core)},
+                    {"sceneMetadataGeneration",sceneMetadataGeneration},
+                    {"context",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")}}},
+                {"nativeAudit",nativeAuditAvailable?DescribeContactRecreateAudit(nativeAudit):null}};
+        }
+
+        private delegate void AuditValidator();
+
+        private static void AddValidatorCheck(List<object> checks,List<object> blockers,
+            List<object> deferred,string id,string phase,AuditValidator validator,
+            string code,string message)
+        {
+            try
+            {
+                validator();
+                AddReadinessCheck(checks,blockers,deferred,id,phase,"pass","blocker",code,message,null);
+            }
+            catch(Exception error)
+            {
+                AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                    code+"_FAILED",error.GetType().Name+": "+error.Message,null);
+            }
+        }
+
+        private static void AddReadinessCheck(List<object> checks,List<object> blockers,
+            List<object> deferred,string id,string phase,string status,string severity,
+            string code,string message,object evidence)
+        {
+            var value=new Dictionary<string,object>{{"id",id},{"module","rigidbody-actor-rebuild"},
+                {"phase",phase},{"status",status},{"severity",severity},{"code",code},
+                {"message",message},{"evidence",evidence},
+                {"mutation",new Dictionary<string,object>{{"gameState",false},
+                    {"moduleState",false},{"nativeState",false}}}};
+            checks.Add(value);
+            if(status=="fail"&&severity=="blocker")blockers.Add(id);
+            if(status=="deferred")deferred.Add(id);
+        }
+
+        private static readonly string[] NativeAuditCheckNames={"arguments","observer",
+            "recreate-state","revisions","target-buffers","target-uniqueness","rows",
+            "row-uniqueness","sip-capture","sip-identity","sip-semantic-counts",
+            "sip-membership","sip-legacy-arm","contact-capture","contact-identity",
+            "contact-bitmaps","contact-membership","large-capture","large-identity",
+            "large-membership","writability"};
+
+        private static void AppendNativeAuditChecks(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,NativeContactRecreateAuditReceipt receipt)
+        {
+            object evidence=DescribeContactRecreateAudit(receipt);
+            for(int i=0;i<NativeAuditCheckNames.Length;i++)
+            {
+                uint bit=1u<<i;
+                bool evaluated=(receipt.EvaluatedMask&bit)!=0;
+                bool issue=(receipt.IssueMask&bit)!=0;
+                string status=!evaluated?"deferred":issue?"fail":"pass";
+                string name=NativeAuditCheckNames[i];
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.native."+name,phase,status,"blocker",
+                    !evaluated?"NATIVE_CHECK_DEFERRED":issue?"NATIVE_CHECK_FAILED":"NATIVE_CHECK_PASSED",
+                    !evaluated?"A prerequisite prevented this native check from being evaluated safely.":
+                        issue?"The native read-only planner found an incompatible restore condition.":
+                            "The native read-only planner accepted this condition.",evidence);
+            }
+        }
+
+        private static void AppendDeferredNativeAuditChecks(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,string reason)
+        {
+            foreach(string name in NativeAuditCheckNames)
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.native."+name,phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",reason,null);
+        }
+
+        private NativeContactRecreateAuditReceipt CallContactRecreateAudit(
+            CheckpointSidecar selected,NativeContactRecreatePlanRow[] rows)
+        {
+            int receiptSize=Marshal.SizeOf(typeof(NativeContactRecreateAuditReceipt));
+            int rowSize=Marshal.SizeOf(typeof(NativeContactRecreatePlanRow));
+            if(receiptSize!=232||rowSize!=36)
+                throw new InvalidOperationException("Managed contact-recreate audit ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr sipBuffer=Marshal.AllocHGlobal(Math.Max(1,
+                selected.ShapeInstancePairPool.Order.Length)*IntPtr.Size);
+            IntPtr contactBuffer=Marshal.AllocHGlobal(selected.ContactPoolOrder.Length*IntPtr.Size);
+            IntPtr largeBuffer=Marshal.AllocHGlobal(Math.Max(1,
+                selected.LargeManifoldPool.Order.Length)*IntPtr.Size);
+            IntPtr rowBuffer=Marshal.AllocHGlobal(rows.Length*rowSize);
+            NativeContactRecreateAuditReceipt receipt;
+            int ok;
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                for(int i=0;i<selected.ShapeInstancePairPool.Order.Length;i++)Marshal.WriteInt32(
+                    sipBuffer,i*IntPtr.Size,unchecked((int)selected.ShapeInstancePairPool.Order[i]));
+                for(int i=0;i<selected.ContactPoolOrder.Length;i++)Marshal.WriteInt32(
+                    contactBuffer,i*IntPtr.Size,unchecked((int)selected.ContactPoolOrder[i]));
+                for(int i=0;i<selected.LargeManifoldPool.Order.Length;i++)Marshal.WriteInt32(
+                    largeBuffer,i*IntPtr.Size,unchecked((int)selected.LargeManifoldPool.Order[i]));
+                for(int i=0;i<rows.Length;i++)Marshal.StructureToPtr(rows[i],
+                    new IntPtr(rowBuffer.ToInt64()+i*rowSize),false);
+                ok=auditContactRecreate(new UIntPtr(unityPlayerBase),new UIntPtr(contactManagerContext),
+                    new UIntPtr(selected.ShapeInstancePairPool.NPhaseCore),
+                    new UIntPtr(selected.ShapeInstancePairPool.Pool),sipBuffer,
+                    (uint)selected.ShapeInstancePairPool.Order.Length,
+                    selected.ShapeInstancePairPool.Used,selected.ShapeInstancePairPool.Unreleased,
+                    new UIntPtr(selected.FreeArray),contactBuffer,(uint)selected.ContactPoolOrder.Length,
+                    new UIntPtr(selected.LargeManifoldPool.Pool),largeBuffer,
+                    (uint)selected.LargeManifoldPool.Order.Length,selected.LargeManifoldPool.Used,
+                    selected.LargeManifoldPool.Unreleased,rowBuffer,(uint)rows.Length,receiptBuffer);
+                receipt=(NativeContactRecreateAuditReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeContactRecreateAuditReceipt));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(rowBuffer);Marshal.FreeHGlobal(largeBuffer);
+                Marshal.FreeHGlobal(contactBuffer);Marshal.FreeHGlobal(sipBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            if(ok==0||receipt.ApiVersion!=1||receipt.StructSize!=(uint)receiptSize||
+                (receipt.Result!=1&&receipt.Result!=2))
+                throw new InvalidOperationException("Native contact-recreate audit failed its receipt contract: result="+
+                    receipt.Result+", error="+receipt.LastError+".");
+            return receipt;
+        }
+
+        private static object DescribeContactRecreateAudit(NativeContactRecreateAuditReceipt value)
+        {
+            return new Dictionary<string,object>{{"apiVersion",value.ApiVersion},{"result",value.Result},
+                {"lastError",value.LastError},{"evaluatedMask","0x"+value.EvaluatedMask.ToString("X8")},
+                {"issueMask","0x"+value.IssueMask.ToString("X8")},
+                {"recreateState",value.RecreateState},{"observerInstalled",value.ObserverInstalled},
+                {"rowCount",value.RowCount},{"invalidRowCount",value.InvalidRowCount},
+                {"duplicateRowCount",value.DuplicateRowCount},
+                {"targetFreeSipRowCount",value.TargetFreeSipRowCount},
+                {"activeSipRowCount",value.ActiveSipRowCount},
+                {"targetSipCount",value.TargetSipCount},{"targetSipHash","0x"+value.TargetSipHash.ToString("X8")},
+                {"targetSipUsed",value.TargetSipUsed},{"targetSipUnreleased",value.TargetSipUnreleased},
+                {"liveSipCount",value.LiveSipCount},{"liveSipHash","0x"+value.LiveSipHash.ToString("X8")},
+                {"liveSipUsed",value.LiveSipUsed},{"liveSipUnreleased",value.LiveSipUnreleased},
+                {"expectedSemanticSipCount",value.ExpectedSemanticSipCount},
+                {"expectedLegacySipCount",value.ExpectedLegacySipCount},
+                {"sipMissingCount",value.SipMissingCount},{"sipExtraCount",value.SipExtraCount},
+                {"targetContactCount",value.TargetContactCount},{"targetContactHash","0x"+value.TargetContactHash.ToString("X8")},
+                {"liveContactCount",value.LiveContactCount},{"liveContactHash","0x"+value.LiveContactHash.ToString("X8")},
+                {"expectedContactCount",value.ExpectedContactCount},
+                {"contactMissingCount",value.ContactMissingCount},{"contactExtraCount",value.ContactExtraCount},
+                {"useBitmapCount",value.UseBitmapCount},{"activeBitmapCount",value.ActiveBitmapCount},
+                {"touchBitmapCount",value.TouchBitmapCount},{"modifiableBitmapCount",value.ModifiableBitmapCount},
+                {"targetLargeCount",value.TargetLargeCount},{"targetLargeHash","0x"+value.TargetLargeHash.ToString("X8")},
+                {"targetLargeUsed",value.TargetLargeUsed},{"targetLargeUnreleased",value.TargetLargeUnreleased},
+                {"liveLargeCount",value.LiveLargeCount},{"liveLargeHash","0x"+value.LiveLargeHash.ToString("X8")},
+                {"liveLargeUsed",value.LiveLargeUsed},{"liveLargeUnreleased",value.LiveLargeUnreleased},
+                {"expectedLargeCount",value.ExpectedLargeCount},{"largeMissingCount",value.LargeMissingCount},
+                {"largeExtraCount",value.LargeExtraCount},{"unwritableCount",value.UnwritableCount},
+                {"firstResult",value.FirstResult},{"firstError",value.FirstError},
+                {"firstRow",value.FirstRow},{"firstDetail",value.FirstDetail}};
+        }
+
+        private static object[] HexArray(IEnumerable<uint> values)
+        {
+            return values.Select(value=>(object)("0x"+value.ToString("X8"))).ToArray();
+        }
+
+        private string AuditModuleFingerprint()
+        {
+            return string.Join("|",new[]{contactPoolCaptures.ToString(),contactPoolRestores.ToString(),
+                manifoldPoolCaptures.ToString(),manifoldPoolRestores.ToString(),
+                transformDispatchCaptures.ToString(),transformDispatchRestores.ToString(),
+                dirtyInteractionCaptures.ToString(),dirtyInteractionRestores.ToString(),
+                pendingContactPoolAction.ToString(),pendingContactPoolFrame.ToString(),
+                scheduledContactPoolCaptureFrame.ToString(),automaticRestorePending.ToString(),
+                warpInProgress.ToString(),warpTargetFrame.ToString(),warpTargetRestoreEligible.ToString(),
+                contactRecreatePendingValidation.ToString(),dirtyRestorePendingValidation.ToString(),
+                contactPoolReceipts.Count.ToString(),manifoldPoolReceipts.Count.ToString(),
+                transformDispatchReceipts.Count.ToString(),dirtyInteractionReceipts.Count.ToString(),
+                contactRecreateReceipts.Count.ToString(),checkpointSidecars.Count.ToString(),
+                failure??"<null>"});
+        }
+
+        private uint ResolveCurrentPxShape(ColliderEndpointState endpoint)
+        {
+            if(endpoint==null||ReferenceEquals(endpoint.Collider,null)||endpoint.Collider==null||
+                endpoint.Collider.GetInstanceID()!=endpoint.InstanceId||
+                endpoint.Collider.GetType().FullName!=endpoint.TypeName||
+                PathOf(endpoint.Collider.transform)!=endpoint.Path)
+                throw new InvalidOperationException("A checkpoint contact endpoint is no longer the exact live Collider incarnation.");
+            IntPtr native=(IntPtr)cachedPtr.GetValue(endpoint.Collider);
+            uint shape=native==IntPtr.Zero?0u:unchecked((uint)Marshal.ReadInt32(native,0x24));
+            if(shape==0)throw new InvalidOperationException("A checkpoint contact endpoint has no live PxShape.");
+            return shape;
+        }
+
+        private bool ValidatePendingContactRecreate(string action,int observedFrame,
+            bool allowCleanIntermediate)
+        {
+            if(!contactRecreatePendingValidation)return true;
+            CheckpointSidecar selected=pendingContactRecreateSidecar;
+            if(selected==null)throw new InvalidOperationException("Pending contact recreation lost its checkpoint sidecar.");
+            try
+            {
+                NativeContactRecreateReceipt receipt=CallContactRecreateStatus(action,
+                    observedFrame<0?selected.Frame:observedFrame);
+                uint expectedRows=(uint)selected.ContactManagerOwners.Records.Length;
+                bool cleanIntermediate=receipt.Result==1&&receipt.State==1&&receipt.Armed==1&&
+                    receipt.RowCount==expectedRows&&receipt.MatchedCount<receipt.RowCount&&
+                    receipt.MatchedCount+receipt.RemainingCount==receipt.RowCount&&
+                    receipt.SipMatchedCount<receipt.RowCount&&
+                    receipt.SipMatchedCount+receipt.SipRemainingCount==receipt.RowCount&&
+                    receipt.InvalidRow==uint.MaxValue&&receipt.Detail==0;
+                // Contact managers are created by more than one narrowphase
+                // worker and need not all exist after the first replayed step.
+                // Keep an authenticated, non-poisoned plan armed while exact
+                // progress is still possible.  Completion below remains fully
+                // fail-closed, and the next authoring pause admits no partial.
+                if(allowCleanIntermediate&&cleanIntermediate)return false;
+                if(receipt.Result!=1||receipt.State!=2||receipt.Armed!=0||
+                    receipt.MatchedCount!=receipt.RowCount||receipt.RemainingCount!=0||
+                    receipt.SipMatchedCount!=receipt.RowCount||receipt.SipRemainingCount!=0||
+                    receipt.SipMatchedMask!=receipt.MatchedMask||
+                    receipt.RowCount!=expectedRows||
+                    receipt.SipCountCurrent!=(uint)selected.ShapeInstancePairPool.Order.Length||
+                    receipt.SipHashCurrent!=selected.ShapeInstancePairPool.OrderHash||
+                    receipt.SipUsedCurrent!=selected.ShapeInstancePairPool.Used||
+                    receipt.SipUnreleasedCurrent!=selected.ShapeInstancePairPool.Unreleased||
+                    receipt.ContactCountCurrent!=(uint)selected.ContactPoolOrder.Length||
+                    receipt.ContactHashCurrent!=selected.OrderHash||
+                    receipt.LargeCountCurrent!=(uint)selected.LargeManifoldPool.Order.Length||
+                    receipt.LargeHashCurrent!=selected.LargeManifoldPool.OrderHash||
+                    receipt.LargeUsedCurrent!=selected.LargeManifoldPool.Used||
+                    receipt.LargeUnreleasedCurrent!=selected.LargeManifoldPool.Unreleased)
+                    throw new InvalidOperationException("Native contact-manager recreation did not converge at the first advancing output boundary: result="+
+                        receipt.Result+", state="+receipt.State+", matched="+receipt.MatchedCount+
+                        "/"+receipt.RowCount+", invalidRow="+receipt.InvalidRow+", detail="+receipt.Detail+".");
+
+                LiveContactPoolState contact=CaptureLiveContactPoolState();
+                if(contact.Receipt.FreeArray.ToUInt32()!=selected.FreeArray||
+                    contact.Receipt.OrderHashBefore!=selected.OrderHash||
+                    !contact.Order.SequenceEqual(selected.ContactPoolOrder))
+                    throw new InvalidOperationException("Recreated contact-manager free order differs from the checkpoint.");
+                ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,selected.Frame);
+                ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,selected.Frame);
+                SipPoolState sip=CaptureSipPoolState(
+                    selected.ShapeInstancePairPool.NPhaseCore,selected.Frame);
+                if(!SameManifoldPoolSnapshot(large,selected.LargeManifoldPool)||
+                    !SameManifoldPoolSnapshot(sphere,selected.SphereManifoldPool)||
+                    !SameSipPoolSnapshot(sip,selected.ShapeInstancePairPool))
+                    throw new InvalidOperationException("Recreated native pool state differs from the checkpoint.");
+                ContactManagerOwnerState current=CaptureContactManagerOwners(selected.Frame);
+                ValidateRecreatedOwnerMapping(selected.ContactManagerOwners,current);
+                CallContactRecreateCancel("complete",selected.Frame);
+                contactRecreatePendingValidation=false;
+                pendingContactRecreateSidecar=null;
+                return true;
+            }
+            catch
+            {
+                try{CancelDirtyInteractionWork();}catch{}
+                try{CancelContactRecreateWork();}catch{}
+                throw;
+            }
+        }
+
+        private void ValidateRecreatedOwnerMapping(ContactManagerOwnerState target,
+            ContactManagerOwnerState current)
+        {
+            NativeContactManagerOwnerReceipt a=target.Receipt,b=current.Receipt;
+            if(a.Pool!=b.Pool||a.FreeArray!=b.FreeArray||a.Slabs!=b.Slabs||
+                a.FreeCount!=b.FreeCount||a.UsedCount!=b.UsedCount||a.ActiveCount!=b.ActiveCount||
+                a.TouchCount!=b.TouchCount||a.ModifiableCount!=b.ModifiableCount||
+                a.FreeOrderHash!=b.FreeOrderHash||a.UseBitmapHash!=b.UseBitmapHash||
+                a.ActiveBitmapHash!=b.ActiveBitmapHash||a.TouchBitmapHash!=b.TouchBitmapHash||
+                a.ModifiableBitmapHash!=b.ModifiableBitmapHash||target.Records.Length!=current.Records.Length)
+                throw new InvalidOperationException("Recreated contact-manager pool membership differs from the checkpoint.");
+            var currentByManager=current.Records.ToDictionary(value=>value.Manager.ToUInt32());
+            for(int i=0;i<target.Records.Length;i++)
+            {
+                NativeContactManagerOwnerRecord expected=target.Records[i],actual;
+                if(!currentByManager.TryGetValue(expected.Manager.ToUInt32(),out actual))
+                    throw new InvalidOperationException("Checkpoint contact manager "+Hex(expected.Manager)+" was not recreated.");
+                uint shape0=ResolveCurrentPxShape(target.Endpoints0[i]);
+                uint shape1=ResolveCurrentPxShape(target.Endpoints1[i]);
+                uint low=Math.Min(shape0,shape1),high=Math.Max(shape0,shape1);
+                uint actualLow=Math.Min(actual.PxShape0.ToUInt32(),actual.PxShape1.ToUInt32());
+                uint actualHigh=Math.Max(actual.PxShape0.ToUInt32(),actual.PxShape1.ToUInt32());
+                if(actual.Slot!=expected.Slot||actual.Membership!=expected.Membership||
+                    actual.Manifold!=expected.Manifold||actual.Sip!=expected.Sip||
+                    actual.PrimaryVtable!=expected.PrimaryVtable||actual.SecondaryVtable!=expected.SecondaryVtable||
+                    actual.ShapeSim0!=expected.ShapeSim0||actual.ShapeSim1!=expected.ShapeSim1||
+                    actual.PxsShapeCore0!=expected.PxsShapeCore0||actual.PxsShapeCore1!=expected.PxsShapeCore1||
+                    actual.RigidBody0!=expected.RigidBody0||actual.RigidBody1!=expected.RigidBody1||
+                    actual.RigidCore0!=expected.RigidCore0||actual.RigidCore1!=expected.RigidCore1||
+                    actual.ActorPair!=expected.ActorPair||actualLow!=low||actualHigh!=high||
+                    actual.ManagerFlags!=expected.ManagerFlags||actual.ContactCount!=expected.ContactCount||
+                    actual.WorkUnitFlags!=expected.WorkUnitFlags||actual.StatusFlags!=expected.StatusFlags||
+                    actual.GeomType0+actual.GeomType1!=expected.GeomType0+expected.GeomType1||
+                    actual.DisableResponse!=expected.DisableResponse||actual.DisableCcd!=expected.DisableCcd||
+                    actual.CacheSize!=expected.CacheSize||actual.ManagerHash!=expected.ManagerHash||
+                    actual.SipHash!=expected.SipHash||actual.ManifoldHash!=expected.ManifoldHash||
+                    actual.CacheHash!=expected.CacheHash)
+                    throw new InvalidOperationException("Recreated contact owner differs for manager "+Hex(expected.Manager)+".");
+            }
+        }
+
+        private NativeContactRecreateReceipt CallContactRecreateStatus(string action,int frame)
+        {
+            int size=Marshal.SizeOf(typeof(NativeContactRecreateReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeContactRecreateReceipt receipt;
+            int ok;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                ok=statusContactRecreate(new UIntPtr(unityPlayerBase),new UIntPtr(contactManagerContext),buffer);
+                receipt=(NativeContactRecreateReceipt)Marshal.PtrToStructure(buffer,typeof(NativeContactRecreateReceipt));
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            RecordContactRecreateReceipt(action,frame,receipt);
+            if(ok==0||receipt.ApiVersion!=2||receipt.StructSize!=(uint)size)
+                throw new InvalidOperationException("Native contact-recreate status failed: result="+receipt.Result+
+                    ", error="+receipt.LastError+", state="+receipt.State+".");
+            return receipt;
+        }
+
+        private void CallContactRecreateCancel(string action,int frame)
+        {
+            if(cancelContactRecreate==null)return;
+            int size=Marshal.SizeOf(typeof(NativeContactRecreateReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeContactRecreateReceipt receipt;
+            int ok;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                ok=cancelContactRecreate(new UIntPtr(unityPlayerBase),buffer);
+                receipt=(NativeContactRecreateReceipt)Marshal.PtrToStructure(buffer,typeof(NativeContactRecreateReceipt));
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            RecordContactRecreateReceipt(action,frame,receipt);
+            if(ok==0||receipt.Result!=1||receipt.ApiVersion!=2||receipt.StructSize!=(uint)size)
+                throw new InvalidOperationException("Native contact-recreate cancel failed: result="+
+                    receipt.Result+", error="+receipt.LastError+".");
+        }
+
+        private void CancelContactRecreateWork()
+        {
+            if((contactRecreatePendingValidation||pendingContactRecreateSidecar!=null)&&
+                cancelContactRecreate!=null)
+                CallContactRecreateCancel("cancel",pendingContactRecreateSidecar==null?-1:
+                    pendingContactRecreateSidecar.Frame);
+            contactRecreatePendingValidation=false;
+            pendingContactRecreateSidecar=null;
+        }
+
+        private void RecordContactRecreateReceipt(string action,int frame,
+            NativeContactRecreateReceipt receipt)
+        {
+            contactRecreateReceipts.Add(new Dictionary<string,object>{{"action",action},{"frame",frame},
+                {"result",receipt.Result},{"lastError",receipt.LastError},{"state",receipt.State},
+                {"rowCount",receipt.RowCount},{"matchedCount",receipt.MatchedCount},
+                {"remainingCount",receipt.RemainingCount},{"invalidRow",receipt.InvalidRow},{"detail",receipt.Detail},
+                {"contactCountCurrent",receipt.ContactCountCurrent},{"contactHashCurrent","0x"+receipt.ContactHashCurrent.ToString("X8")},
+                {"largeCountCurrent",receipt.LargeCountCurrent},{"largeHashCurrent","0x"+receipt.LargeHashCurrent.ToString("X8")},
+                {"largeUsedCurrent",receipt.LargeUsedCurrent},{"largeUnreleasedCurrent",receipt.LargeUnreleasedCurrent},
+                {"lastSip",Hex(receipt.LastSip)},{"lastShapeLow",Hex(receipt.LastShapeLow)},
+                {"lastShapeHigh",Hex(receipt.LastShapeHigh)},{"lastManager",Hex(receipt.LastManager)},
+                {"lastManifold",Hex(receipt.LastManifold)},{"observerEntries",receipt.ObserverEntries},
+                {"attemptOrdinal",receipt.AttemptOrdinal},{"attemptSip",Hex(receipt.AttemptSip)},
+                {"attemptShapeLow",Hex(receipt.AttemptShapeLow)},{"attemptShapeHigh",Hex(receipt.AttemptShapeHigh)},
+                {"attemptRow",receipt.AttemptRow},{"attemptMatchedMask","0x"+receipt.AttemptMatchedMask.ToString("X8")},
+                {"attemptFreeCount",receipt.AttemptFreeCount},{"attemptManagerIndex",receipt.AttemptManagerIndex},
+                {"attemptLargeHead",Hex(receipt.AttemptLargeHead)},
+                {"attemptManifoldIndex",receipt.AttemptManifoldIndex},
+                {"nphaseCore",Hex(receipt.NPhaseCore)},{"sipPool",Hex(receipt.SipPool)},
+                {"sipMatchedCount",receipt.SipMatchedCount},{"sipRemainingCount",receipt.SipRemainingCount},
+                {"targetSipCount",receipt.TargetSipCount},{"targetSipHash","0x"+receipt.TargetSipHash.ToString("X8")},
+                {"sipCountCurrent",receipt.SipCountCurrent},{"sipHashCurrent","0x"+receipt.SipHashCurrent.ToString("X8")},
+                {"sipUsedCurrent",receipt.SipUsedCurrent},{"sipUnreleasedCurrent",receipt.SipUnreleasedCurrent},
+                {"sipMatchedMask","0x"+receipt.SipMatchedMask.ToString("X8")},
+                {"sipObserverEntries",receipt.SipObserverEntries},{"lastAllocatedSip",Hex(receipt.LastAllocatedSip)}});
+            if(contactRecreateReceipts.Count>24)contactRecreateReceipts.RemoveAt(0);
+        }
+
         private ContactManagerOwnerState CaptureContactManagerOwners(int frame)
         {
             int receiptSize=Marshal.SizeOf(typeof(NativeContactManagerOwnerReceipt));
@@ -827,11 +1809,16 @@ namespace SuperchargedPatch.Authoring.Modules
                         value.Sip==UIntPtr.Zero||value.ValidationFlags!=0x7Fu)||
                     records.Select(value=>value.Slot).Distinct().Count()!=records.Length)
                     throw new InvalidOperationException("Native contact-manager owner records failed the managed set contract.");
-                Dictionary<uint,string> colliders=CurrentColliderShapeOwners();
-                string[] owners0=records.Select(value=>ColliderOwner(colliders,value.PxShape0)).ToArray();
-                string[] owners1=records.Select(value=>ColliderOwner(colliders,value.PxShape1)).ToArray();
+                Dictionary<uint,ColliderEndpointState> colliders=CurrentColliderShapeOwners();
+                ColliderEndpointState[] endpoints0=records.Select(value=>ColliderOwner(colliders,value.PxShape0)).ToArray();
+                ColliderEndpointState[] endpoints1=records.Select(value=>ColliderOwner(colliders,value.PxShape1)).ToArray();
+                if(endpoints0.Any(value=>value==null)||endpoints1.Any(value=>value==null))
+                    throw new InvalidOperationException("An active contact manager endpoint has no unique live Collider owner.");
+                string[] owners0=endpoints0.Select(value=>value.Identity).ToArray();
+                string[] owners1=endpoints1.Select(value=>value.Identity).ToArray();
                 return new ContactManagerOwnerState {Receipt=receipt,Records=records,
-                    ShapeOwners0=owners0,ShapeOwners1=owners1};
+                    ShapeOwners0=owners0,ShapeOwners1=owners1,
+                    Endpoints0=endpoints0,Endpoints1=endpoints1};
             }
             finally
             {
@@ -840,9 +1827,9 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
-        private Dictionary<uint,string> CurrentColliderShapeOwners()
+        private Dictionary<uint,ColliderEndpointState> CurrentColliderShapeOwners()
         {
-            var result=new Dictionary<uint,string>();
+            var result=new Dictionary<uint,ColliderEndpointState>();
             foreach(Collider collider in UnityEngine.Object.FindObjectsOfType(typeof(Collider)))
             {
                 if(collider==null)continue;
@@ -850,20 +1837,24 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(native==IntPtr.Zero)continue;
                 uint shape=unchecked((uint)Marshal.ReadInt32(native,0x24));
                 if(shape==0)continue;
-                string owner=PathOf(collider.transform)+"|"+collider.GetType().Name+
-                    "#"+collider.GetInstanceID();
-                string previous;
-                if(result.TryGetValue(shape,out previous)&&previous!=owner)
+                string path=PathOf(collider.transform);
+                string typeName=collider.GetType().FullName;
+                string owner=path+"|"+collider.GetType().Name+"#"+collider.GetInstanceID();
+                ColliderEndpointState previous;
+                if(result.TryGetValue(shape,out previous)&&previous.Identity!=owner)
                     throw new InvalidOperationException("Two live Colliders own PxShape 0x"+
-                        shape.ToString("X8")+": "+previous+" and "+owner+".");
-                result[shape]=owner;
+                        shape.ToString("X8")+": "+previous.Identity+" and "+owner+".");
+                result[shape]=new ColliderEndpointState {Collider=collider,
+                    InstanceId=collider.GetInstanceID(),Path=path,TypeName=typeName,
+                    Identity=owner,PxShape=shape};
             }
             return result;
         }
 
-        private static string ColliderOwner(Dictionary<uint,string> owners,UIntPtr shape)
+        private static ColliderEndpointState ColliderOwner(
+            Dictionary<uint,ColliderEndpointState> owners,UIntPtr shape)
         {
-            string result;
+            ColliderEndpointState result;
             return owners.TryGetValue(shape.ToUInt32(),out result)?result:null;
         }
 
@@ -934,6 +1925,53 @@ namespace SuperchargedPatch.Authoring.Modules
             contactPoolReceipts.Add(value);if(contactPoolReceipts.Count>16)contactPoolReceipts.RemoveAt(0);
         }
 
+        private ManifoldPoolState CaptureManifoldPoolStateReadOnly(uint poolKind,int frame)
+        {
+            string poolName=poolKind==LargeManifoldPoolKind?"large":
+                poolKind==SphereManifoldPoolKind?"sphere":null;
+            if(poolName==null)throw new InvalidOperationException("Unsupported manifold-pool kind "+poolKind+".");
+            int size=Marshal.SizeOf(typeof(NativeManifoldPoolReceipt));
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr snapshotBuffer=Marshal.AllocHGlobal(MaximumManifolds*IntPtr.Size);
+            NativeManifoldPoolReceipt receipt;
+            uint[] order;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureManifoldPoolSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(contactManagerContext),poolKind,snapshotBuffer,
+                    MaximumManifolds,receiptBuffer);
+                receipt=(NativeManifoldPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeManifoldPoolReceipt));
+                if(ok==0||receipt.Result!=1||receipt.TraversedCount>MaximumManifolds)
+                    throw new InvalidOperationException("Read-only "+poolName+
+                        " manifold-pool audit failed at frame "+frame+": result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+                order=new uint[receipt.TraversedCount];
+                for(int i=0;i<order.Length;i++)order[i]=unchecked((uint)Marshal.ReadInt32(
+                    snapshotBuffer,i*IntPtr.Size));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);
+            }
+            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                receipt.Context.ToUInt32()!=contactManagerContext||receipt.PoolKind!=poolKind||
+                receipt.Pool==UIntPtr.Zero||receipt.FreeHeadBefore.ToUInt32()!=
+                    (order.Length==0?0u:order[0])||receipt.FreeHeadAfter!=receipt.FreeHeadBefore||
+                receipt.OrderHashBefore!=ContactPoolOrderHash(order)||
+                receipt.OrderHashAfter!=receipt.OrderHashBefore)
+                throw new InvalidOperationException("Read-only "+poolName+
+                    " manifold-pool audit receipt differs.");
+            var state=new ManifoldPoolState {PoolKind=poolKind,Pool=receipt.Pool.ToUInt32(),
+                OrderHash=receipt.OrderHashBefore,Order=order,ElementSize=receipt.ElementSize,
+                ElementsPerSlab=receipt.ElementsPerSlab,Used=receipt.Used,
+                Unreleased=receipt.Unreleased,SlabSize=receipt.SlabSize};
+            ValidateManifoldPoolState(state,poolKind,poolName);
+            return state;
+        }
+
         private ManifoldPoolState RunManifoldPoolAction(int action,uint poolKind,ManifoldPoolState snapshot,int frame)
         {
             string poolName=poolKind==LargeManifoldPoolKind?"large":
@@ -989,7 +2027,9 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Managed "+poolName+" manifold-pool snapshot differs from the native capture receipt.");
                 manifoldPoolCaptures++;
                 return new ManifoldPoolState {PoolKind=poolKind,Pool=receipt.Pool.ToUInt32(),
-                    OrderHash=orderHash,Order=capturedOrder};
+                    OrderHash=orderHash,Order=capturedOrder,ElementSize=receipt.ElementSize,
+                    ElementsPerSlab=receipt.ElementsPerSlab,Used=receipt.Used,
+                    Unreleased=receipt.Unreleased,SlabSize=receipt.SlabSize};
             }
 
             uint expectedHead=snapshot.Order.Length==0?0u:snapshot.Order[0];
@@ -1018,6 +2058,51 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"orderHashAfter","0x"+receipt.OrderHashAfter.ToString("X8")},
                 {"topBefore",topBefore},{"topAfter",topAfter}};
             manifoldPoolReceipts.Add(value);if(manifoldPoolReceipts.Count>32)manifoldPoolReceipts.RemoveAt(0);
+        }
+
+        private SipPoolState CaptureSipPoolState(uint nphaseCore,int frame)
+        {
+            if(captureSipPoolSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native shape-pair-pool capture is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeSipPoolReceipt));
+            if(size!=128)throw new InvalidOperationException("Managed shape-pair-pool ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr orderBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+            NativeSipPoolReceipt receipt;
+            uint[] order=null;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureSipPoolSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),orderBuffer,MaximumShapeInstancePairs,receiptBuffer);
+                receipt=(NativeSipPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeSipPoolReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native shape-pair-pool capture failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
+                    receipt.TraversedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0x1Fu)
+                    throw new InvalidOperationException("Native shape-pair-pool receipt contract differs.");
+                order=new uint[receipt.TraversedCount];
+                for(int i=0;i<order.Length;i++)order[i]=unchecked((uint)Marshal.ReadInt32(
+                    orderBuffer,i*IntPtr.Size));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(orderBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            var state=new SipPoolState {NPhaseCore=nphaseCore,Pool=receipt.Pool.ToUInt32(),
+                OrderHash=receipt.OrderHash,ElementSize=receipt.ElementSize,
+                ElementsPerSlab=receipt.ElementsPerSlab,Used=receipt.Used,
+                Unreleased=receipt.Unreleased,SlabSize=receipt.SlabSize,Order=order};
+            ValidateSipPoolState(state);
+            if(receipt.FreeHead.ToUInt32()!=(order.Length==0?0u:order[0])||
+                receipt.OrderHash!=ContactPoolOrderHash(order))
+                throw new InvalidOperationException("Managed shape-pair-pool snapshot differs from native capture.");
+            return state;
         }
 
         private TransformDispatchState RunTransformDispatchAction(int action,TransformDispatchState snapshot)
@@ -1221,6 +2306,18 @@ namespace SuperchargedPatch.Authoring.Modules
             pendingDirtyCaptureOrdinal=receipt.Captures+1;
         }
 
+        private uint ReadObservedNPhaseCore(out uint observations)
+        {
+            if(!dirtyInteractionHookInstalled||lastObservedDirtyNPhase==null)
+                throw new InvalidOperationException("Passive NPhaseCore observation requires the installed dirty-interaction hook.");
+            UIntPtr nphase;
+            int ok=lastObservedDirtyNPhase(new UIntPtr(unityPlayerBase),out nphase,out observations);
+            uint value=nphase.ToUInt32();
+            if(ok==0||value==0||observations==0)
+                throw new InvalidOperationException("The dirty-interaction hook has not observed a current NPhaseCore yet.");
+            return value;
+        }
+
         private void FinalizePendingDirtyInteractionCapture()
         {
             if(pendingDirtyCaptureSidecar==null)return;
@@ -1259,6 +2356,9 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateDirtyInteractionState(state);
             if(DirtyInteractionOrderHash(keys)!=receipt.OrderHashAfter)
                 throw new InvalidOperationException("Managed dirty-interaction order hash differs from native capture.");
+            if(pendingDirtyCaptureSidecar.ShapeInstancePairPool==null||
+                pendingDirtyCaptureSidecar.ShapeInstancePairPool.NPhaseCore!=state.NPhaseCore)
+                throw new InvalidOperationException("Dirty-interaction capture completed for a different NPhaseCore than the sealed checkpoint allocator state.");
             pendingDirtyCaptureSidecar.DirtyInteractions=state;
             StoreCheckpointSidecar(pendingDirtyCaptureSidecar);
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
@@ -1403,6 +2503,10 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ResetSceneOwnedCheckpointState(string reason,bool clearFailure)
         {
+            uint ignored;
+            try{ReadObservedNPhaseCore(out ignored);dirtyNPhaseObservationFloor=ignored;}
+            catch{dirtyNPhaseObservationFloor=0;}
+            CancelContactRecreateWork();
             CancelDirtyInteractionWork();
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
@@ -1462,16 +2566,34 @@ namespace SuperchargedPatch.Authoring.Modules
         private static void ValidateManifoldPoolState(ManifoldPoolState value,uint poolKind,string poolName)
         {
             if(value==null||value.PoolKind!=poolKind||value.Pool==0||value.Order==null||
-                value.Order.Length>MaximumManifolds||value.OrderHash!=ContactPoolOrderHash(value.Order))
+                value.Order.Length>MaximumManifolds||value.OrderHash!=ContactPoolOrderHash(value.Order)||
+                value.ElementSize==0||value.ElementsPerSlab==0||value.SlabSize!=value.ElementSize*value.ElementsPerSlab)
                 throw new InvalidOperationException("The "+poolName+" manifold-pool checkpoint sidecar is incomplete.");
             if(value.Order.Any(pointer=>pointer==0)||value.Order.Distinct().Count()!=value.Order.Length)
                 throw new InvalidOperationException("The "+poolName+" manifold-pool checkpoint contains a null or duplicate free element.");
         }
 
+        private static void ValidateSipPoolState(SipPoolState value)
+        {
+            if(value==null||value.NPhaseCore==0||value.Pool!=value.NPhaseCore+0x2E0u||
+                value.Order==null||value.Order.Length>MaximumShapeInstancePairs||
+                value.OrderHash!=ContactPoolOrderHash(value.Order)||value.ElementSize!=0x44u||
+                value.ElementsPerSlab!=32u||value.SlabSize!=0x880u||
+                value.Unreleased!=(uint)value.Order.Length||
+                value.Used+value.Unreleased>MaximumShapeInstancePairs||
+                ((value.Used+value.Unreleased)&31u)!=0)
+                throw new InvalidOperationException("The shape-pair-pool checkpoint sidecar is incomplete.");
+            if(value.Order.Any(pointer=>pointer==0)||value.Order.Distinct().Count()!=value.Order.Length)
+                throw new InvalidOperationException("The shape-pair-pool checkpoint contains a null or duplicate free element.");
+        }
+
         private static void ValidateContactManagerOwnerState(ContactManagerOwnerState value)
         {
             if(value==null||value.Records==null||value.ShapeOwners0==null||value.ShapeOwners1==null||
+                value.Endpoints0==null||value.Endpoints1==null||
                 value.Records.Length!=value.ShapeOwners0.Length||value.Records.Length!=value.ShapeOwners1.Length||
+                value.Records.Length!=value.Endpoints0.Length||value.Records.Length!=value.Endpoints1.Length||
+                value.Endpoints0.Any(endpoint=>endpoint==null)||value.Endpoints1.Any(endpoint=>endpoint==null)||
                 value.Receipt.Result!=1||value.Receipt.ConsistencyFlags!=0xFFu||
                 value.Receipt.RecordsWritten!=(uint)value.Records.Length||
                 value.Receipt.RecordsRequired!=value.Receipt.RecordsWritten||
@@ -1487,6 +2609,20 @@ namespace SuperchargedPatch.Authoring.Modules
             object[] top=value.Order.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
             return new Dictionary<string,object>{{"poolKind",value.PoolKind},
                 {"pool","0x"+value.Pool.ToString("X8")},{"freeCount",value.Order.Length},
+                {"elementSize",value.ElementSize},{"elementsPerSlab",value.ElementsPerSlab},
+                {"used",value.Used},{"unreleased",value.Unreleased},{"slabSize",value.SlabSize},
+                {"freeHead",value.Order.Length==0?"0x00000000":"0x"+value.Order[0].ToString("X8")},
+                {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
+        }
+
+        private static object DescribeSipPoolState(SipPoolState value)
+        {
+            if(value==null)return null;
+            object[] top=value.Order.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore","0x"+value.NPhaseCore.ToString("X8")},
+                {"pool","0x"+value.Pool.ToString("X8")},{"freeCount",value.Order.Length},
+                {"elementSize",value.ElementSize},{"elementsPerSlab",value.ElementsPerSlab},
+                {"used",value.Used},{"unreleased",value.Unreleased},{"slabSize",value.SlabSize},
                 {"freeHead",value.Order.Length==0?"0x00000000":"0x"+value.Order[0].ToString("X8")},
                 {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
         }
@@ -1546,8 +2682,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar is incomplete.");
             ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
             ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
+            ValidateSipPoolState(value.ShapeInstancePairPool);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
+            if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore)
+                throw new InvalidOperationException("Checkpoint SIP and dirty-interaction state belong to different NPhaseCore instances.");
+            ValidateCheckpointPoolCoherence(value);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
                 throw new InvalidOperationException("Contact-pool checkpoint sidecar no longer owns the retained core snapshot.");
             CheckpointSidecar previous;
@@ -1558,6 +2698,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     previous.OrderHash==value.OrderHash&&
                     previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
                     SameContactManagerOwnerSnapshot(previous.ContactManagerOwners,value.ContactManagerOwners)&&
+                    SameSipPoolSnapshot(previous.ShapeInstancePairPool,value.ShapeInstancePairPool)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -1570,10 +2711,55 @@ namespace SuperchargedPatch.Authoring.Modules
             checkpointSidecars.Add(value.Frame,value);
         }
 
+        private static void ValidateCheckpointPoolCoherence(CheckpointSidecar value)
+        {
+            if(value==null||value.ContactManagerOwners==null||
+                value.ContactManagerOwners.Records==null||value.ContactPoolOrder==null||
+                value.ShapeInstancePairPool==null||value.ShapeInstancePairPool.Order==null||
+                value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
+                value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
+                throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
+            NativeContactManagerOwnerRecord[] owners=value.ContactManagerOwners.Records;
+            var contactFree=new HashSet<uint>(value.ContactPoolOrder);
+            var sipFree=new HashSet<uint>(value.ShapeInstancePairPool.Order);
+            var largeFree=new HashSet<uint>(value.LargeManifoldPool.Order);
+            var sphereFree=new HashSet<uint>(value.SphereManifoldPool.Order);
+            uint[] managers=owners.Select(owner=>owner.Manager.ToUInt32()).ToArray();
+            uint[] sips=owners.Select(owner=>owner.Sip.ToUInt32()).ToArray();
+            uint[] large=owners.Where(owner=>owner.ManifoldBytes==0xF0u&&owner.Manifold.ToUInt32()>1u)
+                .Select(owner=>owner.Manifold.ToUInt32()).ToArray();
+            uint[] sphere=owners.Where(owner=>owner.ManifoldBytes==0x60u&&owner.Manifold.ToUInt32()>1u)
+                .Select(owner=>owner.Manifold.ToUInt32()).ToArray();
+            NativeContactManagerOwnerReceipt receipt=value.ContactManagerOwners.Receipt;
+            if(receipt.Context.ToUInt32()!=value.Context||receipt.FreeArray.ToUInt32()!=value.FreeArray||
+                receipt.FreeCount!=(uint)value.ContactPoolOrder.Length||receipt.FreeOrderHash!=value.OrderHash||
+                managers.Distinct().Count()!=managers.Length||sips.Distinct().Count()!=sips.Length||
+                large.Distinct().Count()!=large.Length||sphere.Distinct().Count()!=sphere.Length||
+                managers.Any(contactFree.Contains)||sips.Any(sipFree.Contains)||
+                large.Any(largeFree.Contains)||sphere.Any(sphereFree.Contains)||
+                receipt.UsedCount!=(uint)owners.Length||
+                value.ShapeInstancePairPool.Used<(uint)sips.Length||
+                value.LargeManifoldPool.Used<(uint)large.Length||
+                value.SphereManifoldPool.Used<(uint)sphere.Length)
+                throw new InvalidOperationException("Checkpoint contact owners and allocator partitions were not captured at one coherent physics boundary.");
+        }
+
         private static bool SameManifoldPoolSnapshot(ManifoldPoolState left,ManifoldPoolState right)
         {
             if(left==null||right==null)return left==right;
             return left.PoolKind==right.PoolKind&&left.Pool==right.Pool&&left.OrderHash==right.OrderHash&&
+                left.ElementSize==right.ElementSize&&left.ElementsPerSlab==right.ElementsPerSlab&&
+                left.Used==right.Used&&left.Unreleased==right.Unreleased&&left.SlabSize==right.SlabSize&&
+                left.Order!=null&&right.Order!=null&&left.Order.SequenceEqual(right.Order);
+        }
+
+        private static bool SameSipPoolSnapshot(SipPoolState left,SipPoolState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.NPhaseCore==right.NPhaseCore&&left.Pool==right.Pool&&
+                left.OrderHash==right.OrderHash&&left.ElementSize==right.ElementSize&&
+                left.ElementsPerSlab==right.ElementsPerSlab&&left.Used==right.Used&&
+                left.Unreleased==right.Unreleased&&left.SlabSize==right.SlabSize&&
                 left.Order!=null&&right.Order!=null&&left.Order.SequenceEqual(right.Order);
         }
 
@@ -1590,6 +2776,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     a.PxShape1!=b.PxShape1||a.ManagerHash!=b.ManagerHash||a.SipHash!=b.SipHash||
                     a.Manifold!=b.Manifold||a.ManifoldHash!=b.ManifoldHash||a.CacheHash!=b.CacheHash)
                     return false;
+                if(!ReferenceEquals(left.Endpoints0[i].Collider,right.Endpoints0[i].Collider)||
+                    !ReferenceEquals(left.Endpoints1[i].Collider,right.Endpoints1[i].Collider))return false;
             }
             return true;
         }
@@ -1641,6 +2829,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"freeCount",found?value.ContactPoolOrder.Length:0},
                 {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
                 {"contactManagerOwners",found?DescribeContactManagerOwnerState(value.ContactManagerOwners,true):null},
+                {"shapeInstancePairPool",found?DescribeSipPoolState(value.ShapeInstancePairPool):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -1813,6 +3002,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactPoolSnapshotLastFrame",lastFrame},
                 {"contactManagerOwnerSnapshot",latest==null?null:
                     DescribeContactManagerOwnerState(latest.ContactManagerOwners,true)},
+                {"shapeInstancePairPoolSnapshot",latest==null?null:
+                    DescribeSipPoolState(latest.ShapeInstancePairPool)},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -1838,6 +3029,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"dirtyInteractionRestorePendingValidation",dirtyRestorePendingValidation},
                 {"dirtyInteractionCaptures",dirtyInteractionCaptures},{"dirtyInteractionRestores",dirtyInteractionRestores},
                 {"dirtyInteractionReceipts",dirtyInteractionReceipts.ToArray()},
+                {"contactRecreatePendingValidation",contactRecreatePendingValidation},
+                {"contactRecreateReceipts",contactRecreateReceipts.ToArray()},
                 {"warpInProgress",warpInProgress},{"warpTargetFrame",warpTargetFrame},{"warpTargetRestoreEligible",warpTargetRestoreEligible},
                 {"contactPoolCaptures",contactPoolCaptures},{"contactPoolRestores",contactPoolRestores},
                 {"contactPoolReceipts",contactPoolReceipts.ToArray()},
@@ -1849,6 +3042,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void Deactivate()
         {
+            CancelContactRecreateWork();
             if(dirtyInteractionHookInstalled)
             {
                 CallDirtyInteractionAction(uninstallDirtyInteractionOrder,"uninstall",1);
@@ -1866,13 +3060,17 @@ namespace SuperchargedPatch.Authoring.Modules
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
+            contactRecreatePendingValidation=false;pendingContactRecreateSidecar=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
             captureContactManagerActiveOwners=null;
-            captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;
+            captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;captureSipPoolSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
+            contactRecreateApiVersion=null;contactRecreateAuditApiVersion=null;auditContactRecreate=null;
+            armContactRecreate=null;statusContactRecreate=null;cancelContactRecreate=null;
             installDirtyInteractionOrder=null;statusDirtyInteractionOrder=null;armDirtyInteractionCapture=null;
+            lastObservedDirtyNPhase=null;dirtyNPhaseObservationFloor=0;
             copyDirtyInteractionCapture=null;armDirtyInteractionRestore=null;cancelDirtyInteractionOrder=null;
             uninstallDirtyInteractionOrder=null;
             if(library!=IntPtr.Zero){FreeLibrary(library);library=IntPtr.Zero;}

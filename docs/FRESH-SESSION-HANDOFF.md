@@ -1,5 +1,58 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Aggregate rewind-readiness and atomic SIP milestone (2026-09-21,
+> managed r14u/native r29):** the bounded Story 1-1 f1048 -> f444 audit now
+> reaches both paused planning points with zero observed blockers and does not
+> run a replay frame or search.  The preceding v69 read-only pass exposed two
+> nominal native failures as one capture-coherence bug: f444 managers and
+> manifolds were captured synchronously, but `FinalizePendingDirtyInteractionCapture`
+> overwrote their SIP allocator state with the later f1048 sample.  That made
+> four active owner SIPs simultaneously appear free and changed the saved SIP
+> partition from the real 20 free / 12 used to 24 free / 8 used.
+>
+> r14u seals the SIP allocator beside managers/manifolds at the exact f444
+> output boundary.  Native r29 passively publishes the latest NPhaseCore and a
+> monotonic observation ordinal from the already-installed dirty-update hook;
+> managed capture reads the observation before and after all synchronous pool
+> captures and requires both values unchanged.  The later dirty-list sample
+> attaches only its semantic keys and verifies the same NPhaseCore; it can no
+> longer replace allocator history.  Capture-time and publication-time
+> cross-pool validators reject owner/free overlap, identity duplication,
+> allocator accounting differences, and mixed NPhaseCore state.
+>
+> Fresh v70 evidence is
+> `artifacts/readiness-plan-atomic-sip-f1048-to-f444-r1/`.  Source readiness is
+> 20 pass / 0 fail; target readiness is 44 pass / 0 fail.  The repeated native
+> audit evaluates all 21 implemented conditions with issue mask zero:
+> 12 manager rows, SIP 20 free / 12 active, contact managers 244 free / 12
+> active, large manifolds 20 free / 12 active, no missing/extra pointers, no
+> owner/free overlap, and no unwritable target.  Its managed/native/game
+> mutation proof is false/false/false and the recreation state remains idle.
+> The target report SHA-256 is
+> `337D82B0ABDB02066323879E23CF3333D5016A09D4125DBFA73DC69E5A82F18F`;
+> summary SHA-256 is
+> `1CDBD9E67D092CBC14095B3758089C357DC8D3DD20CF03888BC43AFE5503234A`.
+> Native r29 SHA-256 is
+> `4EB92B092872579349A313BA5E5CB3CA5D1719EB1C9F89636EFC5BA886FEB33A`;
+> managed r14u SHA-256 is
+> `BDD686F2359DA5508B72F842FE8BF736E22AD4FCF5898ACF40233C522B0234C6`.
+>
+> The aggregate also stopped recursively treating diagnostic fields such as
+> Animator `firstByteDifference` as terminal module failures.  It now checks
+> provider availability and explicit terminal fields separately and marks the
+> missing versioned health/readiness contracts as deferred.  Animator's
+> after-prepare byte offset 2 and exact topology sentinel -1 are therefore
+> evidence for the later staged finalizer, not false admission blockers;
+> BodyRestore correctly uses its registration lease as activation.
+>
+> This is a working planning/capture milestone, not complete rewind parity.
+> The remaining native families are explicitly deferred: ActorPair
+> reachability/free order, actor/global interaction registration order, island
+> edge allocator/change queues, Transform-cache ID/refcounts, broadphase
+> created-overlap order, dirty-list live projection, and first-output owner
+> convergence.  Add ActorPair readiness next, then island edges and Transform
+> cache, before enabling the suffix replay.  Search remains disabled.
+
 > **Animator target-null milestone (2026-09-21, managed r59/native r19):**
 > the clean bounded f1048 -> f444 run now completes Animator Stage A, Stage B,
 > final owner verification and resume release. Native r19 can clear an exact

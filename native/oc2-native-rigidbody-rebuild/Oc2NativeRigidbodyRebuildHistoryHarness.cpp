@@ -37,6 +37,78 @@ struct DirtyInteractionOrderReceipt {
     uint32_t orderHashBefore, orderHashAfter, installed, armed;
     uint32_t restoreMode, matchedCount, capturedOnlyCount, liveOnlyCount;
 };
+
+struct ContactContextObserverReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, observedContext;
+    uint32_t observations, installed;
+};
+
+struct ContactRecreatePlanRow {
+    uintptr_t pxsShapeCoreLow, pxsShapeCoreHigh;
+    uintptr_t targetManager, targetManifold, targetSip;
+    uint32_t targetSlot, manifoldBytes, targetManagerFlags, flags;
+};
+
+struct ContactRecreateReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, context, freeArray, largePool;
+    uint32_t state, rowCount, matchedCount, remainingCount;
+    uint32_t contactCountBefore, targetContactCount, contactCountCurrent;
+    uint32_t contactHashBefore, targetContactHash, contactHashCurrent;
+    uint32_t largeCountBefore, targetLargeCount, largeCountCurrent;
+    uint32_t largeHashBefore, targetLargeHash, largeHashCurrent;
+    uint32_t largeUsedBefore, targetLargeUsed, largeUsedCurrent;
+    uint32_t largeUnreleasedBefore, targetLargeUnreleased, largeUnreleasedCurrent;
+    uint32_t matchedMask, threadId;
+    uintptr_t lastSip, lastShapeLow, lastShapeHigh, lastManager, lastManifold;
+    uint32_t invalidRow, detail, installed, armed;
+    uint32_t observerEntries, attemptOrdinal;
+    uintptr_t attemptSip, attemptShapeLow, attemptShapeHigh;
+    uint32_t attemptRow, attemptMatchedMask, attemptFreeCount, attemptManagerIndex;
+    uintptr_t attemptLargeHead;
+    uint32_t attemptManifoldIndex;
+    uintptr_t nphaseCore, sipPool;
+    uint32_t sipMatchedCount, sipRemainingCount;
+    uint32_t targetSipCount, targetSipHash, targetSipUsed,
+        targetSipUnreleased;
+    uint32_t sipCountCurrent, sipHashCurrent, sipUsedCurrent,
+        sipUnreleasedCurrent;
+    uint32_t sipMatchedMask, sipObserverEntries;
+    uintptr_t lastAllocatedSip;
+};
+
+struct ContactRecreateAuditReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, context, nphaseCore, sipPool, freeArray, largePool;
+    uint32_t evaluatedMask, issueMask, recreateState, observerInstalled;
+    uint32_t rowCount, invalidRowCount, duplicateRowCount;
+    uint32_t targetFreeSipRowCount, activeSipRowCount;
+    uint32_t targetSipCount, targetSipHash, targetSipUsed,
+        targetSipUnreleased;
+    uint32_t liveSipCount, liveSipHash, liveSipUsed, liveSipUnreleased;
+    uint32_t expectedSemanticSipCount, expectedLegacySipCount;
+    uint32_t sipMissingCount, sipExtraCount;
+    uint32_t targetContactCount, targetContactHash;
+    uint32_t liveContactCount, liveContactHash, expectedContactCount;
+    uint32_t contactMissingCount, contactExtraCount;
+    uint32_t useBitmapCount, activeBitmapCount, touchBitmapCount,
+        modifiableBitmapCount;
+    uint32_t targetLargeCount, targetLargeHash, targetLargeUsed,
+        targetLargeUnreleased;
+    uint32_t liveLargeCount, liveLargeHash, liveLargeUsed,
+        liveLargeUnreleased;
+    uint32_t expectedLargeCount, largeMissingCount, largeExtraCount;
+    uint32_t unwritableCount, firstResult, firstError, firstRow, firstDetail;
+};
+
+struct SipPoolReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, pool, freeHead;
+    uint32_t elementSize, elementsPerSlab, used, unreleased, slabSize;
+    uint32_t traversedCount, orderHash, validationFlags;
+    uintptr_t top[16];
+};
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -45,6 +117,14 @@ static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
     "Unexpected Win32 dirty-interaction receipt ABI");
+static_assert(sizeof(ContactRecreatePlanRow) == 36,
+    "Unexpected Win32 contact-recreate plan-row ABI");
+static_assert(sizeof(ContactRecreateReceipt) == 268,
+    "Unexpected Win32 contact-recreate receipt ABI");
+static_assert(sizeof(ContactRecreateAuditReceipt) == 232,
+    "Unexpected Win32 contact-recreate audit receipt ABI");
+static_assert(sizeof(SipPoolReceipt) == 128,
+    "Unexpected Win32 shape-pair-pool receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
 typedef int (__cdecl *CaptureSnapshot)(uintptr_t, uintptr_t*, uint32_t,
@@ -56,6 +136,7 @@ typedef int (__cdecl *CaptureManifoldSnapshot)(uintptr_t, uintptr_t, uint32_t,
 typedef int (__cdecl *RestoreManifoldSnapshot)(uintptr_t, uintptr_t, uint32_t,
     uintptr_t, const uintptr_t*, uint32_t, ManifoldPoolReceipt*);
 typedef int (__cdecl *DirtyAction)(uintptr_t, DirtyInteractionOrderReceipt*);
+typedef int (__cdecl *DirtyLastNPhase)(uintptr_t, uintptr_t*, uint32_t*);
 typedef int (__cdecl *DirtyCaptureCopy)(uintptr_t, DirtyInteractionKey*,
     uint32_t, DirtyInteractionOrderReceipt*);
 typedef int (__cdecl *DirtyRestoreArm)(uintptr_t, uintptr_t, uintptr_t,
@@ -63,6 +144,54 @@ typedef int (__cdecl *DirtyRestoreArm)(uintptr_t, uintptr_t, uintptr_t,
     const DirtyInteractionKey*, uint32_t, uint32_t,
     DirtyInteractionOrderReceipt*);
 typedef void (__thiscall *DirtyUpdate)(void*);
+typedef int (__cdecl *ContextObserverAction)(uintptr_t,
+    ContactContextObserverReceipt*);
+typedef int (__cdecl *ContactRecreateArm)(uintptr_t, uintptr_t, uintptr_t,
+    uintptr_t, const uintptr_t*, uint32_t, uint32_t, uint32_t, uintptr_t,
+    const uintptr_t*, uint32_t, uintptr_t, const uintptr_t*, uint32_t,
+    uint32_t, uint32_t, const ContactRecreatePlanRow*, uint32_t,
+    ContactRecreateReceipt*);
+typedef int (__cdecl *ContactRecreateAudit)(uintptr_t, uintptr_t, uintptr_t,
+    uintptr_t, const uintptr_t*, uint32_t, uint32_t, uint32_t, uintptr_t,
+    const uintptr_t*, uint32_t, uintptr_t, const uintptr_t*, uint32_t,
+    uint32_t, uint32_t, const ContactRecreatePlanRow*, uint32_t,
+    ContactRecreateAuditReceipt*);
+typedef int (__cdecl *CaptureSipSnapshot)(uintptr_t, uintptr_t, uintptr_t*,
+    uint32_t, SipPoolReceipt*);
+typedef int (__cdecl *ContactRecreateStatus)(uintptr_t, uintptr_t,
+    ContactRecreateReceipt*);
+typedef int (__cdecl *ContactRecreateCancel)(uintptr_t,
+    ContactRecreateReceipt*);
+typedef uintptr_t (__thiscall *FakeCreateManager)(void*, void*, void*);
+typedef uintptr_t (__thiscall *FakeCreateSip)(void*, void*, void*, uint32_t);
+
+struct FakeCreateWorkerCall {
+    FakeCreateManager create;
+    void* context;
+    void* descriptor;
+    DWORD threadId;
+    uintptr_t result;
+};
+
+static DWORD WINAPI RunFakeCreateWorker(void* value) {
+    FakeCreateWorkerCall* call = static_cast<FakeCreateWorkerCall*>(value);
+    call->threadId = GetCurrentThreadId();
+    call->result = call->create(call->context, call->descriptor, 0);
+    return 0;
+}
+
+static bool InvokeFakeCreateOnWorker(FakeCreateManager create, void* context,
+    void* descriptor, DWORD& threadId) {
+    FakeCreateWorkerCall call = {create, context, descriptor, 0, 0};
+    HANDLE thread = CreateThread(0, 0, RunFakeCreateWorker, &call, 0, 0);
+    if (!thread) return false;
+    const DWORD wait = WaitForSingleObject(thread, 10000);
+    DWORD exitCode = 1;
+    const BOOL readExit = GetExitCodeThread(thread, &exitCode);
+    CloseHandle(thread);
+    threadId = call.threadId;
+    return wait == WAIT_OBJECT_0 && readExit && exitCode == 0;
+}
 
 static int failures = 0;
 
@@ -91,6 +220,46 @@ static const uint32_t kSpherePoolSlabRva = 0xA69CCA;
 static const uint32_t kLargePoolCallsiteRva = 0xA69F15;
 static const uint32_t kSpherePoolCallsiteRva = 0xA69F32;
 static const uint32_t kDirtyUpdateRva = 0xA540F0;
+static const uint32_t kCreateManagerRva = 0xA69E80;
+static const uint32_t kCreateShapeInstancePairRva = 0xA4E560;
+static const uint32_t kInitManagerRva = 0xA7E5F0;
+static const uint32_t kCreateSipRva = 0xA54430;
+static const uint32_t kGetShapeTypeRva = 0x842360;
+static const uint8_t kCreateManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
+static const uint8_t kCreateShapeInstancePairBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
+};
+static const uint8_t kCreateShapeInstancePairPoolBytes[] = {
+    0x81,0xC6,0xE0,0x02,0x00,0x00,0x8B,0xD8,
+    0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x07,0x8B,0xCE
+};
+static const uint8_t kCreateManagerPoolBytes[] = {
+    0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
+};
+static const uint8_t kCreateManagerPopBytes[] = {
+    0xFF,0x4E,0x14,0x8B,0x4E,0x14,0x8B,0x46,0x10,0x57,0xFF,0x75,
+    0x0C,0x8B,0x3C,0x88,0x8B,0x46,0x20,0xFF,0x75,0x08,0x8B,0x57,
+    0x4C,0x8B,0xCA,0xC1,0xE9,0x05,0x83,0xE2,0x1F,0x8D,0x0C,0x88,
+    0x8B,0x01,0x0F,0xAB,0xD0,0x89,0x01,0x8B
+};
+static const uint8_t kInitManagerBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x8B,0x75,0x08,0x8B,0x46,0x0C,0x89,0x01
+};
+static const uint8_t kInitManagerUserDataBytes[] = {
+    0x8B,0x06,0x89,0x41,0x0C,0x33,0xC0,0x66,0x89,0x41,0x72,
+    0x66,0x89,0x41,0x24
+};
+static const uint8_t kCreateSipBytes[] = {
+    0x55,0x8B,0xEC,0x81,0xEC,0x94,0x00,0x00,0x00,0x53,0x8B,0xD9,
+    0x56,0x89,0x5D,0xC8,0x8B,0x4B,0x20,0xE8,0xA8,0x3A,0xFF,0xFF,
+    0x8B,0x73,0x20,0x89,0x45,0xEC,0x8B,0x43,0x24,0x89,0x45,0xFC,
+    0x8B
+};
+static const uint8_t kCreateSipShapeBytes[] = {
+    0x8B,0x46,0x1C,0x83,0xC0,0x20,0x89,0x45,0x80,0x8B,0x43,0x1C,
+    0x83,0xC0,0x20,0x89,0x7D,0xB4,0x83
+};
+static const uint8_t kGetShapeTypeBytes[] = {0x8B,0x41,0x74,0xC3};
 static const uint8_t kDirtyUpdateFunctionBytes[] = {
     0x55,0x8B,0xEC,0x83,0xEC,0x34,0x8B,0xE5,0x5D,0xC3
 };
@@ -128,7 +297,7 @@ static const uint8_t kSpherePoolCallsiteBytes[] = {
 };
 
 static uint8_t* CreateRevisionImage() {
-    const uint32_t size = 0xA6A000;
+    const uint32_t size = 0xA80000;
     uint8_t* image = static_cast<uint8_t*>(VirtualAlloc(0, size,
         MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     if (!image) return 0;
@@ -146,6 +315,58 @@ static uint8_t* CreateRevisionImage() {
         sizeof(kSpherePoolCallsiteBytes));
     CopyBytes(image + kDirtyUpdateRva, kDirtyUpdateFunctionBytes,
         sizeof(kDirtyUpdateFunctionBytes));
+    CopyBytes(image + kCreateManagerRva, kCreateManagerBytes,
+        sizeof(kCreateManagerBytes));
+    CopyBytes(image + kCreateManagerRva + 0x06, kCreateManagerPoolBytes,
+        sizeof(kCreateManagerPoolBytes));
+    CopyBytes(image + kCreateManagerRva + 0x29, kCreateManagerPopBytes,
+        sizeof(kCreateManagerPopBytes));
+    // The harness executes only the patched entry/preparation hook.  Its
+    // trampoline returns through this small valid epilogue instead of running
+    // the copied disassembly-signature bytes used solely by revision guards.
+    image[kCreateManagerRva + 0x14] = 0xE9;
+    *reinterpret_cast<int32_t*>(image + kCreateManagerRva + 0x15) =
+        static_cast<int32_t>(0x80 - 0x19);
+    const uint8_t epilogue[] = {0x5E,0x5B,0x5D,0xC2,0x08,0x00};
+    CopyBytes(image + kCreateManagerRva + 0x80, epilogue,
+        sizeof(epilogue));
+    CopyBytes(image + kCreateShapeInstancePairRva,
+        kCreateShapeInstancePairBytes,
+        sizeof(kCreateShapeInstancePairBytes));
+    image[kCreateShapeInstancePairRva + 0x08] = 0xE9;
+    *reinterpret_cast<int32_t*>(image + kCreateShapeInstancePairRva + 0x09) =
+        static_cast<int32_t>(0x90 - 0x0D);
+    CopyBytes(image + kCreateShapeInstancePairRva + 0x65,
+        kCreateShapeInstancePairPoolBytes,
+        sizeof(kCreateShapeInstancePairPoolBytes));
+    // ECX was saved by the copied prologue at [EBP-4]. Pop one 0x44-byte SIP
+    // from NPhaseCore::mLLSipPool, update PxPool counters, and preserve the
+    // real thiscall/RET 0x0c contract used by the hook trampoline.
+    const uint8_t sipEpilogue[] = {
+        0x8B,0x4D,0xFC,                         // mov ecx,[ebp-4]
+        0x81,0xC1,0xE0,0x02,0x00,0x00,          // add ecx,2e0h
+        0x8B,0x81,0x24,0x01,0x00,0x00,          // mov eax,[ecx+124h]
+        0x8B,0x10,                               // mov edx,[eax]
+        0xFF,0x81,0x18,0x01,0x00,0x00,          // inc [ecx+118h]
+        0xFF,0x89,0x1C,0x01,0x00,0x00,          // dec [ecx+11ch]
+        0x89,0x91,0x24,0x01,0x00,0x00,          // mov [ecx+124h],edx
+        0x5B,                                    // pop ebx
+        0x8B,0xE5,                               // mov esp,ebp
+        0x5D,                                    // pop ebp
+        0xC2,0x0C,0x00                           // ret 0ch
+    };
+    CopyBytes(image + kCreateShapeInstancePairRva + 0x90, sipEpilogue,
+        sizeof(sipEpilogue));
+    CopyBytes(image + kInitManagerRva, kInitManagerBytes,
+        sizeof(kInitManagerBytes));
+    CopyBytes(image + kInitManagerRva + 0x172,
+        kInitManagerUserDataBytes, sizeof(kInitManagerUserDataBytes));
+    CopyBytes(image + kCreateSipRva, kCreateSipBytes,
+        sizeof(kCreateSipBytes));
+    CopyBytes(image + kCreateSipRva + 0x1E6, kCreateSipShapeBytes,
+        sizeof(kCreateSipShapeBytes));
+    CopyBytes(image + kGetShapeTypeRva, kGetShapeTypeBytes,
+        sizeof(kGetShapeTypeBytes));
     return image;
 }
 
@@ -255,7 +476,8 @@ static bool DirtyHashValid(const uintptr_t* entries, uint32_t count,
 }
 
 static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
-    DirtyAction status, DirtyAction armCapture, DirtyCaptureCopy copyCapture,
+    DirtyAction status, DirtyLastNPhase lastNPhase, DirtyAction armCapture,
+    DirtyCaptureCopy copyCapture,
     DirtyRestoreArm armRestore, DirtyAction cancel, DirtyAction uninstall) {
     const uint32_t capacity = 8;
     const uint32_t hashSize = 16;
@@ -306,18 +528,39 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     DirtyInteractionOrderReceipt receipt = {};
     Check(install(imagePointer, &receipt) == 1 && receipt.result == 1 &&
         receipt.installed == 1, "dirty hook installs");
+    uintptr_t observedNPhase = 1;
+    uint32_t observations = 1;
+    Check(lastNPhase(imagePointer, &observedNPhase, &observations) == 0 &&
+        observedNPhase == 0 && observations == 0,
+        "passive nphase is unavailable before the first hook entry");
     Check(armCapture(imagePointer, &receipt) == 1 && receipt.result == 18 &&
         receipt.armed == 1, "dirty capture arms");
     DirtyUpdate update = reinterpret_cast<DirtyUpdate>(
         image + kDirtyUpdateRva);
     update(nphase);
+    Check(lastNPhase(imagePointer, &observedNPhase, &observations) == 1 &&
+        observedNPhase == reinterpret_cast<uintptr_t>(nphase) &&
+        observations == 1,
+        "passive nphase observes the first hook entry");
+    uintptr_t repeatedNPhase = 0;
+    uint32_t repeatedObservations = 0;
+    Check(lastNPhase(imagePointer, &repeatedNPhase,
+        &repeatedObservations) == 1 &&
+        repeatedNPhase == observedNPhase &&
+        repeatedObservations == observations,
+        "passive nphase getter is repeatable and read-only");
     receipt = {};
     Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
         receipt.count == 3 && receipt.captures == 1 && receipt.armed == 0,
         "dirty capture completes one-shot");
     update(nphase);
+    Check(lastNPhase(imagePointer, &observedNPhase, &observations) == 1 &&
+        observedNPhase == reinterpret_cast<uintptr_t>(nphase) &&
+        observations == 2,
+        "passive nphase advances while the transaction hook is idle");
     Check(status(imagePointer, &receipt) == 1 && receipt.result == 1 &&
-        receipt.captures == 1 && receipt.armed == 0,
+        receipt.captures == 1 && receipt.armed == 0 &&
+        receipt.nphaseCore == reinterpret_cast<uintptr_t>(nphase),
         "dirty capture is dormant after one call");
     DirtyInteractionOrderReceipt capturedReceipt = receipt;
     DirtyInteractionKey captured[3] = {};
@@ -586,6 +829,11 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     receipt = {};
     Check(uninstall(imagePointer, &receipt) == 1 && receipt.result == 1,
         "dirty hook uninstalls");
+    observedNPhase = 1;
+    observations = 1;
+    Check(lastNPhase(imagePointer, &observedNPhase, &observations) == 0 &&
+        observedNPhase == 0 && observations == 0,
+        "passive nphase resets on uninstall");
     Check(memcmp(image + kDirtyUpdateRva, kDirtyUpdateFunctionBytes,
         6) == 0, "dirty hook restores exact function bytes");
 }
@@ -690,6 +938,683 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
         receipt.freeHeadAfter == 0, "zero manifold list restore succeeds");
 }
 
+static void InitializeContactRecreateFixture(uint8_t* context,
+    uint8_t managers[256][0x80], uintptr_t* freeArray, uintptr_t* slabs,
+    uint32_t* useMap, uint32_t* activeMap, uint32_t* touchMap,
+    uint32_t* modifiableMap, uint8_t manifolds[32][0xF0]) {
+    memset(context, 0, 0x1800);
+    memset(managers, 0, 256 * 0x80);
+    memset(useMap, 0, 8 * sizeof(uint32_t));
+    memset(activeMap, 0, 8 * sizeof(uint32_t));
+    memset(touchMap, 0, 8 * sizeof(uint32_t));
+    memset(modifiableMap, 0, 8 * sizeof(uint32_t));
+    slabs[0] = reinterpret_cast<uintptr_t>(managers);
+    for (uint32_t i = 0; i < 256; ++i) {
+        freeArray[i] = reinterpret_cast<uintptr_t>(managers[i]);
+        *reinterpret_cast<uint32_t*>(managers[i] + 0x4C) = i;
+    }
+    uint8_t* contactPool = context + 0x2B8;
+    *reinterpret_cast<uint32_t*>(contactPool + 0x00) = 256;
+    *reinterpret_cast<uint32_t*>(contactPool + 0x04) = 4096;
+    *reinterpret_cast<uint32_t*>(contactPool + 0x08) = 1;
+    *reinterpret_cast<uint32_t*>(contactPool + 0x0C) = 8;
+    *reinterpret_cast<uintptr_t*>(contactPool + 0x10) =
+        reinterpret_cast<uintptr_t>(freeArray);
+    *reinterpret_cast<uint32_t*>(contactPool + 0x14) = 256;
+    *reinterpret_cast<uintptr_t*>(contactPool + 0x18) =
+        reinterpret_cast<uintptr_t>(slabs);
+    *reinterpret_cast<uintptr_t*>(contactPool + 0x1C) =
+        reinterpret_cast<uintptr_t>(context);
+    *reinterpret_cast<uintptr_t*>(contactPool + 0x20) =
+        reinterpret_cast<uintptr_t>(useMap);
+    *reinterpret_cast<uint32_t*>(contactPool + 0x24) = 8;
+    *reinterpret_cast<uintptr_t*>(context + 0x534) =
+        reinterpret_cast<uintptr_t>(activeMap);
+    *reinterpret_cast<uint32_t*>(context + 0x538) = 8;
+    *reinterpret_cast<uintptr_t*>(context + 0x540) =
+        reinterpret_cast<uintptr_t>(touchMap);
+    *reinterpret_cast<uint32_t*>(context + 0x544) = 8;
+    *reinterpret_cast<uintptr_t*>(context + 0x16D0) =
+        reinterpret_cast<uintptr_t>(modifiableMap);
+    *reinterpret_cast<uint32_t*>(context + 0x16D4) = 8;
+
+    uint8_t* largePool = context + 0x2E4;
+    *reinterpret_cast<uint32_t*>(largePool + 0x114) = 32;
+    *reinterpret_cast<uint32_t*>(largePool + 0x118) = 0;
+    *reinterpret_cast<uint32_t*>(largePool + 0x11C) = 32;
+    *reinterpret_cast<uint32_t*>(largePool + 0x120) = 32 * 0xF0;
+    for (uint32_t i = 0; i < 32; ++i)
+        *reinterpret_cast<uintptr_t*>(manifolds[i]) = i + 1 < 32 ?
+            reinterpret_cast<uintptr_t>(manifolds[i + 1]) : 0;
+    *reinterpret_cast<uintptr_t*>(largePool + 0x124) =
+        reinterpret_cast<uintptr_t>(manifolds[0]);
+}
+
+static void ConsumePreparedAllocation(uint8_t* context,
+    uintptr_t expectedManager, uintptr_t expectedManifold) {
+    uintptr_t* freeArray = reinterpret_cast<uintptr_t*>(
+        *reinterpret_cast<uintptr_t*>(context + 0x2C8));
+    uint32_t& freeCount = *reinterpret_cast<uint32_t*>(context + 0x2CC);
+    uint8_t* largePool = context + 0x2E4;
+    const uintptr_t head = *reinterpret_cast<uintptr_t*>(largePool + 0x124);
+    Check(freeArray[freeCount - 1] == expectedManager,
+        "endpoint hook selects the expected manager");
+    Check(head == expectedManifold,
+        "endpoint hook selects the expected manifold");
+    --freeCount;
+    *reinterpret_cast<uintptr_t*>(largePool + 0x124) =
+        *reinterpret_cast<uintptr_t*>(head);
+    ++*reinterpret_cast<uint32_t*>(largePool + 0x118);
+    --*reinterpret_cast<uint32_t*>(largePool + 0x11C);
+}
+
+static void CommitPreparedAllocation(uint8_t* context,
+    uintptr_t expectedManager, uintptr_t expectedManifold, uintptr_t sip,
+    uintptr_t shape0, uintptr_t shape1) {
+    ConsumePreparedAllocation(context, expectedManager, expectedManifold);
+    const uint32_t slot = *reinterpret_cast<uint32_t*>(expectedManager + 0x4C);
+    *reinterpret_cast<uintptr_t*>(expectedManager + 0x0C) = sip;
+    *reinterpret_cast<uintptr_t*>(expectedManager + 0x3C) = expectedManifold;
+    *reinterpret_cast<uintptr_t*>(expectedManager + 0x58) = shape0;
+    *reinterpret_cast<uintptr_t*>(expectedManager + 0x5C) = shape1;
+    *reinterpret_cast<uintptr_t*>(sip + 0x38) = expectedManager;
+    const uintptr_t allocatedBitmaps[2] = {
+        reinterpret_cast<uintptr_t>(context + 0x2D8),
+        reinterpret_cast<uintptr_t>(context + 0x534)};
+    for (uint32_t i = 0; i < 2; ++i) {
+        const uintptr_t bitmap = allocatedBitmaps[i];
+        const uintptr_t map = *reinterpret_cast<uintptr_t*>(bitmap);
+        reinterpret_cast<uint32_t*>(map)[slot >> 5] |=
+            1u << (slot & 31u);
+    }
+}
+
+static void ReturnPreparedAllocation(uint8_t* context, uintptr_t manager,
+    uintptr_t manifold, uintptr_t sip) {
+    uintptr_t* freeArray = reinterpret_cast<uintptr_t*>(
+        *reinterpret_cast<uintptr_t*>(context + 0x2C8));
+    uint32_t& freeCount = *reinterpret_cast<uint32_t*>(context + 0x2CC);
+    freeArray[freeCount++] = manager;
+    uint8_t* largePool = context + 0x2E4;
+    *reinterpret_cast<uintptr_t*>(manifold) =
+        *reinterpret_cast<uintptr_t*>(largePool + 0x124);
+    *reinterpret_cast<uintptr_t*>(largePool + 0x124) = manifold;
+    --*reinterpret_cast<uint32_t*>(largePool + 0x118);
+    ++*reinterpret_cast<uint32_t*>(largePool + 0x11C);
+    const uint32_t slot = *reinterpret_cast<uint32_t*>(manager + 0x4C);
+    const uintptr_t returnedBitmaps[4] = {
+        reinterpret_cast<uintptr_t>(context + 0x2D8),
+        reinterpret_cast<uintptr_t>(context + 0x534),
+        reinterpret_cast<uintptr_t>(context + 0x540),
+        reinterpret_cast<uintptr_t>(context + 0x16D0)};
+    for (uint32_t i = 0; i < 4; ++i) {
+        const uintptr_t bitmap = returnedBitmaps[i];
+        const uintptr_t map = *reinterpret_cast<uintptr_t*>(bitmap);
+        reinterpret_cast<uint32_t*>(map)[slot >> 5] &=
+            ~(1u << (slot & 31u));
+    }
+    *reinterpret_cast<uintptr_t*>(sip + 0x38) = 0;
+}
+
+#if 0
+static void RunContactRecreateTests(uint8_t* image,
+    ContextObserverAction installObserver,
+    ContextObserverAction uninstallObserver, ContactRecreateArm arm,
+    ContactRecreateStatus status, ContactRecreateCancel cancel) {
+    uint8_t context[0x1800] = {};
+    uint8_t managers[256][0x80] = {};
+    uintptr_t freeArray[256] = {};
+    uintptr_t slabs[1] = {};
+    uint32_t useMap[8] = {}, activeMap[8] = {}, touchMap[8] = {},
+        modifiableMap[8] = {};
+    uint8_t manifolds[32][0xF0] = {};
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    const uintptr_t imagePointer = reinterpret_cast<uintptr_t>(image);
+    const uintptr_t contextPointer = reinterpret_cast<uintptr_t>(context);
+    const uintptr_t freeArrayPointer = reinterpret_cast<uintptr_t>(freeArray);
+    const uintptr_t largePoolPointer = reinterpret_cast<uintptr_t>(
+        context + 0x2E4);
+    uintptr_t targetContact[254] = {};
+    for (uint32_t i = 0; i < 254; ++i)
+        targetContact[i] = reinterpret_cast<uintptr_t>(managers[i + 2]);
+    uintptr_t targetLarge[30] = {};
+    for (uint32_t i = 0; i < 30; ++i)
+        targetLarge[i] = reinterpret_cast<uintptr_t>(manifolds[i + 2]);
+    uintptr_t originalContact[256] = {};
+    for (uint32_t i = 0; i < 256; ++i)
+        originalContact[i] = reinterpret_cast<uintptr_t>(managers[i]);
+    uintptr_t originalLarge[32] = {};
+    for (uint32_t i = 0; i < 32; ++i)
+        originalLarge[i] = reinterpret_cast<uintptr_t>(manifolds[i]);
+    ContactRecreatePlanRow rows[2] = {
+        {0x1000, 0x2000, reinterpret_cast<uintptr_t>(managers[0]),
+            reinterpret_cast<uintptr_t>(manifolds[0]), 0, 0xF0, 0, 0},
+        {0x3000, 0x4000, reinterpret_cast<uintptr_t>(managers[1]),
+            reinterpret_cast<uintptr_t>(manifolds[1]), 1, 0xF0, 0, 0}
+    };
+    ContactContextObserverReceipt observer = {};
+    Check(installObserver(imagePointer, &observer) == 1 &&
+        observer.result == 1 && observer.installed == 1,
+        "contact observer installs for recreation tests");
+
+    ContactRecreateReceipt receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1 && receipt.result == 1 && receipt.state == 1 &&
+        receipt.armed == 1, "contact recreation union plan arms");
+    Check(Same(freeArray, targetContact, 254),
+        "contact recreation primes exact target-free prefix");
+    Check(ManifoldOrderMatches(context, 0,
+        reinterpret_cast<const uintptr_t*>(0), 0) == false,
+        "contact recreation has a nonempty primed manifold chain");
+
+    FakeCreateManager create = reinterpret_cast<FakeCreateManager>(
+        image + kCreateManagerRva);
+    uint8_t sip0[0x44] = {}, sip1[0x44] = {};
+    uintptr_t descriptor0[7] = {reinterpret_cast<uintptr_t>(sip0),
+        0,0,0,0,0x1000,0x2000};
+    uintptr_t descriptor1[7] = {reinterpret_cast<uintptr_t>(sip1),
+        0,0,0,0,0x3000,0x4000};
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    DWORD workerThreadId = 0;
+    Check(InvokeFakeCreateOnWorker(create, context, descriptor1,
+        workerThreadId),
+        "contact recreation accepts a serialized worker-thread handoff");
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.result == 1 && receipt.state == 2 && receipt.armed == 0 &&
+        receipt.matchedCount == 2 && receipt.remainingCount == 0 &&
+        receipt.contactCountCurrent == 254 &&
+        receipt.contactHashCurrent == receipt.targetContactHash &&
+        receipt.largeCountCurrent == 30 &&
+        receipt.largeHashCurrent == receipt.targetLargeHash &&
+        receipt.largeUsedCurrent == 2 && receipt.largeUnreleasedCurrent == 30 &&
+        receipt.threadId == workerThreadId,
+        "contact recreation converges after exact pair order");
+    Check(cancel(imagePointer, &receipt) == 1 && receipt.state == 0,
+        "completed contact recreation clears to dormant state");
+
+    // Reinitialize and consume in reverse semantic order.  The same target
+    // free structures must remain after both allocations.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "contact recreation reverse-order plan arms");
+    create(context, descriptor1, 0);
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 2 && receipt.contactHashCurrent ==
+            receipt.targetContactHash && receipt.largeHashCurrent ==
+            receipt.targetLargeHash,
+        "contact recreation is independent of pair creation order");
+    cancel(imagePointer, &receipt);
+
+    // An armed plan that has not observed a shipped allocation is entirely
+    // reversible, including the primed contact array and linked manifold
+    // chain.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "unmatched contact recreation plan arms");
+    Check(cancel(imagePointer, &receipt) == 1 && receipt.state == 0 &&
+        *reinterpret_cast<uint32_t*>(context + 0x2CC) == 256 &&
+        Same(freeArray, originalContact, 256) &&
+        ManifoldOrderMatches(context, 0, originalLarge, 32) &&
+        *reinterpret_cast<uint32_t*>(context + 0x2E4 + 0x118) == 0 &&
+        *reinterpret_cast<uint32_t*>(context + 0x2E4 + 0x11C) == 32,
+        "unmatched cancellation restores both allocator preimages");
+
+    // A short-lived pair absent from the checkpoint remains pass-through.  It
+    // may temporarily consume the primed tops, but once the shipped lifecycle
+    // returns both LIFO entries the tracked checkpoint pairs can still select
+    // their exact manager/manifold identities.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "unexpected-pair contact recreation plan arms");
+    uint8_t unexpectedSip[0x44] = {};
+    uintptr_t unexpectedDescriptor[7] = {
+        reinterpret_cast<uintptr_t>(unexpectedSip),0,0,0,0,0x5000,0x6000
+    };
+    const uintptr_t transientManager = freeArray[255];
+    const uintptr_t transientManifold = *reinterpret_cast<uintptr_t*>(
+        context + 0x2E4 + 0x124);
+    create(context, unexpectedDescriptor, 0);
+    ConsumePreparedAllocation(context, transientManager, transientManifold);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.result == 1 && receipt.state == 1 &&
+        receipt.matchedCount == 0 && receipt.remainingCount == 2 &&
+        receipt.contactCountCurrent == 255 &&
+        receipt.largeCountCurrent == 31,
+        "transient foreign pair remains a guarded pass-through");
+    ReturnPreparedAllocation(context, transientManager, transientManifold,
+        unexpectedDescriptor[0]);
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    create(context, descriptor1, 0);
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 2 && receipt.matchedCount == 2 &&
+        receipt.contactHashCurrent == receipt.targetContactHash &&
+        receipt.largeHashCurrent == receipt.targetLargeHash,
+        "tracked recreation converges after a returned foreign pair");
+    cancel(imagePointer, &receipt);
+
+    // Status remains an honest partial receipt after one natural allocation.
+    // Cancellation may clear the hook state but must not put that now-live
+    // manager or manifold back into a free pool.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "partial contact recreation plan arms");
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 1 && receipt.armed == 1 &&
+        receipt.matchedCount == 1 && receipt.remainingCount == 1 &&
+        receipt.contactCountCurrent == 255 &&
+        receipt.largeCountCurrent == 31 &&
+        receipt.largeUsedCurrent == 1 && receipt.largeUnreleasedCurrent == 31,
+        "partial contact recreation status reports one consumption");
+    Check(cancel(imagePointer, &receipt) == 1 &&
+        *reinterpret_cast<uint32_t*>(context + 0x2CC) == 255 &&
+        !Same(freeArray, originalContact, 256),
+        "partial cancellation does not free an already-consumed manager");
+
+    // Repeating an already consumed semantic pair is a distinct poisoned
+    // state, not an accidental second match.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "duplicate-pair contact recreation plan arms");
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    create(context, descriptor0, 0);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 0 &&
+        receipt.result == 13 && receipt.state == 3 &&
+        receipt.matchedCount == 1 && receipt.remainingCount == 1,
+        "duplicate semantic pair poisons a partially consumed plan");
+    cancel(imagePointer, &receipt);
+
+    // A pair may destroy its manager and recreate it during the same
+    // maintenance pass.  Admit that lifecycle only after the exact selected
+    // manager and manifold are both back in their free structures, all slot
+    // membership bits are clear, and the SIP backlink is null again.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    memset(sip0, 0, sizeof(sip0));
+    memset(sip1, 0, sizeof(sip1));
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 1, "returned-pair contact recreation plan arms");
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    ReturnPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0]);
+    create(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    create(context, descriptor1, 0);
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.result == 1 && receipt.state == 2 &&
+        receipt.matchedCount == 2 && receipt.remainingCount == 0 &&
+        receipt.observerEntries == 3,
+        "proved destroy/recreate lifecycle converges exactly once live");
+    cancel(imagePointer, &receipt);
+
+    // Membership admission rejects a readable foreign manager even when all
+    // counts and bitmap metadata otherwise look valid.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    uint8_t foreignManager[0x80] = {};
+    *reinterpret_cast<uint32_t*>(foreignManager + 0x4C) = 255;
+    freeArray[255] = reinterpret_cast<uintptr_t>(foreignManager);
+    receipt = {};
+    Check(arm(imagePointer, contextPointer, freeArrayPointer, targetContact,
+        254, largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &receipt) == 0 && receipt.result == 7 && receipt.state == 3 &&
+        receipt.detail == 14,
+        "foreign contact-manager membership is rejected before writes");
+    cancel(imagePointer, &receipt);
+
+    // An unarmed observer must not alter either allocator.
+    InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+        useMap, activeMap, touchMap, modifiableMap, manifolds);
+    const uintptr_t topBefore = freeArray[255];
+    const uintptr_t headBefore = *reinterpret_cast<uintptr_t*>(
+        context + 0x2E4 + 0x124);
+    create(context, descriptor0, 0);
+    Check(freeArray[255] == topBefore &&
+        *reinterpret_cast<uintptr_t*>(context + 0x2E4 + 0x124) == headBefore,
+        "dormant contact observer performs no allocator writes");
+
+    observer = {};
+    Check(uninstallObserver(imagePointer, &observer) == 1 &&
+        observer.result == 1 && observer.installed == 0,
+        "contact observer uninstalls after recreation tests");
+}
+#endif
+
+static void RunContactRecreateSipTests(uint8_t* image,
+    ContextObserverAction installObserver,
+    ContextObserverAction uninstallObserver, ContactRecreateArm arm,
+    ContactRecreateStatus status, ContactRecreateCancel cancel,
+    CaptureSipSnapshot captureSip, ContactRecreateAudit audit) {
+    uint8_t context[0x1800] = {};
+    uint8_t managers[256][0x80] = {};
+    uintptr_t freeArray[256] = {};
+    uintptr_t slabs[1] = {};
+    uint32_t useMap[8] = {}, activeMap[8] = {}, touchMap[8] = {},
+        modifiableMap[8] = {};
+    uint8_t manifolds[32][0xF0] = {};
+    uint8_t nphase[0x420] = {};
+    uint8_t sipNodes[32][0x44] = {};
+    uint8_t shapeSims[6][0x20] = {};
+    uint8_t shapeCores[6][0x24] = {};
+    const uintptr_t imagePointer = reinterpret_cast<uintptr_t>(image);
+    const uintptr_t contextPointer = reinterpret_cast<uintptr_t>(context);
+    const uintptr_t nphasePointer = reinterpret_cast<uintptr_t>(nphase);
+    const uintptr_t sipPoolPointer = nphasePointer + 0x2E0;
+    const uintptr_t freeArrayPointer = reinterpret_cast<uintptr_t>(freeArray);
+    const uintptr_t largePoolPointer = reinterpret_cast<uintptr_t>(
+        context + 0x2E4);
+    uintptr_t targetContact[254] = {};
+    uintptr_t targetLarge[30] = {};
+    uintptr_t targetSip[30] = {};
+    for (uint32_t i = 0; i < 254; ++i)
+        targetContact[i] = reinterpret_cast<uintptr_t>(managers[i + 2]);
+    for (uint32_t i = 0; i < 30; ++i) {
+        targetLarge[i] = reinterpret_cast<uintptr_t>(manifolds[i + 2]);
+        targetSip[i] = reinterpret_cast<uintptr_t>(sipNodes[i + 2]);
+    }
+    for (uint32_t i = 0; i < 6; ++i)
+        *reinterpret_cast<uintptr_t*>(shapeSims[i] + 0x1C) =
+            reinterpret_cast<uintptr_t>(shapeCores[i]);
+    const uintptr_t pxs[6] = {
+        reinterpret_cast<uintptr_t>(shapeCores[0] + 0x20),
+        reinterpret_cast<uintptr_t>(shapeCores[1] + 0x20),
+        reinterpret_cast<uintptr_t>(shapeCores[2] + 0x20),
+        reinterpret_cast<uintptr_t>(shapeCores[3] + 0x20),
+        reinterpret_cast<uintptr_t>(shapeCores[4] + 0x20),
+        reinterpret_cast<uintptr_t>(shapeCores[5] + 0x20)
+    };
+    ContactRecreatePlanRow rows[2] = {
+        {pxs[0] < pxs[1] ? pxs[0] : pxs[1],
+            pxs[0] < pxs[1] ? pxs[1] : pxs[0],
+            reinterpret_cast<uintptr_t>(managers[0]),
+            reinterpret_cast<uintptr_t>(manifolds[0]),
+            reinterpret_cast<uintptr_t>(sipNodes[0]), 0, 0xF0, 0, 0},
+        {pxs[2] < pxs[3] ? pxs[2] : pxs[3],
+            pxs[2] < pxs[3] ? pxs[3] : pxs[2],
+            reinterpret_cast<uintptr_t>(managers[1]),
+            reinterpret_cast<uintptr_t>(manifolds[1]),
+            reinterpret_cast<uintptr_t>(sipNodes[1]), 1, 0xF0, 0, 0}
+    };
+    const auto initialize = [&]() {
+        InitializeContactRecreateFixture(context, managers, freeArray, slabs,
+            useMap, activeMap, touchMap, modifiableMap, manifolds);
+        memset(nphase + 0x2E0, 0, 0x140);
+        memset(sipNodes, 0, sizeof(sipNodes));
+        uint8_t* pool = nphase + 0x2E0;
+        *reinterpret_cast<uint32_t*>(pool + 0x114) = 32;
+        *reinterpret_cast<uint32_t*>(pool + 0x118) = 0;
+        *reinterpret_cast<uint32_t*>(pool + 0x11C) = 32;
+        *reinterpret_cast<uint32_t*>(pool + 0x120) = 0x880;
+        for (uint32_t i = 0; i < 32; ++i)
+            *reinterpret_cast<uintptr_t*>(sipNodes[i]) = i + 1 < 32 ?
+                reinterpret_cast<uintptr_t>(sipNodes[i + 1]) : 0;
+        *reinterpret_cast<uintptr_t*>(pool + 0x124) =
+            reinterpret_cast<uintptr_t>(sipNodes[0]);
+    };
+    const auto returnSip = [&](uintptr_t sip) {
+        uint8_t* pool = nphase + 0x2E0;
+        *reinterpret_cast<uintptr_t*>(sip) =
+            *reinterpret_cast<uintptr_t*>(pool + 0x124);
+        *reinterpret_cast<uintptr_t*>(pool + 0x124) = sip;
+        --*reinterpret_cast<uint32_t*>(pool + 0x118);
+        ++*reinterpret_cast<uint32_t*>(pool + 0x11C);
+    };
+    const auto armPlan = [&](ContactRecreateReceipt& receipt) {
+        return arm(imagePointer, contextPointer, nphasePointer, sipPoolPointer,
+            targetSip, 30, 2, 30, freeArrayPointer, targetContact, 254,
+            largePoolPointer, targetLarge, 30, 2, 30, rows, 2, &receipt);
+    };
+
+    initialize();
+    uintptr_t sipCaptured[32] = {};
+    SipPoolReceipt sipReceipt = {};
+    Check(captureSip(imagePointer, nphasePointer, sipCaptured, 32,
+        &sipReceipt) == 1 && sipReceipt.result == 1 &&
+        sipReceipt.traversedCount == 32 && sipReceipt.used == 0 &&
+        sipReceipt.unreleased == 32,
+        "shape-pair pool capture validates exact LIFO state");
+
+    ContactContextObserverReceipt observer = {};
+    Check(installObserver(imagePointer, &observer) == 1 &&
+        observer.result == 1 && observer.installed == 1,
+        "dual shape-pair/contact observer installs");
+
+    ContactRecreateAuditReceipt auditReceipt = {};
+    Check(audit(imagePointer, contextPointer, nphasePointer, sipPoolPointer,
+        targetSip, 30, 2, 30, freeArrayPointer, targetContact, 254,
+        largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &auditReceipt) == 1 && auditReceipt.result == 1 &&
+        auditReceipt.apiVersion == 1 &&
+        auditReceipt.structSize == sizeof(auditReceipt) &&
+        auditReceipt.issueMask == 0 &&
+        auditReceipt.evaluatedMask == 0x001FFFFFu &&
+        auditReceipt.liveSipCount == 32 &&
+        auditReceipt.expectedSemanticSipCount == 32 &&
+        auditReceipt.liveContactCount == 256 &&
+        auditReceipt.expectedContactCount == 256 &&
+        auditReceipt.liveLargeCount == 32 &&
+        auditReceipt.expectedLargeCount == 32,
+        "read-only recreation audit accepts a clean complete plan");
+
+    uintptr_t mixedTargetSip[30] = {};
+    memcpy(mixedTargetSip, targetSip, sizeof(mixedTargetSip));
+    mixedTargetSip[29] = rows[0].targetSip;
+    auditReceipt = {};
+    Check(audit(imagePointer, contextPointer, nphasePointer, sipPoolPointer,
+        mixedTargetSip, 30, 2, 30, freeArrayPointer, targetContact, 254,
+        largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &auditReceipt) == 1 && auditReceipt.result == 2 &&
+        auditReceipt.recreateState == 0 &&
+        auditReceipt.targetFreeSipRowCount == 1 &&
+        auditReceipt.activeSipRowCount == 1 &&
+        (auditReceipt.issueMask & (1u << 10)) != 0 &&
+        (auditReceipt.issueMask & (1u << 11)) != 0 &&
+        (auditReceipt.issueMask & (1u << 12)) != 0 &&
+        (auditReceipt.issueMask & (1u << 16)) == 0 &&
+        (auditReceipt.issueMask & (1u << 19)) == 0,
+        "read-only audit accumulates mixed-phase SIP issues and continues");
+    auditReceipt = {};
+    Check(audit(imagePointer, contextPointer, nphasePointer, sipPoolPointer,
+        targetSip, 30, 2, 30, freeArrayPointer, targetContact, 254,
+        largePoolPointer, targetLarge, 30, 2, 30, rows, 2,
+        &auditReceipt) == 1 && auditReceipt.result == 1 &&
+        auditReceipt.recreateState == 0,
+        "read-only audit leaves native recreation state reusable");
+    FakeCreateSip createSip = reinterpret_cast<FakeCreateSip>(
+        image + kCreateShapeInstancePairRva);
+    FakeCreateManager createManager = reinterpret_cast<FakeCreateManager>(
+        image + kCreateManagerRva);
+
+    ContactRecreateReceipt receipt = {};
+    Check(armPlan(receipt) == 1 && receipt.result == 1 &&
+        receipt.apiVersion == 2 && receipt.state == 1 &&
+        receipt.sipMatchedCount == 0,
+        "combined shape-pair/contact recreation plan arms");
+    uintptr_t descriptor0[7] = {0,0,0,0,0,pxs[0],pxs[1]};
+    uintptr_t descriptor1[7] = {0,0,0,0,0,pxs[2],pxs[3]};
+    descriptor0[0] = createSip(nphase, shapeSims[0], shapeSims[1], 0);
+    Check(descriptor0[0] == rows[0].targetSip,
+        "shape-pair hook selects row-zero historical SIP");
+    createManager(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    descriptor1[0] = createSip(nphase, shapeSims[2], shapeSims[3], 0);
+    Check(descriptor1[0] == rows[1].targetSip,
+        "shape-pair hook selects row-one historical SIP");
+    DWORD workerThreadId = 0;
+    Check(InvokeFakeCreateOnWorker(createManager, context, descriptor1,
+        workerThreadId), "manager hook accepts worker-thread handoff");
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 2 && receipt.matchedCount == 2 &&
+        receipt.sipMatchedCount == 2 && receipt.sipRemainingCount == 0 &&
+        receipt.sipCountCurrent == 30 &&
+        receipt.sipHashCurrent == receipt.targetSipHash &&
+        receipt.sipUsedCurrent == 2 && receipt.sipUnreleasedCurrent == 30 &&
+        receipt.contactHashCurrent == receipt.targetContactHash &&
+        receipt.largeHashCurrent == receipt.targetLargeHash,
+        "combined recreation converges with exact SIP/manager/manifold pools");
+    Check(cancel(imagePointer, &receipt) == 1 && receipt.state == 0,
+        "completed combined recreation clears to dormant state");
+
+    // A foreign pair may borrow an ordinary checkpoint-free SIP and return it
+    // before either tracked pair. The exact LIFO state and historical row SIPs
+    // remain available afterward.
+    initialize();
+    receipt = {};
+    Check(armPlan(receipt) == 1,
+        "combined recreation arms before transient foreign pair");
+    uintptr_t foreignDescriptor[7] = {0,0,0,0,0,pxs[4],pxs[5]};
+    foreignDescriptor[0] = createSip(nphase, shapeSims[4], shapeSims[5], 0);
+    const uintptr_t foreignManager = freeArray[255];
+    const uintptr_t foreignManifold = *reinterpret_cast<uintptr_t*>(
+        context + 0x2E4 + 0x124);
+    createManager(context, foreignDescriptor, 0);
+    ConsumePreparedAllocation(context, foreignManager, foreignManifold);
+    ReturnPreparedAllocation(context, foreignManager, foreignManifold,
+        foreignDescriptor[0]);
+    returnSip(foreignDescriptor[0]);
+    descriptor0[0] = createSip(nphase, shapeSims[0], shapeSims[1], 0);
+    createManager(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    descriptor1[0] = createSip(nphase, shapeSims[2], shapeSims[3], 0);
+    createManager(context, descriptor1, 0);
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 2 && receipt.sipMatchedCount == 2 &&
+        receipt.sipHashCurrent == receipt.targetSipHash,
+        "tracked SIP recreation survives a returned foreign allocation");
+    cancel(imagePointer, &receipt);
+
+    // The manager and SIP may both be destroyed and recreated within one
+    // maintenance pass. Reconciliation must clear both match bits only after
+    // their exact pool entries have returned.
+    initialize();
+    receipt = {};
+    Check(armPlan(receipt) == 1,
+        "combined recreation arms for destroy/recreate lifecycle");
+    descriptor0[0] = createSip(nphase, shapeSims[0], shapeSims[1], 0);
+    createManager(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    ReturnPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0]);
+    returnSip(descriptor0[0]);
+    descriptor0[0] = createSip(nphase, shapeSims[0], shapeSims[1], 0);
+    createManager(context, descriptor0, 0);
+    CommitPreparedAllocation(context, rows[0].targetManager,
+        rows[0].targetManifold, descriptor0[0], descriptor0[5],
+        descriptor0[6]);
+    descriptor1[0] = createSip(nphase, shapeSims[2], shapeSims[3], 0);
+    createManager(context, descriptor1, 0);
+    CommitPreparedAllocation(context, rows[1].targetManager,
+        rows[1].targetManifold, descriptor1[0], descriptor1[5],
+        descriptor1[6]);
+    receipt = {};
+    Check(status(imagePointer, contextPointer, &receipt) == 1 &&
+        receipt.state == 2 && receipt.matchedCount == 2 &&
+        receipt.sipMatchedCount == 2 && receipt.sipObserverEntries == 3,
+        "combined destroy/recreate lifecycle converges exactly once live");
+    cancel(imagePointer, &receipt);
+
+    // An unobserved arm is fully reversible, including the newly primed SIP
+    // chain as well as the manager and manifold allocators.
+    initialize();
+    receipt = {};
+    Check(armPlan(receipt) == 1,
+        "unobserved combined recreation plan arms");
+    Check(cancel(imagePointer, &receipt) == 1 && receipt.state == 0 &&
+        *reinterpret_cast<uintptr_t*>(nphase + 0x2E0 + 0x124) ==
+            reinterpret_cast<uintptr_t>(sipNodes[0]) &&
+        *reinterpret_cast<uint32_t*>(nphase + 0x2E0 + 0x118) == 0 &&
+        *reinterpret_cast<uint32_t*>(nphase + 0x2E0 + 0x11C) == 32,
+        "unobserved cancellation restores the SIP-pool preimage");
+
+    observer = {};
+    Check(uninstallObserver(imagePointer, &observer) == 1 &&
+        observer.result == 1 && observer.installed == 0,
+        "dual shape-pair/contact observer uninstalls");
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("usage: Oc2NativeRigidbodyRebuildHistoryHarness <dll>\n");
@@ -712,10 +1637,15 @@ int main(int argc, char** argv) {
     RestoreManifoldSnapshot restoreManifold =
         reinterpret_cast<RestoreManifoldSnapshot>(GetProcAddress(library,
             "oc2_manifold_pool_restore_snapshot"));
+    CaptureSipSnapshot captureSip = reinterpret_cast<CaptureSipSnapshot>(
+        GetProcAddress(library,
+            "oc2_shape_instance_pair_pool_capture_snapshot"));
     DirtyAction installDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_install"));
     DirtyAction statusDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_status"));
+    DirtyLastNPhase lastDirtyNPhase = reinterpret_cast<DirtyLastNPhase>(
+        GetProcAddress(library, "oc2_dirty_interaction_last_nphase"));
     DirtyAction armDirtyCapture = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_capture_arm"));
     DirtyCaptureCopy copyDirtyCapture =
@@ -728,18 +1658,40 @@ int main(int argc, char** argv) {
         library, "oc2_dirty_interaction_order_uninstall"));
     DirtyAction cancelDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_cancel"));
+    ContextObserverAction installObserver =
+        reinterpret_cast<ContextObserverAction>(GetProcAddress(library,
+            "oc2_contact_manager_context_observer_install"));
+    ContextObserverAction uninstallObserver =
+        reinterpret_cast<ContextObserverAction>(GetProcAddress(library,
+            "oc2_contact_manager_context_observer_uninstall"));
+    ContactRecreateArm armRecreate = reinterpret_cast<ContactRecreateArm>(
+        GetProcAddress(library, "oc2_contact_recreate_arm"));
+    ContactRecreateAudit auditRecreate =
+        reinterpret_cast<ContactRecreateAudit>(GetProcAddress(library,
+            "oc2_contact_recreate_audit"));
+    ContactRecreateStatus statusRecreate =
+        reinterpret_cast<ContactRecreateStatus>(GetProcAddress(library,
+            "oc2_contact_recreate_status"));
+    ContactRecreateCancel cancelRecreate =
+        reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
+            "oc2_contact_recreate_cancel"));
     Check(version && version() == 11, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
     Check(restoreManifold != 0, "manifold restore export");
-    Check(installDirty && statusDirty && armDirtyCapture && copyDirtyCapture &&
+    Check(captureSip != 0, "shape-pair pool capture export");
+    Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
-    if (!version || !capture || !restore || !captureManifold ||
-        !restoreManifold || !installDirty || !statusDirty || !armDirtyCapture ||
+    Check(installObserver && uninstallObserver && auditRecreate && armRecreate &&
+        statusRecreate && cancelRecreate, "contact recreation exports");
+    if (!version || !capture || !restore || !captureManifold || !captureSip ||
+        !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
         !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
-        !uninstallDirty) {
+        !uninstallDirty || !installObserver || !uninstallObserver ||
+        !auditRecreate || !armRecreate || !statusRecreate ||
+        !cancelRecreate) {
         FreeLibrary(library);
         return 1;
     }
@@ -811,6 +1763,9 @@ int main(int argc, char** argv) {
             restoreManifold);
         RunManifoldPoolTests(revisionImage, 1, captureManifold,
             restoreManifold);
+        RunContactRecreateSipTests(revisionImage, installObserver,
+            uninstallObserver, armRecreate, statusRecreate, cancelRecreate,
+            captureSip, auditRecreate);
 
         uint8_t manifoldContext[0x538] = {};
         uint8_t manifoldNodes[4][0xF0] = {};
@@ -828,7 +1783,7 @@ int main(int argc, char** argv) {
             reinterpret_cast<uintptr_t>(manifoldContext), 2, manifoldSaved,
             3, &manifoldReceipt) == 0 && manifoldReceipt.result == 4,
             "invalid manifold pool kind is rejected");
-        RunDirtyInteractionTests(revisionImage, installDirty, statusDirty,
+        RunDirtyInteractionTests(revisionImage, installDirty, statusDirty, lastDirtyNPhase,
             armDirtyCapture, copyDirtyCapture, armDirtyRestore,
             cancelDirty, uninstallDirty);
         VirtualFree(revisionImage, 0, MEM_RELEASE);
@@ -839,6 +1794,6 @@ int main(int argc, char** argv) {
         printf("FAILED %d\n", failures);
         return 1;
     }
-    printf("PASS caller-owned contact/manifold-pool history\n");
+    printf("PASS caller-owned SIP/contact/manifold-pool history\n");
     return 0;
 }

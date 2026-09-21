@@ -32,6 +32,10 @@ CHEFS = {"43", "44", "45", "46"}
 BUTTONS = ("Pickup", "Interact", "Dash")
 
 
+class ReadinessAuditComplete(Exception):
+    """Internal control flow after the requested no-resume audit boundary."""
+
+
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
@@ -97,22 +101,32 @@ def load_suffix(path, target):
     return value, {"command": "raw-input", "segments": segments}
 
 
-def module_failure_values(value, path="$"):
-    failures = []
-    if isinstance(value, dict):
-        for key, child in value.items():
-            lower = key.lower()
-            suspect = lower in ("failure", "error", "lasterror", "resumefailure") or \
-                lower.startswith("first") and lower.endswith("difference")
-            if suspect and child not in (None, "", False, [], {}):
-                failures.append({"path": path + "." + key, "value": child})
-            elif isinstance(child, (dict, list)):
-                failures.extend(module_failure_values(child, path + "." + key))
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            if isinstance(child, (dict, list)):
-                failures.extend(module_failure_values(child, f"{path}[{index}]"))
-    return failures
+TERMINAL_FAILURE_FIELDS = {
+    "delivery-fade-checkpoint": ("failure",),
+    "chef-animator-checkpoint": (
+        "failure", "resumeFailure", "liveError",
+        "scheduledResumeReadyCaptureFailure", "resumePrefixObserverFailure",
+        "chefRandomizeFailure",
+    ),
+    "rigidbody-actor-rebuild": ("failure",),
+    "world-sync-cache": ("lastError",),
+    "resume-phase": ("failure",),
+    "body-restore": (
+        "nativeShapePoseCaptureFailure", "nativeShapeGeometryRebindFailure",
+        "nativeShapeGeometryRebindPoisoned",
+    ),
+}
+
+
+def module_failure_values(slot, value, path="$"):
+    """Return only provider-declared terminal state, never diagnostic history."""
+    if not isinstance(value, dict):
+        return []
+    fields = TERMINAL_FAILURE_FIELDS.get(
+        slot, ("failure", "resumeFailure", "lastError"))
+    return [{"path": path + "." + key, "value": value.get(key)}
+            for key in fields
+            if value.get(key) not in (None, "", False, [], {})]
 
 
 def main():
@@ -133,6 +147,9 @@ def main():
     parser.add_argument("--reconcile-dynamic-registry", action="store_true")
     parser.add_argument("--delivery-fade-slot", default="delivery-fade-checkpoint")
     parser.add_argument("--body-restore-slot", default="body-restore")
+    parser.add_argument("--readiness-audit-only", action="store_true",
+                        help=("Stop at restored f444 after writing source-paused and target-paused "
+                              "readiness reports; do not arm or run the suffix."))
     parser.add_argument("--resume-prefix-index", type=int, choices=(0, 8), default=0,
                         help=("Resume the same bounded route at the exact f436 boundary before "
                               "prefix-8; intended only after a pause-fenced tooling failure."))
@@ -173,6 +190,7 @@ def main():
         "transformDispatchRestored": args.restore_transform_dispatch,
         "registryReconciliation": args.reconcile_dynamic_registry,
         "resumePrefixIndex": args.resume_prefix_index,
+        "readinessAuditOnly": args.readiness_audit_only,
     }
     bridge = host = None
     advancing_lease = None
@@ -266,7 +284,8 @@ def main():
         active = {row.get("slot") for row in
                   bridge_status.get("bridge", {}).get("authoringModules", {}).get("active", [])}
         slots = (args.delivery_fade_slot, args.animator_slot,
-                 args.actor_rebuild_slot, "world-sync-cache", "resume-phase")
+                 args.actor_rebuild_slot, "world-sync-cache", "resume-phase",
+                 args.body_restore_slot)
         result = {"bridge": bridge_status, "modules": {}}
         for slot in slots:
             if slot in active:
@@ -276,11 +295,162 @@ def main():
                 result["modules"][slot] = receipt.get("detail", {}).get("result")
         require(args.delivery_fade_slot in result["modules"],
                 "The active delivery-fade checkpoint module is unavailable.")
-        result["failures"] = {slot: module_failure_values(status)
+        result["failures"] = {slot: module_failure_values(slot, status)
                               for slot, status in result["modules"].items()
-                              if module_failure_values(status)}
+                              if module_failure_values(slot, status)}
         save(label + "-module-statuses.json", result)
         return result
+
+    def actor_readiness(phase, label):
+        request = {"command": "hot-call", "slot": args.actor_rebuild_slot,
+                   "operation": "audit-restore-readiness",
+                   "args": {"phase": phase, "sourceFrame": 1048,
+                            "frame": args.target_frame}}
+        try:
+            response = call("bridge", request, label)
+            result = response.get("detail", {}).get("result")
+            require(isinstance(result, dict) and result.get("schemaVersion") == 1,
+                    "Actor readiness provider returned no versioned report.")
+            return result
+        except Exception as error:
+            return {
+                "schemaVersion": 1,
+                "provider": "authoring-rigidbody-actor-rebuild-v1",
+                "phase": phase,
+                "sourceFrame": 1048,
+                "targetFrame": args.target_frame,
+                "passed": False,
+                "complete": False,
+                "checks": [{
+                    "id": "rigidbody.provider-call",
+                    "module": "rigidbody-actor-rebuild",
+                    "phase": phase,
+                    "status": "fail",
+                    "severity": "blocker",
+                    "code": "READINESS_PROVIDER_FAILED",
+                    "message": f"{type(error).__name__}: {error}",
+                    "evidence": None,
+                    "mutation": {"gameState": False, "moduleState": False,
+                                 "nativeState": False},
+                }],
+                "blockers": ["rigidbody.provider-call"],
+                "deferred": [],
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            }
+
+    def aggregate_readiness(phase, actor, module_snapshot):
+        checks = list(actor.get("checks", []))
+        module_names = {
+            args.animator_slot: "animator",
+            "world-sync-cache": "world-sync",
+            args.body_restore_slot: "body-restore",
+            "resume-phase": "resume-phase",
+            args.delivery_fade_slot: "delivery-fade",
+        }
+        deferred_scopes = {
+            "animator": ("staged-native-restore-and-final-controller-memory",
+                         "Requires the target maintenance/release lifecycle."),
+            "world-sync": ("restored-cache-and-resume-validation",
+                           "Requires a dedicated non-mutating provider for the exact WarpSpec."),
+            "body-restore": ("post-maintenance-native-body-and-shape-validation",
+                             "Requires a pure split from the current restore-time validator."),
+            "resume-phase": ("accepted-input-provenance-and-phase-commit",
+                             "Exists only at the first real resume boundary."),
+            "delivery-fade": ("first-output-fade-convergence",
+                              "Exists only after the first advancing output."),
+        }
+        modules = module_snapshot.get("modules", {})
+        for slot, name in module_names.items():
+            state = modules.get(slot)
+            failures = module_failure_values(slot, state)
+            activation_field = "hasRegistrationLease" if name == "body-restore" else "active"
+            available = isinstance(state, dict) and state.get(activation_field) is True
+            checks.append({
+                "id": f"{name}.provider-availability",
+                "module": name,
+                "phase": phase,
+                "status": "pass" if available else "fail",
+                "severity": "blocker",
+                "code": "PROVIDER_ACTIVE" if available else "PROVIDER_UNAVAILABLE",
+                "message": ("The required provider is loaded and active."
+                            if available else "The required provider is absent or inactive."),
+                "evidence": {"slot": slot, "activationField": activation_field,
+                             "activationValue": (state.get(activation_field)
+                                                 if isinstance(state, dict) else None)},
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            })
+            checks.append({
+                "id": f"{name}.provider-terminal-state",
+                "module": name,
+                "phase": phase,
+                "status": "fail" if failures else "pass",
+                "severity": "blocker",
+                "code": "PROVIDER_DECLARED_FAILURE" if failures else "NO_DECLARED_TERMINAL_FAILURE",
+                "message": ("The provider explicitly reports a terminal failure."
+                            if failures else "The provider reports no terminal failure in its declared status fields."),
+                "evidence": {"slot": slot, "failures": failures},
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            })
+            checks.append({
+                "id": f"{name}.provider-health-contract",
+                "module": name,
+                "phase": phase,
+                "status": "deferred",
+                "severity": "blocker",
+                "code": "VERSIONED_HEALTH_CONTRACT_REQUIRED",
+                "message": "Readiness will not infer health from diagnostic field names; this provider needs a versioned health contract.",
+                "evidence": {"slot": slot},
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            })
+            scope, reason = deferred_scopes[name]
+            checks.append({
+                "id": f"{name}.{scope}",
+                "module": name,
+                "phase": phase,
+                "status": "deferred",
+                "severity": "blocker",
+                "code": "READONLY_PROVIDER_REQUIRED",
+                "message": reason,
+                "evidence": {"requiredPhase": ("first-advancing-output"
+                                                if "first-" in scope or name == "resume-phase"
+                                                else "target-paused")},
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            })
+        blockers = [row["id"] for row in checks
+                    if row.get("status") == "fail" and row.get("severity") == "blocker"]
+        deferred = [row["id"] for row in checks if row.get("status") == "deferred"]
+        counts = {status: sum(row.get("status") == status for row in checks)
+                  for status in ("pass", "fail", "deferred", "not-applicable")}
+        return {
+            "schemaVersion": 1,
+            "classification": "read-only rewind readiness aggregate",
+            "phase": phase,
+            "sourceFrame": 1048,
+            "targetFrame": args.target_frame,
+            "passed": not blockers,
+            "complete": not deferred,
+            "counts": counts,
+            "checks": checks,
+            "blockers": blockers,
+            "deferred": deferred,
+            "coverage": {
+                "rigidbody": "native aggregate provider",
+                "animator": "health plus deferred pure provider",
+                "worldSync": "health plus deferred pure provider",
+                "bodyRestore": "health plus deferred pure provider",
+                "resumePhase": "health plus first-resume deferred",
+                "deliveryFade": "health plus first-output deferred",
+            },
+            "mutation": actor.get("mutation", {"gameState": False,
+                                                "moduleState": False,
+                                                "nativeState": False}),
+            "actorProvider": actor,
+        }
 
     try:
         bridge = Client(args.bridge_port)
@@ -447,6 +617,19 @@ def main():
                     "No exact contact/Transform sidecar exists for f444.")
             contact_before = actor
 
+            source_actor_readiness = actor_readiness(
+                "source-paused", "source-paused-actor-readiness")
+            source_readiness = aggregate_readiness(
+                "source-paused", source_actor_readiness, original_modules)
+            summary["sourceReadiness"] = {
+                "passed": source_readiness["passed"],
+                "complete": source_readiness["complete"],
+                "counts": source_readiness["counts"],
+                "blockers": source_readiness["blockers"],
+                "deferred": source_readiness["deferred"],
+            }
+            save("source-paused-readiness.json", source_readiness)
+
         call("bridge", {"command": "pause"}, "warp-fence")
         call("bridge", {"command": "arm"}, "warp-arm")
         call("controller", {"command": "warp", "frame": args.target_frame,
@@ -481,6 +664,23 @@ def main():
             require(actor.get("automaticRestorePending") is True and
                     actor.get("contactPoolSnapshotFrame") == args.target_frame,
                     "Verified f444 warp did not schedule its contact sidecar.")
+
+            target_actor_readiness = actor_readiness(
+                "target-paused", "target-paused-actor-readiness")
+            target_readiness = aggregate_readiness(
+                "target-paused", target_actor_readiness, restored_modules)
+            summary["targetReadiness"] = {
+                "passed": target_readiness["passed"],
+                "complete": target_readiness["complete"],
+                "counts": target_readiness["counts"],
+                "blockers": target_readiness["blockers"],
+                "deferred": target_readiness["deferred"],
+            }
+            save("target-paused-readiness.json", target_readiness)
+            if args.readiness_audit_only:
+                summary["auditCompleted"] = True
+                summary["classification"] = "bounded Story11 f444 read-only rewind readiness audit"
+                raise ReadinessAuditComplete()
 
         arm_advancing("replay-604-arm")
         call("controller", suffix_request, "replay-604")
@@ -554,6 +754,8 @@ def main():
         summary["passed"] = (all(comparison.values()) and replay_delivery["achieved"] and
                              not changed and not any(module_failures.values()) and
                              all(item["exact"] for item in summary.get("advancingBackgroundLeases", [])))
+    except ReadinessAuditComplete:
+        pass
     except Exception as error:
         summary["error"] = str(error)
     finally:
@@ -590,7 +792,7 @@ def main():
         save("observations.json", evidence)
         save("summary.json", summary)
         print(json.dumps(summary, indent=2))
-    return 0 if summary["passed"] else 1
+    return 0 if summary.get("auditCompleted") or summary["passed"] else 1
 
 
 if __name__ == "__main__":
