@@ -4,8 +4,11 @@
 > r14z/native r31):** the clean, bounded Story 1-1 f1048 -> f444 read-only
 > audit now has zero source or target blockers.  Source readiness is 25 pass /
 > 0 fail / 41 deferred; target readiness is 58 pass / 0 fail / 21 deferred /
-> 1 not-applicable.  `complete` intentionally remains false, so no rewind
-> mutation, suffix replay, or route search was admitted.
+> 1 not-applicable.  The fixture performs the already-existing verified
+> f1048 -> f444 warp so the providers can inspect restored target state, then
+> stops before consuming the planned physics sidecar or running a suffix
+> frame.  The readiness providers themselves are read-only, `complete`
+> intentionally remains false, and no route search was admitted.
 >
 > This pass corrects the earlier false assumption that a zero-contact manager
 > requires zero ActorPair touch history and null report data.  At f444 all 12

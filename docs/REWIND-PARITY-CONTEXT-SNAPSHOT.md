@@ -14,7 +14,10 @@ two allocator layers that PhysX consults before contact-manager creation:
 `artifacts/readiness-plan-actor-pair-report-f1048-to-f444-r3/` reports source
 readiness 25 pass / 0 fail and target readiness 58 pass / 0 fail.  It is still
 intentionally incomplete: 41 source and 21 target capabilities are deferred,
-and no rewind mutation, suffix replay, or search ran.
+and no suffix replay or search ran.  The fixture does execute the existing
+verified f1048 -> f444 warp to expose restored target state; all readiness
+providers are read-only and stop before the planned physics sidecar is
+consumed.
 
 The key semantic correction is that zero current contact points do not imply
 zero ActorPair history.  f444 has 12 allocated ActorPairs.  Ten have
