@@ -16,6 +16,12 @@
 #include "../cache/TransformCacheImage.h"
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
+#include "../memblock/MemBlockImage.h"
+#include "../shape_cache/ShapeCacheBindings.h"
+#include "../body/BodyImage.h"
+#include "../scene_clock/SceneClockImage.h"
+#include "../context_image/ContextImage.h"
+#include "../query_image/QueryImage.h"
 #include "../aux_interactions/AuxInteractionImage.h"
 #include "../actor_pair_graph/ActorPairGraphImage.h"
 
@@ -463,11 +469,143 @@ struct Snapshot
     physx333_offline::OracleImage oracle;
     physx333_offline::AuxInteractionImage aux;
     physx333_offline::ActorPairGraphImage actorPair;
+    oc2::offline::SapImage sap;
+    oc2::offline::TransformCacheImage cache;
+    oc2::offline::IslandImage island;
+    physx333_offline::MemBlockImage memBlocks;
+    oc2::offline::ShapeCacheBindings shapeCache;
+    oc2::offline::BodyImage bodies;
+    oc2::offline::SceneClockImage clock;
+    oc2::offline::ContextImage context;
+    oc2::offline::QueryImage query;
     GraphImage graph;
     Facts facts;
     std::vector<PairKey> deletedOverlaps;
     std::vector<Event> events;
 };
+
+// Every image below contains its complete source-defined payload. Most image
+// equality methods intentionally include scene/allocation addresses, so a
+// second capture at the same stopped boundary checks their full bytes and
+// identity without pretending that addresses match a different scene.
+void verifyRepeatCapture(PxScene& scene,
+                         physx333_offline::MemBlockIdentityRegistry& registry,
+                         const Snapshot& image)
+{
+    std::string error, difference;
+    oc2::offline::SapImage sap;
+    if (!oc2::offline::CaptureSap(scene, sap, error) ||
+        !image.sap.equals(sap, difference))
+        fail("repeat SAP image differs: " + error + difference);
+    oc2::offline::TransformCacheImage cache;
+    if (!oc2::offline::CaptureTransformCache(scene, cache, error) ||
+        !image.cache.equals(cache, difference))
+        fail("repeat transform-cache image differs: " + error + difference);
+    oc2::offline::IslandImage island;
+    if (!oc2::offline::CaptureIsland(scene, island, error) ||
+        !image.island.equals(island, difference))
+        fail("repeat island image differs: " + error + difference);
+    physx333_offline::MemBlockImage memBlocks;
+    if (!physx333_offline::CaptureMemBlockPool(
+            scene, registry, memBlocks, error) ||
+        !image.memBlocks.equals(memBlocks, difference))
+        fail("repeat memory-block image differs: " + error + difference);
+    oc2::offline::ShapeCacheBindings shapeCache;
+    if (!oc2::offline::CaptureShapeCacheBindings(scene, shapeCache, error) ||
+        !image.shapeCache.equals(shapeCache, difference))
+        fail("repeat shape-cache binding image differs: " + error + difference);
+    oc2::offline::BodyImage bodies;
+    if (!oc2::offline::CaptureBodies(scene, bodies, error) ||
+        !image.bodies.equals(bodies, difference))
+        fail("repeat body image differs: " + error + difference);
+    oc2::offline::SceneClockImage clock;
+    if (!oc2::offline::CaptureSceneClock(scene, clock, error) ||
+        !image.clock.equals(clock, difference))
+        fail("repeat scene-clock image differs: " + error + difference);
+    oc2::offline::ContextImage context;
+    if (!oc2::offline::CaptureContextImage(scene, context, error) ||
+        !image.context.equals(context, difference))
+        fail("repeat context image differs: " + error + difference);
+    oc2::offline::QueryImage query;
+    if (!oc2::offline::CaptureQueryImage(scene, query, error) ||
+        !image.query.equals(query, difference))
+        fail("repeat query image differs: " + error + difference);
+}
+
+bool equalCacheLiveValues(const oc2::offline::TransformCacheImage& a,
+                          const oc2::offline::TransformCacheImage& b)
+{
+    if (a.currentId != b.currentId ||
+        a.transforms.capacity != b.transforms.capacity ||
+        a.referenceCounts.capacity != b.referenceCounts.capacity ||
+        a.freeIds.size != b.freeIds.size ||
+        a.transforms.bytes.size() < a.currentId * sizeof(PxTransform) ||
+        b.transforms.bytes.size() < b.currentId * sizeof(PxTransform) ||
+        a.referenceCounts.bytes.size() < a.currentId * sizeof(PxU32) ||
+        b.referenceCounts.bytes.size() < b.currentId * sizeof(PxU32) ||
+        a.freeIds.bytes.size() < a.freeIds.size * sizeof(PxU32) ||
+        b.freeIds.bytes.size() < b.freeIds.size * sizeof(PxU32))
+        return false;
+    const std::size_t transformBytes = a.currentId * sizeof(PxTransform);
+    const std::size_t refBytes = a.currentId * sizeof(PxU32);
+    const std::size_t freeBytes = a.freeIds.size * sizeof(PxU32);
+    return std::equal(a.transforms.bytes.begin(),
+                      a.transforms.bytes.begin() + transformBytes,
+                      b.transforms.bytes.begin()) &&
+           std::equal(a.referenceCounts.bytes.begin(),
+                      a.referenceCounts.bytes.begin() + refBytes,
+                      b.referenceCounts.bytes.begin()) &&
+           std::equal(a.freeIds.bytes.begin(),
+                      a.freeIds.bytes.begin() + freeBytes,
+                      b.freeIds.bytes.begin());
+}
+
+std::vector<std::pair<PxU32, PxU32> > shapeCacheIds(
+    const oc2::offline::ShapeCacheBindings& image)
+{
+    std::vector<std::pair<PxU32, PxU32> > result;
+    for (const auto& row : image.bindings)
+        result.push_back(std::make_pair(row.shapeId, row.transformCacheId));
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+bool equalMemBlockLayout(const physx333_offline::MemBlockImage& a,
+                         const physx333_offline::MemBlockImage& b)
+{
+    if (a.npCacheActiveStream != b.npCacheActiveStream ||
+        a.frictionActiveStream != b.frictionActiveStream ||
+        a.ccdCacheActiveStream != b.ccdCacheActiveStream ||
+        a.contactIndex != b.contactIndex ||
+        a.allocatedBlocks != b.allocatedBlocks ||
+        a.maxBlocks != b.maxBlocks ||
+        a.initialBlocks != b.initialBlocks ||
+        a.usedBlocks != b.usedBlocks ||
+        a.maxUsedBlocks != b.maxUsedBlocks ||
+        a.peakConstraintAllocations != b.peakConstraintAllocations ||
+        a.constraintAllocations != b.constraintAllocations ||
+        a.scratchBlockCount != b.scratchBlockCount ||
+        a.scratchArenaSize != b.scratchArenaSize ||
+        a.scratchStackCapacity != b.scratchStackCapacity ||
+        a.scratchStackOffsets != b.scratchStackOffsets ||
+        a.scratchArenaBytes != b.scratchArenaBytes ||
+        a.exceptionalOrdinals != b.exceptionalOrdinals ||
+        a.unsupported != b.unsupported ||
+        a.arrays.size() != b.arrays.size() ||
+        a.blocks.size() != b.blocks.size())
+        return false;
+    for (std::size_t i = 0; i < a.arrays.size(); ++i)
+        if (a.arrays[i].name != b.arrays[i].name ||
+            a.arrays[i].size != b.arrays[i].size ||
+            a.arrays[i].capacity != b.arrays[i].capacity ||
+            a.arrays[i].entries != b.arrays[i].entries)
+            return false;
+    for (std::size_t i = 0; i < a.blocks.size(); ++i)
+        if (!(a.blocks[i].identity == b.blocks[i].identity) ||
+            a.blocks[i].bytes.size() != b.blocks[i].bytes.size())
+            return false;
+    return true;
+}
 
 struct World
 {
@@ -477,6 +615,7 @@ struct World
     PxRigidDynamic* chefs[4] = {NULL, NULL, NULL, NULL};
     PxRigidDynamic* idle = NULL;
     std::vector<PxRigidActor*> actors;
+    physx333_offline::MemBlockIdentityRegistry memBlockRegistry;
 
     explicit World(Runtime& rt) : runtime(rt)
     {
@@ -614,9 +753,9 @@ struct World
         if (!physx333_offline::CaptureActorPairGraph(
                 *scene, image.actorPair, error))
             fail("CaptureActorPairGraph: " + error);
-        oc2::offline::TransformCacheImage cache;
-        if (!oc2::offline::CaptureTransformCache(*scene, cache, error))
+        if (!oc2::offline::CaptureTransformCache(*scene, image.cache, error))
             fail("CaptureTransformCache: " + error);
+        const oc2::offline::TransformCacheImage& cache = image.cache;
         image.facts.cacheCurrent = cache.currentId;
         if (cache.freeIds.bytes.size() < cache.freeIds.size * sizeof(PxU32))
             fail("TransformCache free-ID array is too short");
@@ -638,15 +777,29 @@ struct World
             if (refs) ++image.facts.cacheLive;
             image.facts.cacheRefs += refs;
         }
-        oc2::offline::SapImage sap;
-        if (!oc2::offline::CaptureSap(*scene, sap, error))
+        if (!oc2::offline::CaptureSap(*scene, image.sap, error))
             fail("CaptureSap: " + error);
+        const oc2::offline::SapImage& sap = image.sap;
         image.facts.sapPairs = sapScalar(sap, "pair.activeCount");
         image.facts.sapDeletes = sapScalar(sap, "aabb.deletedOverlapSize");
         image.deletedOverlaps = deletedOverlapKeys(*scene, sap);
-        oc2::offline::IslandImage island;
-        if (!oc2::offline::CaptureIsland(*scene, island, error))
+        if (!oc2::offline::CaptureIsland(*scene, image.island, error))
             fail("CaptureIsland: " + error);
+        const oc2::offline::IslandImage& island = image.island;
+        if (!physx333_offline::CaptureMemBlockPool(
+                *scene, memBlockRegistry, image.memBlocks, error))
+            fail("CaptureMemBlockPool: " + error);
+        if (!oc2::offline::CaptureShapeCacheBindings(
+                *scene, image.shapeCache, error))
+            fail("CaptureShapeCacheBindings: " + error);
+        if (!oc2::offline::CaptureBodies(*scene, image.bodies, error))
+            fail("CaptureBodies: " + error);
+        if (!oc2::offline::CaptureSceneClock(*scene, image.clock, error))
+            fail("CaptureSceneClock: " + error);
+        if (!oc2::offline::CaptureContextImage(*scene, image.context, error))
+            fail("CaptureContextImage: " + error);
+        if (!oc2::offline::CaptureQueryImage(*scene, image.query, error))
+            fail("CaptureQueryImage: " + error);
         for (const auto& binding : island.bindings)
             if (binding.kind == oc2::offline::IslandImage::Binding::Edge)
                 ++image.facts.islandEdges;
@@ -665,6 +818,7 @@ struct World
             if (actorPair.hasReportData) ++image.facts.reportPairs;
         }
         image.events = callback.rows;
+        verifyRepeatCapture(*scene, memBlockRegistry, image);
         return image;
     }
 };
@@ -1084,9 +1238,19 @@ int main()
     if (!(a.actorPair == freshA.actorPair) ||
         !(b.actorPair == freshB.actorPair))
         fail("fresh-scene A/B ActorPair ownership/pool images differ");
+    if (!equalCacheLiveValues(a.cache, freshA.cache) ||
+        !equalCacheLiveValues(b.cache, freshB.cache) ||
+        shapeCacheIds(a.shapeCache) != shapeCacheIds(freshA.shapeCache) ||
+        shapeCacheIds(b.shapeCache) != shapeCacheIds(freshB.shapeCache) ||
+        !equalMemBlockLayout(a.memBlocks, freshA.memBlocks) ||
+        !equalMemBlockLayout(b.memBlocks, freshB.memBlocks))
+        fail("fresh-scene A/B cache or memory-block semantic layouts differ");
+    if (!a.memBlocks.unsupported.empty() ||
+        !b.memBlocks.unsupported.empty())
+        fail("memory-block capture reports unsupported ownership");
     if (runtime.errors.count) fail("PhysX issued an error");
     std::cout << "PASS level-like shared-endpoint 12/4/2 -> 8/2/2 graph, "
-                 "six SAP deletions, cache/manifold/island facts, and "
-                 "fresh-scene ordered callback/Oracle/auxiliary/ActorPair equality\n";
+                 "six SAP deletions, full same-scene component capture, "
+                 "and fresh-scene Oracle/auxiliary/ActorPair equality\n";
 }
 #endif

@@ -92,10 +92,36 @@ checks that all surviving ActorPairs and report objects keep their slots,
 the four removed ActorPair slots and two removed report slots return to their
 free chains, and the full A/B images equal those of a second fresh scene.
 
+At every stopped boundary, the fixture now also retains the **complete
+existing component images** for SAP, TransformCache, ShapeCacheBindings,
+Island, Body, SceneClock, Context, Query, and the memory-block pool. It takes
+an immediate second capture of each image and requires its full same-scene
+equality method to pass. The memory-block capture uses one identity registry
+per scene across all steps, and both settled A/B images must report no
+unsupported memory-block ownership. These checks establish that the images
+can be captured coherently for this mixed, multi-actor scene; they do not
+restore any of the captured state.
+
+Independent fresh scenes are compared at three levels:
+
+| Image | Fresh-scene comparison |
+| --- | --- |
+| Oracle, auxiliary trigger/marker, ActorPair | Their complete portable equality methods, including source-defined ordering and physical pool slots. |
+| TransformCache | Current ID, array capacities, live transform and reference-count prefixes, and used free-ID prefix. Allocation addresses and unused capacity tails are excluded. |
+| ShapeCacheBindings | Sorted shape-ID/transform-cache-ID pairs. ShapeSim addresses are excluded. |
+| Memory-block pool | Stream selectors, counters, scratch metadata, named array sizes/capacities and block-identity order. Block payload bytes are excluded. |
+| SAP, Island, Body, SceneClock, Context, Query | Full same-scene repeated-capture equality only. Their image formats retain scene pointers, allocations, or address-bearing payloads and do not define a portable full-image comparator. Existing graph, callback, and component-fact checks provide a narrower fresh-scene control for these systems. |
+
+A trial of full memory-block equality across the two fresh scenes failed at
+`blocks[0].bytes[800]`. That byte is retained and checked within each scene,
+but its meaning has not been established, so the test does not ignore it in
+a claimed full cross-scene comparison. A later restorer must compare the
+complete target image in the **same scene** after rewinding.
+
 It constructs a second scene with the same public API call trace, requires
-the expected graph/counts, and compares all those images and callback orders
-between the two scenes. This establishes a deterministic baseline for a
-later **joined restore** with shared endpoints and auxiliary interactions.
+the expected graph/counts, and compares the portable images and callback
+orders between the two scenes. This establishes a deterministic baseline for
+a later **joined restore** with shared endpoints and auxiliary interactions.
 No rewind or source-private writes occur here.
 
 The most important known deviations from the f444 image are:
