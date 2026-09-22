@@ -24,6 +24,19 @@ losses, and compares callback ordering against a fresh scene following the
 same steps. The B order is asserted explicitly: trigger losses 16 and 17,
 contact losses 9 through 12, then contact persists 1 through 8.
 
+The separate read-only `aux_interactions` image captures each trigger and
+marker's ordered shape identity, physical pool slot, scene/actor reverse
+indices, active and core flags, and the trigger's flags, prior-touch bit, and
+cache state. It captures the ordered free chains of both pools, the three
+interaction-scene arrays, and every actor's mixed interaction array. A/B
+images must each match a separately constructed fresh scene. The A-to-B
+checks also prove that only the two deleted trigger slots were pushed onto
+the free-list head while both marker objects and their pool remained intact.
+
+For box/box triggers, `GuOverlapTests.cpp` ignores the cache parameter. The
+source initializes `TriggerCache.state` but not its direction or GJK field;
+those uninitialized fields and C++ padding are deliberately not captured.
+
 This is a baseline interaction-count and event fixture, not a rewind
 implementation or an exact level reconstruction. It does not model the
 level's capsule/box contact geometry or game-specific filters.

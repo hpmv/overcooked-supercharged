@@ -10,6 +10,7 @@
 
 #include "PxPhysicsAPI.h"
 #include "../oracle/Oracle.h"
+#include "../aux_interactions/AuxInteractionImage.h"
 
 using namespace physx;
 
@@ -375,6 +376,112 @@ void checkSuccessorEvents(const Snapshot& s)
         fail("successor callback ownership/event pattern differs");
 }
 
+physx333_offline::AuxInteractionImage captureAux(World& world,
+                                                  const char* stage)
+{
+    physx333_offline::AuxInteractionImage image;
+    std::string error;
+    if (!physx333_offline::CaptureAuxInteractionImage(
+            *world.scene, image, error))
+        fail(std::string(stage) + " auxiliary capture: " + error);
+    return image;
+}
+
+PxU32 staticId(const physx333_offline::AuxPairKey& pair)
+{
+    if (pair.shape0.actorId == kMoverId)
+        return pair.shape1.actorId;
+    if (pair.shape1.actorId == kMoverId)
+        return pair.shape0.actorId;
+    fail("auxiliary pair has no fixture mover");
+    return 0;
+}
+
+void checkAuxDelta(const physx333_offline::AuxInteractionImage& a,
+                   const physx333_offline::AuxInteractionImage& b)
+{
+    if (a.sceneOrders.size() != 3 || b.sceneOrders.size() != 3 ||
+        a.sceneOrders[0].pairs.size() != 12 ||
+        b.sceneOrders[0].pairs.size() != 8 ||
+        a.sceneOrders[1].pairs.size() != 4 ||
+        b.sceneOrders[1].pairs.size() != 2 ||
+        a.sceneOrders[2].pairs.size() != 2 ||
+        b.sceneOrders[2].pairs.size() != 2 ||
+        a.triggers.size() != 4 || b.triggers.size() != 2 ||
+        a.markers.size() != 2 || b.markers.size() != 2 ||
+        a.triggerPool.usedCount != 4 || b.triggerPool.usedCount != 2 ||
+        a.markerPool.usedCount != 2 || b.markerPool.usedCount != 2)
+        fail("auxiliary 12/4/2 to 8/2/2 inventory differs");
+    if (a.sceneOrders[2].pairs != b.sceneOrders[2].pairs ||
+        !(a.markerPool == b.markerPool))
+        fail("surviving marker order or pool changed");
+    for (PxU32 i = 0; i < 4; ++i)
+        if (staticId(a.triggers[i].pair) != 14 + i ||
+            !a.triggers[i].lastFrameHadContacts)
+            fail("checkpoint trigger identity/touch state differs");
+    for (PxU32 i = 0; i < 2; ++i)
+        if (staticId(b.triggers[i].pair) != 14 + i ||
+            !(b.triggers[i].pair == a.triggers[i].pair) ||
+            b.triggers[i].poolSlot != a.triggers[i].poolSlot ||
+            !b.triggers[i].lastFrameHadContacts ||
+            !(b.markers[i].pair == a.markers[i].pair) ||
+            b.markers[i].poolSlot != a.markers[i].poolSlot)
+            fail("auxiliary survivor identity/slot differs");
+    if (b.triggerPool.freeOrder.size() !=
+            a.triggerPool.freeOrder.size() + 2 ||
+        !std::equal(a.triggerPool.freeOrder.begin(),
+                    a.triggerPool.freeOrder.end(),
+                    b.triggerPool.freeOrder.begin() + 2))
+        fail("trigger free-chain successor tail differs");
+    std::set<PxU32> releasedSlots = {
+        a.triggers[2].poolSlot, a.triggers[3].poolSlot
+    };
+    if (releasedSlots != std::set<PxU32>({
+            b.triggerPool.freeOrder[0], b.triggerPool.freeOrder[1]}))
+        fail("trigger free-chain head is not the two deleted pairs");
+    bool foundMoverA = false, foundMoverB = false;
+    for (const auto& actor : a.actorOrders)
+        if (actor.actorId == kMoverId)
+        {
+            foundMoverA = true;
+            if (actor.pairs.size() != 18)
+                fail("checkpoint mover interaction order is not 18 entries");
+        }
+    for (const auto& actor : b.actorOrders)
+        if (actor.actorId == kMoverId)
+        {
+            foundMoverB = true;
+            if (actor.pairs.size() != 12)
+                fail("successor mover interaction order is not 12 entries");
+        }
+    if (!foundMoverA || !foundMoverB)
+        fail("auxiliary mover actor order is absent");
+}
+
+void printAux(const char* name,
+              const physx333_offline::AuxInteractionImage& image)
+{
+    std::cout << name << " aux trigger_pool=" <<
+        image.triggerPool.usedCount << '/' <<
+        image.triggerPool.freeOrder.size() <<
+        " marker_pool=" << image.markerPool.usedCount << '/' <<
+        image.markerPool.freeOrder.size() << '\n';
+    for (std::size_t i = 0; i < image.triggers.size(); ++i)
+    {
+        const auto& row = image.triggers[i];
+        std::cout << name << " trigger[" << i << "] static=" <<
+            staticId(row.pair) << " pool_slot=" << row.poolSlot <<
+            " actor_indices=" << row.actorIndex0 << '/' <<
+            row.actorIndex1 << " flags=" << row.triggerFlags <<
+            " touch=" << row.lastFrameHadContacts <<
+            " cache_state=" << row.triggerCacheState << '\n';
+    }
+    for (std::size_t i = 0; i < image.markers.size(); ++i)
+        std::cout << name << " marker[" << i << "] static=" <<
+            staticId(image.markers[i].pair) << " pool_slot=" <<
+            image.markers[i].poolSlot << '\n';
+}
+
 } // namespace
 
 int main()
@@ -383,19 +490,35 @@ int main()
     World first(runtime);
     const Snapshot entry = first.step(0.0f);
     const Snapshot checkpoint = first.step(0.0f);
+    const physx333_offline::AuxInteractionImage checkpointAux =
+        captureAux(first, "A");
     const Snapshot successor = first.step(-0.2f);
+    const physx333_offline::AuxInteractionImage successorAux =
+        captureAux(first, "B");
     print("ENTRY", entry);
     print("A", checkpoint);
     print("B", successor);
+    printAux("A", checkpointAux);
+    printAux("B", successorAux);
     checkCounts(checkpoint, 12, 4, 2, "A");
     checkCounts(successor, 8, 2, 2, "B");
     checkSuccessorEvents(successor);
+    checkAuxDelta(checkpointAux, successorAux);
 
     // A second fresh scene is an ordered callback and interaction baseline.
     World fresh(runtime);
     const Snapshot freshEntry = fresh.step(0.0f);
     const Snapshot freshA = fresh.step(0.0f);
+    const physx333_offline::AuxInteractionImage freshAuxA =
+        captureAux(fresh, "fresh A");
     const Snapshot freshB = fresh.step(-0.2f);
+    const physx333_offline::AuxInteractionImage freshAuxB =
+        captureAux(fresh, "fresh B");
+    std::string auxDifference;
+    if (!checkpointAux.equals(freshAuxA, auxDifference))
+        fail("fresh-scene A auxiliary image: " + auxDifference);
+    if (!successorAux.equals(freshAuxB, auxDifference))
+        fail("fresh-scene B auxiliary image: " + auxDifference);
     if (freshEntry.events != entry.events ||
         freshA.events != checkpoint.events ||
         freshB.events != successor.events ||
@@ -406,6 +529,7 @@ int main()
         freshB.triggers != successor.triggers ||
         freshB.markers != successor.markers)
         fail("fresh-scene ordered events or interaction counts differ");
-    std::cout << "PASS 12/4/2 -> 8/2/2 and fresh-scene ordered events\n";
+    std::cout << "PASS 12/4/2 -> 8/2/2, fresh-scene ordered events, "
+                 "and full auxiliary images\n";
     return 0;
 }

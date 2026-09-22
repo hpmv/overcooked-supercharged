@@ -17,7 +17,10 @@ if(NOT EXISTS "${PHYSX333_LIB}/PhysX3_x86.lib")
 endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
-add_executable(physx333_trigger_marker TriggerMarker.cpp ../oracle/Oracle.cpp)
+add_executable(physx333_trigger_marker
+  TriggerMarker.cpp
+  ../oracle/Oracle.cpp
+  ../aux_interactions/AuxInteractionImage.cpp)
 target_compile_features(physx333_trigger_marker PRIVATE cxx_std_11)
 target_compile_definitions(physx333_trigger_marker PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
