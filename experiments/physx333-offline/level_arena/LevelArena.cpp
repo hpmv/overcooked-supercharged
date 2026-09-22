@@ -33,10 +33,79 @@ void equalInitializedArena(
         fail("initialized source-built allocation replay: " + error);
 }
 
+void checkCacheHistoryWarmup()
+{
+    Runtime runtime;
+    World world(runtime);
+    world.step(0.0f);
+    const Snapshot initial = world.step(0.0f);
+    if (initial.facts.cacheCurrent != 10 ||
+        initial.facts.cacheLive != 10 ||
+        initial.facts.cacheRefs != 24 ||
+        !initial.facts.cacheFreeIds.empty())
+        fail("cache warmup requires the known synthetic A allocation history");
+
+    PxRigidStatic* fixed = static_cast<PxRigidStatic*>(world.actors[2]);
+    if (id(fixed) != 3) fail("cache warmup static actor identity changed");
+    PxShape* temporary[4] = {NULL, NULL, NULL, NULL};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        temporary[i] = runtime.physics->createShape(
+            PxBoxGeometry(0.5f, 0.5f, 0.5f), *runtime.material);
+        if (!temporary[i]) fail("create temporary cache-history shape");
+        World::setRole(*temporary[i], ExtraPlainNoTouch);
+        fixed->attachShape(*temporary[i]);
+        const Snapshot added = world.step(0.0f);
+        if (added.facts.cacheCurrent != 11 + i ||
+            added.facts.cacheLive != 11 + i)
+            fail("temporary contact shape did not allocate the next cache ID");
+    }
+    const unsigned releaseOrder[4] = {2, 1, 0, 3};
+    for (unsigned index : releaseOrder)
+    {
+        fixed->detachShape(*temporary[index]);
+        temporary[index]->release();
+        temporary[index] = NULL;
+        world.step(0.0f);
+    }
+    const Snapshot settled = world.step(0.0f);
+    const std::vector<PxU32> desired = {12, 11, 10};
+    const std::set<PairKey> semanticPairs(
+        settled.graph.scenePairs.begin(), settled.graph.scenePairs.end());
+    if (settled.facts.cacheCurrent != 13 ||
+        settled.facts.cacheLive != 10 ||
+        settled.facts.cacheRefs != 24 ||
+        settled.facts.cacheFreeIds != desired ||
+        settled.graph.counts[Sc::PX_INTERACTION_TYPE_OVERLAP] != 12 ||
+        settled.graph.counts[Sc::PX_INTERACTION_TYPE_TRIGGER] != 4 ||
+        settled.graph.counts[Sc::PX_INTERACTION_TYPE_MARKER] != 2 ||
+        settled.graph.activeBodies.size() != 5 ||
+        semanticPairs != expectedPairs(false) ||
+        semanticPairs.size() != settled.graph.scenePairs.size() ||
+        runtime.errors.count)
+    {
+        std::cerr << "CACHE_HISTORY current=" << settled.facts.cacheCurrent
+                  << " live=" << settled.facts.cacheLive
+                  << " refs=" << settled.facts.cacheRefs << " free=";
+        for (PxU32 value : settled.facts.cacheFreeIds)
+            std::cerr << value << ',';
+        std::cerr << '\n';
+        fail("temporary contact history did not reproduce target cache ledger");
+    }
+    std::cout << "PASS source-built four-shape public warmup reaches "
+                 "cache currentId=13 live=10 refs=24 free=[12,11,10]\n";
+}
+
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--cache-history") == 0)
+    {
+        checkCacheHistoryWarmup();
+        return 0;
+    }
+    if (argc != 1) fail("unknown level-arena diagnostic option");
     oc2::offline::ArenaSnapshotAllocator arena(256u * 1024u * 1024u);
     if (!arena.valid()) fail("reserve PhysX diagnostic arena");
     Runtime runtime(&arena);

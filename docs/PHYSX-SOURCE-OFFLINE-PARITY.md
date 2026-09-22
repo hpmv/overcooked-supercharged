@@ -64,6 +64,11 @@ original PhysX NPhase lifecycle, with exact A and next-B images over 100 cold
 and 100 warm cycles. It has no contact or marker survivors, so the joined
 level-graph component restore is still open. Actor and
 shape lifetime, CCD, and several other native-state families remain gated.
+The level-arena build also has a separate public-API cache-history check that
+reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
+and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.
+Its temporary shapes perturb other native histories, so this is a reachability
+control, not an exact f444 scene reconstruction.
 Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and
 game-side ABI have not been proven from the source-built fixtures.

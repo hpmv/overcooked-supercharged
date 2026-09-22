@@ -28,6 +28,18 @@ snapshot itself retains those raw bytes. A difference in any other captured
 byte fails the test. The shared padding normalizer also runs the older
 12-contact arena regression fixture.
 
+The same build check separately runs `--cache-history`. It uses public PhysX
+calls to add four temporary, non-touching contact shapes to one existing
+static actor, giving the scene four new cache IDs (10–13). Detaching them in
+order 12, 11, 10, 13 and settling leaves the original 12/4/2 semantic graph,
+five active bodies, ten live cache IDs and 24 references, but changes the
+cache ledger to `currentId=13`, free-ID LIFO `[12,11,10]`—the three scalar
+facts observed at shipped f444. This proves that cache history is reachable,
+not that the entire resulting scene is equivalent to f444: the temporary
+shapes and extra steps also alter NPhase, island, broadphase, query,
+actor/shape ID, clock, and allocator histories. The main arena replay uses
+its original, simpler history.
+
 This is a **diagnostic source-level rewind**, not the component-by-component
 restorer and not a Unity implementation. All PhysX allocations in this
 fixture pass through the diagnostic allocator and stay at their old

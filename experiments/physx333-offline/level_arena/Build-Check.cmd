@@ -16,5 +16,12 @@ if errorlevel 1 exit /b 1
 "%CMAKE%" --build "%~dp0out-ninja" --config Release
 if errorlevel 1 exit /b 1
 
+if "%~1"=="" (
+  "%~dp0out-ninja\physx333_level_arena.exe"
+  if errorlevel 1 exit /b 1
+  "%~dp0out-ninja\physx333_level_arena.exe" --cache-history
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
 "%~dp0out-ninja\physx333_level_arena.exe" %*
 exit /b %errorlevel%
