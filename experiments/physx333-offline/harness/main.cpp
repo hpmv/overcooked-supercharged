@@ -456,20 +456,72 @@ void requireOracleEqual(const char* label,
     std::cout << "PASS " << label << "\n";
 }
 
+std::string sixSlotOrder(const physx333_offline::OracleImage& image,
+                         const char* section, size_t slotOffset)
+{
+    const auto found = image.parts.find(section);
+    if (found == image.parts.end() || found->second.size() % kPairCount != 0)
+        return "unavailable";
+    const auto& words = found->second;
+    const size_t stride = words.size() / kPairCount;
+    if (slotOffset >= stride) return "unavailable";
+    std::ostringstream out;
+    for (size_t i = 0; i != kPairCount; ++i)
+    {
+        if (i) out << ',';
+        out << words[i * stride + slotOffset];
+    }
+    return out.str();
+}
+
+std::string sixSlotsByMoverShape(const physx333_offline::OracleImage& image,
+                                  const char* section, size_t slotOffset)
+{
+    const auto sip = image.parts.find("nphase.shape_pairs");
+    const auto slots = image.parts.find(section);
+    if (sip == image.parts.end() || slots == image.parts.end() ||
+        sip->second.size() % kPairCount != 0 ||
+        slots->second.size() % kPairCount != 0)
+        return "unavailable";
+    const size_t sipStride = sip->second.size() / kPairCount;
+    const size_t slotStride = slots->second.size() / kPairCount;
+    if (sipStride < 6 || slotOffset >= slotStride) return "unavailable";
+    PxU32 byShape[kPairCount] = {};
+    bool seen[kPairCount] = {};
+    for (size_t i = 0; i != kPairCount; ++i)
+    {
+        const PxU32 shape = sip->second[i * sipStride + 3];
+        if (sip->second[i * sipStride + 2] != 7 || shape >= kPairCount || seen[shape])
+            return "unavailable";
+        seen[shape] = true;
+        byShape[shape] = slots->second[i * slotStride + slotOffset];
+    }
+    std::ostringstream out;
+    for (size_t i = 0; i != kPairCount; ++i)
+    {
+        if (!seen[i]) return "unavailable";
+        if (i) out << ',';
+        out << byShape[i];
+    }
+    return out.str();
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
     bool publicProbe = false;
     bool nphaseTopologyProbe = false;
+    bool nphaseReverseProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
         else if (std::string(argv[i]) == "--nphase-topology-probe") nphaseTopologyProbe = true;
+        else if (std::string(argv[i]) == "--nphase-reverse-probe") nphaseReverseProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
     }
 
-    if (nphaseTopologyProbe)
+    if (nphaseTopologyProbe || nphaseReverseProbe)
     {
         if (publicProbe) die("NPhase topology probe is a separate process mode");
         Runtime runtime;
@@ -480,18 +532,22 @@ int main(int argc, char** argv)
         source->step(false);
         source->step(true);
         source->step(false);
+        const physx333_offline::OracleImage checkpointOracle = captureOracle(*source);
         physx333_offline::NPhaseTopologyImage checkpointTopology;
         std::string error;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
                                                      checkpointTopology, error))
             die("NPhase checkpoint topology capture: " + error);
+        physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
+        if (nphaseReverseProbe)
+            std::reverse(requestedTopology.pairs.begin(), requestedTopology.pairs.end());
         source->step(true);
         physx333_offline::NPhaseTopologyImage deletedTopology;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
                                                      deletedTopology, error) ||
             !deletedTopology.pairs.empty())
             die("NPhase successor is not empty: " + error);
-        physx333_offline::NPhaseTopologyImage badTopology = checkpointTopology;
+        physx333_offline::NPhaseTopologyImage badTopology = requestedTopology;
         badTopology.pairs[0].pairFlags ^= 1u;
         if (physx333_offline::RestoreNPhaseTopology(*source->scene,
                                                      badTopology, error))
@@ -503,18 +559,41 @@ int main(int argc, char** argv)
             die("NPhase bridge preflight rejection changed the scene: " + error);
         std::cout << "PASS NPhase filter mismatch rejected before mutation\n";
         if (!physx333_offline::RestoreNPhaseTopology(*source->scene,
-                                                     checkpointTopology, error))
+                                                     requestedTopology, error))
             die("NPhase lifecycle reconstruction: " + error);
         physx333_offline::NPhaseTopologyImage recreated;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
                                                      recreated, error))
             die("NPhase recreated topology capture: " + error);
-        if (!checkpointTopology.sameShapePairs(recreated, error))
+        if (!requestedTopology.sameShapePairs(recreated, error))
             die("NPhase reconstructed pair identities: " + error);
-        if (checkpointTopology.equals(recreated, error))
+        if (requestedTopology.equals(recreated, error))
             die("NPhase lifecycle-only reconstruction unexpectedly restored full touch state");
-        std::cout << "PASS NPhase lifecycle restores six ordered shape pairs; "
-                  << "touch/contact history remains different (" << error << ")\n";
+        std::cout << "PASS NPhase lifecycle restores six requested shape pairs"
+                  << (nphaseReverseProbe ? " (reverse order)" : "")
+                  << "; touch/contact history remains different (" << error << ")\n";
+        const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
+        if (checkpointOracle.equals(recreatedOracle, error))
+            die("NPhase lifecycle-only reconstruction unexpectedly matched the complete oracle");
+        std::cout << "NPHASE_REMAINING first_difference=" << error << "\n";
+        std::cout << "NPHASE_SLOTS checkpoint_cm="
+                  << sixSlotOrder(checkpointOracle, "contact.managers", 0)
+                  << " recreated_cm="
+                  << sixSlotOrder(recreatedOracle, "contact.managers", 0)
+                  << " checkpoint_sip="
+                  << sixSlotOrder(checkpointOracle, "nphase.shape_pairs", 1)
+                  << " recreated_sip="
+                  << sixSlotOrder(recreatedOracle, "nphase.shape_pairs", 1)
+                  << "\n";
+        std::cout << "NPHASE_BY_SHAPE checkpoint_cm="
+                  << sixSlotsByMoverShape(checkpointOracle, "contact.managers", 0)
+                  << " recreated_cm="
+                  << sixSlotsByMoverShape(recreatedOracle, "contact.managers", 0)
+                  << " checkpoint_sip="
+                  << sixSlotsByMoverShape(checkpointOracle, "nphase.shape_pairs", 1)
+                  << " recreated_sip="
+                  << sixSlotsByMoverShape(recreatedOracle, "nphase.shape_pairs", 1)
+                  << "\n";
         std::cout.flush();
         std::_Exit(0);
     }

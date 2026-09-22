@@ -162,6 +162,16 @@ SAP, contact caches, and islands are not yet jointly restored. The bridge is
 our own C++ code compiled into an ignored source mirror; the pinned external
 PhysX checkout remains unchanged.
 
+An additional `--nphase-reverse-probe` isolates allocation order. In the
+checkpoint, the six shape pairs own SIP and contact-manager slots
+`5,4,3,2,1,0` by mover-shape index. Recreating in checkpoint interaction
+order gives `0,1,2,3,4,5` and loses those pair-to-slot bindings. Recreating
+in reverse order restores the exact `5,4,3,2,1,0` binding for each shape,
+though InteractionScene enumeration is then reversed and touch, report,
+manifold, island, and allocator history still differ. This supports a
+lifecycle-first restore followed by an explicit ordered-container and payload
+projection; it is not a whole-scene rewind result.
+
 A separate island image now captures manager-owned graph pools, ordered free
 chains, bitmaps, queues, counters, and work backing. Same-topology idempotent
 restore passes 100 times, and malformed images or missing contact-edge
