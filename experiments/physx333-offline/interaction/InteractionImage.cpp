@@ -356,6 +356,40 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         next.reportActorPairOrder.push_back(found->second);
     }
 
+    const auto& actorPairPool = nphase.mActorPairPool;
+    next.actorPairPoolUsedCount = actorPairPool.mUsed;
+    const PxU32 actorPairCapacity = actorPairPool.mSlabs.size() *
+        actorPairPool.mElementsPerSlab;
+    std::vector<bool> seenActorPairFree(actorPairCapacity, false);
+    auto* actorPairFree = actorPairPool.mFreeElement;
+    while (actorPairFree)
+    {
+        PxU32 slot = 0;
+        if (!poolSlot(actorPairPool, actorPairFree, slot) ||
+            seenActorPairFree[slot] ||
+            next.actorPairPoolFreeOrder.size() >= actorPairCapacity)
+        {
+            error = "ActorPair pool free chain is inconsistent";
+            return false;
+        }
+        seenActorPairFree[slot] = true;
+        next.actorPairPoolFreeOrder.push_back(slot);
+        actorPairFree = actorPairFree->mNext;
+    }
+    if (next.actorPairPoolUsedCount +
+            next.actorPairPoolFreeOrder.size() != actorPairCapacity)
+    {
+        error = "ActorPair pool used/free partition is inconsistent";
+        return false;
+    }
+    for (const InteractionPairImage& pair : next.pairs)
+        if (pair.actorPairPoolSlot >= actorPairCapacity ||
+            seenActorPairFree[pair.actorPairPoolSlot])
+        {
+            error = "Live ActorPair occupies a free or invalid pool slot";
+            return false;
+        }
+
     const auto& reportPool = nphase.mActorPairContactReportDataPool;
     next.reportPoolSlabCount = reportPool.mSlabs.size();
     next.reportPoolUsedCount = reportPool.mUsed;
@@ -499,6 +533,174 @@ bool CaptureInteractionImage(PxScene& scene, InteractionImage& image,
     if (!fixtureRows(scene, next, pairs, mover, error)) return false;
     image = next;
     error.clear();
+    return true;
+}
+
+bool PrepareActorPairPoolSubset12(PxScene& scene,
+                                  const InteractionImage& target,
+                                  std::string& error)
+{
+    error.clear();
+    NPhaseTopologyImage current;
+    if (!CaptureNPhaseTopology(scene, current, error)) return false;
+    if (target.scene != reinterpret_cast<uintptr_t>(&scene) ||
+        target.pairs.size() != 12 || target.topology.pairs.size() != 12 ||
+        current.pairs.size() != 8 || current.activePairCount != 8 ||
+        target.actorPairPoolUsedCount != 12)
+    {
+        error = "ActorPair reorder requires the same-scene 12-to-8 fixture";
+        return false;
+    }
+    NpScene& np = static_cast<NpScene&>(scene);
+    Sc::Scene& sc = np.getScene().getScScene();
+    Sc::InteractionScene& interactions = sc.getInteractionScene();
+    Sc::NPhaseCore& nphase = *sc.getNPhaseCore();
+    auto& actorPool = nphase.mActorPairPool;
+    PxsContext* context = interactions.getLowLevelContext();
+    if (!context ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != 8 ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER) ||
+        actorPool.mUsed != 8 ||
+        context->mContactManagerPool.mFreeCount < 4 ||
+        actorPool.mSlabs.size() * actorPool.mElementsPerSlab !=
+            target.actorPairPoolUsedCount +
+            target.actorPairPoolFreeOrder.size())
+    {
+        error = "ActorPair reorder scene or pool inventory differs";
+        return false;
+    }
+    std::set<PxU32> targetSlots;
+    for (PxU32 shape = 0; shape < 12; ++shape)
+        if (target.pairs[shape].moverShape != shape ||
+            !targetSlots.insert(
+                target.pairs[shape].actorPairPoolSlot).second)
+        {
+            error = "Target ActorPair slots are invalid or duplicated";
+            return false;
+        }
+    for (PxU32 row = 0; row < 8; ++row)
+    {
+        const NPhasePairTopology& live = current.pairs[row];
+        const PxU32 shape = live.shape0.shapeIndex;
+        if (live.shape0.actorId != 13 || shape >= 8 ||
+            live.shape1.actorId != shape + 1 ||
+            live.shape1.shapeIndex != 0)
+        {
+            error = "ActorPair survivor shape binding differs";
+            return false;
+        }
+        Sc::ShapeInstancePairLL* sip =
+            static_cast<Sc::ShapeInstancePairLL*>(
+                interactions.mInteractions[Sc::PX_INTERACTION_TYPE_OVERLAP][row]);
+        PxU32 slot = 0;
+        if (!sip ||
+            !poolSlot(actorPool, sip->getActorPair(), slot) ||
+            slot != target.pairs[shape].actorPairPoolSlot)
+        {
+            error = "ActorPair survivor physical slot differs";
+            return false;
+        }
+    }
+
+    typedef decltype(actorPool.mFreeElement) FreeNode;
+    std::vector<FreeNode> freeNodes;
+    std::vector<PxU32> freeSlots;
+    std::map<PxU32, FreeNode> nodeBySlot;
+    const PxU32 capacity = actorPool.mSlabs.size() *
+        actorPool.mElementsPerSlab;
+    for (FreeNode node = actorPool.mFreeElement; node;
+         node = node->mNext)
+    {
+        PxU32 slot = 0;
+        if (!poolSlot(actorPool, node, slot) ||
+            !nodeBySlot.insert(std::make_pair(slot, node)).second ||
+            freeNodes.size() >= capacity)
+        {
+            error = "ActorPair free chain is invalid or cyclic";
+            return false;
+        }
+        freeNodes.push_back(node);
+        freeSlots.push_back(slot);
+    }
+    if (freeNodes.size() != capacity - actorPool.mUsed ||
+        freeNodes.size() != target.actorPairPoolFreeOrder.size() + 4 ||
+        !std::equal(target.actorPairPoolFreeOrder.begin(),
+                    target.actorPairPoolFreeOrder.end(),
+                    freeSlots.begin() + 4))
+    {
+        error = "ActorPair free-chain tail differs from checkpoint";
+        return false;
+    }
+
+    std::vector<PxU32> createShapes;
+    auto* nextSip = nphase.mLLSipPool.mFreeElement;
+    auto& managerPool = context->mContactManagerPool;
+    for (PxU32 step = 0; step < 4; ++step)
+    {
+        PxU32 nextSipSlot = 0;
+        if (!nextSip ||
+            !poolSlot(nphase.mLLSipPool, nextSip, nextSipSlot))
+        {
+            error = "SIP free chain cannot realize ActorPair creation order";
+            return false;
+        }
+        const PxU32 nextManagerSlot = managerPool.mFreeList[
+            managerPool.mFreeCount - 1 - step]->getIndex();
+        PxU32 match = 12;
+        for (PxU32 shape = 8; shape < 12; ++shape)
+            if (std::find(createShapes.begin(), createShapes.end(), shape) ==
+                    createShapes.end() &&
+                target.pairs[shape].sipPoolSlot == nextSipSlot &&
+                target.pairs[shape].managerSlot == nextManagerSlot)
+            {
+                match = shape;
+                break;
+            }
+        if (match == 12)
+        {
+            error = "SIP/CM order cannot realize target ActorPair mapping";
+            return false;
+        }
+        createShapes.push_back(match);
+        nextSip = nextSip->mNext;
+    }
+    std::vector<FreeNode> desired(4, NULL);
+    std::set<PxU32> desiredSlots;
+    for (PxU32 step = 0; step < 4; ++step)
+    {
+        const PxU32 slot = target.pairs[
+            createShapes[step]].actorPairPoolSlot;
+        const auto found = nodeBySlot.find(slot);
+        if (found == nodeBySlot.end() ||
+            !desiredSlots.insert(slot).second ||
+            std::find(freeSlots.begin(), freeSlots.begin() + 4, slot) ==
+                freeSlots.begin() + 4)
+        {
+            error = "Next ActorPair free slots cannot realize checkpoint";
+            return false;
+        }
+        desired[step] = found->second;
+    }
+    for (PxU32 step = 0; step < 4; ++step)
+        desired[step]->mNext = step + 1 < 4 ?
+            desired[step + 1] : freeNodes[4];
+    actorPool.mFreeElement = desired[0];
+    FreeNode observed = actorPool.mFreeElement;
+    for (PxU32 step = 0; step < 4; ++step)
+    {
+        if (observed != desired[step])
+        {
+            error = "ActorPair free-order write failed; scene is fail-stop";
+            return false;
+        }
+        observed = observed->mNext;
+    }
+    if (observed != freeNodes[4])
+    {
+        error = "ActorPair free-order tail changed; scene is fail-stop";
+        return false;
+    }
     return true;
 }
 
@@ -888,11 +1090,16 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
         target.managerSlabCount != current.managerSlabCount ||
         target.managerFreeCount != current.managerFreeCount ||
         target.managerFreeOrder != current.managerFreeOrder ||
+        target.actorPairPoolUsedCount !=
+            current.actorPairPoolUsedCount ||
+        target.actorPairPoolFreeOrder !=
+            current.actorPairPoolFreeOrder ||
         target.moverTransferringCount || current.moverTransferringCount)
     {
         error = "Subset interaction order or manager-pool topology differs";
         return false;
     }
+    PxU32 missingReports = 0;
     for (PxU32 shape = 0; shape < 12; ++shape)
     {
         const InteractionPairImage& a = target.pairs[shape];
@@ -903,23 +1110,49 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
             a.managerSlot != b.managerSlot ||
             a.islandEdge != b.islandEdge ||
             a.actorPairRefCount != b.actorPairRefCount ||
-            a.reportDataPresent != 1 ||
             b.reportDataPresent != (shape < 8 ? 1u : 0u) ||
-            (shape < 8 && a.reportPoolSlot != b.reportPoolSlot) ||
-            a.reportStreamManager.size() !=
-                sizeof(Sc::ContactStreamManager))
+            (shape < 8 && (!a.reportDataPresent ||
+                           a.reportPoolSlot != b.reportPoolSlot)) ||
+            (a.reportDataPresent &&
+             (a.reportPoolSlot == 0xffffffffu ||
+              a.reportStreamManager.size() !=
+                  sizeof(Sc::ContactStreamManager))) ||
+            (!a.reportDataPresent &&
+             (a.reportPoolSlot != 0xffffffffu ||
+              !a.reportStreamManager.empty())))
         {
-            error = "Subset pair slot, survivor report, or actor ownership differs";
+            std::ostringstream out;
+            out << "Subset pair slot, survivor report, or actor ownership "
+                   "differs at shape " << shape
+                << " sip=" << a.sipPoolSlot << '/' << b.sipPoolSlot
+                << " actorPair=" << a.actorPairPoolSlot << '/'
+                << b.actorPairPoolSlot
+                << " manager=" << a.managerSlot << '/' << b.managerSlot
+                << " edge=" << a.islandEdge << '/' << b.islandEdge
+                << " ref=" << a.actorPairRefCount << '/'
+                << b.actorPairRefCount
+                << " report=" << a.reportDataPresent << '/'
+                << b.reportDataPresent
+                << " reportSlot=" << a.reportPoolSlot << '/'
+                << b.reportPoolSlot;
+            error = out.str();
             return false;
         }
+        if (shape >= 8 && a.reportDataPresent) ++missingReports;
+    }
+    if (!missingReports || missingReports > 4)
+    {
+        error = "Subset target has no supported missing report ownership";
+        return false;
     }
     if (target.reportPoolSlabCount != current.reportPoolSlabCount ||
-        target.reportPoolUsedCount != current.reportPoolUsedCount + 4 ||
+        target.reportPoolUsedCount !=
+            current.reportPoolUsedCount + missingReports ||
         current.reportPoolFreeOrder.size() !=
-            target.reportPoolFreeOrder.size() + 4 ||
+            target.reportPoolFreeOrder.size() + missingReports ||
         !std::equal(target.reportPoolFreeOrder.begin(),
                     target.reportPoolFreeOrder.end(),
-                    current.reportPoolFreeOrder.begin() + 4) ||
+                    current.reportPoolFreeOrder.begin() + missingReports) ||
         target.reportBufferIndex || current.reportBufferIndex ||
         !target.reportBufferBytes.empty() ||
         !current.reportBufferBytes.empty() ||
@@ -931,8 +1164,9 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
         !current.forceThresholdEventOrder.empty() ||
         !target.reportActorPairOrder.empty() ||
         !current.reportActorPairOrder.empty() ||
-        target.persistentEventOrder.size() != 12 ||
-        target.nextPersistentPair != 12 ||
+        target.persistentEventOrder.size() !=
+            target.reportPoolUsedCount ||
+        target.nextPersistentPair != target.persistentEventOrder.size() ||
         current.persistentEventOrder.size() != 8 ||
         current.nextPersistentPair != 8)
     {
@@ -942,13 +1176,18 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
     std::set<PxU32> persistentShapes(
         target.persistentEventOrder.begin(),
         target.persistentEventOrder.end());
-    if (persistentShapes.size() != 12 ||
-        *persistentShapes.begin() != 0 ||
-        *persistentShapes.rbegin() != 11)
+    if (persistentShapes.size() != target.persistentEventOrder.size())
     {
-        error = "Target persistent event list is not a twelve-pair permutation";
+        error = "Target persistent event list has duplicate pair identity";
         return false;
     }
+    for (PxU32 shape = 0; shape < 12; ++shape)
+        if (persistentShapes.count(shape) !=
+            (target.pairs[shape].reportDataPresent ? 1u : 0u))
+        {
+            error = "Persistent event list and report ownership disagree";
+            return false;
+        }
 
     NpScene& np = static_cast<NpScene&>(scene);
     Sc::Scene& sc = np.getScene().getScScene();
@@ -978,14 +1217,22 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
 
     std::map<PxU32, PxU32> missingByReportSlot;
     for (PxU32 shape = 8; shape < 12; ++shape)
+    {
+        if (!target.pairs[shape].reportDataPresent) continue;
         if (!missingByReportSlot.insert(std::make_pair(
                 target.pairs[shape].reportPoolSlot, shape)).second)
         {
             error = "Missing report pool slots are duplicated";
             return false;
         }
-    void* creationOrder[4];
-    for (PxU32 i = 0; i < 4; ++i)
+    }
+    if (missingByReportSlot.size() != missingReports)
+    {
+        error = "Missing report ownership count disagrees with pool slots";
+        return false;
+    }
+    std::vector<void*> creationOrder(missingReports, NULL);
+    for (PxU32 i = 0; i < missingReports; ++i)
     {
         const auto found = missingByReportSlot.find(
             current.reportPoolFreeOrder[i]);
@@ -1009,7 +1256,8 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
     }
     const InteractionReportCreateSubsetFnV2 create =
         reinterpret_cast<InteractionReportCreateSubsetFnV2>(exported);
-    const PxU32 result = create(&nphase, creationOrder, 4, 12, 8);
+    const PxU32 result = create(&nphase, creationOrder.data(),
+                               missingReports, 12, 8);
     if (result != InteractionReportBridgeSuccess)
     {
         std::ostringstream out;
@@ -1033,10 +1281,11 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
     {
         const InteractionPairImage& a = target.pairs[shape];
         const InteractionPairImage& b = current.pairs[shape];
-        if (!b.reportDataPresent ||
-            a.reportPoolSlot != b.reportPoolSlot ||
-            a.reportActorAId != b.reportActorAId ||
-            a.reportActorBId != b.reportActorBId ||
+        if (a.reportDataPresent != b.reportDataPresent ||
+            (a.reportDataPresent &&
+             (a.reportPoolSlot != b.reportPoolSlot ||
+              a.reportActorAId != b.reportActorAId ||
+              a.reportActorBId != b.reportActorBId)) ||
             a.actorPairRefCount != b.actorPairRefCount)
         {
             error = "Report subset lifecycle owner binding differs; dispose it";
@@ -1054,7 +1303,6 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
         const InteractionPairImage& saved = target.pairs[shape];
         Sc::ShapeInstancePairLL& sip = *byShape[shape];
         Sc::ActorPair& actorPair = *sip.getActorPair();
-        Sc::ActorPairContactReportData& report = *actorPair.mReportData;
         sip.mFlags = saved.sipFlags;
         sip.mContactReportStamp = saved.contactReportStamp;
         sip.mReportPairIndex = saved.reportPairIndex;
@@ -1064,10 +1312,14 @@ bool RestoreInteractionMetadataSubset12(PxScene& scene,
             static_cast<PxU16>(saved.actorPairFlags);
         actorPair.mTouchCount =
             static_cast<PxU16>(saved.actorPairTouchCount);
-        report.mStrmResetStamp = saved.reportResetStamp;
-        std::memcpy(&report.mContactStreamManager,
-                    saved.reportStreamManager.data(),
-                    saved.reportStreamManager.size());
+        if (saved.reportDataPresent)
+        {
+            Sc::ActorPairContactReportData& report = *actorPair.mReportData;
+            report.mStrmResetStamp = saved.reportResetStamp;
+            std::memcpy(&report.mContactStreamManager,
+                        saved.reportStreamManager.data(),
+                        saved.reportStreamManager.size());
+        }
         sip.mManager->mFlags = saved.managerFlags;
         sip.mManager->getWorkUnit().statusFlags =
             static_cast<PxU16>(saved.managerStatusFlags);

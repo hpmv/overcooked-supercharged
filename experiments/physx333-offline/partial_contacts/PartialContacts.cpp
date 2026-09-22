@@ -276,7 +276,7 @@ struct World
     PxRigidDynamic* mover = nullptr;
     std::vector<PxRigidActor*> actors;
 
-    explicit World(Runtime& rt) : runtime(rt)
+    explicit World(Runtime& rt, bool mixed = false) : runtime(rt)
     {
         PxSceneDesc desc(rt.physics->getTolerancesScale());
         desc.gravity = PxVec3(0.0f);
@@ -291,8 +291,11 @@ struct World
 
         for (PxU32 i = 0; i < kStatics; ++i)
         {
-            const PxReal x = static_cast<PxReal>(i) * 3.0f;
-            const PxReal z = i < 8 ? 0.0f : 0.9f;
+            const bool cornerGap = mixed && (i == 8 || i == 10);
+            const PxReal x = static_cast<PxReal>(i) * 3.0f +
+                (cornerGap ? 1.1f : 0.0f);
+            const PxReal z = i < 8 ? 0.0f :
+                (cornerGap ? 1.1f : 0.9f);
             PxRigidStatic* fixed = rt.physics->createRigidStatic(
                 PxTransform(PxVec3(x, 0.0f, z)));
             if (!fixed) fail("createRigidStatic");
@@ -316,8 +319,14 @@ struct World
                 PxBoxGeometry(0.5f, 0.5f, 0.5f), *rt.material);
             if (!shape) fail("create dynamic shape");
             mover->attachShape(*shape);
-            shape->setLocalPose(PxTransform(PxVec3(
-                static_cast<PxReal>(i) * 3.0f, 0.0f, 0.0f)));
+            const PxVec3 localPosition(static_cast<PxReal>(i) * 3.0f,
+                                       0.0f, 0.0f);
+            if (mixed && (i == 8 || i == 10))
+                shape->setLocalPose(PxTransform(
+                    localPosition,
+                    PxQuat(0.78539816339f, PxVec3(0.0f, 1.0f, 0.0f))));
+            else
+                shape->setLocalPose(PxTransform(localPosition));
             shape->release();
         }
         mover->setMass(12.0f);
@@ -399,10 +408,11 @@ void captureJoined(World& world,
 }
 
 void verifyJoined(const JoinedCapture& expected,
-                  const JoinedCapture& actual, const char* stage)
+                  const JoinedCapture& actual, const char* stage,
+                  bool rebuiltColdTree = false)
 {
     std::string error;
-    if (!expected.cache.equals(actual.cache, error))
+    if (!expected.cache.equalsWithRebasedFreeIds(actual.cache, error))
         fail(std::string(stage) + " transform-cache image: " + error);
     if (!expected.shapeCache.equals(actual.shapeCache, error))
         fail(std::string(stage) + " shape-cache image: " + error);
@@ -412,7 +422,9 @@ void verifyJoined(const JoinedCapture& expected,
         fail(std::string(stage) + " scene-clock image: " + error);
     if (!expected.context.equals(actual.context, error))
         fail(std::string(stage) + " context image: " + error);
-    if (!expected.query.equalsWithRebasedStack(actual.query, error))
+    if (!(rebuiltColdTree ?
+          expected.query.equalsWithRebuiltColdTree(actual.query, error) :
+          expected.query.equalsWithRebasedStack(actual.query, error)))
         fail(std::string(stage) + " query image: " + error);
     if (!expected.blocks.pool.equals(actual.blocks.pool, error) ||
         expected.blocks.contactBindings != actual.blocks.contactBindings)
@@ -425,9 +437,12 @@ void restoreJoinedSubset(World& world,
                          physx333_offline::MemBlockIdentityRegistry& memoryIds,
                          const Capture& checkpoint,
                          const JoinedCapture& checkpointJoined,
-                         const char* stage)
+                         const char* stage, bool mixed)
 {
     std::string error;
+    if (mixed && !physx333_offline::PrepareActorPairPoolSubset12(
+            *world.scene, interaction, error))
+        fail(std::string(stage) + " ActorPair free order: " + error);
     if (!physx333_offline::RestoreNPhaseSubset(
             *world.scene, topology, error))
         fail(std::string(stage) + " NPhase subset: " + error);
@@ -563,6 +578,94 @@ void printPairFacts(const char* label, const Capture& image)
 }
 
 void verifyFreshEqual(const Capture& a, const Capture& b,
+                      const char* stage);
+
+void mixedBaseline(Runtime& runtime)
+{
+    World world(runtime, true);
+    world.step(0.0f);
+    world.step(0.0f);
+    const Capture checkpoint = world.capture();
+    physx333_offline::InteractionImage checkpointInteraction;
+    std::string error;
+    if (!physx333_offline::CaptureInteractionImage(
+            *world.scene, checkpointInteraction, error))
+        fail("Mixed checkpoint interaction capture: " + error);
+    std::cout << "MIXED_A pairs=" << checkpoint.pairRows.size()
+              << " reports=" << checkpointInteraction.reportPoolUsedCount
+              << " persistent=" <<
+                 checkpointInteraction.persistentEventOrder.size()
+              << " callbacks=" << checkpoint.events.size() << '\n';
+    for (std::size_t i = 0; i < checkpointInteraction.pairs.size(); ++i)
+    {
+        const auto& pair = checkpointInteraction.pairs[i];
+        std::cout << "MIXED_PAIR shape=" << i
+                  << " report=" << pair.reportDataPresent
+                  << " touch=" << pair.actorPairTouchCount
+                  << " manifold=" << pair.manifoldKind << '\n';
+    }
+    world.step(-0.2f);
+    const Capture successor = world.capture();
+    std::cout << "MIXED_B_ORACLE pairs=" << successor.pairRows.size()
+              << " sap_pairs=" << sapScalar(successor.sap, "pair.activeCount")
+              << '\n';
+    for (const auto& pair : successor.pairRows)
+        std::cout << "MIXED_B_PAIR static=" << pair.staticId << '\n';
+    std::cout << "MIXED_B pairs=" << successor.pairRows.size()
+              << " reports=" <<
+                 part(successor.oracle,
+                      "nphase.pool.actor_pair_report.header")[2]
+              << " persistent=" <<
+                 part(successor.oracle, "nphase.event_lists")[0]
+              << " callbacks=" << successor.events.size() << '\n';
+    for (const Event& event : checkpoint.events)
+        std::cout << "MIXED_EVENT A static=" << event.actor0
+                  << " flags=" << event.flags << '\n';
+    for (const Event& event : successor.events)
+        std::cout << "MIXED_EVENT B static=" << event.actor0
+                  << " flags=" << event.flags << '\n';
+    if (checkpoint.pairRows.size() != 12 ||
+        successor.pairRows.size() != 8 ||
+        checkpointInteraction.reportPoolUsedCount != 10 ||
+        part(successor.oracle,
+             "nphase.pool.actor_pair_report.header")[2] != 8 ||
+        checkpointInteraction.persistentEventOrder.size() != 10 ||
+        part(successor.oracle, "nphase.event_lists")[0] != 8 ||
+        checkpoint.events.size() != 10 || successor.events.size() != 10)
+        fail("Mixed fixture did not yield 12/8 pairs and 10/8 reports");
+    for (std::size_t i = 0; i < 12; ++i)
+    {
+        const bool touching = i != 8 && i != 10;
+        if ((checkpointInteraction.pairs[i].reportDataPresent != 0) !=
+                touching ||
+            (checkpointInteraction.pairs[i].actorPairTouchCount != 0) !=
+                touching)
+            fail("Mixed report/touch pattern differs at shape " +
+                 std::to_string(i));
+    }
+    for (std::size_t i = 0; i < successor.events.size(); ++i)
+    {
+        const Event& event = successor.events[i];
+        const PxU32 wanted = i < 2 ?
+            static_cast<PxU32>(10 + 2 * i) :
+            static_cast<PxU32>(i - 1);
+        const PxU32 flag = i < 2 ? PxPairFlag::eNOTIFY_TOUCH_LOST :
+            PxPairFlag::eNOTIFY_TOUCH_PERSISTS;
+        if (event.actor0 != wanted || event.actor1 != kMoverId ||
+            !(event.flags & flag))
+            fail("Mixed successor callback order differs");
+    }
+    World fresh(runtime, true);
+    fresh.step(0.0f);
+    fresh.step(0.0f);
+    verifyFreshEqual(checkpoint, fresh.capture(), "mixed checkpoint");
+    fresh.step(-0.2f);
+    verifyFreshEqual(successor, fresh.capture(), "mixed successor");
+    std::cout << "PASS mixed box/box 10-touch/2-nontouch baseline, "
+                 "12-to-8 topology and ordered callbacks\n";
+}
+
+void verifyFreshEqual(const Capture& a, const Capture& b,
                       const char* stage)
 {
     std::string difference;
@@ -584,9 +687,9 @@ void verifyFreshEqual(const Capture& a, const Capture& b,
     }
 }
 
-void subsetProbe(Runtime& runtime, bool warm)
+void subsetProbe(Runtime& runtime, bool warm, bool mixed)
 {
-    World world(runtime);
+    World world(runtime, mixed);
     if (warm)
     {
         // A separate control: preallocate the broadphase deletion-output
@@ -650,6 +753,23 @@ void subsetProbe(Runtime& runtime, bool warm)
     if (!successor.oracle.equals(afterSlotReject.oracle, error))
         fail("Rejected NPhase manager slot changed the scene: " + error);
 
+    if (mixed)
+    {
+        physx333_offline::InteractionImage invalidActorPair =
+            checkpointInteraction;
+        invalidActorPair.pairs[8].actorPairPoolSlot =
+            invalidActorPair.pairs[9].actorPairPoolSlot;
+        if (physx333_offline::PrepareActorPairPoolSubset12(
+                *world.scene, invalidActorPair, error))
+            fail("Duplicate target ActorPair slot was accepted");
+        const Capture afterActorPairReject = world.capture();
+        if (!successor.oracle.equals(afterActorPairReject.oracle, error))
+            fail("Rejected ActorPair target changed the scene: " + error);
+        if (!physx333_offline::PrepareActorPairPoolSubset12(
+                *world.scene, checkpointInteraction, error))
+            fail("Mixed ActorPair free-order prepare failed; scene is "
+                 "fail-stop: " + error);
+    }
     if (!physx333_offline::RestoreNPhaseSubset(*world.scene, target, error))
         fail("NPhase subset lifecycle failed; scene is fail-stop: " + error);
     physx333_offline::NPhaseTopologyImage restored;
@@ -674,6 +794,38 @@ void subsetProbe(Runtime& runtime, bool warm)
     physx333_offline::OracleImage projected;
     if (!physx333_offline::CaptureOracle(*world.scene, projected, error))
         fail("NPhase subset projected Oracle capture: " + error);
+    if (mixed)
+    {
+        std::cout << "MIXED_ACTOR_PAIR_FREE A=" <<
+            sequence(part(checkpoint.oracle,
+                          "nphase.pool.actor_pair.free_order"), 16)
+                  << " B=" <<
+            sequence(part(successor.oracle,
+                          "nphase.pool.actor_pair.free_order"), 16)
+                  << " restored=" <<
+            sequence(part(projected,
+                          "nphase.pool.actor_pair.free_order"), 16)
+                  << '\n';
+        std::cout << "MIXED_SIP_FREE B=" <<
+            sequence(part(successor.oracle,
+                          "nphase.pool.shape_pair.free_order"), 8)
+                  << " CM_FREE_TAIL_B=" <<
+            tail(part(successor.oracle, "contact.pool.free_order"), 8)
+                  << '\n';
+        for (PxU32 shape = 8; shape < 12; ++shape)
+            std::cout << "MIXED_ACTOR_PAIR shape=" << shape
+                      << " target_sip=" <<
+                checkpointInteraction.pairs[shape].sipPoolSlot
+                      << " target_cm=" <<
+                checkpointInteraction.pairs[shape].managerSlot
+                      << " target_slot=" <<
+                checkpointInteraction.pairs[shape].actorPairPoolSlot
+                      << " restored_slot=" <<
+                recreatedInteraction.pairs[shape].actorPairPoolSlot
+                      << " target_report=" <<
+                checkpointInteraction.pairs[shape].reportDataPresent
+                      << '\n';
+    }
     if (checkpoint.oracle.equals(projected, error))
         fail("Lifecycle-only subset unexpectedly matched the full checkpoint");
     std::cout << "SUBSET_ORACLE_FIRST_DIFFERENCE " << error << '\n';
@@ -749,8 +901,54 @@ void subsetProbe(Runtime& runtime, bool warm)
               << std::dec
               << '\n';
 
+    oc2::offline::SapImage invalidSap = checkpoint.sap;
+    bool foundDeletedBuffer = false;
+    for (auto& buffer : invalidSap.buffers)
+        if (buffer.name == "aabb.deletedOverlaps")
+        {
+            buffer.address = 1;
+            foundDeletedBuffer = true;
+        }
+    if (!foundDeletedBuffer ||
+        oc2::offline::RestoreSap(*world.scene, invalidSap, error))
+        fail("Invalid cold SAP image was accepted");
+    oc2::offline::SapImage afterSapReject;
+    if (!oc2::offline::CaptureSap(*world.scene, afterSapReject, error) ||
+        !preRestoreSap.equals(afterSapReject, error))
+        fail("Rejected cold SAP image changed the scene: " + error);
+
     if (!oc2::offline::RestoreSap(*world.scene, checkpoint.sap, error))
         fail("12-pair SAP restore failed; scene is fail-stop: " + error);
+    oc2::offline::SapImage restoredSap;
+    if (!oc2::offline::CaptureSap(*world.scene, restoredSap, error) ||
+        !checkpoint.sap.equals(restoredSap, error))
+        fail("12-pair SAP restored image differs: " + error);
+    oc2::offline::TransformCacheImage preRestoreCache;
+    if (!oc2::offline::CaptureTransformCache(
+            *world.scene, preRestoreCache, error))
+        fail("12-pair pre-restore transform-cache capture: " + error);
+    std::cout << "CACHE_FREE_IDS checkpoint="
+              << checkpointJoined.cache.freeIds.size << "/"
+              << checkpointJoined.cache.freeIds.capacity << "@0x"
+              << std::hex << checkpointJoined.cache.freeIds.address
+              << " current=" << std::dec << preRestoreCache.freeIds.size
+              << "/" << preRestoreCache.freeIds.capacity << "@0x"
+              << std::hex << preRestoreCache.freeIds.address
+              << " transforms=" << std::dec
+              << checkpointJoined.cache.transforms.size << "/"
+              << checkpointJoined.cache.transforms.capacity << "@0x"
+              << std::hex << checkpointJoined.cache.transforms.address
+              << "->" << std::dec << preRestoreCache.transforms.size
+              << "/" << preRestoreCache.transforms.capacity << "@0x"
+              << std::hex << preRestoreCache.transforms.address
+              << " references=" << std::dec
+              << checkpointJoined.cache.referenceCounts.size << "/"
+              << checkpointJoined.cache.referenceCounts.capacity << "@0x"
+              << std::hex << checkpointJoined.cache.referenceCounts.address
+              << "->" << std::dec << preRestoreCache.referenceCounts.size
+              << "/" << preRestoreCache.referenceCounts.capacity << "@0x"
+              << std::hex << preRestoreCache.referenceCounts.address
+              << std::dec << '\n';
     if (!oc2::offline::RestoreTransformCache(
             *world.scene, checkpointJoined.cache, error))
         fail("12-pair transform-cache restore failed; scene is fail-stop: " +
@@ -768,6 +966,33 @@ void subsetProbe(Runtime& runtime, bool warm)
     if (!oc2::offline::RestoreContextImage(
             *world.scene, checkpointJoined.context, error))
         fail("12-pair context restore failed; scene is fail-stop: " + error);
+    oc2::offline::QueryImage preRestoreQuery;
+    if (!oc2::offline::CaptureQueryImage(
+            *world.scene, preRestoreQuery, error))
+        fail("12-pair pre-restore query capture: " + error);
+    std::cout << "QUERY_LAYOUT checkpoint_fields="
+              << checkpointJoined.query.fields.size()
+              << " current_fields=" << preRestoreQuery.fields.size() << '\n';
+    for (std::size_t i = 0;
+         i < checkpointJoined.query.fields.size() &&
+         i < preRestoreQuery.fields.size(); ++i)
+        if (checkpointJoined.query.fields[i].name !=
+            preRestoreQuery.fields[i].name)
+        {
+            std::cout << "QUERY_LAYOUT_FIRST_NAME checkpoint="
+                      << checkpointJoined.query.fields[i].name
+                      << " current=" << preRestoreQuery.fields[i].name
+                      << " index=" << i << '\n';
+            break;
+        }
+    for (std::size_t i = checkpointJoined.query.fields.size();
+         i < preRestoreQuery.fields.size(); ++i)
+        std::cout << "QUERY_LAYOUT_EXTRA index=" << i
+                  << " name=" << preRestoreQuery.fields[i].name
+                  << " address=0x" << std::hex
+                  << preRestoreQuery.fields[i].address << std::dec
+                  << " bytes=" << preRestoreQuery.fields[i].bytes.size()
+                  << '\n';
     if (!oc2::offline::RestoreQueryImage(
             *world.scene, checkpointJoined.query, error))
         fail("12-pair query restore failed; scene is fail-stop: " + error);
@@ -789,7 +1014,7 @@ void subsetProbe(Runtime& runtime, bool warm)
         fail("12-pair joined next-step SAP/island image: " + error);
     JoinedCapture replayedJoined;
     captureJoined(world, memoryIds, replayedJoined, "replayed successor");
-    verifyJoined(successorJoined, replayedJoined, "joined next-step");
+    verifyJoined(successorJoined, replayedJoined, "joined next-step", !warm);
     std::cout << "PASS 12-to-8 joined next-step ordered callbacks, Oracle, "
                  "and all component images\n";
     for (unsigned iteration = 1; iteration < 100; ++iteration)
@@ -797,7 +1022,8 @@ void subsetProbe(Runtime& runtime, bool warm)
         const std::string stage = "joined repeat " +
             std::to_string(iteration);
         restoreJoinedSubset(world, target, checkpointInteraction, memoryIds,
-                            checkpoint, checkpointJoined, stage.c_str());
+                            checkpoint, checkpointJoined, stage.c_str(),
+                            mixed);
         world.step(-0.2f);
         const Capture repeatedB = world.capture();
         verifyFreshEqual(successor, repeatedB, stage.c_str());
@@ -806,7 +1032,7 @@ void subsetProbe(Runtime& runtime, bool warm)
             fail(stage + " successor SAP/island: " + error);
         JoinedCapture repeatedJoined;
         captureJoined(world, memoryIds, repeatedJoined, stage.c_str());
-        verifyJoined(successorJoined, repeatedJoined, stage.c_str());
+        verifyJoined(successorJoined, repeatedJoined, stage.c_str(), !warm);
     }
     std::cout << "PASS 12-to-8 joined replay and all component images x100\n";
     std::cout.flush();
@@ -821,10 +1047,24 @@ int main(int argc, char** argv)
     const bool subset = argc == 2 && std::string(argv[1]) == "--subset-probe";
     const bool warmSubset = argc == 2 &&
         std::string(argv[1]) == "--subset-warm-probe";
-    if (argc != 1 && !subset && !warmSubset)
+    const bool mixed = argc == 2 &&
+        std::string(argv[1]) == "--mixed-baseline";
+    const bool mixedSubset = argc == 2 &&
+        std::string(argv[1]) == "--mixed-subset-probe";
+    const bool mixedWarmSubset = argc == 2 &&
+        std::string(argv[1]) == "--mixed-warm-subset-probe";
+    if (argc != 1 && !subset && !warmSubset && !mixed &&
+        !mixedSubset && !mixedWarmSubset)
         fail("Unknown partial-contact fixture argument");
     Runtime runtime;
-    if (subset || warmSubset) subsetProbe(runtime, warmSubset);
+    if (subset || warmSubset || mixedSubset || mixedWarmSubset)
+        subsetProbe(runtime, warmSubset || mixedWarmSubset,
+                    mixedSubset || mixedWarmSubset);
+    if (mixed)
+    {
+        mixedBaseline(runtime);
+        return 0;
+    }
     Capture checkpoint, successor;
     std::vector<Event> publicRepeat;
     {

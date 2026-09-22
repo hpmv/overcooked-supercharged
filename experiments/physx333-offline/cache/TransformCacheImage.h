@@ -10,7 +10,8 @@ namespace oc2 { namespace offline {
 
 // Test-only image of one stopped PhysX 3.3.3 scene's low-level transform
 // cache. The addresses are process-local and are intentionally part of the
-// image: restore requires the same scene and unchanged allocation topology.
+// image: restore requires the same scene and unchanged transform/reference
+// allocations. The ID pool's owned free-ID array may be allocation-rebased.
 struct TransformCacheImage
 {
     struct Array
@@ -33,6 +34,11 @@ struct TransformCacheImage
 
     bool equals(const TransformCacheImage& other,
                 std::string& firstDifference) const;
+    // The free-ID array is owned only by this ID pool. A rewind across its
+    // growth may reproduce the same capacity and live prefix at a new
+    // address; the uninitialized capacity tail is deliberately excluded.
+    bool equalsWithRebasedFreeIds(const TransformCacheImage& other,
+                                  std::string& firstDifference) const;
 };
 
 // Call only after fetchResults and before the next simulation call. This

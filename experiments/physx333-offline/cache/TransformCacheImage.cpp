@@ -85,7 +85,8 @@ bool captureArray(const Ps::Array<T>& source, TransformCacheImage::Array& out,
 template <typename T>
 bool sameArrayTopology(const Ps::Array<T>& live,
                        const TransformCacheImage::Array& saved,
-                       const char* name, bool fixedSize, std::string& error)
+                       const char* name, bool fixedSize,
+                       bool allowAllocationRebase, std::string& error)
 {
     if (saved.capacity > kMaximumArrayBytes / sizeof(T) ||
         saved.size > saved.capacity ||
@@ -94,8 +95,10 @@ bool sameArrayTopology(const Ps::Array<T>& live,
         error = std::string(name) + ": invalid saved size/capacity";
         return false;
     }
-    if (saved.address != reinterpret_cast<std::uintptr_t>(live.begin()) ||
-        saved.capacity != live.capacity() ||
+    if ((saved.capacity == 0) != (saved.address == 0) ||
+        (!allowAllocationRebase &&
+         (saved.address != reinterpret_cast<std::uintptr_t>(live.begin()) ||
+          saved.capacity != live.capacity())) ||
         (fixedSize && saved.size != live.size()))
     {
         error = std::string(name) + ": allocation identity/capacity changed";
@@ -167,10 +170,28 @@ void writeImage(CacheAccess& access, const TransformCacheImage& image)
 }
 
 bool sameArray(const TransformCacheImage::Array& a,
-               const TransformCacheImage::Array& b)
+               const TransformCacheImage::Array& b,
+               bool allowAddressRebase = false)
 {
-    return a.address == b.address && a.size == b.size &&
+    return (allowAddressRebase || a.address == b.address) &&
+           a.size == b.size &&
            a.capacity == b.capacity && a.bytes == b.bytes;
+}
+
+bool sameFreeIdsSemantically(const TransformCacheImage::Array& a,
+                             const TransformCacheImage::Array& b)
+{
+    if (a.size != b.size || a.capacity != b.capacity ||
+        a.size > a.capacity ||
+        a.bytes.size() != std::size_t(a.capacity) * sizeof(PxU32) ||
+        b.bytes.size() != std::size_t(b.capacity) * sizeof(PxU32))
+        return false;
+    // Ps::Array reads only [0, size) and constructs into the next slot on
+    // pushBack. Newly allocated capacity tails are not initialized and have
+    // no stable value after a rewind, even though their capacity must match.
+    const std::size_t liveBytes = std::size_t(a.size) * sizeof(PxU32);
+    return !liveBytes ||
+           std::memcmp(a.bytes.data(), b.bytes.data(), liveBytes) == 0;
 }
 
 } // namespace
@@ -200,6 +221,39 @@ bool TransformCacheImage::equals(const TransformCacheImage& other,
         return false;
     }
     if (!sameArray(freeIds, other.freeIds))
+    {
+        firstDifference = "ID pool free IDs and allocated tail";
+        return false;
+    }
+    return true;
+}
+
+bool TransformCacheImage::equalsWithRebasedFreeIds(
+    const TransformCacheImage& other,
+    std::string& firstDifference) const
+{
+    firstDifference.clear();
+    if (scene != other.scene || cache != other.cache || idPool != other.idPool)
+    {
+        firstDifference = "scene/transform cache identity";
+        return false;
+    }
+    if (currentId != other.currentId)
+    {
+        firstDifference = "ID pool current ID";
+        return false;
+    }
+    if (!sameArray(transforms, other.transforms))
+    {
+        firstDifference = "transform array";
+        return false;
+    }
+    if (!sameArray(referenceCounts, other.referenceCounts))
+    {
+        firstDifference = "reference count array";
+        return false;
+    }
+    if (!sameFreeIdsSemantically(freeIds, other.freeIds))
     {
         firstDifference = "ID pool free IDs and allocated tail";
         return false;
@@ -244,18 +298,49 @@ bool RestoreTransformCache(PxScene& scene, const TransformCacheImage& image,
         return false;
     }
     if (!sameArrayTopology(access.cache->mTransformCache, image.transforms,
-                           "transform array", true, error) ||
+                           "transform array", true, false, error) ||
         !sameArrayTopology(access.cache->mRefCounts, image.referenceCounts,
-                           "reference counts", true, error) ||
+                           "reference counts", true, false, error) ||
         !sameArrayTopology(access.ids->mFreeIDs, image.freeIds,
-                           "ID pool free IDs", false, error) ||
+                           "ID pool free IDs", false, true, error) ||
         !validateSaved(image, error))
         return false;
+
+    // Cm::IDPoolBase only retains this Ps::Array, not pointers into its
+    // backing. A successor can grow it while releasing transform IDs. Build
+    // the target allocation before modifying the live scene, then swap it in
+    // without invoking an allocator during the actual restore. The old live
+    // allocation remains owned by replacement until verification succeeds.
+    const bool rebaseFreeIds =
+        image.freeIds.address != reinterpret_cast<std::uintptr_t>(
+            access.ids->mFreeIDs.begin()) ||
+        image.freeIds.capacity != access.ids->mFreeIDs.capacity();
+    if (rebaseFreeIds && access.ids->mFreeIDs.isInUserMemory())
+    {
+        error = "ID pool free IDs are in externally owned memory";
+        return false;
+    }
+    Ps::Array<PxU32> replacement(access.ids->mFreeIDs.getAllocator());
+    if (rebaseFreeIds)
+    {
+        replacement.reserve(image.freeIds.capacity);
+        if (replacement.capacity() != image.freeIds.capacity ||
+            (image.freeIds.capacity && !replacement.begin()))
+        {
+            error = "Could not allocate target ID pool free-ID capacity";
+            return false;
+        }
+        replacement.forceSize_Unsafe(image.freeIds.size);
+        if (!image.freeIds.bytes.empty())
+            std::memcpy(replacement.begin(), image.freeIds.bytes.data(),
+                        image.freeIds.bytes.size());
+    }
 
     // All structural checks precede the first write. The following copies
     // reuse existing allocations and cannot invoke a PhysX allocator.
     TransformCacheImage rollback;
     if (!CaptureTransformCache(scene, rollback, error)) return false;
+    if (rebaseFreeIds) access.ids->mFreeIDs.swap(replacement);
     writeImage(access, image);
     TransformCacheImage observed;
     std::string verifyError;
@@ -263,7 +348,9 @@ bool RestoreTransformCache(PxScene& scene, const TransformCacheImage& image,
     try
     {
         verified = CaptureTransformCache(scene, observed, verifyError) &&
-                   image.equals(observed, verifyError);
+                   (rebaseFreeIds ?
+                    image.equalsWithRebasedFreeIds(observed, verifyError) :
+                    image.equals(observed, verifyError));
     }
     catch (...)
     {
@@ -271,6 +358,7 @@ bool RestoreTransformCache(PxScene& scene, const TransformCacheImage& image,
     }
     if (!verified)
     {
+        if (rebaseFreeIds) access.ids->mFreeIDs.swap(replacement);
         writeImage(access, rollback);
         TransformCacheImage reverted;
         std::string rollbackError;

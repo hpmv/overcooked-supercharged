@@ -62,12 +62,14 @@ struct InteractionImage {
     std::vector<std::uint32_t> sceneOrder;
     std::vector<std::uint32_t> moverActorOrder;
     std::vector<std::uint32_t> managerFreeOrder;
+    std::vector<std::uint32_t> actorPairPoolFreeOrder;
     std::vector<std::uint32_t> reportPoolFreeOrder;
     std::vector<std::uint32_t> persistentEventOrder;
     std::vector<std::uint32_t> forceThresholdEventOrder;
     std::vector<std::uint32_t> reportActorPairOrder;
     std::uint32_t managerSlabCount = 0;
     std::uint32_t managerFreeCount = 0;
+    std::uint32_t actorPairPoolUsedCount = 0;
     std::uint32_t reportPoolSlabCount = 0;
     std::uint32_t reportPoolUsedCount = 0;
     std::uint32_t sceneActiveCount = 0;
@@ -120,6 +122,16 @@ bool RestoreInteractionMetadata(physx::PxScene& scene,
 bool RestoreInteractionMetadataSubset12(physx::PxScene& scene,
                                          const InteractionImage& target,
                                          std::string& error);
+
+// Mixed twelve-box fixture pre-stage. A/B share the same four free ActorPair
+// objects but their LIFO order may differ from the SIP/CM creation order.
+// Validate all live owners and pool nodes, then reorder only those four free
+// links so source onOverlapCreated reuses the checkpoint's physical AP slots.
+// This mutates a disposable scene and must be followed immediately by the
+// subset NPhase lifecycle; failure afterward is fail-stop.
+bool PrepareActorPairPoolSubset12(physx::PxScene& scene,
+                                  const InteractionImage& target,
+                                  std::string& error);
 
 // Stage 1: install source WorkUnit pointer/size bindings and owned PCM data
 // before moving/restoring the NpMemBlockPool backing. The source bytes at

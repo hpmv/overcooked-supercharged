@@ -505,8 +505,8 @@ bool RestoreNPhaseSubset(PxScene& scene,
     for (size_t i = 0; i < target.pairs.size(); ++i)
     {
         const NPhasePairTopology& row = target.pairs[i];
-        if (!pairKeyValid(row, fixture) || !row.hasTouch ||
-            !row.hasKnownTouch || !row.hasManager ||
+        if (!pairKeyValid(row, fixture) || !row.hasKnownTouch ||
+            !row.hasManager ||
             row.sipPoolSlot == 0xffffffffu ||
             row.managerSlot == 0xffffffffu ||
             targetRow[row.shape0.shapeIndex] >= 0)

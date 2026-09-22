@@ -75,7 +75,8 @@ oc2_physx333_report_create_subset_v2(
     using namespace physx333_offline;
     if (!nphaseCore || !orderedMissingActorPairs || !missingCount ||
         missingCount > 64 || expectedOverlapCount > 64 ||
-        missingCount + expectedAlreadyReported != expectedOverlapCount)
+        expectedAlreadyReported > expectedOverlapCount ||
+        missingCount + expectedAlreadyReported > expectedOverlapCount)
         return InteractionReportBridgeInvalidInput;
     Sc::NPhaseCore& nphase = *static_cast<Sc::NPhaseCore*>(nphaseCore);
     Sc::InteractionScene& interactions =

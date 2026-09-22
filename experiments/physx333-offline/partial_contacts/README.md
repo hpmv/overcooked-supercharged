@@ -42,44 +42,32 @@ Observed with the pinned `3.3.3-1.3.3` source build:
 - Repeating B after a public body restore yields only the eight persistent
   callbacks. It loses all four `TOUCH_LOST` notifications.
 
-The existing six-contact restore cannot consume this fixture as-is:
+The twelve-pair restore extends the original six-contact path in four ways:
 
-1. `NPhaseTopology::fixtureShapes` requires exactly seven actors, six dynamic
-   shapes, and six static shapes. The source DLL bridge requires exactly six
-   requests and an empty successor interaction scene. Here there are thirteen
-   actors and eight surviving interactions at B. Generalize identity mapping
-   and bridge preflight to a requested subset, then use the source
-   `onOverlapCreated` lifecycle only for the four missing pairs.
-2. The eight surviving SIP/CM/ActorPair/edge objects must retain their physical
-   bindings and order. A restore must merge four recreated pairs into the
-   target InteractionScene and mover interaction order, while also rebuilding
-   persistent contact event and report lists. A blind reverse creation into a
-   nonempty scene leaves the new four appended after the eight survivors.
-3. The missing pairs occupied original SIP/CM/edge slots 8 through 11. Their
-   free-list/LIFO order at B differs by pool. Recreating in target slot order
-   needs to be derived from each pool's actual next-allocation rule and
-   validated against the target image. A particular six-pair reverse loop is
-   insufficient as a general rule.
-4. The joined image must capture both surviving and resurrected contact
-   payloads and pointer bindings. Existing `InteractionImage` uses fixed
-   six-entry arrays and requires every fixture pair to be present, while its
-   metadata stage assumes six persistent/report pairs and zero report cursor.
-   Preserve survivor object identity, report/touch predecessor data, and the
-   contact memory-block allocations before publishing the restored island,
-   SAP, body, context, and clock images.
+1. The source NPhase bridge now creates only the four missing pairs through
+   `onOverlapCreated`, retaining the eight survivor objects.
+2. Scene and mover interaction arrays are reordered to A after creation;
+   SIP, contact-manager, edge, and ActorPair physical slots are verified.
+3. The mixed fixture's ActorPair free-node order differs from the required
+   SIP/manager creation order. A preflighted stage permutes only four free
+   links before source lifecycle allocation, retaining survivor objects and
+   the untouched free-list tail.
+4. All twelve work units, reports where owned, touch metadata, contact
+   memory, islands, broadphase, bodies, caches, clock, context, and queries
+   are restored and verified before simulation.
 
 The default run is a deterministic public-only red test and component-state
 inventory. The shipped Story 1-1 trace has a distinct broadphase pattern
 (zero created/six deleted), so this fixture is not an exact scene
 reconstruction.
 
-For the bounded source-lifecycle subset stage, run:
+For full joined rewind/replay from a cold checkpoint, run:
 
 ```bat
 cmd /c experiments\physx333-offline\partial_contacts\Build-Check.cmd --subset-probe
 ```
 
-This separate fail-stop mode captures A's NPhase pair keys and physical SIP/CM
+This mode captures A's NPhase pair keys and physical SIP/CM
 slots, checks that corrupt shape and physical-slot requests are rejected
 without a scene change, then preflights and creates only the four missing B
 pairs through the original
@@ -92,13 +80,15 @@ twelve work units and single box/box manifolds, with the saved contact-memory
 blocks installed between binding and payload stages.
 
 All `contact.*` and `nphase.*` source-Oracle sections then match A. The
-existing island restore closes the next difference: the complete source
-Oracle and separate island image match A exactly. The cold fixture then
-stops at a strict SAP preflight. At A,
-`AABBManager::mDeletedPairsSize/Capacity` are `0/0` and its buffer pointer
-is null; after B they are `4/32` with a new allocation. The same-allocation
-SAP restore correctly rejects the changed capacity before writing. No
-post-restore physics step occurs in this cold mode.
+island restore closes the next difference, and the complete source Oracle
+matches A. The cold successor allocates new SAP deleted-overlap storage
+(A `size/capacity=0/0`, null pointer; B `4/32`, new pointer), an empty
+transform-cache free-ID array, and a progressive query-tree FIFO stack.
+The narrowly guarded component restorers handle each allocation-lifetime
+change. Malformed SAP images reject without mutation. Only after the full
+checkpoint Oracle and every component image agree does the fixture replay B.
+Ordered callbacks, the Oracle, and all component images match the original B
+for 100 consecutive cold rewind/replay cycles.
 
 A separate high-water control first runs a 12-to-8-to-12 warm-up cycle, so
 the broadphase deletion-output buffer exists at both A and B. Run it with:
@@ -111,11 +101,23 @@ In that control the full source Oracle and the SAP, island, transform-cache,
 shape-cache-binding, body, scene-clock, context, query, and contact-memory
 images all match checkpoint A after restore. The next B step reproduces
 ordered contact callbacks, the full Oracle, and every listed component image.
-This high-water condition is a control, not a fix for the cold fixture's
-allocation-lifetime problem. Repeated replay is separately tested x100.
+The high-water run is a separate regression control; the cold mode above
+tests allocation-lifetime rollback directly. Both replay x100.
 
 The real Story 1-1 checkpoint has twelve capsule/box managers with zero
 current contact points; ten pairs still have the touch bit and a report
 object, while two do not. It also has trigger and marker interactions. This
 fixture instead uses twelve touching box/box pairs and gates out triggers and
 markers; those level features require separate source-built coverage.
+
+The separate `--mixed-baseline` mode uses twelve box/box broadphase pairs,
+with rotated corner-gap geometry for mover shapes 8 and 10. Both pairs have
+an overlap but no touch or report object. The other ten pairs touch. Its A
+checkpoint therefore has twelve SIP/CM/ActorPair objects and exactly ten
+report objects, with null reports at shapes 8 and 10. B removes shapes 8–11,
+leaving eight pairs and reporting two ordered losses (static actors 10, 12)
+followed by eight persistent contacts. Fresh-scene A/B Oracle and callbacks
+match. `--mixed-subset-probe` performs the same full cold joined rewind and
+replay x100; `--mixed-warm-subset-probe` is its separate high-water control.
+This reproduces the checkpoint's mixed ownership pattern without yet claiming
+capsule/box or trigger/marker coverage.
