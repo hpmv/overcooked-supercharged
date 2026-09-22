@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "PxPhysicsAPI.h"
 
@@ -329,11 +330,183 @@ void checkRebuildGate()
                  "rejection\n";
 }
 
+struct SixShapeQueryFixture
+{
+    PxDefaultAllocator allocator;
+    Errors errors;
+    InlineDispatcher dispatcher;
+    PxFoundation* foundation = nullptr;
+    PxPhysics* physics = nullptr;
+    PxMaterial* material = nullptr;
+    PxScene* scene = nullptr;
+    PxRigidDynamic* mover = nullptr;
+    PxShape* firstShape = nullptr;
+    std::vector<PxRigidActor*> actors;
+
+    SixShapeQueryFixture()
+    {
+        foundation = PxCreateFoundation(PX_PHYSICS_VERSION, allocator, errors);
+        require(foundation != nullptr, "six-shape foundation");
+        physics = PxCreatePhysics(PX_PHYSICS_VERSION, *foundation,
+                                  PxTolerancesScale());
+        require(physics != nullptr, "six-shape physics");
+        material = physics->createMaterial(0.5f, 0.5f, 0.0f);
+        require(material != nullptr, "six-shape material");
+        PxSceneDesc desc(physics->getTolerancesScale());
+        desc.gravity = PxVec3(0.0f);
+        desc.cpuDispatcher = &dispatcher;
+        desc.filterShader = filter;
+        desc.broadPhaseType = PxBroadPhaseType::eSAP;
+        desc.staticStructure = PxPruningStructure::eSTATIC_AABB_TREE;
+        desc.dynamicStructure = PxPruningStructure::eDYNAMIC_AABB_TREE;
+        scene = physics->createScene(desc);
+        require(scene != nullptr, "six-shape scene");
+        for (PxU32 i = 0; i < 6; ++i)
+        {
+            PxRigidStatic* fixed = physics->createRigidStatic(
+                PxTransform(PxVec3(PxReal(i) * 3.0f, -10.0f, 0.0f)));
+            PxShape* shape = physics->createShape(
+                PxBoxGeometry(0.5f, 0.5f, 0.5f), *material);
+            require(fixed && shape, "six-shape fixed actor/shape");
+            fixed->attachShape(*shape);
+            shape->release();
+            scene->addActor(*fixed);
+            actors.push_back(fixed);
+        }
+        mover = physics->createRigidDynamic(
+            PxTransform(PxVec3(0.0f, 0.95f, 0.0f)));
+        require(mover != nullptr, "six-shape mover");
+        for (PxU32 i = 0; i < 6; ++i)
+        {
+            PxShape* shape = physics->createShape(
+                PxBoxGeometry(0.5f, 0.5f, 0.5f), *material);
+            require(shape != nullptr, "six-shape dynamic shape");
+            mover->attachShape(*shape);
+            shape->setLocalPose(PxTransform(PxVec3(PxReal(i) * 3.0f,
+                                                  0.0f, 0.0f)));
+            if (!i) firstShape = shape;
+            shape->release();
+        }
+        mover->setMass(6.0f);
+        mover->setMassSpaceInertiaTensor(PxVec3(18.0f, 18.0f, 18.0f));
+        mover->setLinearDamping(0.0f);
+        mover->setAngularDamping(0.0f);
+        scene->addActor(*mover);
+        actors.push_back(mover);
+    }
+
+    ~SixShapeQueryFixture()
+    {
+        for (PxRigidActor* actor : actors) actor->release();
+        scene->release();
+        material->release();
+        physics->release();
+        foundation->release();
+    }
+
+    void step(bool away)
+    {
+        mover->setGlobalPose(PxTransform(PxVec3(0.0f, 0.95f,
+                                                away ? 5.0f : 0.0f)));
+        mover->setLinearVelocity(PxVec3(0.0f));
+        mover->setAngularVelocity(PxVec3(0.0f));
+        scene->simulate(1.0f / 60.0f);
+        require(scene->fetchResults(true), "six-shape fetchResults");
+    }
+
+    bool overlapMoverAt(float z)
+    {
+        PxOverlapBuffer hit;
+        scene->overlap(PxSphereGeometry(0.25f),
+                       PxTransform(PxVec3(0.0f, 0.95f, z)), hit);
+        if (hit.hasBlock && hit.block.shape == firstShape) return true;
+        for (PxU32 i = 0; i < hit.nbTouches; ++i)
+            if (hit.touches[i].shape == firstShape) return true;
+        return false;
+    }
+};
+
+const QueryImage::Field* queryField(const QueryImage& image,
+                                    const std::string& name)
+{
+    for (const QueryImage::Field& field : image.fields)
+        if (field.name == name) return &field;
+    return nullptr;
+}
+
+void checkStackRebase()
+{
+    SixShapeQueryFixture fixture;
+    fixture.step(false);
+    fixture.step(true);
+    fixture.step(false);
+    std::string error;
+    QueryImage checkpoint;
+    if (!CaptureQueryImage(*fixture.scene, checkpoint, error))
+        require(false, "six-shape checkpoint capture: " + error);
+    fixture.step(true);
+    QueryImage successor;
+    if (!CaptureQueryImage(*fixture.scene, successor, error))
+        require(false, "six-shape successor capture: " + error);
+    const QueryImage::Field* aStack = queryField(
+        checkpoint, "dynamic.newTreeStorage.stackStorage");
+    const QueryImage::Field* bStack = queryField(
+        successor, "dynamic.newTreeStorage.stackStorage");
+    require(aStack && bStack && aStack->bytes.size() == 8 &&
+            bStack->bytes.size() == 16 &&
+            aStack->address != bStack->address,
+            "six-shape fixture missed FIFO capacity 1 to 2 growth");
+    QueryImage altered = checkpoint;
+    for (QueryImage::Field& field : altered.fields)
+        if (field.name == "dynamic.newTreeStorage.stackStorage")
+            field.bytes[0] ^= 1;
+    require(!checkpoint.equalsWithRebasedStack(altered, error),
+            "rebased equality ignored changed FIFO entry content");
+    altered = checkpoint;
+    for (QueryImage::Field& field : altered.fields)
+        if (field.name == "dynamic.newTreeStorage.nodes")
+            field.bytes[0] ^= 1;
+    require(!checkpoint.equalsWithRebasedStack(altered, error),
+            "rebased equality ignored changed tree-node content");
+    require(fixture.overlapMoverAt(5.0f), "six-shape successor overlap");
+
+    for (int i = 0; i < 100; ++i)
+    {
+        if (!RestoreQueryImage(*fixture.scene, checkpoint, error))
+            require(false, "six-shape rebased restore: " + error);
+        QueryImage observed;
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !checkpoint.equalsWithRebasedStack(observed, error))
+            require(false, "six-shape rebased checkpoint parity: " + error);
+        require(!checkpoint.equals(observed, error),
+                "six-shape restore unexpectedly reused freed FIFO address");
+        if (i == 0)
+        {
+            require(!RestoreQueryImage(*fixture.scene, successor, error),
+                    "unsafe reverse FIFO capacity growth was accepted");
+            QueryImage afterReject;
+            if (!CaptureQueryImage(*fixture.scene, afterReject, error) ||
+                !checkpoint.equalsWithRebasedStack(afterReject, error))
+                require(false, "reverse-growth rejection mutated query: " + error);
+        }
+        fixture.step(true);
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !successor.equalsWithRebasedStack(observed, error))
+            require(false, "six-shape replayed build step: " + error);
+        require(fixture.overlapMoverAt(5.0f),
+                "six-shape replayed successor overlap");
+    }
+    std::cout << "PASS six-shape progressive FIFO growth: guarded rebase, "
+                 "100 query-image and overlap replays, unsafe reverse "
+                 "growth rejected atomically\n";
+}
+
 } // namespace
 
 int main()
 {
     check();
     checkRebuildGate();
+    checkStackRebase();
     return 0;
 }

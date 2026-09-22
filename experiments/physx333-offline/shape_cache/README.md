@@ -12,16 +12,20 @@ replayed step, while the transform-cache free-ID stack contained paired swaps
 `Sc::ShapeInstancePairLL::destroyManager` →
 `Sc::ShapeSim::destroyTransformCache` → `PxsTransformCache::releaseID`.
 
-`ShapeCacheBindings` captures the stopped scene's active rigid-overlap
-ShapeSim addresses, shape IDs, and transform-cache IDs. After the source
+`ShapeCacheBindings` now enumerates every attached rigid-static/dynamic
+`ShapeSim`, including shapes with no interaction, and captures its address,
+shape ID, and transform-cache ID. After the source
 lifecycle and cache-array restore, its guarded writer restores the ShapeSim
 bindings, verifies the result, and rolls back on verification failure. It
-rejects changed shape identity, invalid or duplicate target IDs, and IDs
-without a live cache reference before writing. The offline joined probe
+rejects changed shape identity, duplicate non-sentinel target IDs, and IDs
+without a live cache reference before writing; an unallocated/sentinel ID
+is valid for a contactless shape. The offline joined probe
 checks malformed-image atomic rejection and then confirms the next-step
 free-ID stack, six other component images, 100 rewinds, and a five-step
-contact suffix match.
+contact suffix match. `--all-shape-binding-probe` checks that a seventh,
+contactless mover shape is included and verifies duplicate capture and
+corrupt-identity rejection.
 
-This is an exact-allocation component for active rigid overlaps, not a
-general actor/shape lifetime serializer. Contactless shapes, triggers,
-reallocation, and a Unity-shipped binary are outside its current claim.
+This is an exact-allocation component for attached rigid shapes, not a
+general actor/shape lifetime serializer. Articulation/particle/cloth shapes,
+reallocation, and a Unity-shipped binary remain outside its claim.

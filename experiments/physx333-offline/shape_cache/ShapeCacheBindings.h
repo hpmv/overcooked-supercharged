@@ -9,8 +9,9 @@ namespace physx { class PxScene; }
 namespace oc2 { namespace offline {
 
 // The transform-cache array and ID pool do not own the ShapeSim ID fields.
-// This joined image covers the active rigid-overlap shapes in the stopped
-// source-built scene. It is tied to their exact ShapeSim allocations.
+// This joined image covers every attached rigid-static/dynamic ShapeSim in the
+// stopped source-built scene, including shapes with no current interaction.
+// It is tied to their exact ShapeSim allocations.
 struct ShapeCacheBindings
 {
     struct Binding
@@ -28,7 +29,7 @@ struct ShapeCacheBindings
 };
 
 // Capture does not mutate PhysX. Restore requires the same ordered set of
-// active rigid-overlap ShapeSim objects and must run after the cache array/ID
+// attached rigid ShapeSim objects and must run after the cache array/ID
 // pool has been restored, before the next simulation step. It does not create
 // interactions, IDs, or cache entries.
 bool CaptureShapeCacheBindings(physx::PxScene& scene,

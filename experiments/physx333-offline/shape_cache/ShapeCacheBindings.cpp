@@ -18,9 +18,17 @@
 #undef private
 
 #include "NpScene.h"
+#include "NpRigidDynamic.h"
+#include "NpRigidStatic.h"
+#include "ScBodyCore.h"
+#include "ScStaticCore.h"
+#include "ScActorCore.h"
+#include "ScBodySim.h"
+#include "ScStaticSim.h"
+#include "ScShapeSim.h"
+#include "framework/ScElement.h"
 #include "ScScene.h"
 #include "ScInteractionScene.h"
-#include "ScShapeInstancePairLL.h"
 #include "PxsContext.h"
 
 namespace oc2 { namespace offline {
@@ -55,33 +63,56 @@ bool collect(PxScene& scene, ShapeCacheBindings& image,
     }
     cache = &context->getTransformCache();
     image.scene = reinterpret_cast<std::uintptr_t>(&scene);
-    std::map<std::uintptr_t, ShapeCacheBindings::Binding> seen;
-    Cm::Range<Sc::Interaction*const> range =
-        interactions.getInteractions(Sc::PX_INTERACTION_TYPE_OVERLAP);
-    while (!range.empty())
+    const PxActorTypeFlags flags = PxActorTypeFlag::eRIGID_STATIC |
+                                   PxActorTypeFlag::eRIGID_DYNAMIC;
+    const PxU32 actorCount = scene.getNbActors(flags);
+    std::vector<PxActor*> actors(actorCount);
+    if (actorCount && scene.getActors(flags, actors.data(), actorCount) != actorCount)
     {
-        Sc::ShapeInstancePairLL* pair =
-            static_cast<Sc::ShapeInstancePairLL*>(range.front());
-        range.popFront();
-        Sc::ShapeSim* shapes[] = {&pair->getShape0(), &pair->getShape1()};
-        for (unsigned i = 0; i < 2; ++i)
+        error = "rigid actor enumeration changed during shape-cache capture";
+        return false;
+    }
+    std::map<std::uintptr_t, ShapeCacheBindings::Binding> seen;
+    for (PxActor* actor : actors)
+    {
+        Sc::RigidSim* rigid = nullptr;
+        if (actor->getType() == PxActorType::eRIGID_DYNAMIC)
         {
-            ShapeCacheBindings::Binding binding;
-            binding.shapeSim = reinterpret_cast<std::uintptr_t>(shapes[i]);
-            binding.shapeId = shapes[i]->getID();
-            binding.transformCacheId = shapes[i]->getTransformCacheID();
-            const auto found = seen.find(binding.shapeSim);
-            if (found != seen.end())
+            Sc::BodyCore& core = static_cast<NpRigidDynamic&>(*actor)
+                .getScbBodyFast().getScBody();
+            rigid = static_cast<Sc::RigidSim*>(
+                static_cast<Sc::ActorCore&>(core).getSim());
+        }
+        else if (actor->getType() == PxActorType::eRIGID_STATIC)
+        {
+            Sc::StaticCore& core = static_cast<NpRigidStatic&>(*actor)
+                .getScbRigidStaticFast().getScStatic();
+            rigid = static_cast<Sc::RigidSim*>(
+                static_cast<Sc::ActorCore&>(core).getSim());
+        }
+        if (!rigid)
+        {
+            error = "rigid actor has no same-scene simulation object";
+            return false;
+        }
+        for (Sc::Element* element = rigid->getElements_(); element;
+             element = element->mNextInActor)
+        {
+            if (element->getElementType() != Sc::PX_ELEMENT_TYPE_SHAPE)
             {
-                if (!bindingKeysEqual(found->second, binding) ||
-                    found->second.transformCacheId != binding.transformCacheId)
-                {
-                    error = "ShapeSim appears with conflicting transform ID";
-                    return false;
-                }
+                error = "non-rigid shape element is unsupported";
+                return false;
             }
-            else
-                seen.insert(std::make_pair(binding.shapeSim, binding));
+            Sc::ShapeSim* shape = static_cast<Sc::ShapeSim*>(element);
+            ShapeCacheBindings::Binding binding;
+            binding.shapeSim = reinterpret_cast<std::uintptr_t>(shape);
+            binding.shapeId = shape->getID();
+            binding.transformCacheId = shape->getTransformCacheID();
+            if (!seen.insert(std::make_pair(binding.shapeSim, binding)).second)
+            {
+                error = "ShapeSim occurs twice in rigid actor element lists";
+                return false;
+            }
         }
     }
     for (const auto& entry : seen)
@@ -147,11 +178,11 @@ bool RestoreShapeCacheBindings(PxScene& scene,
     for (std::size_t i = 0; i < image.bindings.size(); ++i)
     {
         const auto& target = image.bindings[i];
-        if (!bindingKeysEqual(target, before.bindings[i]) ||
-            target.transformCacheId == PX_INVALID_U32 ||
-            target.transformCacheId >= cache->mIDPool.mCurrentID ||
-            cache->getReferenceCount(target.transformCacheId) == 0 ||
-            !savedIds.insert(target.transformCacheId).second)
+        const bool validCacheId = target.transformCacheId == PX_INVALID_U32 ||
+            (target.transformCacheId < cache->mIDPool.mCurrentID &&
+             cache->getReferenceCount(target.transformCacheId) != 0 &&
+             savedIds.insert(target.transformCacheId).second);
+        if (!bindingKeysEqual(target, before.bindings[i]) || !validCacheId)
         {
             error = "shape-cache identity, target ID, or reference count is invalid";
             return false;

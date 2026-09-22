@@ -9,7 +9,8 @@ namespace physx { class PxScene; }
 namespace oc2 { namespace offline {
 
 // A source-layout image of the settled SceneQueryManager and its AABB pruners.
-// Only valid in the same scene while every guarded allocation is still live.
+// Same-scene only; guarded allocations must remain live except the explicit
+// progressive FIFO backing-buffer rebase documented below.
 struct QueryImage
 {
     struct Field
@@ -25,6 +26,11 @@ struct QueryImage
     std::uint64_t seal = 0;
 
     bool equals(const QueryImage& other, std::string& error) const;
+    // Only the progressive dynamic new-tree FIFO's backing array may have
+    // moved. All other fields, including its logical size/capacity/content,
+    // must still match. This does not imply identical allocator history.
+    bool equalsWithRebasedStack(const QueryImage& other,
+                                std::string& error) const;
 };
 
 bool CaptureQueryImage(physx::PxScene& scene, QueryImage& out,

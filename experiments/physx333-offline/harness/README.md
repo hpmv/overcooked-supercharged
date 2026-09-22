@@ -16,15 +16,18 @@ order and report/touch metadata, installs contact-manager bindings, transfers
 existing 16 KiB friction/cache blocks from the unused stack to their saved
 owners, restores contact payload and PCM manifolds, then restores island, SAP,
 transform-cache, per-ShapeSim transform-cache ID bindings, body, and
-scene-clock images. No physics step occurs between
+scene-clock, cached worker-context, and scene-query images. The latter safely
+rebases a dynamic query-tree FIFO buffer that grew after the checkpoint; only
+that owned backing address may differ in its semantic comparison. No physics
+step occurs between
 those stages. If any stage fails, this disposable process exits instead of
 simulating a partial scene.
 
 The probe checks the 39-section source oracle at the reconstructed checkpoint,
 then simulates `A -> B` and compares the ordered contact callbacks, public
-body/scene observations, the oracle, and SAP/cache/body/clock/island/block
-images to the original step. It repeats the
-rewind and next-step check 100 times, then compares a five-step suffix that
+body/scene observations, the oracle, and SAP/cache/ShapeSim/body/clock/context/
+query/island/block images to the original step. It repeats the complete
+checkpoint and next-step image check 100 times, then compares a five-step suffix that
 creates, maintains, and deletes contacts against an independently created
 reference scene. These are reproducible fixture results, not yet complete
 PhysX-only parity for a level or the Unity-shipped binary.
@@ -34,6 +37,8 @@ oracle: restoring the transform-cache ID pool without its owning `ShapeSim`
 ID fields produced a different free-ID order while public results still
 matched. The [shape-cache binding image](../shape_cache/README.md) repairs
 that dependency; the joined probe includes its corruption-rejection check.
+The `--all-shape-binding-probe` also confirms a contactless seventh mover
+shape is included by the ShapeSim image.
 
 Current boundaries:
 
@@ -43,8 +48,11 @@ Current boundaries:
 - The oracle explicitly marks four source-state categories unsupported:
   allocator/free-slot tails, NPhase filter/dirty state, constraints and
   articulations, and solver/friction backing not covered by the fixture.
-- The fixture has no scene queries, CCD, particles, cloth, or kinematic actor.
-  Those paths need their own source-backed images and replay matrices.
+- The joined fixture has no explicit scene-query calls, CCD, particles, cloth,
+  or kinematic actor. `fetchResults` nevertheless updates its query pruner;
+  an isolated query fixture also verifies raycast/overlap replay and the
+  one supported FIFO-stack growth. Other query allocations and those other
+  feature paths need their own source-backed replay matrices.
 - Several component restorers require the same scene, allocation addresses,
   capacities, and actor/shape topology. Their guards reject changed topology;
   passing a component A/B test alone does not authorize a physics step.

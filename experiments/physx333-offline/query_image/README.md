@@ -1,15 +1,21 @@
 # PhysX 3.3.3 settled scene-query image
 
-`QueryImage` is a same-scene, fixed-allocation component for the pinned
+`QueryImage` is a same-scene source-layout component for the pinned
 `3.3.3-1.3.3` Win32 source build. It captures `Sq::SceneQueryManager` dirty
 timestamps, dirty bitmaps, ordered dirty list, and both AABB pruners' active
 pool, handle maps, tree nodes, refit state, tree map, and rebuild counters.
 For `BUILD_INIT` and `BUILD_IN_PROGRESS`, it also captures the second tree,
-cached boxes, builder counters, and the FIFO node stack. This is still a
-same-allocation image: a restore between rebuild phases is rejected when
-PhysX allocated or freed tree storage. It checks allocation and topology identities before writing, verifies a new
-capture afterward, and rolls back if verification fails. The source checkout
-and the game are untouched.
+cached boxes, builder counters, and the FIFO node stack. Most allocations
+must remain fixed. One guarded exception admits growth of the dynamic new
+tree's FIFO backing array: when a later build doubles its capacity, the old
+checkpoint address is already freed. Restore copies the checkpoint entries
+to the currently owned buffer and lowers its *logical* capacity; the next
+build step grows the array naturally. It never writes to the freed address.
+`equalsWithRebasedStack` compares this one buffer by logical capacity and
+content; `equals` remains a raw exact image check. All other allocation and
+topology identities are checked before writing. Restore verifies a new
+capture and rolls back if verification fails. The source checkout and game
+are untouched.
 
 Source basis:
 
@@ -44,18 +50,26 @@ also finds one progressive build step whose allocations remain fixed,
 restores the preceding query image, and replays the actual next
 `simulate`/`fetchResults` step 100 times to the same query image. This last
 check concerns the query component; it does not compare contact or body state.
+An independent six-shape fixture reproduces the progressive FIFO capacity
+1→2/address-replacement transition from the joined contact probe. It replays
+the checkpoint→next-step query image and overlap result 100 times, using the
+semantic comparator for the rebased address. Attempting reverse growth in the
+component is rejected before mutation.
 
 Integration calls are `CaptureQueryImage(PxScene&, QueryImage&, error)` and
 `RestoreQueryImage(PxScene&, const QueryImage&, error)`.
 
 The present gate requires a stopped scene, static AABB tree plus dynamic AABB
-tree, the same scene and allocation addresses, unchanged shape topology and
-pool capacity, no uncommitted pruner changes, no bucket-pruner objects, and
-no queued rebuild fixups. `BUILD_INIT` and
-`BUILD_IN_PROGRESS` are supported when the second tree, cached bounds, and
-FIFO stack have the same allocation addresses and capacities at both ends.
+tree, the same scene, unchanged shape topology and pool capacity, no
+uncommitted pruner changes, no bucket-pruner objects, and no queued rebuild
+fixups. All allocation addresses must match except the explicitly rebased
+FIFO buffer. `BUILD_INIT` and `BUILD_IN_PROGRESS` are supported when the
+second tree and cached bounds retain their allocation addresses. A dynamic
+new-tree FIFO buffer may have grown after the checkpoint if its live capacity
+is at least the checkpoint capacity; shrinking or replacing the stack object
+or node pool is rejected.
 It permits pending `SceneQueryManager` dirty shapes, which is the path
-exercised above. It does not yet restore a progressive rebuild across
+exercised above. It does not yet restore a progressive rebuild across other
 allocation changes, bucket fallback, static tree replacement, pruner growth,
 `eNONE`, volume caches, batched/SPU queries, or PVD query
 collector history. A checkpoint in any of those states needs a wider image.

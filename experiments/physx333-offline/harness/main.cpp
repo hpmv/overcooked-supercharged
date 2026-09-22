@@ -26,6 +26,8 @@
 #include "../interaction/InteractionImage.h"
 #include "../body/BodyImage.h"
 #include "../scene_clock/SceneClockImage.h"
+#include "../context_image/ContextImage.h"
+#include "../query_image/QueryImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -233,6 +235,8 @@ struct World
         desc.filterShader = reportFilter;
         desc.simulationEventCallback = &events;
         desc.broadPhaseType = PxBroadPhaseType::eSAP;
+        desc.staticStructure = PxPruningStructure::eSTATIC_AABB_TREE;
+        desc.dynamicStructure = PxPruningStructure::eDYNAMIC_AABB_TREE;
         scene = runtime.physics->createScene(desc);
         if (!scene) die("createScene failed");
 
@@ -522,6 +526,7 @@ int main(int argc, char** argv)
     bool interactionMetadataProbe = false;
     bool joinedPayloadProbe = false;
     bool joinedReplayProbe = false;
+    bool allShapeBindingProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
@@ -535,7 +540,47 @@ int main(int argc, char** argv)
             joinedPayloadProbe = true;
             joinedReplayProbe = true;
         }
+        else if (std::string(argv[i]) == "--all-shape-binding-probe")
+            allShapeBindingProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
+    }
+
+    if (allShapeBindingProbe)
+    {
+        Runtime runtime;
+        World world(runtime);
+        PxShape* distant = runtime.physics->createShape(
+            PxBoxGeometry(0.5f, 0.5f, 0.5f), *runtime.material);
+        if (!distant) die("create contactless shape failed");
+        distant->setLocalPose(PxTransform(PxVec3(100.0f, 0.0f, 0.0f)));
+        world.mover->attachShape(*distant);
+        distant->release();
+        world.step(false);
+        oc2::offline::ShapeCacheBindings saved;
+        oc2::offline::ShapeCacheBindings repeated;
+        std::string error;
+        if (!oc2::offline::CaptureShapeCacheBindings(*world.scene, saved,
+                                                      error) ||
+            !oc2::offline::CaptureShapeCacheBindings(*world.scene, repeated,
+                                                      error) ||
+            !saved.equals(repeated, error))
+            die("all-shape binding duplicate capture: " + error);
+        if (saved.bindings.size() != 13)
+            die("all-shape binding image omitted a contactless ShapeSim");
+        if (!oc2::offline::RestoreShapeCacheBindings(*world.scene, saved,
+                                                     error))
+            die("all-shape binding same-image restore: " + error);
+        oc2::offline::ShapeCacheBindings corrupt = saved;
+        corrupt.bindings[0].shapeId ^= 1u;
+        if (oc2::offline::RestoreShapeCacheBindings(*world.scene, corrupt,
+                                                    error))
+            die("all-shape binding corrupt identity was accepted");
+        if (!oc2::offline::CaptureShapeCacheBindings(*world.scene, repeated,
+                                                      error) ||
+            !saved.equals(repeated, error))
+            die("all-shape binding rejection mutated scene: " + error);
+        std::cout << "PASS all 13 rigid ShapeSim bindings, including one contactless shape, duplicate capture and atomic rejection\n";
+        return 0;
     }
 
     if (nphaseTopologyProbe || nphaseReverseProbe || interactionOrderProbe ||
@@ -588,6 +633,8 @@ int main(int argc, char** argv)
         oc2::offline::ShapeCacheBindings checkpointShapeCache;
         oc2::offline::BodyImage checkpointBody;
         oc2::offline::SceneClockImage checkpointClock;
+        oc2::offline::ContextImage checkpointContext;
+        oc2::offline::QueryImage checkpointQuery;
         if (joinedPayloadProbe &&
             !physx333_offline::CaptureMemBlockRestore(*source->scene,
                 memBlockIds, checkpointMemBlocks, error))
@@ -605,7 +652,12 @@ int main(int argc, char** argv)
              !oc2::offline::CaptureBodies(*source->scene,
                                           checkpointBody, error) ||
              !oc2::offline::CaptureSceneClock(*source->scene,
-                                              checkpointClock, error)))
+                                              checkpointClock, error) ||
+             !oc2::offline::CaptureContextImage(*source->scene,
+                                                checkpointContext, error) ||
+             (joinedReplayProbe &&
+              !oc2::offline::CaptureQueryImage(*source->scene,
+                                               checkpointQuery, error))))
             die("joined checkpoint component capture: " + error);
         physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
         if (nphaseReverseProbe)
@@ -615,8 +667,11 @@ int main(int argc, char** argv)
         physx333_offline::OracleImage expectedDeletionOracle;
         oc2::offline::SapImage expectedDeletionSap;
         oc2::offline::TransformCacheImage expectedDeletionCache;
+        oc2::offline::ShapeCacheBindings expectedDeletionShapeCache;
         oc2::offline::BodyImage expectedDeletionBody;
         oc2::offline::SceneClockImage expectedDeletionClock;
+        oc2::offline::ContextImage expectedDeletionContext;
+        oc2::offline::QueryImage expectedDeletionQuery;
         oc2::offline::IslandImage expectedDeletionIsland;
         physx333_offline::MemBlockRestoreImage expectedDeletionBlocks;
         if (joinedReplayProbe)
@@ -626,11 +681,17 @@ int main(int argc, char** argv)
             if (!oc2::offline::CaptureSap(*source->scene,
                                           expectedDeletionSap, error) ||
                 !oc2::offline::CaptureTransformCache(*source->scene,
-                                                      expectedDeletionCache, error) ||
+                    expectedDeletionCache, error) ||
+                !oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                    expectedDeletionShapeCache, error) ||
                 !oc2::offline::CaptureBodies(*source->scene,
-                                              expectedDeletionBody, error) ||
+                    expectedDeletionBody, error) ||
                 !oc2::offline::CaptureSceneClock(*source->scene,
                                                   expectedDeletionClock, error) ||
+                !oc2::offline::CaptureContextImage(*source->scene,
+                                                    expectedDeletionContext, error) ||
+                !oc2::offline::CaptureQueryImage(*source->scene,
+                                                  expectedDeletionQuery, error) ||
                 !oc2::offline::CaptureIsland(*source->scene,
                                               expectedDeletionIsland, error) ||
                 !physx333_offline::CaptureMemBlockRestore(*source->scene,
@@ -782,7 +843,7 @@ int main(int argc, char** argv)
                                             shapeCacheDifference) << "\n";
             oc2::offline::ShapeCacheBindings corruptShapeCache =
                 checkpointShapeCache;
-            corruptShapeCache.bindings[0].transformCacheId = PX_INVALID_U32;
+            corruptShapeCache.bindings[0].shapeId ^= 1u;
             if (oc2::offline::RestoreShapeCacheBindings(*source->scene,
                     corruptShapeCache, error))
                 die("corrupt shape-cache binding image was accepted");
@@ -795,6 +856,10 @@ int main(int argc, char** argv)
             if (!oc2::offline::RestoreShapeCacheBindings(*source->scene,
                     checkpointShapeCache, error))
                 die("joined shape-cache binding restore: " + error);
+            if (!oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                    recreatedShapeCache, error) ||
+                !checkpointShapeCache.equals(recreatedShapeCache, error))
+                die("joined shape-cache binding verification: " + error);
             std::cout << "PASS joined shape-cache binding restore\n";
             if (!oc2::offline::RestoreBodies(*source->scene,
                                               checkpointBody, error))
@@ -804,6 +869,16 @@ int main(int argc, char** argv)
                                                   checkpointClock, error))
                 die("joined scene-clock restore: " + error);
             std::cout << "PASS joined scene-clock restore\n";
+            if (!oc2::offline::RestoreContextImage(*source->scene,
+                                                    checkpointContext, error))
+                die("joined context restore: " + error);
+            std::cout << "PASS joined low-level context restore\n";
+            if (joinedReplayProbe &&
+                !oc2::offline::RestoreQueryImage(*source->scene,
+                                                 checkpointQuery, error))
+                die("joined query restore: " + error);
+            if (joinedReplayProbe)
+                std::cout << "PASS joined scene-query restore\n";
         }
         const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
         const bool oracleExact = checkpointOracle.equals(recreatedOracle, error);
@@ -812,6 +887,22 @@ int main(int argc, char** argv)
             if (!oracleExact)
                 die("joined source oracle mismatch: " + error);
             std::cout << "PASS joined 39-section source oracle image\n";
+            oc2::offline::ContextImage recreatedContext;
+            oc2::offline::QueryImage recreatedQuery;
+            if (!oc2::offline::CaptureContextImage(*source->scene,
+                    recreatedContext, error) ||
+                (joinedReplayProbe &&
+                 !oc2::offline::CaptureQueryImage(*source->scene,
+                     recreatedQuery, error)))
+                die("joined reconstructed component capture: " + error);
+            if (!checkpointContext.equals(recreatedContext, error))
+                die("joined reconstructed context image: " + error);
+            if (joinedReplayProbe &&
+                !checkpointQuery.equalsWithRebasedStack(recreatedQuery,
+                                                        error))
+                die("joined reconstructed query image: " + error);
+            std::cout << "PASS joined checkpoint context"
+                      << (joinedReplayProbe ? "/query" : "") << " images\n";
         }
         else
         {
@@ -854,8 +945,11 @@ int main(int argc, char** argv)
             std::cout << "PASS joined next-step 39-section oracle parity\n";
             oc2::offline::SapImage replayedSap;
             oc2::offline::TransformCacheImage replayedCache;
+            oc2::offline::ShapeCacheBindings replayedShapeCache;
             oc2::offline::BodyImage replayedBody;
             oc2::offline::SceneClockImage replayedClock;
+            oc2::offline::ContextImage replayedContext;
+            oc2::offline::QueryImage replayedQuery;
             oc2::offline::IslandImage replayedIsland;
             physx333_offline::MemBlockRestoreImage replayedBlocks;
             physx333_offline::MemBlockIdentityRegistry replayIds = memBlockIds;
@@ -863,10 +957,16 @@ int main(int argc, char** argv)
                                           replayDifference) ||
                 !oc2::offline::CaptureTransformCache(*source->scene,
                     replayedCache, replayDifference) ||
+                !oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                    replayedShapeCache, replayDifference) ||
                 !oc2::offline::CaptureBodies(*source->scene,
                     replayedBody, replayDifference) ||
                 !oc2::offline::CaptureSceneClock(*source->scene,
                     replayedClock, replayDifference) ||
+                !oc2::offline::CaptureContextImage(*source->scene,
+                    replayedContext, replayDifference) ||
+                !oc2::offline::CaptureQueryImage(*source->scene,
+                    replayedQuery, replayDifference) ||
                 !oc2::offline::CaptureIsland(*source->scene,
                     replayedIsland, replayDifference) ||
                 !physx333_offline::CaptureMemBlockRestore(*source->scene,
@@ -911,6 +1011,13 @@ int main(int argc, char** argv)
                           << replayDifference << "\n";
                 extendedParity = false;
             }
+            if (!expectedDeletionShapeCache.equals(replayedShapeCache,
+                                                   replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE shape_cache="
+                          << replayDifference << "\n";
+                extendedParity = false;
+            }
             if (!expectedDeletionBody.equals(replayedBody, replayDifference))
             {
                 std::cout << "EXTENDED_DIFFERENCE body=" << replayDifference << "\n";
@@ -919,6 +1026,40 @@ int main(int argc, char** argv)
             if (!expectedDeletionClock.equals(replayedClock, replayDifference))
             {
                 std::cout << "EXTENDED_DIFFERENCE clock=" << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionContext.equals(replayedContext,
+                                                replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE context=" << replayDifference
+                          << "\n";
+                for (size_t field = 0; field < expectedDeletionContext.fields.size() &&
+                     field < replayedContext.fields.size(); ++field)
+                {
+                    const auto& wanted = expectedDeletionContext.fields[field];
+                    const auto& got = replayedContext.fields[field];
+                    if (wanted.name != "context.simStats" ||
+                        got.name != wanted.name) continue;
+                    for (size_t byte = 0; byte + sizeof(PxU32) <=
+                         wanted.bytes.size() && byte + sizeof(PxU32) <=
+                         got.bytes.size(); byte += sizeof(PxU32))
+                    {
+                        PxU32 a = 0, b = 0;
+                        std::memcpy(&a, &wanted.bytes[byte], sizeof(a));
+                        std::memcpy(&b, &got.bytes[byte], sizeof(b));
+                        if (a != b)
+                            std::cout << "CONTEXT_STATS word=" <<
+                                byte / sizeof(PxU32) << " expected=" << a
+                                      << " actual=" << b << "\n";
+                    }
+                }
+                extendedParity = false;
+            }
+            if (!expectedDeletionQuery.equalsWithRebasedStack(
+                    replayedQuery, replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE query=" << replayDifference
+                          << "\n";
                 extendedParity = false;
             }
             if (!expectedDeletionIsland.equals(replayedIsland, replayDifference))
@@ -937,7 +1078,7 @@ int main(int argc, char** argv)
             }
             if (!extendedParity)
                 die("joined next-step extended image parity differs");
-            std::cout << "PASS joined next-step SAP/cache/body/clock/island/block images\n";
+            std::cout << "PASS joined next-step SAP/cache/body/clock/context/query/island/block images\n";
             for (unsigned iteration = 1; iteration < 100; ++iteration)
             {
                 if (!physx333_offline::RestoreInteractionOrder(
@@ -962,7 +1103,11 @@ int main(int argc, char** argv)
                     !oc2::offline::RestoreBodies(*source->scene,
                                                   checkpointBody, error) ||
                     !oc2::offline::RestoreSceneClock(*source->scene,
-                                                      checkpointClock, error))
+                                                      checkpointClock, error) ||
+                    !oc2::offline::RestoreContextImage(*source->scene,
+                                                        checkpointContext, error) ||
+                    !oc2::offline::RestoreQueryImage(*source->scene,
+                                                      checkpointQuery, error))
                     die("joined repeat rewind " + std::to_string(iteration) +
                         ": " + error);
                 const physx333_offline::OracleImage repeatedCheckpoint =
@@ -970,6 +1115,20 @@ int main(int argc, char** argv)
                 if (!checkpointOracle.equals(repeatedCheckpoint,
                                              replayDifference))
                     die("joined repeat checkpoint " +
+                        std::to_string(iteration) + ": " + replayDifference);
+                oc2::offline::ContextImage repeatedContext;
+                oc2::offline::QueryImage repeatedQuery;
+                if (!oc2::offline::CaptureContextImage(*source->scene,
+                        repeatedContext, replayDifference) ||
+                    !oc2::offline::CaptureQueryImage(*source->scene,
+                        repeatedQuery, replayDifference))
+                    die("joined repeat component capture " +
+                        std::to_string(iteration) + ": " + replayDifference);
+                if (!checkpointContext.equals(repeatedContext,
+                                               replayDifference) ||
+                    !checkpointQuery.equalsWithRebasedStack(
+                        repeatedQuery, replayDifference))
+                    die("joined repeat context/query checkpoint " +
                         std::to_string(iteration) + ": " + replayDifference);
                 source->step(true);
                 const Snapshot repeatedDeletion = source->capture();
@@ -983,8 +1142,61 @@ int main(int argc, char** argv)
                                                    replayDifference))
                     die("joined repeat oracle " +
                         std::to_string(iteration) + ": " + replayDifference);
+                oc2::offline::SapImage repeatedSap;
+                oc2::offline::TransformCacheImage repeatedCache;
+                oc2::offline::ShapeCacheBindings repeatedShapeCache;
+                oc2::offline::BodyImage repeatedBody;
+                oc2::offline::SceneClockImage repeatedClock;
+                oc2::offline::ContextImage repeatedNextContext;
+                oc2::offline::QueryImage repeatedNextQuery;
+                oc2::offline::IslandImage repeatedIsland;
+                physx333_offline::MemBlockRestoreImage repeatedBlocks;
+                physx333_offline::MemBlockIdentityRegistry repeatedIds =
+                    memBlockIds;
+                if (!oc2::offline::CaptureSap(*source->scene, repeatedSap,
+                        replayDifference) ||
+                    !oc2::offline::CaptureTransformCache(*source->scene,
+                        repeatedCache, replayDifference) ||
+                    !oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                        repeatedShapeCache, replayDifference) ||
+                    !oc2::offline::CaptureBodies(*source->scene,
+                        repeatedBody, replayDifference) ||
+                    !oc2::offline::CaptureSceneClock(*source->scene,
+                        repeatedClock, replayDifference) ||
+                    !oc2::offline::CaptureContextImage(*source->scene,
+                        repeatedNextContext, replayDifference) ||
+                    !oc2::offline::CaptureQueryImage(*source->scene,
+                        repeatedNextQuery, replayDifference) ||
+                    !oc2::offline::CaptureIsland(*source->scene,
+                        repeatedIsland, replayDifference) ||
+                    !physx333_offline::CaptureMemBlockRestore(*source->scene,
+                        repeatedIds, repeatedBlocks, replayDifference))
+                    die("joined repeat extended capture " +
+                        std::to_string(iteration) + ": " + replayDifference);
+                if (!expectedDeletionSap.equals(repeatedSap,
+                        replayDifference) ||
+                    !expectedDeletionCache.equals(repeatedCache,
+                        replayDifference) ||
+                    !expectedDeletionShapeCache.equals(repeatedShapeCache,
+                        replayDifference) ||
+                    !expectedDeletionBody.equals(repeatedBody,
+                        replayDifference) ||
+                    !expectedDeletionClock.equals(repeatedClock,
+                        replayDifference) ||
+                    !expectedDeletionContext.equals(repeatedNextContext,
+                        replayDifference) ||
+                    !expectedDeletionQuery.equalsWithRebasedStack(
+                        repeatedNextQuery, replayDifference) ||
+                    !expectedDeletionIsland.equals(repeatedIsland,
+                        replayDifference) ||
+                    !expectedDeletionBlocks.pool.equals(repeatedBlocks.pool,
+                        replayDifference) ||
+                    expectedDeletionBlocks.contactBindings !=
+                        repeatedBlocks.contactBindings)
+                    die("joined repeat extended image " +
+                        std::to_string(iteration) + ": " + replayDifference);
             }
-            std::cout << "PASS joined rewind and next-step parity x100\n";
+            std::cout << "PASS joined rewind and full next-step image parity x100\n";
             World reference(runtime);
             reference.step(false);
             reference.step(true);

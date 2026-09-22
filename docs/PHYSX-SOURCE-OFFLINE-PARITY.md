@@ -6,6 +6,22 @@ to a settled checkpoint and produce the same subsequent internal states and
 outputs when given the same calls. Game execution is deferred during this
 track. A source-built result is not yet a claim about Unity's shipped binary.
 
+## Latest status (2026-09-22)
+
+The expanded six-contact same-scene joined rewind passes 100
+checkpoint-to-next-step cycles with full component-image comparisons and a
+five-step suffix. It includes cached worker-context state and a guarded
+semantic rebase when the scene-query pruner replaces its FIFO stack backing.
+A separate 12→8 contact fixture reproduces four lost callbacks
+under a public-only rewind. Its subset lifecycle bridge restores the four
+missing pair objects and their exact physical slots while preserving eight
+survivors, but contact/report payload and the full checkpoint image still
+differ; it does not simulate after that partial reconstruction. A settled
+kinematic-target body-image component test passes 100 A↔B round trips, not a
+joined next-step proof. See [the detailed source-state audit](PHYSX-SOURCE-STATE-AUDIT.md)
+for the current coverage and feature gates. The older milestone narrative
+below records how the experiment reached this point.
+
 ## Source and existing evidence
 
 The local upstream source is the `3.3.3-1.3.3` tag of
@@ -88,7 +104,7 @@ These gates establish PhysX-only parity for the exercised Story 1-1 feature
 set. Unity's build flags, private layout, scene integration, and exact game
 input history still require later calibration against the shipped binary.
 
-## Current status
+## Earlier component milestones
 
 Gates 1 and 2 pass in the pinned Win32 Release source build. The fixture has
 six separated dynamic-box/static-box contacts. After the checkpoint, moving

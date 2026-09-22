@@ -37,6 +37,43 @@ static_assert(sizeof(FIFOStackMirror) == 16,
               "Unexpected PhysX 3.3.3 FIFOStack2 layout");
 
 constexpr std::size_t kMaxImageBytes = 16u * 1024u * 1024u;
+const char* const kRebasedStackData = "dynamic.newTreeStorage.stackData";
+const char* const kRebasedStackCapacity = "dynamic.newTreeStorage.stackCapacity";
+const char* const kRebasedStackSize = "dynamic.newTreeStorage.stackSize";
+const char* const kRebasedStackStorage = "dynamic.newTreeStorage.stackStorage";
+
+const QueryImage::Field* findField(const QueryImage& image, const char* name)
+{
+    for (const QueryImage::Field& field : image.fields)
+        if (field.name == name) return &field;
+    return nullptr;
+}
+
+bool readWord(const QueryImage::Field* field, PxU32& value)
+{
+    if (!field || field->bytes.size() != sizeof(value)) return false;
+    std::memcpy(&value, field->bytes.data(), sizeof(value));
+    return true;
+}
+
+bool validStackBuffer(const QueryImage& image, PxU32& capacity,
+                      PxU32& size)
+{
+    const QueryImage::Field* data = findField(image, kRebasedStackData);
+    const QueryImage::Field* storage = findField(image, kRebasedStackStorage);
+    const QueryImage::Field* cap = findField(image, kRebasedStackCapacity);
+    if (!storage)
+        return false;
+    PxU32 pointer = 0;
+    if (!readWord(data, pointer) || !readWord(cap, capacity) ||
+        !readWord(findField(image, kRebasedStackSize), size))
+        return false;
+    if (size > capacity ||
+        storage->bytes.size() != std::size_t(capacity) * sizeof(StackEntryMirror) ||
+        (capacity ? pointer != storage->address : pointer != 0))
+        return false;
+    return true;
+}
 
 bool addBytes(QueryImage& image, const std::string& name,
               const void* address, std::size_t bytes, bool invariant,
@@ -408,6 +445,47 @@ bool QueryImage::equals(const QueryImage& other, std::string& error) const
     return true;
 }
 
+bool QueryImage::equalsWithRebasedStack(const QueryImage& other,
+                                        std::string& error) const
+{
+    if (scene != other.scene || fields.size() != other.fields.size())
+    {
+        error = "query image scene or field count differs";
+        return false;
+    }
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const Field& a = fields[i];
+        const Field& b = other.fields[i];
+        if (a.name != b.name || a.invariant != b.invariant ||
+            a.bytes.size() != b.bytes.size() ||
+            (a.address != b.address && a.name != kRebasedStackStorage) ||
+            (a.bytes != b.bytes && a.name != kRebasedStackData))
+        {
+            error = "query image differs at " + a.name;
+            return false;
+        }
+    }
+    const bool haveStack = findField(*this, kRebasedStackData) != nullptr;
+    if (haveStack != (findField(other, kRebasedStackData) != nullptr))
+    {
+        error = "query FIFO stack layout differs";
+        return false;
+    }
+    if (haveStack)
+    {
+        PxU32 lhsCap = 0, lhsSize = 0, rhsCap = 0, rhsSize = 0;
+        if (!validStackBuffer(*this, lhsCap, lhsSize) ||
+            !validStackBuffer(other, rhsCap, rhsSize) ||
+            lhsCap != rhsCap || lhsSize != rhsSize)
+        {
+            error = "query FIFO stack backing is inconsistent";
+            return false;
+        }
+    }
+    return true;
+}
+
 bool CaptureQueryImage(PxScene& scene, QueryImage& out, std::string& error)
 {
     error.clear();
@@ -431,35 +509,77 @@ bool RestoreQueryImage(PxScene& scene, const QueryImage& target,
         error = "query image belongs to another scene or layout";
         return false;
     }
+    // The source FIFO is a Ps::Array. A later progressive build may double
+    // its allocation, freeing the checkpoint buffer. Never write to that
+    // stale address. Reuse the currently owned (at least as large) buffer,
+    // lower its logical capacity, and let Ps::Array grow it on replay.
+    bool rebaseStack = false;
+    const QueryImage::Field* targetStack = findField(target, kRebasedStackStorage);
+    const QueryImage::Field* beforeStack = findField(before, kRebasedStackStorage);
+    if (targetStack || beforeStack)
+    {
+        PxU32 targetCap = 0, targetSize = 0;
+        PxU32 beforeCap = 0, beforeSize = 0;
+        if (!validStackBuffer(target, targetCap, targetSize) ||
+            !validStackBuffer(before, beforeCap, beforeSize))
+        {
+            error = "query FIFO stack image is inconsistent";
+            return false;
+        }
+        rebaseStack = targetStack->address != beforeStack->address ||
+            targetCap != beforeCap;
+        if (rebaseStack && (!targetCap || targetCap > beforeCap ||
+                            targetStack->address == beforeStack->address))
+        {
+            error = "query FIFO stack cannot be safely rebased";
+            return false;
+        }
+    }
     for (std::size_t i = 0; i < target.fields.size(); ++i)
     {
         const QueryImage::Field& to = target.fields[i];
         const QueryImage::Field& from = before.fields[i];
-        if (to.name != from.name || to.address != from.address ||
-            to.invariant != from.invariant || to.bytes.size() != from.bytes.size())
+        const bool movedStorage = rebaseStack && to.name == kRebasedStackStorage;
+        const bool movedData = rebaseStack && to.name == kRebasedStackData;
+        const bool lowerCapacity = rebaseStack && to.name == kRebasedStackCapacity;
+        if (to.name != from.name ||
+            (!movedStorage && to.address != from.address) ||
+            to.invariant != from.invariant ||
+            (!movedStorage && to.bytes.size() != from.bytes.size()))
         {
             error = "query storage changed at " + to.name;
             return false;
         }
-        if (to.invariant && to.bytes != from.bytes)
+        if (to.invariant && to.bytes != from.bytes &&
+            !movedData && !lowerCapacity)
         {
             error = "query topology changed at " + to.name;
             return false;
         }
     }
     for (const QueryImage::Field& field : target.fields)
-        if (!field.invariant && !field.bytes.empty())
-            std::memcpy(reinterpret_cast<void*>(field.address),
+        if ((!field.invariant ||
+             (rebaseStack && field.name == kRebasedStackCapacity)) &&
+            !field.bytes.empty())
+        {
+            const std::uintptr_t address =
+                rebaseStack && field.name == kRebasedStackStorage ?
+                beforeStack->address : field.address;
+            std::memcpy(reinterpret_cast<void*>(address),
                         field.bytes.data(), field.bytes.size());
+        }
 
     QueryImage observed;
     std::string verifyError;
     if (capture(scene, observed, verifyError) &&
-        target.equals(observed, verifyError)) return true;
+        (rebaseStack ? target.equalsWithRebasedStack(observed, verifyError) :
+                       target.equals(observed, verifyError))) return true;
 
     // All writes above have fixed addresses, so this rollback cannot allocate.
     for (const QueryImage::Field& field : before.fields)
-        if (!field.invariant && !field.bytes.empty())
+        if ((!field.invariant ||
+             (rebaseStack && field.name == kRebasedStackCapacity)) &&
+            !field.bytes.empty())
             std::memcpy(reinterpret_cast<void*>(field.address),
                         field.bytes.data(), field.bytes.size());
     error = "query restore verification failed: " + verifyError;

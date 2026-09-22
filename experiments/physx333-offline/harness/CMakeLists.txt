@@ -30,6 +30,8 @@ add_executable(physx333_offline_harness
   ../interaction/InteractionImage.cpp
   ../body/BodyImage.cpp
   ../scene_clock/SceneClockImage.cpp
+  ../context_image/ContextImage.cpp
+  ../query_image/QueryImage.cpp
 )
 target_compile_features(physx333_offline_harness PRIVATE cxx_std_11)
 target_compile_definitions(physx333_offline_harness PRIVATE
