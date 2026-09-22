@@ -121,6 +121,16 @@ rebasing remain outside this component's admission. The production Unity
 helper remains read-only for SAP/BPElem and does not apply the full predecessor
 transaction.
 
+The low-level `PxsTransformCache` and its `Cm::IDPool` now have a separate
+same-scene component image. It preserves the full transform and reference-count
+allocations, including capacity tails, plus the ID high-water mark and ordered
+free-ID stack. In the six-contact fixture it passes duplicate checkpoint
+capture, 100 checkpoint/deleted-state round trips, and atomic rejection of a
+corrupt high-water mark. This component likewise cannot be used alone before
+simulation: ShapeSim IDs, contact managers, and islands still own references to
+the old topology. It rejects an allocation-address or capacity change; growth
+of the free-ID array requires a later allocator-aware restore.
+
 A read-only NPhase/contact/island oracle now passes the same checkpoint,
 six-deletion, and settled-suffix comparisons between independent scenes. It
 captures 39 ordered sections including interaction and ActorPair topology,

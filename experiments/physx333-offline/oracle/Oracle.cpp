@@ -308,11 +308,17 @@ std::string OracleImage::summary() const
 
 bool CaptureOracle(PxScene& scene, OracleImage& image, std::string& error)
 {
+    NpScene& npScene = static_cast<NpScene&>(scene);
+    if (npScene.isPhysicsRunning() || npScene.isPhysicsBuffering())
+    {
+        error = "scene is inside simulate/collide/fetchResults";
+        return false;
+    }
     OracleImage next;
     ShapeIds ids;
     ActorIds actorCores;
     if (!fixtureIds(scene, ids, actorCores, error)) return false;
-    Sc::Scene& sc = static_cast<NpScene&>(scene).getScene().getScScene();
+    Sc::Scene& sc = npScene.getScene().getScScene();
     Sc::NPhaseCore& np = *sc.getNPhaseCore();
     Sc::InteractionScene& interactions = sc.getInteractionScene();
     PxsContext& context = *interactions.getLowLevelContext();

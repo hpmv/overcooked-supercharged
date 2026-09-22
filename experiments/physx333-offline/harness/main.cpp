@@ -17,6 +17,7 @@
 #include "PxsContext.h"
 #include "../sap/SapImage.h"
 #include "../oracle/Oracle.h"
+#include "../cache/TransformCacheImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -495,6 +496,16 @@ int main(int argc, char** argv)
         if (!sapCheckpoint.equals(sapCheckpointCopy, sapDifference))
             die("SAP checkpoint capture is not stable: " + sapDifference);
         std::cout << "PASS SAP checkpoint double capture\n";
+        oc2::offline::TransformCacheImage cacheCheckpoint;
+        oc2::offline::TransformCacheImage cacheCheckpointCopy;
+        std::string cacheError;
+        std::string cacheDifference;
+        if (!oc2::offline::CaptureTransformCache(*source.scene, cacheCheckpoint, cacheError) ||
+            !oc2::offline::CaptureTransformCache(*source.scene, cacheCheckpointCopy, cacheError))
+            die("transform-cache checkpoint capture: " + cacheError);
+        if (!cacheCheckpoint.equals(cacheCheckpointCopy, cacheDifference))
+            die("transform-cache checkpoint capture is not stable: " + cacheDifference);
+        std::cout << "PASS transform-cache checkpoint double capture\n";
 
         source.step(true);
         deletion = source.capture();
@@ -507,6 +518,9 @@ int main(int argc, char** argv)
         oc2::offline::SapImage sapDeleted;
         if (!oc2::offline::CaptureSap(*source.scene, sapDeleted, sapError))
             die("SAP deletion capture: " + sapError);
+        oc2::offline::TransformCacheImage cacheDeleted;
+        if (!oc2::offline::CaptureTransformCache(*source.scene, cacheDeleted, cacheError))
+            die("transform-cache deletion capture: " + cacheError);
 
         for (PxU32 iteration = 0; iteration != 100; ++iteration)
         {
@@ -551,6 +565,39 @@ int main(int argc, char** argv)
         if (!sapDeleted.equals(afterReject, sapDifference))
             die("rejected SAP image changed live state: " + sapDifference);
         std::cout << "PASS corrupt SAP image rejected atomically\n";
+
+        for (PxU32 iteration = 0; iteration != 100; ++iteration)
+        {
+            if (!oc2::offline::RestoreTransformCache(*source.scene,
+                                                      cacheCheckpoint, cacheError))
+                die("transform-cache checkpoint restore: " + cacheError);
+            oc2::offline::TransformCacheImage restored;
+            if (!oc2::offline::CaptureTransformCache(*source.scene, restored, cacheError) ||
+                !cacheCheckpoint.equals(restored, cacheDifference))
+                die("transform-cache checkpoint round-trip: " +
+                    (cacheError.empty() ? cacheDifference : cacheError));
+            // Other PhysX subsystems still own the deleted-state topology.
+            if (!oc2::offline::RestoreTransformCache(*source.scene,
+                                                      cacheDeleted, cacheError))
+                die("transform-cache deletion restore: " + cacheError);
+            if (!oc2::offline::CaptureTransformCache(*source.scene, restored, cacheError) ||
+                !cacheDeleted.equals(restored, cacheDifference))
+                die("transform-cache deletion round-trip: " +
+                    (cacheError.empty() ? cacheDifference : cacheError));
+        }
+        std::cout << "PASS transform-cache/ID-pool A-B round-trip x100\n";
+        oc2::offline::TransformCacheImage corruptCache = cacheCheckpoint;
+        corruptCache.currentId = 0xffffffffu;
+        if (oc2::offline::RestoreTransformCache(*source.scene,
+                                                 corruptCache, cacheError))
+            die("corrupt transform-cache image was accepted");
+        oc2::offline::TransformCacheImage cacheAfterReject;
+        if (!oc2::offline::CaptureTransformCache(*source.scene,
+                                                  cacheAfterReject, cacheError) ||
+            !cacheDeleted.equals(cacheAfterReject, cacheDifference))
+            die("rejected transform-cache image changed live state: " +
+                (cacheError.empty() ? cacheDifference : cacheError));
+        std::cout << "PASS corrupt transform-cache image rejected atomically\n";
 
         source.step(false);
         settled = source.capture();
