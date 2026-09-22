@@ -17,8 +17,9 @@ touching pairs or ten touching and two overlapping/non-touching pairs. It
 matches ordered callbacks, all 39 implemented source-Oracle sections, and
 the SAP, island, interaction, cache, body, clock, context, query, and contact
 memory component images. A diagnostic fixed-address allocator independently
-replays the two cold variants with matching initialized arena bytes and
-allocation ledgers for 100 cycles each. See the
+replays a five-step alternating 12↔8 suffix for each cold variant, matching
+initialized arena bytes, allocation ledgers, and callbacks over 100 cycles.
+See the
 [12→8 fixture](../experiments/physx333-offline/partial_contacts/README.md),
 [arena diagnostic](../experiments/physx333-offline/arena_snapshot/README.md),
 and [source-state audit](PHYSX-SOURCE-STATE-AUDIT.md). The older milestone

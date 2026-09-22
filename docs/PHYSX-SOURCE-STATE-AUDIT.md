@@ -56,7 +56,8 @@ stack. This does not cover the level's capsule/box geometry, trigger and
 marker interactions, or its six-deletion broadphase pattern. See the
 [12→8 fixture](../experiments/physx333-offline/partial_contacts/README.md).
 A separate [raw-arena diagnostic](../experiments/physx333-offline/arena_snapshot/README.md)
-also replays its two cold layouts for 100 cycles, but it does not capture OS
+also replays five-step suffixes for its two cold layouts over 100 cycles,
+but it does not capture OS
 state or imply direct use in the statically linked Unity binary.
 
 ## Retained-state inventory

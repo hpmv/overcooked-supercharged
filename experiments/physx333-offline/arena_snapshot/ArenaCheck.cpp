@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "PxPhysicsAPI.h"
@@ -272,23 +273,38 @@ int main(int argc, char** argv)
     f.step(0.0f);
     require(f.contactPairs() == 12, "checkpoint must have twelve pairs");
     const auto checkpoint = f.allocator.capture();
-    f.step(-0.2f);
-    require(f.contactPairs() == 8, "successor must have eight pairs");
-    const auto expected = f.allocator.capture();
-    const std::vector<PxU32> expectedEvents = f.events.words;
+    const PxReal suffixPoses[] = {-0.2f, 0.0f, -0.2f, 0.0f, -0.2f};
+    struct Observation
+    {
+        oc2::offline::ArenaSnapshotAllocator::Image arena;
+        std::vector<PxU32> events;
+        PxU32 pairs;
+    };
+    std::vector<Observation> expected;
+    for (unsigned step = 0; step < 5; ++step)
+    {
+        f.step(suffixPoses[step]);
+        Observation observed;
+        observed.arena = f.allocator.capture();
+        observed.events = f.events.words;
+        observed.pairs = f.contactPairs();
+        require(observed.pairs == (step % 2 ? 12u : 8u),
+                "reference suffix pair count");
+        expected.push_back(std::move(observed));
+    }
     {
         auto invalid = checkpoint;
         ++invalid.owner;
         std::string error;
         require(!f.allocator.restore(invalid, error),
                 "foreign arena image must reject");
-        require(expected.equals(f.allocator.capture(), error),
+        require(expected.back().arena.equals(f.allocator.capture(), error),
                 "foreign image rejection changed arena: " + error);
         invalid = checkpoint;
         invalid.blocks.front().offset = 1;
         require(!f.allocator.restore(invalid, error),
                 "misaligned arena block must reject");
-        require(expected.equals(f.allocator.capture(), error),
+        require(expected.back().arena.equals(f.allocator.capture(), error),
                 "malformed block rejection changed arena: " + error);
     }
     for (unsigned iteration = 0; iteration < 100; ++iteration)
@@ -299,14 +315,20 @@ int main(int argc, char** argv)
         const auto restored = f.allocator.capture();
         if (!checkpoint.equals(restored, error))
             require(false, "checkpoint arena differs: " + error);
-        f.step(-0.2f);
-        require(f.contactPairs() == 8, "replay pair count");
-        require(f.events.words == expectedEvents, "replay callbacks differ");
-        const auto replayed = f.allocator.capture();
-        if (!sameInitializedArena(expected, replayed, error))
-            require(false, "replayed arena differs: " + error);
+        for (unsigned step = 0; step < 5; ++step)
+        {
+            f.step(suffixPoses[step]);
+            require(f.contactPairs() == expected[step].pairs,
+                    "replay suffix pair count");
+            require(f.events.words == expected[step].events,
+                    "replay suffix callbacks differ");
+            const auto replayed = f.allocator.capture();
+            if (!sameInitializedArena(expected[step].arena, replayed, error))
+                require(false, "replayed suffix arena differs at step " +
+                        std::to_string(step) + ": " + error);
+        }
     }
     std::cout << "PASS source-built 12-to-8 " <<
         (mixed ? "mixed " : "all-touch ") <<
-        "raw-allocation replay x100\n";
+        "raw-allocation five-step replay x100\n";
 }
