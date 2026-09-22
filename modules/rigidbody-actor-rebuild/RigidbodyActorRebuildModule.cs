@@ -64,6 +64,10 @@ namespace SuperchargedPatch.Authoring.Modules
             public ushort CacheSize,ContactCount,WorkUnitFlags,StatusFlags;
             public byte InteractionType,InteractionFlags,GeomType0,GeomType1,DisableResponse,DisableCcd;
             public ushort ValidationFlags;
+            public UIntPtr ActorPairActor0,ActorPairActor1,ActorPairScene;
+            public ushort ActorPairInternalFlags,ActorPairTouchCount,ActorPairRefCount,ActorPairReserved;
+            public UIntPtr ActorPairReportData;
+            public uint ActorPairHash;
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
@@ -167,6 +171,28 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeActorPairPoolReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,Pool,FreeHead,Slabs;
+            public uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,SlabCount;
+            public uint TotalElements,FreeCount,FreeOrderHash,AllocatedCount,AllocatedOrderHash,ValidationFlags;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopFree;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopAllocated;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeActorPairReportPoolReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,Pool,FreeHead,Slabs;
+            public uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,SlabCount;
+            public uint TotalElements,FreeCount,FreeOrderHash,AllocatedCount,AllocatedOrderHash,ValidationFlags;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopFree;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopAllocated;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeDirtyInteractionKey
         {
             public UIntPtr ElementLow,ElementHigh,PrimaryVtable;
@@ -200,6 +226,12 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr unityBase,UIntPtr context,uint poolKind,UIntPtr expectedPool,IntPtr snapshot,uint count,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeSipPoolCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,IntPtr snapshot,uint capacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeActorPairPoolCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr freeSnapshot,uint freeCapacity,
+            IntPtr allocatedSnapshot,uint allocatedCapacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeActorPairReportPoolCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr freeSnapshot,uint freeCapacity,
+            IntPtr allocatedSnapshot,uint allocatedCapacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateArm(
@@ -281,6 +313,28 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint[] Order;
         }
 
+        private sealed class ActorPairPoolState
+        {
+            internal uint NPhaseCore,Pool,FreeOrderHash,AllocatedOrderHash;
+            internal uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,SlabCount,TotalElements;
+            internal uint[] FreeOrder,AllocatedOrder;
+        }
+
+        private sealed class ActorPairReportPoolState
+        {
+            internal uint NPhaseCore,Pool,FreeOrderHash,AllocatedOrderHash;
+            internal uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,SlabCount,TotalElements;
+            internal uint[] FreeOrder,AllocatedOrder;
+            internal byte[][] AllocatedBytes;
+        }
+
+        private sealed class ActorPairReuseScanState
+        {
+            internal uint ActorPair,Actor0,Actor1,ScannedActor,OtherActor;
+            internal uint InteractionCount,SipCandidates,MatchingSipCandidates;
+            internal uint[] MatchingActorPairs;
+        }
+
         private sealed class ColliderEndpointState
         {
             internal Collider Collider;
@@ -316,6 +370,8 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint[] ContactPoolOrder;
             internal ContactManagerOwnerState ContactManagerOwners;
             internal SipPoolState ShapeInstancePairPool;
+            internal ActorPairPoolState ActorPairPool;
+            internal ActorPairReportPoolState ActorPairReportPool;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -337,6 +393,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeManifoldPoolCaptureSnapshot captureManifoldPoolSnapshot;
         private NativeManifoldPoolRestoreSnapshot restoreManifoldPoolSnapshot;
         private NativeSipPoolCaptureSnapshot captureSipPoolSnapshot;
+        private NativeActorPairPoolCaptureSnapshot captureActorPairPoolSnapshot;
+        private NativeActorPairReportPoolCaptureSnapshot captureActorPairReportPoolSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
         private NativeApiVersion contactRecreateApiVersion;
         private NativeApiVersion contactRecreateAuditApiVersion;
@@ -449,6 +507,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 captureManifoldPoolSnapshot=Export<NativeManifoldPoolCaptureSnapshot>("oc2_manifold_pool_capture_snapshot");
                 restoreManifoldPoolSnapshot=Export<NativeManifoldPoolRestoreSnapshot>("oc2_manifold_pool_restore_snapshot");
                 captureSipPoolSnapshot=Export<NativeSipPoolCaptureSnapshot>("oc2_shape_instance_pair_pool_capture_snapshot");
+                captureActorPairPoolSnapshot=Export<NativeActorPairPoolCaptureSnapshot>("oc2_actor_pair_pool_capture_snapshot");
+                captureActorPairReportPoolSnapshot=Export<NativeActorPairReportPoolCaptureSnapshot>(
+                    "oc2_actor_pair_report_pool_capture_snapshot");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
@@ -466,7 +527,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
-                if(apiVersion()!=11)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(apiVersion()!=13)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 if(contactRecreateApiVersion()!=2)throw new InvalidOperationException("Native contact-recreate API version mismatch.");
                 if(contactRecreateAuditApiVersion()!=1)throw new InvalidOperationException("Native contact-recreate audit API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
@@ -803,7 +864,8 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null||
                 captureContactManagerActiveOwners==null||captureManifoldPoolSnapshot==null||
-                restoreManifoldPoolSnapshot==null||captureSipPoolSnapshot==null)
+                restoreManifoldPoolSnapshot==null||captureSipPoolSnapshot==null||
+                captureActorPairPoolSnapshot==null||captureActorPairReportPoolSnapshot==null)
                 throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
@@ -869,7 +931,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
             RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
@@ -879,6 +941,9 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Managed contact-pool snapshot hash differs from the native capture receipt.");
                 ContactManagerOwnerState owners=CaptureContactManagerOwners(actionFrame);
                 SipPoolState sip=CaptureSipPoolState(captureNPhase,actionFrame);
+                ActorPairPoolState actorPairs=CaptureActorPairPoolState(captureNPhase,actionFrame);
+                ActorPairReportPoolState actorPairReports=CaptureActorPairReportPoolState(
+                    captureNPhase,actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -888,6 +953,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     OrderHash=orderHash,ContactPoolOrder=capturedOrder,
                     ContactManagerOwners=owners,
                     ShapeInstancePairPool=sip,
+                    ActorPairPool=actorPairs,
+                    ActorPairReportPool=actorPairReports,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 uint afterObservation;
@@ -932,7 +999,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=11||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=13||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeArray.ToUInt32()!=expected.FreeArray||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
@@ -977,7 +1044,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=11||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=13||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
                     throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
@@ -1198,6 +1265,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-sip-sidecar",phase,
                     delegate { ValidateSipPoolState(selected.ShapeInstancePairPool); },
                     "TARGET_SIP_SIDECAR_VALID","The ShapeInstancePair pool sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-actor-pair-sidecar",phase,
+                    delegate { ValidateActorPairPoolState(selected.ActorPairPool); },
+                    "TARGET_ACTOR_PAIR_SIDECAR_VALID","The ActorPair pool sidecar is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-actor-pair-report-sidecar",phase,
+                    delegate { ValidateActorPairReportPoolState(selected.ActorPairReportPool); },
+                    "TARGET_ACTOR_PAIR_REPORT_SIDECAR_VALID",
+                    "The ActorPair contact-report pool sidecar is structurally valid.");
                 AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-large-sidecar",phase,
                     delegate { ValidateManifoldPoolState(selected.LargeManifoldPool,
                         LargeManifoldPoolKind,"large"); },
@@ -1215,17 +1289,33 @@ namespace SuperchargedPatch.Authoring.Modules
                     NativeContactManagerOwnerRecord[] owners=selected.ContactManagerOwners.Records;
                     var contactFree=new HashSet<uint>(selected.ContactPoolOrder);
                     var sipFree=new HashSet<uint>(selected.ShapeInstancePairPool.Order);
+                    var actorPairFree=new HashSet<uint>(selected.ActorPairPool.FreeOrder);
+                    var actorPairAllocated=new HashSet<uint>(selected.ActorPairPool.AllocatedOrder);
+                    var actorPairReportFree=new HashSet<uint>(selected.ActorPairReportPool.FreeOrder);
+                    var actorPairReportAllocated=new HashSet<uint>(selected.ActorPairReportPool.AllocatedOrder);
                     var largeFree=new HashSet<uint>(selected.LargeManifoldPool.Order);
                     uint[] managerOverlap=owners.Select(value=>value.Manager.ToUInt32())
                         .Where(contactFree.Contains).ToArray();
                     uint[] sipOverlap=owners.Select(value=>value.Sip.ToUInt32())
                         .Where(sipFree.Contains).ToArray();
+                    uint[] actorPairs=owners.Select(value=>value.ActorPair.ToUInt32()).Distinct().ToArray();
+                    uint[] actorPairOverlap=actorPairs.Where(actorPairFree.Contains).ToArray();
+                    uint[] actorPairMissing=actorPairs.Where(value=>!actorPairAllocated.Contains(value)).ToArray();
+                    uint[] actorPairReports=owners.Select(value=>value.ActorPairReportData.ToUInt32())
+                        .Where(value=>value!=0).Distinct().ToArray();
+                    uint[] actorPairReportOverlap=actorPairReports.Where(actorPairReportFree.Contains).ToArray();
+                    uint[] actorPairReportMissing=actorPairReports.Where(value=>
+                        !actorPairReportAllocated.Contains(value)).ToArray();
                     uint[] manifoldOverlap=owners.Select(value=>value.Manifold.ToUInt32())
                         .Where(largeFree.Contains).ToArray();
                     bool coherent=managerOverlap.Length==0&&sipOverlap.Length==0&&
+                        actorPairOverlap.Length==0&&actorPairMissing.Length==0&&
+                        actorPairReportOverlap.Length==0&&actorPairReportMissing.Length==0&&
                         manifoldOverlap.Length==0&&
                         selected.ContactManagerOwners.Receipt.UsedCount==(uint)owners.Length&&
                         selected.ShapeInstancePairPool.Used>=(uint)owners.Select(value=>value.Sip).Distinct().Count()&&
+                        selected.ActorPairPool.Used==(uint)actorPairs.Length&&
+                        selected.ActorPairReportPool.Used==(uint)actorPairReports.Length&&
                         selected.LargeManifoldPool.Used>=(uint)owners.Select(value=>value.Manifold).Distinct().Count();
                     AddReadinessCheck(checks,blockers,deferred,
                         "rigidbody.target-cross-pool-coherence",phase,coherent?"pass":"fail","blocker",
@@ -1235,9 +1325,15 @@ namespace SuperchargedPatch.Authoring.Modules
                         new Dictionary<string,object>{{"managerRows",owners.Length},
                             {"contactUsed",selected.ContactManagerOwners.Receipt.UsedCount},
                             {"sipUsed",selected.ShapeInstancePairPool.Used},
+                            {"actorPairUsed",selected.ActorPairPool.Used},
+                            {"actorPairReportUsed",selected.ActorPairReportPool.Used},
                             {"largeUsed",selected.LargeManifoldPool.Used},
                             {"managerPointersInTargetFree",HexArray(managerOverlap)},
                             {"sipPointersInTargetFree",HexArray(sipOverlap)},
+                            {"actorPairPointersInTargetFree",HexArray(actorPairOverlap)},
+                            {"actorPairPointersMissingFromTargetAllocated",HexArray(actorPairMissing)},
+                            {"actorPairReportPointersInTargetFree",HexArray(actorPairReportOverlap)},
+                            {"actorPairReportPointersMissingFromTargetAllocated",HexArray(actorPairReportMissing)},
                             {"manifoldPointersInTargetFree",HexArray(manifoldOverlap)}});
 
                     bool narrow=owners.All(value=>value.ContactCount==0&&value.CacheSize==0&&
@@ -1245,12 +1341,13 @@ namespace SuperchargedPatch.Authoring.Modules
                     AddReadinessCheck(checks,blockers,deferred,"rigidbody.zero-cache-scope",phase,
                         narrow?"pass":"fail","blocker",
                         narrow?"ZERO_CACHE_RECREATE_SCOPE":"UNSUPPORTED_CONTACT_CACHE_STATE",
-                        narrow?"All target pairs are zero-contact, cacheless large-manifold pairs.":
+                        narrow?"All target managers are zero-contact, cacheless, non-modifiable large-manifold pairs.":
                             "At least one target pair carries unsupported contact/cache/manifold state.",
                         new Dictionary<string,object>{{"rows",owners.Length},
                             {"nonzeroContacts",owners.Count(value=>value.ContactCount!=0)},
                             {"nonzeroCaches",owners.Count(value=>value.CacheSize!=0)},
-                            {"nonLargeManifolds",owners.Count(value=>value.ManifoldBytes!=0xF0u)}});
+                            {"nonLargeManifolds",owners.Count(value=>value.ManifoldBytes!=0xF0u)},
+                            {"modifiableManagers",owners.Count(value=>(value.ManagerFlags&1u)!=0)}});
                 }
                 catch(Exception error)
                 {
@@ -1306,6 +1403,9 @@ namespace SuperchargedPatch.Authoring.Modules
                     phase=="source-paused"?"Requires the restored target-paused allocator state.":
                         "Requires a valid resolved target plan.");
             }
+
+            AppendActorPairReadiness(checks,blockers,deferred,phase,found?selected:null,
+                nativeAuditAvailable?nativeAudit:(NativeContactRecreateAuditReceipt?)null);
 
             if(found&&phase=="target-paused")
             {
@@ -1365,9 +1465,10 @@ namespace SuperchargedPatch.Authoring.Modules
                     "Transform-dispatch live admission requires the restored target-paused state.",null);
             }
 
-            string[] futureFamilies={"actor-pair-pool","interaction-registration-order",
+            string[] futureFamilies={"interaction-registration-order",
                 "island-edge-allocator-and-change-queues","transform-cache-id-pool",
                 "broadphase-created-overlap-order","dirty-interaction-live-projection",
+                "contact-report-lists-and-buffer",
                 "first-output-owner-convergence"};
             foreach(string family in futureFamilies)
                 AddReadinessCheck(checks,blockers,deferred,"rigidbody."+family,phase,
@@ -1385,12 +1486,15 @@ namespace SuperchargedPatch.Authoring.Modules
                     "The audit changed tracked module state.",
                 new Dictionary<string,object>{{"before",before},{"after",after}});
 
+            object coverage=FinalizeReadinessCoverage(checks,blockers,deferred,phase);
+
             return new Dictionary<string,object>{{"schemaVersion",1},{"provider",Name},
                 {"operation","audit-restore-readiness"},{"phase",phase},{"sourceFrame",sourceFrame},
                 {"targetFrame",frame},{"currentFrame",CurrentCheckpointFrame()},
                 {"passed",blockers.Count==0},{"complete",deferred.Count==0},
                 {"checks",checks.ToArray()},{"blockers",blockers.ToArray()},
                 {"deferred",deferred.ToArray()},
+                {"coverage",coverage},
                 {"mutation",new Dictionary<string,object>{{"gameState",false},
                     {"moduleState",!stateExact},{"nativeState",false}}},
                 {"targetBinding",new Dictionary<string,object>{{"frame",frame},
@@ -1398,6 +1502,78 @@ namespace SuperchargedPatch.Authoring.Modules
                     {"sceneMetadataGeneration",sceneMetadataGeneration},
                     {"context",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")}}},
                 {"nativeAudit",nativeAuditAvailable?DescribeContactRecreateAudit(nativeAudit):null}};
+        }
+
+        private static readonly string[] RequiredReadinessCheckIds={
+            "rigidbody.target-binding","rigidbody.actor-pair-pool",
+            "rigidbody.zero-cache-scope","rigidbody.sphere-pool",
+            "rigidbody.transform-dispatch",
+            "rigidbody.interaction-registration-order",
+            "rigidbody.island-edge-allocator-and-change-queues",
+            "rigidbody.transform-cache-id-pool",
+            "rigidbody.broadphase-created-overlap-order",
+            "rigidbody.dirty-interaction-live-projection",
+            "rigidbody.contact-report-lists-and-buffer",
+            "rigidbody.first-output-owner-convergence",
+            "rigidbody.audit-state-proof"
+        };
+
+        private static readonly string[] RequiredTargetReadinessCheckIds={
+            "rigidbody.target-contact-sidecar","rigidbody.target-sip-sidecar",
+            "rigidbody.target-actor-pair-sidecar","rigidbody.target-actor-pair-report-sidecar",
+            "rigidbody.target-large-sidecar","rigidbody.target-sphere-sidecar",
+            "rigidbody.target-dirty-sidecar","rigidbody.target-cross-pool-coherence",
+            "rigidbody.resolved-plan-rows","rigidbody.native-audit-repeatability",
+            "rigidbody.native.arguments","rigidbody.native.observer",
+            "rigidbody.native.recreate-state","rigidbody.native.revisions",
+            "rigidbody.native.target-buffers","rigidbody.native.target-uniqueness",
+            "rigidbody.native.rows","rigidbody.native.row-uniqueness",
+            "rigidbody.native.sip-capture","rigidbody.native.sip-identity",
+            "rigidbody.native.sip-semantic-counts","rigidbody.native.sip-membership",
+            "rigidbody.native.sip-legacy-arm","rigidbody.native.contact-capture",
+            "rigidbody.native.contact-identity","rigidbody.native.contact-bitmaps",
+            "rigidbody.native.contact-membership","rigidbody.native.large-capture",
+            "rigidbody.native.large-identity","rigidbody.native.large-membership",
+            "rigidbody.native.writability",
+            "rigidbody.actor-pair.repeatability","rigidbody.actor-pair.pool-identity",
+            "rigidbody.actor-pair.target-partition","rigidbody.actor-pair.live-partition",
+            "rigidbody.actor-pair.reachability","rigidbody.actor-pair.reference-counts",
+            "rigidbody.actor-pair.target-coherence","rigidbody.actor-pair.touch-state",
+            "rigidbody.actor-pair.internal-flags","rigidbody.actor-pair-report.repeatability",
+            "rigidbody.actor-pair.report-data-pool","rigidbody.actor-pair.reuse-decision",
+            "rigidbody.actor-pair.allocation-binding"
+        };
+
+        private static object FinalizeReadinessCoverage(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase)
+        {
+            string[] ids=checks.Cast<Dictionary<string,object>>()
+                .Select(value=>Convert.ToString(value["id"])).ToArray();
+            string[] duplicates=ids.GroupBy(value=>value,StringComparer.Ordinal)
+                .Where(group=>group.Count()>1).Select(group=>group.Key).ToArray();
+            string[] requiredIds=(phase=="target-paused"?
+                RequiredReadinessCheckIds.Concat(RequiredTargetReadinessCheckIds):
+                RequiredReadinessCheckIds).ToArray();
+            string[] missing=requiredIds.Where(required=>
+                !ids.Contains(required,StringComparer.Ordinal)).ToArray();
+            foreach(string id in missing)
+                AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                    "MISSING_REQUIRED_CHECK","The provider omitted a required readiness family.",null);
+            AddReadinessCheck(checks,blockers,deferred,"rigidbody.coverage-manifest",phase,
+                duplicates.Length==0&&missing.Length==0?"pass":"fail","blocker",
+                duplicates.Length!=0?"DUPLICATE_CHECK_ID":
+                    missing.Length!=0?"MISSING_REQUIRED_CHECK":"REQUIRED_COVERAGE_ENUMERATED",
+                duplicates.Length==0&&missing.Length==0?
+                    "Every required readiness family is explicitly represented.":
+                    "The provider omitted or duplicated required readiness identifiers.",
+                new Dictionary<string,object>{{"contractVersion",2},
+                    {"required",requiredIds.Cast<object>().ToArray()},
+                    {"uncovered",missing.Cast<object>().ToArray()},
+                    {"duplicates",duplicates.Cast<object>().ToArray()}});
+            return new Dictionary<string,object>{{"contractVersion",2},
+                {"required",requiredIds.Cast<object>().ToArray()},
+                {"uncovered",missing.Cast<object>().ToArray()},
+                {"duplicates",duplicates.Cast<object>().ToArray()}};
         }
 
         private delegate void AuditValidator();
@@ -1464,6 +1640,252 @@ namespace SuperchargedPatch.Authoring.Modules
             foreach(string name in NativeAuditCheckNames)
                 AddReadinessCheck(checks,blockers,deferred,"rigidbody.native."+name,phase,
                     "deferred","blocker","TARGET_PHASE_REQUIRED",reason,null);
+        }
+
+        private static ActorPairReuseScanState ScanActorPairReuseCandidate(
+            IGrouping<uint,NativeContactManagerOwnerRecord> group)
+        {
+            NativeContactManagerOwnerRecord first=group.First();
+            uint actor0=first.ActorPairActor0.ToUInt32(),actor1=first.ActorPairActor1.ToUInt32();
+            if(actor0==0||actor1==0||actor0==actor1)
+                throw new InvalidOperationException("ActorPair endpoints are null or identical.");
+            uint count0=ReadWord(actor0+0x1Cu),count1=ReadWord(actor1+0x1Cu);
+            if(count0>MaximumShapeInstancePairs||count1>MaximumShapeInstancePairs)
+                throw new InvalidOperationException("Actor interaction count is outside the guarded bound.");
+            // Exact shipped findActorPair choice: ties scan actor1.
+            uint scanned=count0<count1?actor0:actor1;
+            uint other=scanned==actor0?actor1:actor0;
+            uint count=scanned==actor0?count0:count1;
+            uint data=ReadWord(scanned+0x14u);
+            if(count!=0&&data==0)
+                throw new InvalidOperationException("Actor interaction array is null with a nonzero count.");
+            uint sipCandidates=0,matching=0;
+            var matchingActorPairs=new List<uint>();
+            for(uint i=0;i<count;i++)
+            {
+                uint interaction=ReadWord(data+i*4u);
+                if(interaction==0)throw new InvalidOperationException("Actor interaction array contains null.");
+                uint endpoint0=ReadWord(interaction+0x04u),endpoint1=ReadWord(interaction+0x08u);
+                byte flags=ReadBytes(interaction+0x15u,1)[0];
+                if((flags&0x10)==0)continue;
+                sipCandidates++;
+                if(!((endpoint0==scanned&&endpoint1==other)||
+                    (endpoint0==other&&endpoint1==scanned)))continue;
+                matching++;
+                matchingActorPairs.Add(ReadWord(interaction+0x28u));
+            }
+            return new ActorPairReuseScanState {ActorPair=group.Key,Actor0=actor0,Actor1=actor1,
+                ScannedActor=scanned,OtherActor=other,InteractionCount=count,
+                SipCandidates=sipCandidates,MatchingSipCandidates=matching,
+                MatchingActorPairs=matchingActorPairs.ToArray()};
+        }
+
+        private static object DescribeActorPairReuseScan(ActorPairReuseScanState value)
+        {
+            return new Dictionary<string,object>{{"targetActorPair","0x"+value.ActorPair.ToString("X8")},
+                {"actor0","0x"+value.Actor0.ToString("X8")},{"actor1","0x"+value.Actor1.ToString("X8")},
+                {"scannedActor","0x"+value.ScannedActor.ToString("X8")},
+                {"otherActor","0x"+value.OtherActor.ToString("X8")},
+                {"interactionCount",value.InteractionCount},{"sipCandidates",value.SipCandidates},
+                {"matchingSipCandidates",value.MatchingSipCandidates},
+                {"matchingActorPairs",HexArray(value.MatchingActorPairs)}};
+        }
+
+        private void AppendActorPairReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,CheckpointSidecar selected,
+            NativeContactRecreateAuditReceipt? nativeAudit)
+        {
+            if(phase!="target-paused"||selected==null)
+            {
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair-pool",phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",
+                    "ActorPair live admission requires the restored target-paused allocator state.",null);
+                return;
+            }
+            try
+            {
+                ValidateActorPairPoolState(selected.ActorPairPool);
+                ActorPairPoolState first=CaptureActorPairPoolState(
+                    selected.ActorPairPool.NPhaseCore,selected.Frame);
+                ActorPairPoolState second=CaptureActorPairPoolState(
+                    selected.ActorPairPool.NPhaseCore,selected.Frame);
+                bool repeatable=SameActorPairPoolSnapshot(first,second);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.repeatability",phase,
+                    repeatable?"pass":"fail","blocker",
+                    repeatable?"ACTOR_PAIR_CAPTURE_REPEATABLE":"ACTOR_PAIR_CAPTURE_CHANGED",
+                    repeatable?"Two caller-owned ActorPair pool captures are byte-equivalent.":
+                        "Repeated ActorPair pool capture observed a changing allocator.",
+                    new Dictionary<string,object>{{"first",DescribeActorPairPoolState(first)},
+                        {"second",DescribeActorPairPoolState(second)}});
+
+                ActorPairPoolState target=selected.ActorPairPool;
+                bool identity=first.NPhaseCore==target.NPhaseCore&&first.Pool==target.Pool&&
+                    first.ElementSize==target.ElementSize&&
+                    first.ElementsPerSlab==target.ElementsPerSlab&&
+                    first.SlabSize==target.SlabSize&&first.SlabCount==target.SlabCount&&
+                    first.TotalElements==target.TotalElements;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.pool-identity",phase,
+                    identity?"pass":"fail","blocker",
+                    identity?"ACTOR_PAIR_POOL_IDENTITY":"ACTOR_PAIR_POOL_CHANGED",
+                    identity?"The target and live ActorPair partitions belong to the same exact pool.":
+                        "The live ActorPair allocator identity or layout differs from the target.",
+                    new Dictionary<string,object>{{"target",DescribeActorPairPoolState(target)},
+                        {"live",DescribeActorPairPoolState(first)}});
+
+                uint[] targetPointers=selected.ContactManagerOwners.Records
+                    .Select(value=>value.ActorPair.ToUInt32()).Distinct().ToArray();
+                var targetAllocated=new HashSet<uint>(target.AllocatedOrder);
+                bool targetPartition=target.Used==(uint)targetPointers.Length&&
+                    targetPointers.All(targetAllocated.Contains)&&
+                    targetPointers.Length==targetAllocated.Count;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.target-partition",phase,
+                    targetPartition?"pass":"fail","blocker",
+                    targetPartition?"ACTOR_PAIR_TARGET_PARTITION_EXACT":"ACTOR_PAIR_TARGET_PARTITION_MISMATCH",
+                    targetPartition?"Every target ActorPair is exactly the target allocated partition.":
+                        "The target owner rows and target ActorPair allocated partition disagree.",
+                    new Dictionary<string,object>{{"targetPointers",HexArray(targetPointers)},
+                        {"targetAllocated",HexArray(target.AllocatedOrder)}});
+
+                var expectedLiveFree=new HashSet<uint>(target.FreeOrder);
+                expectedLiveFree.UnionWith(target.AllocatedOrder);
+                var liveFree=new HashSet<uint>(first.FreeOrder);
+                bool livePartition=first.Used==0&&first.AllocatedOrder.Length==0&&
+                    liveFree.SetEquals(expectedLiveFree);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.live-partition",phase,
+                    livePartition?"pass":"fail","blocker",
+                    livePartition?"ACTOR_PAIR_LIVE_PARTITION_EXACT":"ACTOR_PAIR_LIVE_PARTITION_MISMATCH",
+                    livePartition?"The live free partition is exactly target-free plus every ActorPair to recreate.":
+                        "The restored ActorPair pool contains a missing, extra, or still-allocated element.",
+                    new Dictionary<string,object>{{"expectedLiveFreeCount",expectedLiveFree.Count},
+                        {"liveFreeCount",first.FreeOrder.Length},{"liveAllocated",HexArray(first.AllocatedOrder)}});
+
+                uint[] missing=targetPointers.Where(value=>!liveFree.Contains(value)).ToArray();
+                bool reachable=missing.Length==0;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.reachability",phase,
+                    reachable?"pass":"fail","blocker",
+                    reachable?"ACTOR_PAIR_TARGETS_REACHABLE":"ACTOR_PAIR_TARGET_MISSING",
+                    reachable?"Every exact target ActorPair is reachable in the live free list.":
+                        "At least one exact target ActorPair cannot be selected from the live allocator.",
+                    new Dictionary<string,object>{{"uniqueTargets",targetPointers.Length},
+                        {"missing",HexArray(missing)},
+                        {"liveFreeIndices",targetPointers.Select(value=>(object)Array.IndexOf(first.FreeOrder,value)).ToArray()}});
+
+                NativeContactManagerOwnerRecord[] owners=selected.ContactManagerOwners.Records;
+                var groups=owners.GroupBy(value=>value.ActorPair.ToUInt32()).ToArray();
+                const uint SipHasTouch=0x00200000u;
+                bool referenceCounts=groups.All(group=>
+                {
+                    NativeContactManagerOwnerRecord item=group.First();
+                    int reportSetReference=(item.ActorPairInternalFlags&1u)!=0?1:0;
+                    return item.ActorPairRefCount==group.Count()+reportSetReference;
+                });
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.reference-counts",phase,
+                    referenceCounts?"pass":"fail","blocker",
+                    referenceCounts?"ACTOR_PAIR_REFERENCE_COUNTS_EXACT":"ACTOR_PAIR_REFERENCE_COUNT_MISMATCH",
+                    referenceCounts?"Every ActorPair reference count equals its complete SIP ownership plus any report-set reference.":
+                        "At least one ActorPair reference count contradicts its captured owners and report-set flag.",
+                    new Dictionary<string,object>{{"uniqueTargets",groups.Length},{"rows",owners.Length}});
+
+                bool touchCoherent=groups.All(group=>
+                    group.First().ActorPairTouchCount==group.Count(value=>(value.SipFlags&SipHasTouch)!=0));
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.target-coherence",phase,
+                    touchCoherent&&referenceCounts?"pass":"fail","blocker",
+                    touchCoherent&&referenceCounts?"ACTOR_PAIR_TARGET_COHERENT":"ACTOR_PAIR_TARGET_CONTRADICTION",
+                    touchCoherent&&referenceCounts?
+                        "ActorPair touch counts, SIP touch flags, references, endpoints, and allocated ownership are coherent.":
+                        "The target ActorPair fields contradict the captured SIP or ownership state.",
+                    new Dictionary<string,object>{{"touchCounts",groups.Select(group=>(object)
+                            group.First().ActorPairTouchCount).ToArray()},
+                        {"sipTouchCounts",groups.Select(group=>(object)
+                            group.Count(value=>(value.SipFlags&SipHasTouch)!=0)).ToArray()}});
+
+                int touched=groups.Count(group=>group.First().ActorPairTouchCount!=0);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.touch-state",phase,
+                    !touchCoherent?"fail":touched==0?"pass":"deferred","blocker",
+                    !touchCoherent?"ACTOR_PAIR_TOUCH_STATE_CONTRADICTORY":
+                        touched==0?"ACTOR_PAIR_TOUCH_STATE_EMPTY":"ACTOR_PAIR_TOUCH_RESTORE_REQUIRED",
+                    !touchCoherent?"ActorPair and SIP touch state disagree.":
+                        touched==0?"No target ActorPair carries persistent touch history.":
+                            "Valid target ActorPairs carry touch history; exact direct reconstruction is not implemented yet.",
+                    new Dictionary<string,object>{{"touchedActorPairs",touched},{"uniqueTargets",groups.Length}});
+
+                int flagged=groups.Count(group=>group.First().ActorPairInternalFlags!=0);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.internal-flags",phase,
+                    flagged==0?"not-applicable":"deferred","blocker",
+                    flagged==0?"ACTOR_PAIR_NO_PENDING_REPORT_SET":"ACTOR_PAIR_REPORT_SET_RESTORE_REQUIRED",
+                    flagged==0?"No target ActorPair is pending in a report or threshold set.":
+                        "Target ActorPair flags require exact report/threshold set membership reconstruction.",
+                    new Dictionary<string,object>{{"flaggedActorPairs",flagged}});
+
+                ActorPairReportPoolState targetReports=selected.ActorPairReportPool;
+                ValidateActorPairReportPoolState(targetReports);
+                ActorPairReportPoolState liveReports=CaptureActorPairReportPoolState(
+                    targetReports.NPhaseCore,selected.Frame);
+                ActorPairReportPoolState liveReportsRepeated=CaptureActorPairReportPoolState(
+                    targetReports.NPhaseCore,selected.Frame);
+                bool reportRepeatable=SameActorPairReportPoolSnapshot(liveReports,liveReportsRepeated);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair-report.repeatability",phase,
+                    reportRepeatable?"pass":"fail","blocker",
+                    reportRepeatable?"ACTOR_PAIR_REPORT_CAPTURE_REPEATABLE":"ACTOR_PAIR_REPORT_CAPTURE_CHANGED",
+                    reportRepeatable?"Two caller-owned ActorPair report-pool captures are byte-equivalent.":
+                        "Repeated ActorPair report-pool capture observed changing state.",
+                    new Dictionary<string,object>{{"first",DescribeActorPairReportPoolState(liveReports)},
+                        {"second",DescribeActorPairReportPoolState(liveReportsRepeated)}});
+                uint[] targetReportPointers=groups.Select(group=>group.First().ActorPairReportData.ToUInt32())
+                    .Where(value=>value!=0).ToArray();
+                bool reportTargetPartition=targetReports.Used==(uint)targetReportPointers.Length&&
+                    new HashSet<uint>(targetReports.AllocatedOrder).SetEquals(targetReportPointers);
+                var expectedLiveReports=new HashSet<uint>(targetReports.FreeOrder);
+                expectedLiveReports.UnionWith(targetReports.AllocatedOrder);
+                bool reportLivePartition=liveReports.Used==0&&
+                    new HashSet<uint>(liveReports.FreeOrder).SetEquals(expectedLiveReports);
+                bool reportStructural=reportRepeatable&&reportTargetPartition&&reportLivePartition&&
+                    liveReports.Pool==targetReports.Pool&&liveReports.ElementSize==targetReports.ElementSize&&
+                    liveReports.SlabCount==targetReports.SlabCount;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.report-data-pool",phase,
+                    reportStructural?"deferred":"fail","blocker",
+                    reportStructural?"ACTOR_PAIR_REPORT_BINDING_REQUIRED":"ACTOR_PAIR_REPORT_POOL_MISMATCH",
+                    reportStructural?
+                        "The exact target report objects, bytes, and live free reachability are captured; semantic address binding and reconstruction remain.":
+                        "ActorPair report-data pool identity, partition, or owner mapping is inconsistent.",
+                    new Dictionary<string,object>{{"target",DescribeActorPairReportPoolState(targetReports)},
+                        {"live",DescribeActorPairReportPoolState(liveReports)},
+                        {"ownerReportPointers",HexArray(targetReportPointers)}});
+
+                bool sipAllocatorEmpty=nativeAudit.HasValue&&nativeAudit.Value.LiveSipUsed==0;
+                ActorPairReuseScanState[] reuseScans=groups.Select(ScanActorPairReuseCandidate).ToArray();
+                bool reuseExact=sipAllocatorEmpty&&reuseScans.All(value=>value.MatchingSipCandidates==0);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.reuse-decision",phase,
+                    reuseExact?"pass":"fail","blocker",
+                    reuseExact?"ACTOR_PAIR_ALLOCATE_DECISION_PROVED":"ACTOR_PAIR_REUSE_CANDIDATE_PRESENT",
+                    reuseExact?"The live SIP allocator and exact actor-interaction scans prove every target pair must allocate, not reuse.":
+                        "A live matching SIP or nonempty allocator makes the target allocate-versus-reuse decision incompatible.",
+                    new Dictionary<string,object>{{"liveSipUsed",nativeAudit.HasValue?
+                            (object)nativeAudit.Value.LiveSipUsed:null},
+                        {"scans",reuseScans.Select(value=>DescribeActorPairReuseScan(value)).ToArray()}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair.allocation-binding",phase,
+                    "deferred","blocker","ACTOR_PAIR_SEMANTIC_STEERING_REQUIRED",
+                    "All target addresses are reachable, but the current hook does not yet bind each semantic pair to its exact ActorPair before PhysX allocation.",
+                    new Dictionary<string,object>{{"freeIndices",targetPointers.Select(value=>(object)
+                        Array.IndexOf(first.FreeOrder,value)).ToArray()}});
+
+                bool structural=repeatable&&identity&&targetPartition&&livePartition&&reachable&&
+                    touchCoherent&&referenceCounts&&reportStructural&&reuseExact;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair-pool",phase,
+                    structural?"deferred":"fail","blocker",
+                    structural?"ACTOR_PAIR_RECONSTRUCTION_REQUIRED":"ACTOR_PAIR_STRUCTURAL_MISMATCH",
+                    structural?"ActorPair and report-data capture, coherence, partitions, reachability, and reuse decisions are exact; direct state reconstruction and address binding remain.":
+                        "ActorPair structural admission failed before replay.",
+                    new Dictionary<string,object>{{"target",DescribeActorPairPoolState(target)},
+                        {"live",DescribeActorPairPoolState(first)},
+                        {"uniqueTargetActorPairs",targetPointers.Length}});
+            }
+            catch(Exception error)
+            {
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.actor-pair-pool",phase,
+                    "fail","blocker","ACTOR_PAIR_AUDIT_FAILED",
+                    error.GetType().Name+": "+error.Message,null);
+            }
         }
 
         private NativeContactRecreateAuditReceipt CallContactRecreateAudit(
@@ -1777,7 +2199,7 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             int receiptSize=Marshal.SizeOf(typeof(NativeContactManagerOwnerReceipt));
             int recordSize=Marshal.SizeOf(typeof(NativeContactManagerOwnerRecord));
-            if(recordSize!=132||receiptSize!=156)
+            if(recordSize!=160||receiptSize!=156)
                 throw new InvalidOperationException("Managed contact-manager owner ABI size differs.");
             IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
             IntPtr recordBuffer=Marshal.AllocHGlobal(MaximumContactManagers*recordSize);
@@ -1792,7 +2214,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native contact-manager owner capture failed: result="+
                         receipt.Result+", Win32/error="+receipt.LastError+", invalidSlot="+
                         receipt.InvalidSlot+", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.Context.ToUInt32()!=contactManagerContext||receipt.TotalSlots<1||
                     receipt.TotalSlots>MaximumContactManagers||receipt.RecordsRequired!=receipt.UsedCount||
@@ -1806,7 +2228,7 @@ namespace SuperchargedPatch.Authoring.Modules
                         typeof(NativeContactManagerOwnerRecord));
                 if(records.Any(value=>value.Slot>=receipt.TotalSlots||
                         (value.Membership&3u)!=3u||value.Manager==UIntPtr.Zero||
-                        value.Sip==UIntPtr.Zero||value.ValidationFlags!=0x7Fu)||
+                        value.Sip==UIntPtr.Zero||value.ValidationFlags!=0xFFu)||
                     records.Select(value=>value.Slot).Distinct().Count()!=records.Length)
                     throw new InvalidOperationException("Native contact-manager owner records failed the managed set contract.");
                 Dictionary<uint,ColliderEndpointState> colliders=CurrentColliderShapeOwners();
@@ -1897,6 +2319,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"rigidBody0",Hex(value.RigidBody0)},{"rigidBody1",Hex(value.RigidBody1)},
                 {"rigidCore0",Hex(value.RigidCore0)},{"rigidCore1",Hex(value.RigidCore1)},
                 {"actorPair",Hex(value.ActorPair)},{"managerFlags","0x"+value.ManagerFlags.ToString("X8")},
+                {"actorPairActor0",Hex(value.ActorPairActor0)},
+                {"actorPairActor1",Hex(value.ActorPairActor1)},
+                {"actorPairScene",Hex(value.ActorPairScene)},
+                {"actorPairInternalFlags","0x"+value.ActorPairInternalFlags.ToString("X4")},
+                {"actorPairTouchCount",value.ActorPairTouchCount},
+                {"actorPairRefCount",value.ActorPairRefCount},
+                {"actorPairReportData",Hex(value.ActorPairReportData)},
+                {"actorPairHash","0x"+value.ActorPairHash.ToString("X8")},
                 {"sipFlags","0x"+value.SipFlags.ToString("X8")},
                 {"interactionType",value.InteractionType},{"interactionFlags","0x"+value.InteractionFlags.ToString("X2")},
                 {"geomType0",value.GeomType0},{"geomType1",value.GeomType1},
@@ -1955,7 +2385,7 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);
             }
-            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                 receipt.Context.ToUInt32()!=contactManagerContext||receipt.PoolKind!=poolKind||
                 receipt.Pool==UIntPtr.Zero||receipt.FreeHeadBefore.ToUInt32()!=
@@ -2012,7 +2442,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ok==0||receipt.Result!=1)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
                     receipt.Result+", Win32/error="+receipt.LastError+".");
-            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
                 receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
@@ -2080,7 +2510,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native shape-pair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.TraversedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0x1Fu)
@@ -2102,6 +2532,115 @@ namespace SuperchargedPatch.Authoring.Modules
             if(receipt.FreeHead.ToUInt32()!=(order.Length==0?0u:order[0])||
                 receipt.OrderHash!=ContactPoolOrderHash(order))
                 throw new InvalidOperationException("Managed shape-pair-pool snapshot differs from native capture.");
+            return state;
+        }
+
+        private ActorPairPoolState CaptureActorPairPoolState(uint nphaseCore,int frame)
+        {
+            if(captureActorPairPoolSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native ActorPair-pool capture is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeActorPairPoolReceipt));
+            if(size!=212)throw new InvalidOperationException("Managed ActorPair-pool ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr freeBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+            IntPtr allocatedBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+            NativeActorPairPoolReceipt receipt;
+            uint[] freeOrder=null,allocatedOrder=null;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureActorPairPoolSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),freeBuffer,MaximumShapeInstancePairs,
+                    allocatedBuffer,MaximumShapeInstancePairs,receiptBuffer);
+                receipt=(NativeActorPairPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeActorPairPoolReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native ActorPair-pool capture failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
+                    receipt.FreeCount>MaximumShapeInstancePairs||
+                    receipt.AllocatedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0xFFu)
+                    throw new InvalidOperationException("Native ActorPair-pool receipt contract differs.");
+                freeOrder=new uint[receipt.FreeCount];
+                allocatedOrder=new uint[receipt.AllocatedCount];
+                for(int i=0;i<freeOrder.Length;i++)freeOrder[i]=unchecked((uint)Marshal.ReadInt32(
+                    freeBuffer,i*IntPtr.Size));
+                for(int i=0;i<allocatedOrder.Length;i++)allocatedOrder[i]=unchecked((uint)Marshal.ReadInt32(
+                    allocatedBuffer,i*IntPtr.Size));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(allocatedBuffer);Marshal.FreeHGlobal(freeBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            var state=new ActorPairPoolState {NPhaseCore=nphaseCore,Pool=receipt.Pool.ToUInt32(),
+                FreeOrderHash=receipt.FreeOrderHash,AllocatedOrderHash=receipt.AllocatedOrderHash,
+                ElementSize=receipt.ElementSize,ElementsPerSlab=receipt.ElementsPerSlab,
+                Used=receipt.Used,Unreleased=receipt.Unreleased,SlabSize=receipt.SlabSize,
+                SlabCount=receipt.SlabCount,TotalElements=receipt.TotalElements,
+                FreeOrder=freeOrder,AllocatedOrder=allocatedOrder};
+            ValidateActorPairPoolState(state);
+            if(receipt.FreeHead.ToUInt32()!=(freeOrder.Length==0?0u:freeOrder[0])||
+                receipt.FreeOrderHash!=ContactPoolOrderHash(freeOrder)||
+                receipt.AllocatedOrderHash!=ContactPoolOrderHash(allocatedOrder))
+                throw new InvalidOperationException("Managed ActorPair-pool snapshot differs from native capture.");
+            return state;
+        }
+
+        private ActorPairReportPoolState CaptureActorPairReportPoolState(uint nphaseCore,int frame)
+        {
+            if(captureActorPairReportPoolSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native ActorPair report-pool capture is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeActorPairReportPoolReceipt));
+            if(size!=212)throw new InvalidOperationException("Managed ActorPair report-pool ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
+            IntPtr freeBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+            IntPtr allocatedBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+            NativeActorPairReportPoolReceipt receipt;
+            uint[] freeOrder=null,allocatedOrder=null;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureActorPairReportPoolSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),freeBuffer,MaximumShapeInstancePairs,
+                    allocatedBuffer,MaximumShapeInstancePairs,receiptBuffer);
+                receipt=(NativeActorPairReportPoolReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeActorPairReportPoolReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native ActorPair report-pool capture failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
+                    receipt.FreeCount>MaximumShapeInstancePairs||
+                    receipt.AllocatedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0xFFu)
+                    throw new InvalidOperationException("Native ActorPair report-pool receipt contract differs.");
+                freeOrder=new uint[receipt.FreeCount];
+                allocatedOrder=new uint[receipt.AllocatedCount];
+                for(int i=0;i<freeOrder.Length;i++)freeOrder[i]=unchecked((uint)Marshal.ReadInt32(
+                    freeBuffer,i*IntPtr.Size));
+                for(int i=0;i<allocatedOrder.Length;i++)allocatedOrder[i]=unchecked((uint)Marshal.ReadInt32(
+                    allocatedBuffer,i*IntPtr.Size));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(allocatedBuffer);Marshal.FreeHGlobal(freeBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            byte[][] allocatedBytes=allocatedOrder.Select(pointer=>ReadBytes(pointer,0x24)).ToArray();
+            var state=new ActorPairReportPoolState {NPhaseCore=nphaseCore,Pool=receipt.Pool.ToUInt32(),
+                FreeOrderHash=receipt.FreeOrderHash,AllocatedOrderHash=receipt.AllocatedOrderHash,
+                ElementSize=receipt.ElementSize,ElementsPerSlab=receipt.ElementsPerSlab,
+                Used=receipt.Used,Unreleased=receipt.Unreleased,SlabSize=receipt.SlabSize,
+                SlabCount=receipt.SlabCount,TotalElements=receipt.TotalElements,
+                FreeOrder=freeOrder,AllocatedOrder=allocatedOrder,AllocatedBytes=allocatedBytes};
+            ValidateActorPairReportPoolState(state);
+            if(receipt.FreeHead.ToUInt32()!=(freeOrder.Length==0?0u:freeOrder[0])||
+                receipt.FreeOrderHash!=ContactPoolOrderHash(freeOrder)||
+                receipt.AllocatedOrderHash!=ContactPoolOrderHash(allocatedOrder))
+                throw new InvalidOperationException("Managed ActorPair report-pool snapshot differs from native capture.");
             return state;
         }
 
@@ -2424,7 +2963,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ValidateDirtyInteractionReceiptContract(NativeDirtyInteractionReceipt receipt,int size)
         {
-            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native dirty-interaction receipt contract differs.");
         }
 
@@ -2457,7 +2996,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=11||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=13||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -2587,6 +3126,46 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("The shape-pair-pool checkpoint contains a null or duplicate free element.");
         }
 
+        private static void ValidateActorPairPoolState(ActorPairPoolState value)
+        {
+            if(value==null||value.NPhaseCore==0||value.Pool!=value.NPhaseCore+0x90u||
+                value.FreeOrder==null||value.AllocatedOrder==null||
+                value.FreeOrder.Length>MaximumShapeInstancePairs||
+                value.AllocatedOrder.Length>MaximumShapeInstancePairs||
+                value.FreeOrderHash!=ContactPoolOrderHash(value.FreeOrder)||
+                value.AllocatedOrderHash!=ContactPoolOrderHash(value.AllocatedOrder)||
+                value.ElementSize!=0x18u||value.ElementsPerSlab!=32u||value.SlabSize!=0x300u||
+                value.SlabCount>128u||value.TotalElements!=value.SlabCount*value.ElementsPerSlab||
+                value.Used!=(uint)value.AllocatedOrder.Length||
+                value.Unreleased!=(uint)value.FreeOrder.Length||
+                value.Used+value.Unreleased!=value.TotalElements)
+                throw new InvalidOperationException("The ActorPair-pool checkpoint sidecar is incomplete.");
+            uint[] all=value.FreeOrder.Concat(value.AllocatedOrder).ToArray();
+            if(all.Any(pointer=>pointer==0)||all.Distinct().Count()!=all.Length)
+                throw new InvalidOperationException("The ActorPair-pool checkpoint contains a null, duplicate, or overlapping element.");
+        }
+
+        private static void ValidateActorPairReportPoolState(ActorPairReportPoolState value)
+        {
+            if(value==null||value.NPhaseCore==0||value.Pool!=value.NPhaseCore+0x530u||
+                value.FreeOrder==null||value.AllocatedOrder==null||value.AllocatedBytes==null||
+                value.FreeOrder.Length>MaximumShapeInstancePairs||
+                value.AllocatedOrder.Length>MaximumShapeInstancePairs||
+                value.AllocatedBytes.Length!=value.AllocatedOrder.Length||
+                value.AllocatedBytes.Any(bytes=>bytes==null||bytes.Length!=0x24)||
+                value.FreeOrderHash!=ContactPoolOrderHash(value.FreeOrder)||
+                value.AllocatedOrderHash!=ContactPoolOrderHash(value.AllocatedOrder)||
+                value.ElementSize!=0x24u||value.ElementsPerSlab!=32u||value.SlabSize!=0x480u||
+                value.SlabCount>128u||value.TotalElements!=value.SlabCount*value.ElementsPerSlab||
+                value.Used!=(uint)value.AllocatedOrder.Length||
+                value.Unreleased!=(uint)value.FreeOrder.Length||
+                value.Used+value.Unreleased!=value.TotalElements)
+                throw new InvalidOperationException("The ActorPair report-pool checkpoint sidecar is incomplete.");
+            uint[] all=value.FreeOrder.Concat(value.AllocatedOrder).ToArray();
+            if(all.Any(pointer=>pointer==0)||all.Distinct().Count()!=all.Length)
+                throw new InvalidOperationException("The ActorPair report-pool checkpoint contains a null, duplicate, or overlapping element.");
+        }
+
         private static void ValidateContactManagerOwnerState(ContactManagerOwnerState value)
         {
             if(value==null||value.Records==null||value.ShapeOwners0==null||value.ShapeOwners1==null||
@@ -2625,6 +3204,41 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"used",value.Used},{"unreleased",value.Unreleased},{"slabSize",value.SlabSize},
                 {"freeHead",value.Order.Length==0?"0x00000000":"0x"+value.Order[0].ToString("X8")},
                 {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
+        }
+
+        private static object DescribeActorPairPoolState(ActorPairPoolState value)
+        {
+            if(value==null)return null;
+            object[] topFree=value.FreeOrder.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            object[] topAllocated=value.AllocatedOrder.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore","0x"+value.NPhaseCore.ToString("X8")},
+                {"pool","0x"+value.Pool.ToString("X8")},{"elementSize",value.ElementSize},
+                {"elementsPerSlab",value.ElementsPerSlab},{"slabSize",value.SlabSize},
+                {"slabCount",value.SlabCount},{"totalElements",value.TotalElements},
+                {"used",value.Used},{"unreleased",value.Unreleased},
+                {"freeOrderHash","0x"+value.FreeOrderHash.ToString("X8")},
+                {"allocatedOrderHash","0x"+value.AllocatedOrderHash.ToString("X8")},
+                {"topFree",topFree},{"topAllocated",topAllocated}};
+        }
+
+        private static object DescribeActorPairReportPoolState(ActorPairReportPoolState value)
+        {
+            if(value==null)return null;
+            object[] topFree=value.FreeOrder.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            object[] topAllocated=value.AllocatedOrder.Take(16).Select(pointer=>(object)("0x"+pointer.ToString("X8"))).ToArray();
+            string[] contentHashes=value.AllocatedBytes.Select(bytes=>
+            {
+                using(var algorithm=SHA256.Create())
+                    return BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-","");
+            }).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore","0x"+value.NPhaseCore.ToString("X8")},
+                {"pool","0x"+value.Pool.ToString("X8")},{"elementSize",value.ElementSize},
+                {"elementsPerSlab",value.ElementsPerSlab},{"slabSize",value.SlabSize},
+                {"slabCount",value.SlabCount},{"totalElements",value.TotalElements},
+                {"used",value.Used},{"unreleased",value.Unreleased},
+                {"freeOrderHash","0x"+value.FreeOrderHash.ToString("X8")},
+                {"allocatedOrderHash","0x"+value.AllocatedOrderHash.ToString("X8")},
+                {"topFree",topFree},{"topAllocated",topAllocated},{"contentSha256",contentHashes}};
         }
 
         private static uint DirtyInteractionOrderHash(NativeDirtyInteractionKey[] values)
@@ -2683,9 +3297,13 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
             ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
             ValidateSipPoolState(value.ShapeInstancePairPool);
+            ValidateActorPairPoolState(value.ActorPairPool);
+            ValidateActorPairReportPoolState(value.ActorPairReportPool);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
-            if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore)
+            if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
+                value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
+                value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore)
                 throw new InvalidOperationException("Checkpoint SIP and dirty-interaction state belong to different NPhaseCore instances.");
             ValidateCheckpointPoolCoherence(value);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
@@ -2699,6 +3317,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     previous.ContactPoolOrder.SequenceEqual(value.ContactPoolOrder)&&
                     SameContactManagerOwnerSnapshot(previous.ContactManagerOwners,value.ContactManagerOwners)&&
                     SameSipPoolSnapshot(previous.ShapeInstancePairPool,value.ShapeInstancePairPool)&&
+                    SameActorPairPoolSnapshot(previous.ActorPairPool,value.ActorPairPool)&&
+                    SameActorPairReportPoolSnapshot(previous.ActorPairReportPool,value.ActorPairReportPool)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -2716,29 +3336,60 @@ namespace SuperchargedPatch.Authoring.Modules
             if(value==null||value.ContactManagerOwners==null||
                 value.ContactManagerOwners.Records==null||value.ContactPoolOrder==null||
                 value.ShapeInstancePairPool==null||value.ShapeInstancePairPool.Order==null||
+                value.ActorPairPool==null||value.ActorPairPool.FreeOrder==null||
+                value.ActorPairPool.AllocatedOrder==null||
+                value.ActorPairReportPool==null||value.ActorPairReportPool.FreeOrder==null||
+                value.ActorPairReportPool.AllocatedOrder==null||
                 value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
                 value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
                 throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
             NativeContactManagerOwnerRecord[] owners=value.ContactManagerOwners.Records;
             var contactFree=new HashSet<uint>(value.ContactPoolOrder);
             var sipFree=new HashSet<uint>(value.ShapeInstancePairPool.Order);
+            var actorPairFree=new HashSet<uint>(value.ActorPairPool.FreeOrder);
+            var actorPairAllocated=new HashSet<uint>(value.ActorPairPool.AllocatedOrder);
+            var actorPairReportFree=new HashSet<uint>(value.ActorPairReportPool.FreeOrder);
+            var actorPairReportAllocated=new HashSet<uint>(value.ActorPairReportPool.AllocatedOrder);
             var largeFree=new HashSet<uint>(value.LargeManifoldPool.Order);
             var sphereFree=new HashSet<uint>(value.SphereManifoldPool.Order);
             uint[] managers=owners.Select(owner=>owner.Manager.ToUInt32()).ToArray();
             uint[] sips=owners.Select(owner=>owner.Sip.ToUInt32()).ToArray();
+            uint[] actorPairs=owners.Select(owner=>owner.ActorPair.ToUInt32()).Distinct().ToArray();
+            uint[] actorPairReports=owners.Select(owner=>owner.ActorPairReportData.ToUInt32())
+                .Where(pointer=>pointer!=0).Distinct().ToArray();
             uint[] large=owners.Where(owner=>owner.ManifoldBytes==0xF0u&&owner.Manifold.ToUInt32()>1u)
                 .Select(owner=>owner.Manifold.ToUInt32()).ToArray();
             uint[] sphere=owners.Where(owner=>owner.ManifoldBytes==0x60u&&owner.Manifold.ToUInt32()>1u)
                 .Select(owner=>owner.Manifold.ToUInt32()).ToArray();
+            bool actorPairRowsCoherent=owners.GroupBy(owner=>owner.ActorPair.ToUInt32()).All(group=>
+            {
+                NativeContactManagerOwnerRecord first=group.First();
+                return first.ActorPair.ToUInt32()!=0&&
+                    first.ActorPairRefCount==group.Count()+((first.ActorPairInternalFlags&1u)!=0?1:0)&&
+                    group.All(owner=>owner.ActorPairActor0==first.ActorPairActor0&&
+                        owner.ActorPairActor1==first.ActorPairActor1&&
+                        owner.ActorPairScene==first.ActorPairScene&&
+                        owner.ActorPairInternalFlags==first.ActorPairInternalFlags&&
+                        owner.ActorPairTouchCount==first.ActorPairTouchCount&&
+                        owner.ActorPairRefCount==first.ActorPairRefCount&&
+                        owner.ActorPairReportData==first.ActorPairReportData&&
+                        owner.ActorPairHash==first.ActorPairHash);
+            });
             NativeContactManagerOwnerReceipt receipt=value.ContactManagerOwners.Receipt;
             if(receipt.Context.ToUInt32()!=value.Context||receipt.FreeArray.ToUInt32()!=value.FreeArray||
                 receipt.FreeCount!=(uint)value.ContactPoolOrder.Length||receipt.FreeOrderHash!=value.OrderHash||
                 managers.Distinct().Count()!=managers.Length||sips.Distinct().Count()!=sips.Length||
                 large.Distinct().Count()!=large.Length||sphere.Distinct().Count()!=sphere.Length||
                 managers.Any(contactFree.Contains)||sips.Any(sipFree.Contains)||
+                actorPairs.Any(actorPairFree.Contains)||actorPairs.Any(pointer=>!actorPairAllocated.Contains(pointer))||
+                actorPairReports.Any(actorPairReportFree.Contains)||
+                actorPairReports.Any(pointer=>!actorPairReportAllocated.Contains(pointer))||
+                value.ActorPairReportPool.Used!=(uint)actorPairReports.Length||
                 large.Any(largeFree.Contains)||sphere.Any(sphereFree.Contains)||
                 receipt.UsedCount!=(uint)owners.Length||
                 value.ShapeInstancePairPool.Used<(uint)sips.Length||
+                value.ActorPairPool.Used!=(uint)actorPairs.Length||
+                !actorPairRowsCoherent||
                 value.LargeManifoldPool.Used<(uint)large.Length||
                 value.SphereManifoldPool.Used<(uint)sphere.Length)
                 throw new InvalidOperationException("Checkpoint contact owners and allocator partitions were not captured at one coherent physics boundary.");
@@ -2763,6 +3414,43 @@ namespace SuperchargedPatch.Authoring.Modules
                 left.Order!=null&&right.Order!=null&&left.Order.SequenceEqual(right.Order);
         }
 
+        private static bool SameActorPairPoolSnapshot(ActorPairPoolState left,ActorPairPoolState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.NPhaseCore==right.NPhaseCore&&left.Pool==right.Pool&&
+                left.FreeOrderHash==right.FreeOrderHash&&
+                left.AllocatedOrderHash==right.AllocatedOrderHash&&
+                left.ElementSize==right.ElementSize&&left.ElementsPerSlab==right.ElementsPerSlab&&
+                left.Used==right.Used&&left.Unreleased==right.Unreleased&&
+                left.SlabSize==right.SlabSize&&left.SlabCount==right.SlabCount&&
+                left.TotalElements==right.TotalElements&&left.FreeOrder!=null&&right.FreeOrder!=null&&
+                left.AllocatedOrder!=null&&right.AllocatedOrder!=null&&
+                left.FreeOrder.SequenceEqual(right.FreeOrder)&&
+                left.AllocatedOrder.SequenceEqual(right.AllocatedOrder);
+        }
+
+        private static bool SameActorPairReportPoolSnapshot(ActorPairReportPoolState left,
+            ActorPairReportPoolState right)
+        {
+            if(left==null||right==null)return left==right;
+            bool same=left.NPhaseCore==right.NPhaseCore&&left.Pool==right.Pool&&
+                left.FreeOrderHash==right.FreeOrderHash&&
+                left.AllocatedOrderHash==right.AllocatedOrderHash&&
+                left.ElementSize==right.ElementSize&&left.ElementsPerSlab==right.ElementsPerSlab&&
+                left.Used==right.Used&&left.Unreleased==right.Unreleased&&
+                left.SlabSize==right.SlabSize&&left.SlabCount==right.SlabCount&&
+                left.TotalElements==right.TotalElements&&left.FreeOrder!=null&&right.FreeOrder!=null&&
+                left.AllocatedOrder!=null&&right.AllocatedOrder!=null&&
+                left.AllocatedBytes!=null&&right.AllocatedBytes!=null&&
+                left.FreeOrder.SequenceEqual(right.FreeOrder)&&
+                left.AllocatedOrder.SequenceEqual(right.AllocatedOrder)&&
+                left.AllocatedBytes.Length==right.AllocatedBytes.Length;
+            if(!same)return false;
+            for(int i=0;i<left.AllocatedBytes.Length;i++)
+                if(!left.AllocatedBytes[i].SequenceEqual(right.AllocatedBytes[i]))return false;
+            return true;
+        }
+
         private static bool SameContactManagerOwnerSnapshot(ContactManagerOwnerState left,ContactManagerOwnerState right)
         {
             if(left==null||right==null)return left==right;
@@ -2774,7 +3462,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 NativeContactManagerOwnerRecord a=left.Records[i],b=right.Records[i];
                 if(a.Slot!=b.Slot||a.Manager!=b.Manager||a.Sip!=b.Sip||a.PxShape0!=b.PxShape0||
                     a.PxShape1!=b.PxShape1||a.ManagerHash!=b.ManagerHash||a.SipHash!=b.SipHash||
-                    a.Manifold!=b.Manifold||a.ManifoldHash!=b.ManifoldHash||a.CacheHash!=b.CacheHash)
+                    a.Manifold!=b.Manifold||a.ManifoldHash!=b.ManifoldHash||a.CacheHash!=b.CacheHash||
+                    a.ActorPair!=b.ActorPair||a.ActorPairActor0!=b.ActorPairActor0||
+                    a.ActorPairActor1!=b.ActorPairActor1||a.ActorPairScene!=b.ActorPairScene||
+                    a.ActorPairInternalFlags!=b.ActorPairInternalFlags||
+                    a.ActorPairTouchCount!=b.ActorPairTouchCount||
+                    a.ActorPairRefCount!=b.ActorPairRefCount||
+                    a.ActorPairReportData!=b.ActorPairReportData||a.ActorPairHash!=b.ActorPairHash)
                     return false;
                 if(!ReferenceEquals(left.Endpoints0[i].Collider,right.Endpoints0[i].Collider)||
                     !ReferenceEquals(left.Endpoints1[i].Collider,right.Endpoints1[i].Collider))return false;
@@ -2830,6 +3524,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"orderHash",found?"0x"+value.OrderHash.ToString("X8"):null},
                 {"contactManagerOwners",found?DescribeContactManagerOwnerState(value.ContactManagerOwners,true):null},
                 {"shapeInstancePairPool",found?DescribeSipPoolState(value.ShapeInstancePairPool):null},
+                {"actorPairPool",found?DescribeActorPairPoolState(value.ActorPairPool):null},
+                {"actorPairReportPool",found?DescribeActorPairReportPoolState(value.ActorPairReportPool):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -2988,7 +3684,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:11},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:13},
                 {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
@@ -3004,6 +3700,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     DescribeContactManagerOwnerState(latest.ContactManagerOwners,true)},
                 {"shapeInstancePairPoolSnapshot",latest==null?null:
                     DescribeSipPoolState(latest.ShapeInstancePairPool)},
+                {"actorPairPoolSnapshot",latest==null?null:
+                    DescribeActorPairPoolState(latest.ActorPairPool)},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -3066,6 +3764,8 @@ namespace SuperchargedPatch.Authoring.Modules
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
             captureContactManagerActiveOwners=null;
             captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;captureSipPoolSnapshot=null;
+            captureActorPairPoolSnapshot=null;
+            captureActorPairReportPoolSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
             contactRecreateApiVersion=null;contactRecreateAuditApiVersion=null;auditContactRecreate=null;
             armContactRecreate=null;statusContactRecreate=null;cancelContactRecreate=null;
@@ -3104,6 +3804,16 @@ namespace SuperchargedPatch.Authoring.Modules
                     bytes,new UIntPtr(4u),out read)||read.ToUInt32()!=4u)
                 throw new InvalidOperationException("Native read failed at 0x"+address.ToString("X8")+", Win32/error="+Marshal.GetLastWin32Error()+".");
             return BitConverter.ToUInt32(bytes,0);
+        }
+        private static byte[] ReadBytes(uint address,int length)
+        {
+            if(length<0)throw new ArgumentOutOfRangeException("length");
+            byte[] bytes=new byte[length];UIntPtr read=UIntPtr.Zero;
+            if(address==0||!ReadProcessMemory(GetCurrentProcess(),new IntPtr(unchecked((int)address)),
+                    bytes,new UIntPtr((uint)length),out read)||read.ToUInt32()!=(uint)length)
+                throw new InvalidOperationException("Native read failed at 0x"+address.ToString("X8")+
+                    ", length="+length+", Win32/error="+Marshal.GetLastWin32Error()+".");
+            return bytes;
         }
         private static void WriteWord(uint address,uint value)
         {

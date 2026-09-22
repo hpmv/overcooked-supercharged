@@ -1,5 +1,59 @@
 # Fresh-session handoff — 2026-09-08
 
+> **ActorPair/report-history planning milestone (2026-09-21, managed
+> r14z/native r31):** the clean, bounded Story 1-1 f1048 -> f444 read-only
+> audit now has zero source or target blockers.  Source readiness is 25 pass /
+> 0 fail / 41 deferred; target readiness is 58 pass / 0 fail / 21 deferred /
+> 1 not-applicable.  `complete` intentionally remains false, so no rewind
+> mutation, suffix replay, or route search was admitted.
+>
+> This pass corrects the earlier false assumption that a zero-contact manager
+> requires zero ActorPair touch history and null report data.  At f444 all 12
+> managers have zero current contacts/cache bytes, while 10 of their
+> ActorPairs legitimately retain SIP `HAS_TOUCH` history and persistent
+> `ActorPairContactReportData`.  PhysX clears the per-step manager cache on a
+> transform change without clearing that historical ActorPair state.
+>
+> Native API 13 captures the entire `Sc::ActorPair` pool and the complete
+> 0x24-byte contact-report-data pool partition at one unchanged NPhaseCore
+> observation.  The target contains 12 allocated ActorPairs; 10 own report
+> objects and 2 do not.  The report pool is 10 used / 22 free at f444 and
+> 0 used / 32 free at f1048.  Managed validation proves exact pool identity,
+> partitions, object bytes, owner mapping, SIP-derived touch counts, reference
+> counts, internal flags, endpoint coherence, live reachability, and the same
+> allocate-versus-reuse decision made by the shipped `findActorPair` scan.
+> Every one of the 21 native audit conditions passes with issue mask zero.
+>
+> The readiness contract is now versioned and closed at both layers.  The
+> provider and aggregate each own an explicit required-ID set; missing or
+> duplicate conditions fail the manifest, and the aggregate independently
+> checks provider version, phase, frames, mutation flags, result totals, and
+> completeness.  Valid target state that is not yet reconstructable is
+> reported as `deferred`, not mislabeled as corruption.  The remaining
+> ActorPair work is therefore explicit: restore touch state, reconstruct the
+> report-data pool and pointer bindings, and steer each semantic allocation to
+> the exact target ActorPair slot.
+>
+> Clean evidence is
+> `artifacts/readiness-plan-actor-pair-report-f1048-to-f444-r3/`.  Its target
+> report SHA-256 is
+> `044F1403F19308E409128C70CA81FD2908690B3CCA7A93D77EB4F1741C62540B`;
+> summary SHA-256 is
+> `9499E96F0F93698A67E58F6B53029C31A3CCBBE6C723E37809F5A137B135F461`.
+> Managed r14z SHA-256 is
+> `1FAF35B20644388785B42D7189F58CD2F734718FA33D3CEE3E765EBD700E2F56`;
+> native r31 SHA-256 is
+> `CD8657CDB046EB73C1FCBEB6AA47A8F121B3511CEE0257DE469C4E7A8E055933`.
+> The native history harness passes, and the focused Python readiness/input
+> suite passes 41 tests.
+>
+> Continue the comprehensive read-only pass with the contact-report
+> lists/buffer, interaction registration order, island edge allocator/change
+> queues, Transform-cache ID pool, and broadphase created-overlap order.  Only
+> after those contracts are explicit should the mutating ActorPair restore be
+> added.  Preserve ordinary forward and plate-throw physics; search remains
+> disabled.
+
 > **Aggregate rewind-readiness and atomic SIP milestone (2026-09-21,
 > managed r14u/native r29):** the bounded Story 1-1 f1048 -> f444 audit now
 > reaches both paused planning points with zero observed blockers and does not

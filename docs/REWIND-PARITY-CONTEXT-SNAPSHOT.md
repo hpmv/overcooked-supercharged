@@ -6,6 +6,45 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — ActorPair history is fully planned and blocker-free
+
+The v72 audit extends the atomic f444 manager/SIP/manifold capture through the
+two allocator layers that PhysX consults before contact-manager creation:
+`Sc::ActorPair` and `ActorPairContactReportData`.  The clean minimized run at
+`artifacts/readiness-plan-actor-pair-report-f1048-to-f444-r3/` reports source
+readiness 25 pass / 0 fail and target readiness 58 pass / 0 fail.  It is still
+intentionally incomplete: 41 source and 21 target capabilities are deferred,
+and no rewind mutation, suffix replay, or search ran.
+
+The key semantic correction is that zero current contact points do not imply
+zero ActorPair history.  f444 has 12 allocated ActorPairs.  Ten have
+`mTouchCount=1` because their SIPs retain `HAS_TOUCH`, and those same ten own
+persistent 0x24-byte report-history objects; two are untouched and have null
+report data.  All managers nevertheless have zero contact/cache state.  This
+is coherent PhysX 3.3.3 behavior after transform-cache invalidation, not a bad
+checkpoint.
+
+Managed r14z/native r31 now capture and validate the complete ActorPair and
+report-data pool partitions at the same unchanged NPhaseCore observation as
+the existing manager/SIP/manifold sidecars.  The f444 report pool is exactly
+10 used / 22 free; live f1048 is 0 used / 32 free.  Validation covers full
+object bytes, owner/pointer bindings, SIP-derived touch and reference counts,
+flags, endpoints, pool reachability, and the exact interaction-array scan that
+decides ActorPair reuse.  All 21 native audit conditions pass with issue mask
+zero.  The target report SHA-256 is
+`044F1403F19308E409128C70CA81FD2908690B3CCA7A93D77EB4F1741C62540B`.
+
+The provider and aggregate manifests are now independent, explicit, and
+versioned.  Missing or duplicate required checks are failures; valid history
+whose restore is not implemented is a deferred capability.  The three direct
+ActorPair gaps are touch-state restoration, report-pool reconstruction and
+pointer binding, and semantic allocation steering to exact target slots.
+Broader deferred families remain contact-report queues/buffer, interaction
+registration order, island edge allocation/change queues, Transform-cache ID
+allocation, broadphase created-overlap order, dirty live projection, and
+first-output convergence.  Continue planning those families before enabling
+mutation.  Search stays disabled.
+
 ## Latest result — aggregate readiness is blocker-free through restored f444
 
 The first read-only “plan everything” pass found that the apparent SIP count

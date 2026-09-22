@@ -341,6 +341,96 @@ def main():
 
     def aggregate_readiness(phase, actor, module_snapshot):
         checks = list(actor.get("checks", []))
+        rigidbody_base_required = (
+            "rigidbody.target-binding", "rigidbody.actor-pair-pool",
+            "rigidbody.zero-cache-scope", "rigidbody.sphere-pool",
+            "rigidbody.transform-dispatch",
+            "rigidbody.interaction-registration-order",
+            "rigidbody.island-edge-allocator-and-change-queues",
+            "rigidbody.transform-cache-id-pool",
+            "rigidbody.broadphase-created-overlap-order",
+            "rigidbody.dirty-interaction-live-projection",
+            "rigidbody.contact-report-lists-and-buffer",
+            "rigidbody.first-output-owner-convergence",
+            "rigidbody.audit-state-proof",
+        )
+        rigidbody_target_required = (
+            "rigidbody.target-contact-sidecar", "rigidbody.target-sip-sidecar",
+            "rigidbody.target-actor-pair-sidecar",
+            "rigidbody.target-actor-pair-report-sidecar",
+            "rigidbody.target-large-sidecar", "rigidbody.target-sphere-sidecar",
+            "rigidbody.target-dirty-sidecar", "rigidbody.target-cross-pool-coherence",
+            "rigidbody.resolved-plan-rows", "rigidbody.native-audit-repeatability",
+            "rigidbody.native.arguments", "rigidbody.native.observer",
+            "rigidbody.native.recreate-state", "rigidbody.native.revisions",
+            "rigidbody.native.target-buffers", "rigidbody.native.target-uniqueness",
+            "rigidbody.native.rows", "rigidbody.native.row-uniqueness",
+            "rigidbody.native.sip-capture", "rigidbody.native.sip-identity",
+            "rigidbody.native.sip-semantic-counts", "rigidbody.native.sip-membership",
+            "rigidbody.native.sip-legacy-arm", "rigidbody.native.contact-capture",
+            "rigidbody.native.contact-identity", "rigidbody.native.contact-bitmaps",
+            "rigidbody.native.contact-membership", "rigidbody.native.large-capture",
+            "rigidbody.native.large-identity", "rigidbody.native.large-membership",
+            "rigidbody.native.writability",
+            "rigidbody.actor-pair.repeatability", "rigidbody.actor-pair.pool-identity",
+            "rigidbody.actor-pair.target-partition", "rigidbody.actor-pair.live-partition",
+            "rigidbody.actor-pair.reachability", "rigidbody.actor-pair.reference-counts",
+            "rigidbody.actor-pair.target-coherence", "rigidbody.actor-pair.touch-state",
+            "rigidbody.actor-pair.internal-flags",
+            "rigidbody.actor-pair-report.repeatability",
+            "rigidbody.actor-pair.report-data-pool",
+            "rigidbody.actor-pair.reuse-decision",
+            "rigidbody.actor-pair.allocation-binding",
+        )
+        rigidbody_required = list(rigidbody_base_required)
+        if phase == "target-paused":
+            rigidbody_required.extend(rigidbody_target_required)
+        provider_coverage = actor.get("coverage", {})
+        actor_checks = actor.get("checks", [])
+        actor_ids = [row.get("id") for row in actor_checks]
+        actor_duplicate_ids = sorted({check_id for check_id in actor_ids
+                                      if actor_ids.count(check_id) > 1})
+        actor_blockers = [row.get("id") for row in actor_checks
+                          if row.get("status") == "fail" and
+                          row.get("severity") == "blocker"]
+        actor_deferred = [row.get("id") for row in actor_checks
+                          if row.get("status") == "deferred"]
+        provider_contract_ok = (
+            actor.get("schemaVersion") == 1 and
+            actor.get("provider") == "authoring-rigidbody-actor-rebuild-v1" and
+            actor.get("phase") == phase and actor.get("sourceFrame") == 1048 and
+            actor.get("targetFrame") == args.target_frame and
+            provider_coverage.get("contractVersion") == 2 and
+            set(provider_coverage.get("required", [])) == set(rigidbody_required) and
+            provider_coverage.get("uncovered") == [] and
+            provider_coverage.get("duplicates") == [] and
+            not actor_duplicate_ids and
+            actor.get("mutation") == {"gameState": False, "moduleState": False,
+                                      "nativeState": False} and
+            actor.get("passed") == (not actor_blockers) and
+            actor.get("complete") == (not actor_deferred)
+        )
+        checks.append({
+            "id": "aggregate.actor-provider-contract",
+            "module": "aggregate",
+            "phase": phase,
+            "status": "pass" if provider_contract_ok else "fail",
+            "severity": "blocker",
+            "code": ("ACTOR_PROVIDER_CONTRACT_EXACT" if provider_contract_ok else
+                     "ACTOR_PROVIDER_CONTRACT_MISMATCH"),
+            "message": ("The actor provider matches the aggregate-owned versioned contract."
+                        if provider_contract_ok else
+                        "The actor provider report can shrink, misstate, or mutate the aggregate contract."),
+            "evidence": {"expectedRequired": rigidbody_required,
+                         "providerCoverage": provider_coverage,
+                         "duplicateIds": actor_duplicate_ids,
+                         "reportedPassed": actor.get("passed"),
+                         "computedBlockers": actor_blockers,
+                         "reportedComplete": actor.get("complete"),
+                         "computedDeferred": actor_deferred},
+            "mutation": {"gameState": False, "moduleState": False,
+                         "nativeState": False},
+        })
         module_names = {
             args.animator_slot: "animator",
             "world-sync-cache": "world-sync",
@@ -421,6 +511,54 @@ def main():
                 "mutation": {"gameState": False, "moduleState": False,
                              "nativeState": False},
             })
+        required_ids = rigidbody_required + [
+            "rigidbody.coverage-manifest", "aggregate.actor-provider-contract"
+        ]
+        for slot, name in module_names.items():
+            scope, _reason = deferred_scopes[name]
+            required_ids.extend((
+                f"{name}.provider-availability",
+                f"{name}.provider-terminal-state",
+                f"{name}.provider-health-contract",
+                f"{name}.{scope}",
+            ))
+        emitted_ids = [row.get("id") for row in checks]
+        duplicate_ids = sorted({check_id for check_id in emitted_ids
+                                if emitted_ids.count(check_id) > 1})
+        missing_ids = [check_id for check_id in required_ids
+                       if check_id not in emitted_ids]
+        for check_id in missing_ids:
+            checks.append({
+                "id": check_id,
+                "module": "aggregate",
+                "phase": phase,
+                "status": "fail",
+                "severity": "blocker",
+                "code": "MISSING_REQUIRED_CHECK",
+                "message": "The aggregate omitted a required readiness check.",
+                "evidence": None,
+                "mutation": {"gameState": False, "moduleState": False,
+                             "nativeState": False},
+            })
+        checks.append({
+            "id": "aggregate.coverage-manifest",
+            "module": "aggregate",
+            "phase": phase,
+            "status": "fail" if duplicate_ids or missing_ids else "pass",
+            "severity": "blocker",
+            "code": ("DUPLICATE_CHECK_ID" if duplicate_ids else
+                     "MISSING_REQUIRED_CHECK" if missing_ids else
+                     "REQUIRED_COVERAGE_ENUMERATED"),
+            "message": ("The aggregate emitted duplicate readiness check identifiers."
+                        if duplicate_ids else
+                        "The aggregate omitted required readiness check identifiers."
+                        if missing_ids else
+                        "Every required aggregate readiness check is explicitly represented."),
+            "evidence": {"contractVersion": 2, "required": required_ids,
+                         "uncovered": missing_ids, "duplicates": duplicate_ids},
+            "mutation": {"gameState": False, "moduleState": False,
+                         "nativeState": False},
+        })
         blockers = [row["id"] for row in checks
                     if row.get("status") == "fail" and row.get("severity") == "blocker"]
         deferred = [row["id"] for row in checks if row.get("status") == "deferred"]
@@ -434,11 +572,16 @@ def main():
             "targetFrame": args.target_frame,
             "passed": not blockers,
             "complete": not deferred,
+            "ready": not blockers and not deferred,
             "counts": counts,
             "checks": checks,
             "blockers": blockers,
             "deferred": deferred,
             "coverage": {
+                "contractVersion": 2,
+                "required": required_ids,
+                "uncovered": missing_ids,
+                "duplicates": duplicate_ids,
                 "rigidbody": "native aggregate provider",
                 "animator": "health plus deferred pure provider",
                 "worldSync": "health plus deferred pure provider",

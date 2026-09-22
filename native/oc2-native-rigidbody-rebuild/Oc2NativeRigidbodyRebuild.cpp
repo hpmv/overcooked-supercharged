@@ -167,6 +167,19 @@ struct ContactManagerOwnerRecord {
     uint8_t disableResponse;
     uint8_t disableCcd;
     uint16_t validationFlags;
+    // Exact Sc::ActorPair state while this SIP owns the pair.  This is
+    // captured at the same output boundary as the manager and SIP so the
+    // rewind planner never has to infer an allocated ActorPair from bytes
+    // that have subsequently become an intrusive free-list node.
+    uintptr_t actorPairActor0;
+    uintptr_t actorPairActor1;
+    uintptr_t actorPairScene;
+    uint16_t actorPairInternalFlags;
+    uint16_t actorPairTouchCount;
+    uint16_t actorPairRefCount;
+    uint16_t actorPairReserved;
+    uintptr_t actorPairReportData;
+    uint32_t actorPairHash;
 };
 
 struct ContactManagerOwnerReceipt {
@@ -392,6 +405,67 @@ struct SipPoolReceipt {
     uint32_t orderHash;
     uint32_t validationFlags;
     uintptr_t top[16];
+};
+
+// Read-only complete partition of Sc::NPhaseCore::mActorPairPool.  Free order
+// is allocator-significant; allocated order is canonical slab/index order so
+// target/live set comparisons do not depend on hash containers or addresses
+// supplied by managed code.
+struct ActorPairPoolReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t pool;
+    uintptr_t freeHead;
+    uintptr_t slabs;
+    uint32_t elementSize;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t slabSize;
+    uint32_t slabCount;
+    uint32_t totalElements;
+    uint32_t freeCount;
+    uint32_t freeOrderHash;
+    uint32_t allocatedCount;
+    uint32_t allocatedOrderHash;
+    uint32_t validationFlags;
+    uintptr_t topFree[16];
+    uintptr_t topAllocated[16];
+};
+
+// ActorPairContactReportData uses the same Ps::Pool implementation as
+// ActorPair, but its objects are 0x24 bytes and live in NPhaseCore's pool at
+// +0x530.  Capturing both sides of this partition is required before an
+// ActorPair's persistent report-history pointer can be reconstructed without
+// synthesizing notification callbacks.
+struct ActorPairReportPoolReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t pool;
+    uintptr_t freeHead;
+    uintptr_t slabs;
+    uint32_t elementSize;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t slabSize;
+    uint32_t slabCount;
+    uint32_t totalElements;
+    uint32_t freeCount;
+    uint32_t freeOrderHash;
+    uint32_t allocatedCount;
+    uint32_t allocatedOrderHash;
+    uint32_t validationFlags;
+    uintptr_t topFree[16];
+    uintptr_t topAllocated[16];
 };
 
 struct ManifoldPoolReceipt {
@@ -726,7 +800,7 @@ struct InvalidateKinematicTargetReceipt {
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
     "Unexpected Win32 manifold-pool receipt ABI");
-static_assert(sizeof(ContactManagerOwnerRecord) == 132,
+static_assert(sizeof(ContactManagerOwnerRecord) == 160,
     "Unexpected Win32 contact-manager owner record ABI");
 static_assert(sizeof(ContactManagerOwnerReceipt) == 156,
     "Unexpected Win32 contact-manager owner receipt ABI");
@@ -738,6 +812,10 @@ static_assert(sizeof(ContactRecreateAuditReceipt) == 232,
     "Unexpected Win32 contact-recreate audit receipt ABI");
 static_assert(sizeof(SipPoolReceipt) == 128,
     "Unexpected Win32 SIP-pool receipt ABI");
+static_assert(sizeof(ActorPairPoolReceipt) == 212,
+    "Unexpected Win32 ActorPair-pool receipt ABI");
+static_assert(sizeof(ActorPairReportPoolReceipt) == 212,
+    "Unexpected Win32 ActorPair-report-pool receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1023,7 +1101,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 11;
+static const uint32_t kApiVersion = 13;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1038,6 +1116,10 @@ static const uint32_t kCreateContactManagerRva = 0xA69E80;
 static const uint32_t kInitContactManagerRva = 0xA7E5F0;
 static const uint32_t kShapeInstancePairCreateManagerRva = 0xA54430;
 static const uint32_t kCreateShapeInstancePairRva = 0xA4E560;
+static const uint32_t kFindActorPairRva = 0xA4F7B0;
+static const uint32_t kCreateActorPairReportDataRva = 0xA4E370;
+static const uint32_t kActorPairReportSlabStrideRva = 0xA4DAC4;
+static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
@@ -1079,6 +1161,26 @@ static const uint8_t kCreateShapeInstancePairBytes[] = {
 static const uint8_t kCreateShapeInstancePairPoolBytes[] = {
     0x81,0xC6,0xE0,0x02,0x00,0x00,0x8B,0xD8,
     0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x07,0x8B,0xCE
+};
+static const uint8_t kFindActorPairBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
+};
+static const uint8_t kFindActorPairPoolBytes[] = {
+    0x81,0xC7,0x90,0x00,0x00,0x00,0x83,0xBF,
+    0x24,0x01,0x00,0x00,0x00,0x75,0x07
+};
+static const uint8_t kActorPairSlabStrideBytes[] = {
+    0x8B,0x8E,0x14,0x01,0x00,0x00,0x49,0x8D,
+    0x0C,0x49,0x8D,0x0C,0xCF
+};
+static const uint8_t kCreateActorPairReportDataBytes[] = {
+    0x81,0xC1,0x30,0x05,0x00,0x00,0xE9,0x65,0xFD,0xFF,0xFF
+};
+static const uint8_t kActorPairReportSlabStrideBytes[] = {
+    0x83,0xE9,0x24,0x3B,0xCF,0x73,0xE5
+};
+static const uint8_t kReleaseActorPairReportDataBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x8D,0xB1,0x30,0x05,0x00,0x00
 };
 static const uint8_t kCreateContactManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
@@ -1430,6 +1532,24 @@ static int FailManifoldPool(ManifoldPoolReceipt* receipt,
 
 static int FailSipPool(SipPoolReceipt* receipt, SipPoolResult result,
     uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailActorPairPool(ActorPairPoolReceipt* receipt,
+    SipPoolResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailActorPairReportPool(ActorPairReportPoolReceipt* receipt,
+    SipPoolResult result, uint32_t error) {
     if (receipt) {
         receipt->result = result;
         receipt->lastError = error;
@@ -2297,6 +2417,29 @@ static void InitializeSipPoolReceipt(SipPoolReceipt* receipt,
     receipt->nphaseCore = nphaseCore;
     receipt->pool = nphaseCore ? nphaseCore + 0x2E0 : 0;
     receipt->elementSize = 0x44;
+}
+
+static void InitializeActorPairPoolReceipt(ActorPairPoolReceipt* receipt,
+    uintptr_t unityBase, uintptr_t nphaseCore) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(ActorPairPoolReceipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
+    receipt->pool = nphaseCore ? nphaseCore + 0x90 : 0;
+    receipt->elementSize = 0x18;
+}
+
+static void InitializeActorPairReportPoolReceipt(
+    ActorPairReportPoolReceipt* receipt, uintptr_t unityBase,
+    uintptr_t nphaseCore) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(ActorPairReportPoolReceipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
+    receipt->pool = nphaseCore ? nphaseCore + 0x530 : 0;
+    receipt->elementSize = 0x24;
 }
 
 static void InitializeManifoldPoolReceipt(ManifoldPoolReceipt* receipt,
@@ -3951,6 +4094,48 @@ static bool ReadContactManagerOwner(uintptr_t unityBase, uintptr_t manager,
         return false;
     }
 
+    const uintptr_t shapeActor0 = *reinterpret_cast<const uintptr_t*>(
+        record.shapeSim0 + 0x08);
+    const uintptr_t shapeActor1 = *reinterpret_cast<const uintptr_t*>(
+        record.shapeSim1 + 0x08);
+    if (!shapeActor0 || !shapeActor1 || shapeActor0 == shapeActor1 ||
+        !Readable(reinterpret_cast<const void*>(record.actorPair), 0x18)) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidSip,
+            ERROR_NOACCESS, slot, 9);
+        return false;
+    }
+    record.actorPairActor0 = *reinterpret_cast<const uintptr_t*>(
+        record.actorPair + 0x00);
+    record.actorPairActor1 = *reinterpret_cast<const uintptr_t*>(
+        record.actorPair + 0x04);
+    record.actorPairScene = *reinterpret_cast<const uintptr_t*>(
+        record.actorPair + 0x08);
+    record.actorPairInternalFlags = *reinterpret_cast<const uint16_t*>(
+        record.actorPair + 0x0C);
+    record.actorPairTouchCount = *reinterpret_cast<const uint16_t*>(
+        record.actorPair + 0x0E);
+    record.actorPairRefCount = *reinterpret_cast<const uint16_t*>(
+        record.actorPair + 0x10);
+    record.actorPairReportData = *reinterpret_cast<const uintptr_t*>(
+        record.actorPair + 0x14);
+    const bool actorEndpointsMatch =
+        (record.actorPairActor0 == shapeActor0 &&
+            record.actorPairActor1 == shapeActor1) ||
+        (record.actorPairActor0 == shapeActor1 &&
+            record.actorPairActor1 == shapeActor0);
+    if (!actorEndpointsMatch || !record.actorPairScene ||
+        (record.actorPairInternalFlags & ~0x7u) != 0 ||
+        record.actorPairRefCount == 0 ||
+        (record.actorPairReportData &&
+            !Readable(reinterpret_cast<const void*>(
+                record.actorPairReportData), sizeof(uintptr_t)))) {
+        FailContactManagerOwner(receipt, ContactManagerOwnerInvalidSip,
+            ERROR_INVALID_DATA, slot, 10);
+        return false;
+    }
+    record.actorPairHash = ByteHash(
+        reinterpret_cast<const void*>(record.actorPair), 0x18);
+
     const uintptr_t scShapeCore0 = *reinterpret_cast<const uintptr_t*>(
         record.shapeSim0 + 0x1C);
     const uintptr_t scShapeCore1 = *reinterpret_cast<const uintptr_t*>(
@@ -4013,7 +4198,7 @@ static bool ReadContactManagerOwner(uintptr_t unityBase, uintptr_t manager,
             reinterpret_cast<const void*>(record.cachePointer),
             record.cacheSize);
     }
-    record.validationFlags = 0x007Fu;
+    record.validationFlags = 0x00FFu;
     return true;
 }
 
@@ -4753,6 +4938,330 @@ static bool UniqueNonzeroPointers(const uintptr_t* values, uint32_t count) {
             if (values[i] == values[j]) return false;
     }
     return true;
+}
+
+static bool ActorPairPoolRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* entry = reinterpret_cast<const void*>(
+        unityBase + kFindActorPairRva);
+    const void* pool = reinterpret_cast<const void*>(
+        unityBase + kFindActorPairRva + 0x91);
+    const void* stride = reinterpret_cast<const void*>(
+        unityBase + 0xA4D9BA);
+    return Readable(entry, sizeof(kFindActorPairBytes)) &&
+        EqualBytes(entry, kFindActorPairBytes,
+            sizeof(kFindActorPairBytes)) &&
+        Readable(pool, sizeof(kFindActorPairPoolBytes)) &&
+        EqualBytes(pool, kFindActorPairPoolBytes,
+            sizeof(kFindActorPairPoolBytes)) &&
+        Readable(stride, sizeof(kActorPairSlabStrideBytes)) &&
+        EqualBytes(stride, kActorPairSlabStrideBytes,
+            sizeof(kActorPairSlabStrideBytes));
+}
+
+static bool ActorPairPoolElement(const uintptr_t* slabs,
+    uint32_t slabCount, uintptr_t value, uint32_t& slabIndex,
+    uint32_t& elementIndex) {
+    slabIndex = 0xFFFFFFFFu;
+    elementIndex = 0xFFFFFFFFu;
+    for (uint32_t slab = 0; slab < slabCount; ++slab) {
+        const uintptr_t begin = slabs[slab];
+        const uintptr_t end = begin + 0x300u;
+        if (value < begin || value >= end) continue;
+        const uintptr_t delta = value - begin;
+        if ((delta % 0x18u) != 0) return false;
+        slabIndex = slab;
+        elementIndex = static_cast<uint32_t>(delta / 0x18u);
+        return elementIndex < 32u;
+    }
+    return false;
+}
+
+static int CaptureActorPairPool(uintptr_t unityBase,
+    uintptr_t nphaseCore, uintptr_t* freeSnapshot, uint32_t freeCapacity,
+    uintptr_t* allocatedSnapshot, uint32_t allocatedCapacity,
+    ActorPairPoolReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeActorPairPoolReceipt(receipt, unityBase, nphaseCore);
+    if (!unityBase || !nphaseCore)
+        return FailActorPairPool(receipt, SipPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!ActorPairPoolRevisionMatches(unityBase))
+        return FailActorPairPool(receipt, SipPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+    const uintptr_t pool = nphaseCore + 0x90;
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x108), 0x20))
+        return FailActorPairPool(receipt, SipPoolUnreadable,
+            ERROR_NOACCESS);
+    receipt->slabs = *reinterpret_cast<const uintptr_t*>(pool + 0x108);
+    receipt->slabCount = *reinterpret_cast<const uint32_t*>(pool + 0x10C);
+    const uint32_t rawSlabCapacity =
+        *reinterpret_cast<const uint32_t*>(pool + 0x110);
+    receipt->elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        pool + 0x114);
+    receipt->used = *reinterpret_cast<const uint32_t*>(pool + 0x118);
+    receipt->unreleased = *reinterpret_cast<const uint32_t*>(pool + 0x11C);
+    receipt->slabSize = *reinterpret_cast<const uint32_t*>(pool + 0x120);
+    receipt->freeHead = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    const uint32_t slabCapacity = rawSlabCapacity & 0x7FFFFFFFu;
+    if (receipt->elementsPerSlab != 32u ||
+        receipt->slabSize != 0x300u || receipt->slabCount > 128u ||
+        receipt->slabCount > slabCapacity ||
+        (receipt->slabCount && (!receipt->slabs ||
+            !Readable(reinterpret_cast<const void*>(receipt->slabs),
+                receipt->slabCount * sizeof(uintptr_t)))))
+        return FailActorPairPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+    receipt->totalElements = receipt->slabCount * 32u;
+    if (receipt->totalElements > kMaximumShapeInstancePairs ||
+        receipt->used > receipt->totalElements ||
+        receipt->unreleased > receipt->totalElements ||
+        receipt->used + receipt->unreleased != receipt->totalElements)
+        return FailActorPairPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+
+    uintptr_t freeOrder[kMaximumShapeInstancePairs] = {};
+    const uintptr_t* slabs = reinterpret_cast<const uintptr_t*>(
+        receipt->slabs);
+    receipt->freeOrderHash = 2166136261u;
+    uintptr_t current = receipt->freeHead;
+    while (current) {
+        const uint32_t index = receipt->freeCount;
+        if (index >= receipt->totalElements)
+            return FailActorPairPool(receipt, SipPoolInvalidMetadata,
+                ERROR_INSUFFICIENT_BUFFER);
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t)))
+            return FailActorPairPool(receipt, SipPoolInvalidNode,
+                ERROR_NOACCESS);
+        uint32_t slabIndex = 0, elementIndex = 0;
+        if (!ActorPairPoolElement(slabs, receipt->slabCount, current,
+                slabIndex, elementIndex))
+            return FailActorPairPool(receipt, SipPoolInvalidNode,
+                ERROR_INVALID_ADDRESS);
+        for (uint32_t i = 0; i < index; ++i)
+            if (freeOrder[i] == current)
+                return FailActorPairPool(receipt, SipPoolDuplicateNode,
+                    ERROR_DUP_NAME);
+        freeOrder[index] = current;
+        if (index < 16u) receipt->topFree[index] = current;
+        receipt->freeOrderHash ^= static_cast<uint32_t>(current);
+        receipt->freeOrderHash *= 16777619u;
+        ++receipt->freeCount;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (receipt->freeCount != receipt->unreleased ||
+        freeCapacity < receipt->freeCount ||
+        allocatedCapacity < receipt->used)
+        return FailActorPairPool(receipt,
+            freeCapacity < receipt->freeCount ||
+                allocatedCapacity < receipt->used ?
+                    SipPoolCapacityTooSmall : SipPoolInvalidMetadata,
+            freeCapacity < receipt->freeCount ||
+                allocatedCapacity < receipt->used ?
+                    ERROR_INSUFFICIENT_BUFFER : ERROR_INVALID_STATE);
+    if ((receipt->freeCount && (!freeSnapshot ||
+            !Writable(freeSnapshot,
+                receipt->freeCount * sizeof(uintptr_t)))) ||
+        (receipt->used && (!allocatedSnapshot ||
+            !Writable(allocatedSnapshot,
+                receipt->used * sizeof(uintptr_t)))))
+        return FailActorPairPool(receipt, SipPoolBadArgument,
+            ERROR_NOACCESS);
+
+    receipt->allocatedOrderHash = 2166136261u;
+    for (uint32_t slab = 0; slab < receipt->slabCount; ++slab) {
+        const uintptr_t begin = slabs[slab];
+        if (!begin || !Readable(reinterpret_cast<const void*>(begin),
+                receipt->slabSize))
+            return FailActorPairPool(receipt, SipPoolInvalidNode,
+                ERROR_NOACCESS);
+        for (uint32_t element = 0; element < 32u; ++element) {
+            const uintptr_t value = begin + element * 0x18u;
+            if (ContainsPointer(freeOrder, receipt->freeCount, value))
+                continue;
+            if (receipt->allocatedCount >= receipt->used)
+                return FailActorPairPool(receipt,
+                    SipPoolInvalidMetadata, ERROR_INVALID_STATE);
+            allocatedSnapshot[receipt->allocatedCount] = value;
+            if (receipt->allocatedCount < 16u)
+                receipt->topAllocated[receipt->allocatedCount] = value;
+            receipt->allocatedOrderHash ^=
+                static_cast<uint32_t>(value);
+            receipt->allocatedOrderHash *= 16777619u;
+            ++receipt->allocatedCount;
+        }
+    }
+    if (receipt->allocatedCount != receipt->used)
+        return FailActorPairPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_STATE);
+    if (receipt->freeCount)
+        CopyWords(freeSnapshot, freeOrder, receipt->freeCount);
+    receipt->validationFlags = 0xFFu;
+    receipt->result = SipPoolOk;
+    return 1;
+}
+
+static bool ActorPairReportPoolRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* create = reinterpret_cast<const void*>(
+        unityBase + kCreateActorPairReportDataRva);
+    const void* stride = reinterpret_cast<const void*>(
+        unityBase + kActorPairReportSlabStrideRva);
+    const void* release = reinterpret_cast<const void*>(
+        unityBase + kReleaseActorPairReportDataRva);
+    return Readable(create, sizeof(kCreateActorPairReportDataBytes)) &&
+        EqualBytes(create, kCreateActorPairReportDataBytes,
+            sizeof(kCreateActorPairReportDataBytes)) &&
+        Readable(stride, sizeof(kActorPairReportSlabStrideBytes)) &&
+        EqualBytes(stride, kActorPairReportSlabStrideBytes,
+            sizeof(kActorPairReportSlabStrideBytes)) &&
+        Readable(release, sizeof(kReleaseActorPairReportDataBytes)) &&
+        EqualBytes(release, kReleaseActorPairReportDataBytes,
+            sizeof(kReleaseActorPairReportDataBytes));
+}
+
+static bool ActorPairReportPoolElement(const uintptr_t* slabs,
+    uint32_t slabCount, uintptr_t value, uint32_t& slabIndex,
+    uint32_t& elementIndex) {
+    slabIndex = 0xFFFFFFFFu;
+    elementIndex = 0xFFFFFFFFu;
+    for (uint32_t slab = 0; slab < slabCount; ++slab) {
+        const uintptr_t begin = slabs[slab];
+        const uintptr_t end = begin + 0x480u;
+        if (value < begin || value >= end) continue;
+        const uintptr_t delta = value - begin;
+        if ((delta % 0x24u) != 0) return false;
+        slabIndex = slab;
+        elementIndex = static_cast<uint32_t>(delta / 0x24u);
+        return elementIndex < 32u;
+    }
+    return false;
+}
+
+static int CaptureActorPairReportPool(uintptr_t unityBase,
+    uintptr_t nphaseCore, uintptr_t* freeSnapshot, uint32_t freeCapacity,
+    uintptr_t* allocatedSnapshot, uint32_t allocatedCapacity,
+    ActorPairReportPoolReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeActorPairReportPoolReceipt(receipt, unityBase, nphaseCore);
+    if (!unityBase || !nphaseCore)
+        return FailActorPairReportPool(receipt, SipPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!ActorPairReportPoolRevisionMatches(unityBase))
+        return FailActorPairReportPool(receipt, SipPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+    const uintptr_t pool = nphaseCore + 0x530;
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x108), 0x20))
+        return FailActorPairReportPool(receipt, SipPoolUnreadable,
+            ERROR_NOACCESS);
+    receipt->slabs = *reinterpret_cast<const uintptr_t*>(pool + 0x108);
+    receipt->slabCount = *reinterpret_cast<const uint32_t*>(pool + 0x10C);
+    const uint32_t rawSlabCapacity =
+        *reinterpret_cast<const uint32_t*>(pool + 0x110);
+    receipt->elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        pool + 0x114);
+    receipt->used = *reinterpret_cast<const uint32_t*>(pool + 0x118);
+    receipt->unreleased = *reinterpret_cast<const uint32_t*>(pool + 0x11C);
+    receipt->slabSize = *reinterpret_cast<const uint32_t*>(pool + 0x120);
+    receipt->freeHead = *reinterpret_cast<const uintptr_t*>(pool + 0x124);
+    const uint32_t slabCapacity = rawSlabCapacity & 0x7FFFFFFFu;
+    if (receipt->elementsPerSlab != 32u ||
+        receipt->slabSize != 0x480u || receipt->slabCount > 128u ||
+        receipt->slabCount > slabCapacity ||
+        (receipt->slabCount && (!receipt->slabs ||
+            !Readable(reinterpret_cast<const void*>(receipt->slabs),
+                receipt->slabCount * sizeof(uintptr_t)))))
+        return FailActorPairReportPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+    receipt->totalElements = receipt->slabCount * 32u;
+    if (receipt->totalElements > kMaximumShapeInstancePairs ||
+        receipt->used > receipt->totalElements ||
+        receipt->unreleased > receipt->totalElements ||
+        receipt->used + receipt->unreleased != receipt->totalElements)
+        return FailActorPairReportPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+
+    uintptr_t freeOrder[kMaximumShapeInstancePairs] = {};
+    const uintptr_t* slabs = reinterpret_cast<const uintptr_t*>(
+        receipt->slabs);
+    receipt->freeOrderHash = 2166136261u;
+    uintptr_t current = receipt->freeHead;
+    while (current) {
+        const uint32_t index = receipt->freeCount;
+        if (index >= receipt->totalElements)
+            return FailActorPairReportPool(receipt,
+                SipPoolInvalidMetadata, ERROR_INSUFFICIENT_BUFFER);
+        if (!Readable(reinterpret_cast<const void*>(current),
+                sizeof(uintptr_t)))
+            return FailActorPairReportPool(receipt, SipPoolInvalidNode,
+                ERROR_NOACCESS);
+        uint32_t slabIndex = 0, elementIndex = 0;
+        if (!ActorPairReportPoolElement(slabs, receipt->slabCount,
+                current, slabIndex, elementIndex))
+            return FailActorPairReportPool(receipt, SipPoolInvalidNode,
+                ERROR_INVALID_ADDRESS);
+        for (uint32_t i = 0; i < index; ++i)
+            if (freeOrder[i] == current)
+                return FailActorPairReportPool(receipt,
+                    SipPoolDuplicateNode, ERROR_DUP_NAME);
+        freeOrder[index] = current;
+        if (index < 16u) receipt->topFree[index] = current;
+        receipt->freeOrderHash ^= static_cast<uint32_t>(current);
+        receipt->freeOrderHash *= 16777619u;
+        ++receipt->freeCount;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (receipt->freeCount != receipt->unreleased ||
+        freeCapacity < receipt->freeCount ||
+        allocatedCapacity < receipt->used)
+        return FailActorPairReportPool(receipt,
+            freeCapacity < receipt->freeCount ||
+                allocatedCapacity < receipt->used ?
+                    SipPoolCapacityTooSmall : SipPoolInvalidMetadata,
+            freeCapacity < receipt->freeCount ||
+                allocatedCapacity < receipt->used ?
+                    ERROR_INSUFFICIENT_BUFFER : ERROR_INVALID_STATE);
+    if ((receipt->freeCount && (!freeSnapshot ||
+            !Writable(freeSnapshot,
+                receipt->freeCount * sizeof(uintptr_t)))) ||
+        (receipt->used && (!allocatedSnapshot ||
+            !Writable(allocatedSnapshot,
+                receipt->used * sizeof(uintptr_t)))))
+        return FailActorPairReportPool(receipt, SipPoolBadArgument,
+            ERROR_NOACCESS);
+
+    receipt->allocatedOrderHash = 2166136261u;
+    for (uint32_t slab = 0; slab < receipt->slabCount; ++slab) {
+        const uintptr_t begin = slabs[slab];
+        if (!begin || !Readable(reinterpret_cast<const void*>(begin),
+                receipt->slabSize))
+            return FailActorPairReportPool(receipt, SipPoolInvalidNode,
+                ERROR_NOACCESS);
+        for (uint32_t element = 0; element < 32u; ++element) {
+            const uintptr_t value = begin + element * 0x24u;
+            if (ContainsPointer(freeOrder, receipt->freeCount, value))
+                continue;
+            if (receipt->allocatedCount >= receipt->used)
+                return FailActorPairReportPool(receipt,
+                    SipPoolInvalidMetadata, ERROR_INVALID_STATE);
+            allocatedSnapshot[receipt->allocatedCount] = value;
+            if (receipt->allocatedCount < 16u)
+                receipt->topAllocated[receipt->allocatedCount] = value;
+            receipt->allocatedOrderHash ^=
+                static_cast<uint32_t>(value);
+            receipt->allocatedOrderHash *= 16777619u;
+            ++receipt->allocatedCount;
+        }
+    }
+    if (receipt->allocatedCount != receipt->used)
+        return FailActorPairReportPool(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_STATE);
+    if (receipt->freeCount)
+        CopyWords(freeSnapshot, freeOrder, receipt->freeCount);
+    receipt->validationFlags = 0xFFu;
+    receipt->result = SipPoolOk;
+    return 1;
 }
 
 static int AuditContactRecreate(uintptr_t unityBase, uintptr_t context,
@@ -6936,6 +7445,24 @@ oc2_shape_instance_pair_pool_capture_snapshot(
     uint32_t capacity, SipPoolReceipt* receipt) {
     return CaptureShapeInstancePairPool(unityBase, nphaseCore, snapshot,
         capacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_actor_pair_pool_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore, uintptr_t* freeSnapshot,
+    uint32_t freeCapacity, uintptr_t* allocatedSnapshot,
+    uint32_t allocatedCapacity, ActorPairPoolReceipt* receipt) {
+    return CaptureActorPairPool(unityBase, nphaseCore, freeSnapshot,
+        freeCapacity, allocatedSnapshot, allocatedCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_actor_pair_report_pool_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore, uintptr_t* freeSnapshot,
+    uint32_t freeCapacity, uintptr_t* allocatedSnapshot,
+    uint32_t allocatedCapacity, ActorPairReportPoolReceipt* receipt) {
+    return CaptureActorPairReportPool(unityBase, nphaseCore, freeSnapshot,
+        freeCapacity, allocatedSnapshot, allocatedCapacity, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(
