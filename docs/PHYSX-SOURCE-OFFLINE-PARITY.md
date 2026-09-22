@@ -105,7 +105,18 @@ The additional `--public-rewind-probe` is a negative control. Restoring only
 the body's public pose/velocities in the same scene and repeating the deletion
 step yields zero contact-event words, whereas uninterrupted execution yields
 24 words (six four-word contact rows). This is a fast, source-level reproduction
-of a missing contact predecessor. It is not yet a rewind fix. The SAP image and
-full NPhase/island restoration are in development; no source-built same-scene
-rewind has passed yet. The production Unity helper remains read-only for
-SAP/BPElem and does not apply the full predecessor transaction.
+of a missing contact predecessor. It is not yet a rewind fix.
+
+The SAP/BPElem component of gate 3 also passes in the same source-built scene.
+Its test-only image owns complete declared-capacity SAP buffers, the BPElem
+backing and AABB data free lists, change lists, transient pair outputs, scalar
+metadata, and actor/shape bindings. Restore accepts only the same scene and
+allocation topology. It validates saved and live structure before writes,
+recaptures and checks exact equality afterward, and rolls back on a failed
+postwrite check. The harness proves duplicate capture, 100 exact checkpoint /
+deleted-state round-trips, and atomic rejection of a corrupted image. It
+restores the deleted SAP state before resuming simulation, because NPhase and
+island history are not restored yet. Capacity changes and cross-allocation
+rebasing remain outside this component's admission. The production Unity
+helper remains read-only for SAP/BPElem and does not apply the full predecessor
+transaction.

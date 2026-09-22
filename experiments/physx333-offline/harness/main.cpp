@@ -15,6 +15,7 @@
 #include "NpScene.h"
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
+#include "../sap/SapImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -289,15 +290,13 @@ struct World
         if (state.sleeping) mover->putToSleep();
     }
 
-    void step(bool leave)
+    void step(bool away)
     {
         events.rows.clear();
-        if (leave)
-        {
-            PxTransform target = mover->getGlobalPose();
-            target.p.z = 5.0f;
-            mover->setGlobalPose(target);
-        }
+        const PxReal wantedZ = away ? 5.0f : 0.0f;
+        mover->setGlobalPose(PxTransform(PxVec3(0.0f, 0.95f, wantedZ)));
+        mover->setLinearVelocity(PxVec3(0.0f));
+        mover->setAngularVelocity(PxVec3(0.0f));
         scene->simulate(kStep);
         if (!scene->fetchResults(true)) die("fetchResults returned false");
     }
@@ -448,11 +447,76 @@ int main(int argc, char** argv)
     Snapshot checkpoint, deletion, settled;
     {
         World source(runtime);
+        // Exercise both overlap output arrays before checkpoint. Their first
+        // growth is allocator history that this same-allocation restore does
+        // not attempt to reverse.
         source.step(false);
+        source.step(true);
+        source.step(false);
+        std::cout << "PASS six-contact warmup\n";
         checkpoint = source.capture();
         const PublicBodyState publicCheckpoint = source.saveBody();
+        oc2::offline::SapImage sapCheckpoint;
+        oc2::offline::SapImage sapCheckpointCopy;
+        std::string sapError;
+        if (!oc2::offline::CaptureSap(*source.scene, sapCheckpoint, sapError) ||
+            !oc2::offline::CaptureSap(*source.scene, sapCheckpointCopy, sapError))
+            die("SAP checkpoint capture: " + sapError);
+        std::string sapDifference;
+        if (!sapCheckpoint.equals(sapCheckpointCopy, sapDifference))
+            die("SAP checkpoint capture is not stable: " + sapDifference);
+        std::cout << "PASS SAP checkpoint double capture\n";
+
         source.step(true);
         deletion = source.capture();
+        oc2::offline::SapImage sapDeleted;
+        if (!oc2::offline::CaptureSap(*source.scene, sapDeleted, sapError))
+            die("SAP deletion capture: " + sapError);
+
+        for (PxU32 iteration = 0; iteration != 100; ++iteration)
+        {
+            if (!oc2::offline::RestoreSap(*source.scene, sapCheckpoint, sapError))
+                die("SAP checkpoint restore: " + sapError);
+            oc2::offline::SapImage restored;
+            if (!oc2::offline::CaptureSap(*source.scene, restored, sapError))
+                die("SAP recapture after checkpoint restore: " + sapError);
+            if (!sapCheckpoint.equals(restored, sapDifference))
+                die("SAP checkpoint round-trip: " + sapDifference);
+
+            // Contacts and islands still describe the deletion state. Return
+            // SAP to that same state before any subsequent simulate/release.
+            if (!oc2::offline::RestoreSap(*source.scene, sapDeleted, sapError))
+                die("SAP deletion restore: " + sapError);
+            if (!oc2::offline::CaptureSap(*source.scene, restored, sapError))
+                die("SAP recapture after deletion restore: " + sapError);
+            if (!sapDeleted.equals(restored, sapDifference))
+                die("SAP deletion round-trip: " + sapDifference);
+        }
+        std::cout << "PASS SAP/BPElem A-B round-trip x100\n";
+
+        oc2::offline::SapImage corrupted = sapCheckpoint;
+        bool changed = false;
+        for (size_t i = 0; i != corrupted.scalars.size(); ++i)
+        {
+            if (corrupted.scalars[i].name == "pair.activeCount")
+            {
+                std::fill(corrupted.scalars[i].bytes.begin(),
+                          corrupted.scalars[i].bytes.end(),
+                          static_cast<unsigned char>(0xffu));
+                changed = true;
+                break;
+            }
+        }
+        if (!changed) die("SAP image lacks pair.activeCount scalar");
+        if (oc2::offline::RestoreSap(*source.scene, corrupted, sapError))
+            die("corrupt SAP image was accepted");
+        oc2::offline::SapImage afterReject;
+        if (!oc2::offline::CaptureSap(*source.scene, afterReject, sapError))
+            die("SAP recapture after rejected image: " + sapError);
+        if (!sapDeleted.equals(afterReject, sapDifference))
+            die("rejected SAP image changed live state: " + sapDifference);
+        std::cout << "PASS corrupt SAP image rejected atomically\n";
+
         source.step(false);
         settled = source.capture();
 
@@ -469,6 +533,9 @@ int main(int argc, char** argv)
 
         if (publicProbe)
         {
+            // The scripted settled suffix re-entered contact. Return to the
+            // empty-contact state before trying public-only restoration.
+            source.step(true);
             source.restorePublicBody(publicCheckpoint);
             source.step(true);
             const Snapshot naive = source.capture();
@@ -481,6 +548,8 @@ int main(int argc, char** argv)
 
     {
         World replay(runtime);
+        replay.step(false);
+        replay.step(true);
         replay.step(false);
         requireEqual("fresh replay checkpoint", checkpoint, replay.capture());
         replay.step(true);

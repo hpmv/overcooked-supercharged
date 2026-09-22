@@ -17,7 +17,7 @@ if(NOT EXISTS "${PHYSX333_LIB}/PhysX3_x86.lib")
 endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
-add_executable(physx333_offline_harness main.cpp)
+add_executable(physx333_offline_harness main.cpp ../sap/SapImage.cpp)
 target_compile_features(physx333_offline_harness PRIVATE cxx_std_11)
 target_compile_definitions(physx333_offline_harness PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
