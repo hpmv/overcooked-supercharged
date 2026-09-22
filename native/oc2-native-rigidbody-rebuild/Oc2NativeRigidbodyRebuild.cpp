@@ -471,6 +471,62 @@ struct ActorPairReportPoolReceipt {
     uintptr_t topAllocated[16];
 };
 
+// Complete, caller-owned byte image of one of the five Ps::Pool instances
+// embedded in Sc::NPhaseCore.  Free-list links remain present in slabBytes,
+// while freeSlots supplies the same allocator order without checkpoint
+// addresses.  One allocation word describes each 32-element slab.
+struct NPhasePoolSnapshotBuffersV1 {
+    uintptr_t* slabBases;
+    uint32_t slabBaseCapacity;
+    uint32_t* freeSlots;
+    uint32_t freeSlotCapacity;
+    uint32_t* allocationWords;
+    uint32_t allocationWordCapacity;
+    uint8_t* slabBytes;
+    uint32_t slabByteCapacity;
+};
+
+struct NPhasePoolSnapshotReceiptV1 {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t pool;
+    uintptr_t slabsData;
+    uintptr_t freeHead;
+    uint32_t poolKind;
+    uint32_t poolOffset;
+    uint32_t elementSize;
+    uint32_t elementsPerSlab;
+    uint32_t slabSize;
+    uint32_t slabCount;
+    uint32_t slabCapacityRaw;
+    uint32_t totalSlots;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t freeHeadSlot;
+    uint32_t slabBasesRequired;
+    uint32_t slabBasesWritten;
+    uint32_t freeSlotsRequired;
+    uint32_t freeSlotsWritten;
+    uint32_t allocationWordsRequired;
+    uint32_t allocationWordsWritten;
+    uint32_t slabBytesRequired;
+    uint32_t slabBytesWritten;
+    uint32_t metadataHash;
+    uint32_t slabBaseHash;
+    uint32_t freeSlotOrderHash;
+    uint32_t allocationBitmapHash;
+    uint32_t slabByteHash;
+    uint32_t snapshotHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
+
 // Read-only checkpoint view of the report-history structures that precede
 // mDirtyInteractions in Sc::NPhaseCore.  Array capacities retain PhysX's raw
 // ownership bit; the caller receives the exact logical orders and the bytes
@@ -1440,6 +1496,10 @@ static_assert(sizeof(ActorPairPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-pool receipt ABI");
 static_assert(sizeof(ActorPairReportPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-report-pool receipt ABI");
+static_assert(sizeof(NPhasePoolSnapshotBuffersV1) == 32,
+    "Unexpected Win32 NPhase-pool snapshot buffer ABI");
+static_assert(sizeof(NPhasePoolSnapshotReceiptV1) == 152,
+    "Unexpected Win32 NPhase-pool snapshot receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
 static_assert(sizeof(InteractionGraphActorRecord) == 72,
@@ -1590,6 +1650,31 @@ enum SipPoolResult : uint32_t {
     SipPoolInvalidNode = 6,
     SipPoolDuplicateNode = 7,
     SipPoolCapacityTooSmall = 8
+};
+
+enum NPhasePoolKind : uint32_t {
+    NPhasePoolActorPair = 0,
+    NPhasePoolShapeInstancePair = 1,
+    NPhasePoolTrigger = 2,
+    NPhasePoolActorPairReportData = 3,
+    NPhasePoolMarker = 4,
+    NPhasePoolKindCount = 5
+};
+
+enum NPhasePoolSnapshotResult : uint32_t {
+    NPhasePoolSnapshotOk = 1,
+    NPhasePoolSnapshotBadArgument = 2,
+    NPhasePoolSnapshotRevisionMismatch = 3,
+    NPhasePoolSnapshotInvalidKind = 4,
+    NPhasePoolSnapshotUnreadablePool = 5,
+    NPhasePoolSnapshotInvalidMetadata = 6,
+    NPhasePoolSnapshotInvalidSlab = 7,
+    NPhasePoolSnapshotInvalidFreeNode = 8,
+    NPhasePoolSnapshotDuplicateFreeNode = 9,
+    NPhasePoolSnapshotCapacityTooSmall = 10,
+    NPhasePoolSnapshotUnwritableOutput = 11,
+    NPhasePoolSnapshotOverlappingOutput = 12,
+    NPhasePoolSnapshotUnstable = 13
 };
 
 enum ContactRecreateState : uint32_t {
@@ -1937,7 +2022,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 19;
+static const uint32_t kApiVersion = 20;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1968,6 +2053,8 @@ static const uint32_t kCreateContactManagerRva = 0xA69E80;
 static const uint32_t kInitContactManagerRva = 0xA7E5F0;
 static const uint32_t kShapeInstancePairCreateManagerRva = 0xA54430;
 static const uint32_t kCreateShapeInstancePairRva = 0xA4E560;
+static const uint32_t kCreateMarkerPoolLayoutRva = 0xA4E525;
+static const uint32_t kCreateTriggerPoolLayoutRva = 0xA4E66A;
 static const uint32_t kFindActorPairRva = 0xA4F7B0;
 static const uint32_t kCreateActorPairReportDataRva = 0xA4E370;
 static const uint32_t kActorPairReportSlabStrideRva = 0xA4DAC4;
@@ -2044,6 +2131,14 @@ static const uint8_t kCreateShapeInstancePairBytes[] = {
 static const uint8_t kCreateShapeInstancePairPoolBytes[] = {
     0x81,0xC6,0xE0,0x02,0x00,0x00,0x8B,0xD8,
     0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x07,0x8B,0xCE
+};
+static const uint8_t kCreateMarkerPoolLayoutBytes[] = {
+    0x56,0x57,0x8D,0x8B,0x58,0x06,0x00,0x00,
+    0xE8,0x2E,0xC8,0xFF,0xFF
+};
+static const uint8_t kCreateTriggerPoolLayoutBytes[] = {
+    0x52,0x50,0x81,0xC1,0x08,0x04,0x00,0x00,
+    0xE8,0x79,0xC7,0xFF,0xFF
 };
 static const uint8_t kFindActorPairBytes[] = {
     0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
@@ -2627,6 +2722,20 @@ static int FailActorPairReportPool(ActorPairReportPoolReceipt* receipt,
         receipt->lastError = error;
     }
     return 0;
+}
+
+static int FinishNPhasePoolSnapshot(
+    NPhasePoolSnapshotReceiptV1* destination,
+    NPhasePoolSnapshotReceiptV1& receipt,
+    NPhasePoolSnapshotResult result, uint32_t error,
+    uint32_t invalidKind, uint32_t invalidIndex, uint32_t detail) {
+    receipt.result = result;
+    receipt.lastError = error;
+    receipt.invalidKind = invalidKind;
+    receipt.invalidIndex = invalidIndex;
+    receipt.detail = detail;
+    CopyBytes(destination, &receipt, sizeof(receipt));
+    return result == NPhasePoolSnapshotOk ? 1 : 0;
 }
 
 static int FailNPhaseReportState(NPhaseReportStateReceipt* receipt,
@@ -3548,6 +3657,20 @@ static void InitializeActorPairReportPoolReceipt(
     receipt->nphaseCore = nphaseCore;
     receipt->pool = nphaseCore ? nphaseCore + 0x530 : 0;
     receipt->elementSize = 0x24;
+}
+
+static void InitializeNPhasePoolSnapshotReceipt(
+    NPhasePoolSnapshotReceiptV1& receipt, uintptr_t unityBase,
+    uintptr_t nphaseCore, uint32_t poolKind) {
+    receipt = {};
+    receipt.apiVersion = kApiVersion;
+    receipt.structSize = sizeof(receipt);
+    receipt.unityBase = unityBase;
+    receipt.nphaseCore = nphaseCore;
+    receipt.poolKind = poolKind;
+    receipt.freeHeadSlot = 0xFFFFFFFFu;
+    receipt.invalidKind = 0xFFFFFFFFu;
+    receipt.invalidIndex = 0xFFFFFFFFu;
 }
 
 static void InitializeNPhaseReportStateReceipt(
@@ -6585,6 +6708,508 @@ static int CaptureActorPairReportPool(uintptr_t unityBase,
     receipt->validationFlags = 0xFFu;
     receipt->result = SipPoolOk;
     return 1;
+}
+
+struct NPhasePoolHeaderSnapshot {
+    uint8_t inlineBufferUsed;
+    uintptr_t slabsData;
+    uint32_t slabCount;
+    uint32_t slabCapacityRaw;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleased;
+    uint32_t slabSize;
+    uintptr_t freeHead;
+};
+
+struct NPhasePoolMemoryRange {
+    uintptr_t begin;
+    uintptr_t end;
+};
+
+static bool NPhasePoolSnapshotLayout(uint32_t poolKind,
+    uint32_t& poolOffset, uint32_t& elementSize, uint32_t& slabSize) {
+    if (poolKind == NPhasePoolActorPair) {
+        poolOffset = 0x90u;
+        elementSize = 0x18u;
+        slabSize = 0x300u;
+        return true;
+    }
+    if (poolKind == NPhasePoolShapeInstancePair) {
+        poolOffset = 0x2E0u;
+        elementSize = 0x44u;
+        slabSize = 0x880u;
+        return true;
+    }
+    if (poolKind == NPhasePoolTrigger) {
+        poolOffset = 0x408u;
+        elementSize = 0x3Cu;
+        slabSize = 0x780u;
+        return true;
+    }
+    if (poolKind == NPhasePoolActorPairReportData) {
+        poolOffset = 0x530u;
+        elementSize = 0x24u;
+        slabSize = 0x480u;
+        return true;
+    }
+    if (poolKind == NPhasePoolMarker) {
+        poolOffset = 0x658u;
+        elementSize = 0x28u;
+        slabSize = 0x500u;
+        return true;
+    }
+    return false;
+}
+
+static bool NPhasePoolSnapshotRevisionMatches(uintptr_t unityBase) {
+    if (!ActorPairPoolRevisionMatches(unityBase) ||
+        !ShapeInstancePairPoolRevisionMatches(unityBase) ||
+        !ActorPairReportPoolRevisionMatches(unityBase)) return false;
+    const void* marker = reinterpret_cast<const void*>(
+        unityBase + kCreateMarkerPoolLayoutRva);
+    const void* trigger = reinterpret_cast<const void*>(
+        unityBase + kCreateTriggerPoolLayoutRva);
+    return Readable(marker, sizeof(kCreateMarkerPoolLayoutBytes)) &&
+        EqualBytes(marker, kCreateMarkerPoolLayoutBytes,
+            sizeof(kCreateMarkerPoolLayoutBytes)) &&
+        Readable(trigger, sizeof(kCreateTriggerPoolLayoutBytes)) &&
+        EqualBytes(trigger, kCreateTriggerPoolLayoutBytes,
+            sizeof(kCreateTriggerPoolLayoutBytes));
+}
+
+static bool ReadNPhasePoolHeader(uintptr_t pool,
+    NPhasePoolHeaderSnapshot& header) {
+    if (!Readable(reinterpret_cast<const void*>(pool + 0x104u), 0x24u))
+        return false;
+    header.inlineBufferUsed = *reinterpret_cast<const uint8_t*>(pool + 0x104u);
+    header.slabsData = *reinterpret_cast<const uintptr_t*>(pool + 0x108u);
+    header.slabCount = *reinterpret_cast<const uint32_t*>(pool + 0x10Cu);
+    header.slabCapacityRaw =
+        *reinterpret_cast<const uint32_t*>(pool + 0x110u);
+    header.elementsPerSlab =
+        *reinterpret_cast<const uint32_t*>(pool + 0x114u);
+    header.used = *reinterpret_cast<const uint32_t*>(pool + 0x118u);
+    header.unreleased = *reinterpret_cast<const uint32_t*>(pool + 0x11Cu);
+    header.slabSize = *reinterpret_cast<const uint32_t*>(pool + 0x120u);
+    header.freeHead = *reinterpret_cast<const uintptr_t*>(pool + 0x124u);
+    return true;
+}
+
+static bool SameNPhasePoolHeader(const NPhasePoolHeaderSnapshot& left,
+    const NPhasePoolHeaderSnapshot& right) {
+    return left.inlineBufferUsed == right.inlineBufferUsed &&
+        left.slabsData == right.slabsData &&
+        left.slabCount == right.slabCount &&
+        left.slabCapacityRaw == right.slabCapacityRaw &&
+        left.elementsPerSlab == right.elementsPerSlab &&
+        left.used == right.used && left.unreleased == right.unreleased &&
+        left.slabSize == right.slabSize && left.freeHead == right.freeHead;
+}
+
+static bool AppendNPhasePoolRange(const void* pointer, uint32_t bytes,
+    NPhasePoolMemoryRange* ranges, uint32_t& count, uint32_t capacity) {
+    if (!bytes) return true;
+    if (!pointer || count >= capacity) return false;
+    const uintptr_t begin = reinterpret_cast<uintptr_t>(pointer);
+    const uintptr_t end = begin + bytes;
+    if (end <= begin) return false;
+    ranges[count].begin = begin;
+    ranges[count].end = end;
+    ++count;
+    return true;
+}
+
+static bool NPhasePoolRangesOverlap(const NPhasePoolMemoryRange& left,
+    const NPhasePoolMemoryRange& right) {
+    return left.begin < right.end && right.begin < left.end;
+}
+
+static bool NPhasePoolRangeOverlaps(const void* pointer, uint32_t bytes,
+    const void* other, uint32_t otherBytes) {
+    if (!bytes || !otherBytes || !pointer || !other) return false;
+    NPhasePoolMemoryRange ranges[2] = {};
+    uint32_t count = 0;
+    if (!AppendNPhasePoolRange(pointer, bytes, ranges, count, 2u) ||
+        !AppendNPhasePoolRange(other, otherBytes, ranges, count, 2u))
+        return true;
+    return NPhasePoolRangesOverlap(ranges[0], ranges[1]);
+}
+
+static bool NPhasePoolSlotOrdinal(const uintptr_t* slabBases,
+    uint32_t slabCount, uint32_t elementSize, uint32_t slabSize,
+    uintptr_t pointer, uint32_t& ordinal) {
+    ordinal = 0xFFFFFFFFu;
+    for (uint32_t slab = 0; slab < slabCount; ++slab) {
+        const uintptr_t begin = slabBases[slab];
+        const uintptr_t end = begin + slabSize;
+        if (end <= begin || pointer < begin || pointer >= end) continue;
+        const uintptr_t delta = pointer - begin;
+        if ((delta % elementSize) != 0u) return false;
+        const uint32_t element = static_cast<uint32_t>(delta / elementSize);
+        if (element >= 32u) return false;
+        ordinal = slab * 32u + element;
+        return true;
+    }
+    return false;
+}
+
+static uint32_t NPhasePoolMetadataHash(
+    const NPhasePoolSnapshotReceiptV1& receipt) {
+    uint32_t hash = 2166136261u;
+    hash = AppendByteHash(hash, &receipt.slabsData,
+        2u * sizeof(uintptr_t));
+    hash = AppendByteHash(hash, &receipt.poolKind,
+        11u * sizeof(uint32_t));
+    return hash;
+}
+
+static int CaptureNPhasePoolSnapshotV1(uintptr_t unityBase,
+    uintptr_t nphaseCore, uint32_t poolKind,
+    const NPhasePoolSnapshotBuffersV1* callerBuffers,
+    NPhasePoolSnapshotReceiptV1* destination) {
+    if (!destination || !Writable(destination, sizeof(*destination)))
+        return 0;
+    NPhasePoolSnapshotReceiptV1 receipt = {};
+    InitializeNPhasePoolSnapshotReceipt(receipt, unityBase, nphaseCore,
+        poolKind);
+    if (!callerBuffers || !Readable(callerBuffers, sizeof(*callerBuffers)))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotBadArgument, ERROR_INVALID_PARAMETER,
+            3u, 0xFFFFFFFFu, 0u);
+    const NPhasePoolSnapshotBuffersV1 buffers = *callerBuffers;
+    if (NPhasePoolRangeOverlaps(destination, sizeof(*destination),
+            callerBuffers, sizeof(*callerBuffers))) return 0;
+    if (!unityBase || !nphaseCore)
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotBadArgument, ERROR_INVALID_PARAMETER,
+            0u, 0xFFFFFFFFu, 0u);
+
+    uint32_t expectedSlabSize = 0;
+    if (!NPhasePoolSnapshotLayout(poolKind, receipt.poolOffset,
+            receipt.elementSize, expectedSlabSize))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidKind, ERROR_INVALID_PARAMETER,
+            poolKind, 0xFFFFFFFFu, NPhasePoolKindCount);
+    if (nphaseCore > UINTPTR_MAX - receipt.poolOffset - 0x128u)
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotBadArgument, ERROR_ARITHMETIC_OVERFLOW,
+            0u, 0xFFFFFFFFu, receipt.poolOffset);
+    receipt.pool = nphaseCore + receipt.poolOffset;
+    if (NPhasePoolRangeOverlaps(destination, sizeof(*destination),
+            reinterpret_cast<const void*>(receipt.pool), 0x128u)) return 0;
+    if (!NPhasePoolSnapshotRevisionMatches(unityBase))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotRevisionMismatch, ERROR_REVISION_MISMATCH,
+            0u, 0xFFFFFFFFu, 0u);
+    receipt.validationFlags = 0x01u;
+
+    NPhasePoolHeaderSnapshot header = {};
+    if (!ReadNPhasePoolHeader(receipt.pool, header))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotUnreadablePool, ERROR_NOACCESS,
+            0u, 0xFFFFFFFFu, 0x104u);
+    receipt.slabsData = header.slabsData;
+    receipt.freeHead = header.freeHead;
+    receipt.elementsPerSlab = header.elementsPerSlab;
+    receipt.slabSize = header.slabSize;
+    receipt.slabCount = header.slabCount;
+    receipt.slabCapacityRaw = header.slabCapacityRaw;
+    receipt.used = header.used;
+    receipt.unreleased = header.unreleased;
+    const uint32_t slabCapacity = header.slabCapacityRaw & 0x7FFFFFFFu;
+    if (slabCapacity > UINT32_MAX / sizeof(uintptr_t))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_ARITHMETIC_OVERFLOW,
+            0u, 0xFFFFFFFFu, slabCapacity);
+    const uint32_t slabTableBytes = slabCapacity * sizeof(uintptr_t);
+    const uintptr_t inlineSlabTableAddress = receipt.pool + 0x04u;
+    const bool canonicalSlabStorage =
+        (slabCapacity == 64u && header.slabsData == inlineSlabTableAddress &&
+            header.inlineBufferUsed == 1u) ||
+        (slabCapacity > 64u && header.slabsData != inlineSlabTableAddress &&
+            header.inlineBufferUsed == 0u);
+    if (header.elementsPerSlab != 32u ||
+        header.slabSize != expectedSlabSize || header.slabCount > 128u ||
+        header.slabCount > slabCapacity ||
+        header.slabCount > kMaximumShapeInstancePairs / 32u ||
+        !header.slabsData || !canonicalSlabStorage)
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            0u, 0xFFFFFFFFu, 1u);
+    receipt.totalSlots = header.slabCount * 32u;
+    if (header.used > receipt.totalSlots ||
+        header.unreleased > receipt.totalSlots ||
+        header.used + header.unreleased != receipt.totalSlots ||
+        (!receipt.totalSlots && header.freeHead))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            0u, 0xFFFFFFFFu, 2u);
+    if (!Readable(reinterpret_cast<const void*>(header.slabsData),
+            slabTableBytes))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_NOACCESS,
+            0u, 0xFFFFFFFFu, 3u);
+    receipt.validationFlags |= 0x02u;
+
+    uintptr_t slabBases[128] = {};
+    if (header.slabCount)
+        CopyWords(slabBases, reinterpret_cast<const uintptr_t*>(
+            header.slabsData), header.slabCount);
+    for (uint32_t slab = 0; slab < header.slabCount; ++slab) {
+        if (!slabBases[slab] || (slabBases[slab] & 0x0Fu) != 0u ||
+            slabBases[slab] > UINTPTR_MAX - expectedSlabSize ||
+            !Readable(reinterpret_cast<const void*>(slabBases[slab]),
+                expectedSlabSize))
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotInvalidSlab, ERROR_NOACCESS,
+                1u, slab, expectedSlabSize);
+        const uintptr_t slabEnd = slabBases[slab] + expectedSlabSize;
+        for (uint32_t prior = 0; prior < slab; ++prior) {
+            const uintptr_t priorEnd = slabBases[prior] + expectedSlabSize;
+            if (slabBases[slab] < priorEnd && slabBases[prior] < slabEnd)
+                return FinishNPhasePoolSnapshot(destination, receipt,
+                    NPhasePoolSnapshotInvalidSlab, ERROR_INVALID_ADDRESS,
+                    1u, slab, prior);
+        }
+    }
+    receipt.validationFlags |= 0x04u;
+
+    uint32_t freeSlots[kMaximumShapeInstancePairs] = {};
+    uint32_t allocationWords[128] = {};
+    for (uint32_t word = 0; word < header.slabCount; ++word)
+        allocationWords[word] = 0xFFFFFFFFu;
+    uintptr_t current = header.freeHead;
+    uint32_t freeCount = 0;
+    while (current) {
+        if (freeCount >= receipt.totalSlots)
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotInvalidMetadata, ERROR_INVALID_STATE,
+                2u, freeCount, header.unreleased);
+        uint32_t ordinal = 0xFFFFFFFFu;
+        if (!NPhasePoolSlotOrdinal(slabBases, header.slabCount,
+                receipt.elementSize, expectedSlabSize, current, ordinal))
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotInvalidFreeNode, ERROR_INVALID_ADDRESS,
+                2u, freeCount, static_cast<uint32_t>(current));
+        const uint32_t word = ordinal >> 5;
+        const uint32_t bit = 1u << (ordinal & 31u);
+        if ((allocationWords[word] & bit) == 0u)
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotDuplicateFreeNode, ERROR_DUP_NAME,
+                2u, freeCount, ordinal);
+        allocationWords[word] &= ~bit;
+        freeSlots[freeCount++] = ordinal;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (freeCount != header.unreleased) {
+        receipt.freeSlotsRequired = freeCount;
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_INVALID_STATE,
+            2u, freeCount, header.unreleased);
+    }
+    uint32_t allocatedCount = 0;
+    for (uint32_t word = 0; word < header.slabCount; ++word)
+        allocatedCount += BitCount32(allocationWords[word]);
+    if (allocatedCount != header.used)
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_INVALID_STATE,
+            2u, allocatedCount, header.used);
+    if (freeCount) receipt.freeHeadSlot = freeSlots[0];
+    receipt.validationFlags |= 0x08u;
+
+    receipt.slabBasesRequired = header.slabCount;
+    receipt.freeSlotsRequired = freeCount;
+    receipt.allocationWordsRequired = header.slabCount;
+    receipt.slabBytesRequired = header.slabCount * expectedSlabSize;
+    if (buffers.slabBaseCapacity < receipt.slabBasesRequired ||
+        buffers.freeSlotCapacity < receipt.freeSlotsRequired ||
+        buffers.allocationWordCapacity < receipt.allocationWordsRequired ||
+        buffers.slabByteCapacity < receipt.slabBytesRequired)
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotCapacityTooSmall, ERROR_INSUFFICIENT_BUFFER,
+            3u, 0xFFFFFFFFu, 0u);
+    if ((receipt.slabBasesRequired && (!buffers.slabBases ||
+            !Writable(buffers.slabBases,
+                receipt.slabBasesRequired * sizeof(uintptr_t)))) ||
+        (receipt.freeSlotsRequired && (!buffers.freeSlots ||
+            !Writable(buffers.freeSlots,
+                receipt.freeSlotsRequired * sizeof(uint32_t)))) ||
+        (receipt.allocationWordsRequired && (!buffers.allocationWords ||
+            !Writable(buffers.allocationWords,
+                receipt.allocationWordsRequired * sizeof(uint32_t)))) ||
+        (receipt.slabBytesRequired && (!buffers.slabBytes ||
+            !Writable(buffers.slabBytes, receipt.slabBytesRequired))))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotUnwritableOutput, ERROR_NOACCESS,
+            3u, 0xFFFFFFFFu, 1u);
+
+    NPhasePoolMemoryRange outputRanges[6] = {};
+    uint32_t outputRangeCount = 0;
+    if (!AppendNPhasePoolRange(destination, sizeof(*destination),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(callerBuffers, sizeof(*callerBuffers),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.slabBases,
+            receipt.slabBasesRequired * sizeof(uintptr_t), outputRanges,
+            outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.freeSlots,
+            receipt.freeSlotsRequired * sizeof(uint32_t), outputRanges,
+            outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.allocationWords,
+            receipt.allocationWordsRequired * sizeof(uint32_t),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.slabBytes,
+            receipt.slabBytesRequired, outputRanges, outputRangeCount, 6u))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotBadArgument, ERROR_ARITHMETIC_OVERFLOW,
+            3u, 0xFFFFFFFFu, 2u);
+    for (uint32_t i = 0; i < outputRangeCount; ++i)
+        for (uint32_t j = 0; j < i; ++j)
+            if (NPhasePoolRangesOverlap(outputRanges[i], outputRanges[j]))
+                return FinishNPhasePoolSnapshot(destination, receipt,
+                    NPhasePoolSnapshotOverlappingOutput,
+                    ERROR_INVALID_ADDRESS, 3u, i, j);
+
+    NPhasePoolMemoryRange sourceRanges[130] = {};
+    uint32_t sourceRangeCount = 0;
+    const bool inlineSlabTable = header.slabsData == inlineSlabTableAddress;
+    if (!AppendNPhasePoolRange(reinterpret_cast<const void*>(receipt.pool),
+            0x128u, sourceRanges, sourceRangeCount, 130u) ||
+        (!inlineSlabTable && !AppendNPhasePoolRange(
+            reinterpret_cast<const void*>(header.slabsData),
+            slabTableBytes, sourceRanges,
+            sourceRangeCount, 130u)))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotInvalidMetadata, ERROR_ARITHMETIC_OVERFLOW,
+            0u, 0xFFFFFFFFu, 4u);
+    for (uint32_t slab = 0; slab < header.slabCount; ++slab)
+        if (!AppendNPhasePoolRange(reinterpret_cast<const void*>(
+                slabBases[slab]), expectedSlabSize, sourceRanges,
+                sourceRangeCount, 130u))
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotInvalidSlab, ERROR_ARITHMETIC_OVERFLOW,
+                1u, slab, expectedSlabSize);
+    for (uint32_t i = 0; i < sourceRangeCount; ++i)
+        for (uint32_t j = 0; j < i; ++j)
+            if (NPhasePoolRangesOverlap(sourceRanges[i], sourceRanges[j]))
+                return FinishNPhasePoolSnapshot(destination, receipt,
+                    NPhasePoolSnapshotInvalidMetadata,
+                    ERROR_INVALID_ADDRESS, 1u, i, j);
+    for (uint32_t output = 0; output < outputRangeCount; ++output)
+        for (uint32_t source = 0; source < sourceRangeCount; ++source)
+            if (NPhasePoolRangesOverlap(outputRanges[output],
+                    sourceRanges[source])) {
+                if (output < 2u) return 0;
+                return FinishNPhasePoolSnapshot(destination, receipt,
+                    NPhasePoolSnapshotOverlappingOutput,
+                    ERROR_INVALID_ADDRESS, 3u, output, source);
+            }
+    receipt.validationFlags |= 0x10u;
+
+    if (header.slabCount)
+        CopyWords(buffers.slabBases, slabBases, header.slabCount);
+    if (freeCount)
+        CopyBytes(buffers.freeSlots, freeSlots,
+            freeCount * sizeof(uint32_t));
+    if (header.slabCount)
+        CopyBytes(buffers.allocationWords, allocationWords,
+            header.slabCount * sizeof(uint32_t));
+    uint32_t slabByteOffset = 0;
+    for (uint32_t slab = 0; slab < header.slabCount; ++slab) {
+        CopyBytes(buffers.slabBytes + slabByteOffset,
+            reinterpret_cast<const void*>(slabBases[slab]),
+            expectedSlabSize);
+        slabByteOffset += expectedSlabSize;
+    }
+    receipt.slabBasesWritten = receipt.slabBasesRequired;
+    receipt.freeSlotsWritten = receipt.freeSlotsRequired;
+    receipt.allocationWordsWritten = receipt.allocationWordsRequired;
+    receipt.slabBytesWritten = receipt.slabBytesRequired;
+    receipt.validationFlags |= 0x20u;
+
+    NPhasePoolHeaderSnapshot secondHeader = {};
+    if (!NPhasePoolSnapshotRevisionMatches(unityBase) ||
+        !ReadNPhasePoolHeader(receipt.pool, secondHeader) ||
+        !SameNPhasePoolHeader(header, secondHeader))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotUnstable, ERROR_RETRY,
+            4u, 0xFFFFFFFFu, 1u);
+    if (header.slabCount && (!Readable(reinterpret_cast<const void*>(
+            header.slabsData), header.slabCount * sizeof(uintptr_t)) ||
+        !EqualBytes(reinterpret_cast<const void*>(header.slabsData),
+            reinterpret_cast<const uint8_t*>(slabBases),
+            header.slabCount * sizeof(uintptr_t))))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotUnstable, ERROR_RETRY,
+            4u, 0xFFFFFFFFu, 2u);
+    slabByteOffset = 0;
+    for (uint32_t slab = 0; slab < header.slabCount; ++slab) {
+        if (!Readable(reinterpret_cast<const void*>(slabBases[slab]),
+                expectedSlabSize) ||
+            !EqualBytes(reinterpret_cast<const void*>(slabBases[slab]),
+                buffers.slabBytes + slabByteOffset, expectedSlabSize))
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotUnstable, ERROR_RETRY,
+                4u, slab, 3u);
+        slabByteOffset += expectedSlabSize;
+    }
+    uint32_t secondWords[128] = {};
+    for (uint32_t word = 0; word < header.slabCount; ++word)
+        secondWords[word] = 0xFFFFFFFFu;
+    current = secondHeader.freeHead;
+    uint32_t secondFreeCount = 0;
+    while (current) {
+        uint32_t ordinal = 0xFFFFFFFFu;
+        if (secondFreeCount >= freeCount ||
+            !NPhasePoolSlotOrdinal(slabBases, header.slabCount,
+                receipt.elementSize, expectedSlabSize, current, ordinal) ||
+            ordinal != buffers.freeSlots[secondFreeCount])
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotUnstable, ERROR_RETRY,
+                4u, secondFreeCount, 4u);
+        const uint32_t word = ordinal >> 5;
+        const uint32_t bit = 1u << (ordinal & 31u);
+        if ((secondWords[word] & bit) == 0u)
+            return FinishNPhasePoolSnapshot(destination, receipt,
+                NPhasePoolSnapshotUnstable, ERROR_RETRY,
+                4u, secondFreeCount, 5u);
+        secondWords[word] &= ~bit;
+        ++secondFreeCount;
+        current = *reinterpret_cast<const uintptr_t*>(current);
+    }
+    if (secondFreeCount != freeCount ||
+        (header.slabCount && !EqualBytes(secondWords,
+            reinterpret_cast<const uint8_t*>(buffers.allocationWords),
+            header.slabCount * sizeof(uint32_t))))
+        return FinishNPhasePoolSnapshot(destination, receipt,
+            NPhasePoolSnapshotUnstable, ERROR_RETRY,
+            4u, secondFreeCount, 6u);
+    receipt.validationFlags |= 0x40u;
+
+    receipt.metadataHash = NPhasePoolMetadataHash(receipt);
+    receipt.slabBaseHash = OrderHash(buffers.slabBases,
+        receipt.slabBasesWritten);
+    receipt.freeSlotOrderHash = WordHash(buffers.freeSlots,
+        receipt.freeSlotsWritten);
+    receipt.allocationBitmapHash = WordHash(buffers.allocationWords,
+        receipt.allocationWordsWritten);
+    receipt.slabByteHash = ByteHash(buffers.slabBytes,
+        receipt.slabBytesWritten);
+    uint32_t snapshotHash = receipt.metadataHash;
+    snapshotHash = AppendByteHash(snapshotHash, buffers.slabBases,
+        receipt.slabBasesWritten * sizeof(uintptr_t));
+    snapshotHash = AppendByteHash(snapshotHash, buffers.freeSlots,
+        receipt.freeSlotsWritten * sizeof(uint32_t));
+    snapshotHash = AppendByteHash(snapshotHash, buffers.allocationWords,
+        receipt.allocationWordsWritten * sizeof(uint32_t));
+    snapshotHash = AppendByteHash(snapshotHash, buffers.slabBytes,
+        receipt.slabBytesWritten);
+    receipt.snapshotHash = snapshotHash;
+    receipt.validationFlags |= 0x80u;
+    return FinishNPhasePoolSnapshot(destination, receipt,
+        NPhasePoolSnapshotOk, ERROR_SUCCESS,
+        0xFFFFFFFFu, 0xFFFFFFFFu, 0u);
 }
 
 static bool NPhaseReportStateRevisionMatches(uintptr_t unityBase) {
@@ -9629,7 +10254,8 @@ static bool ValidateIslandRestoreTargetV1(
     const IslandSnapshotBuffersV1& buffers,
     const IslandSnapshotReceiptV1& receipt,
     IslandRestoreReceiptV1* output) {
-    if ((receipt.apiVersion != 18u && receipt.apiVersion != kApiVersion) ||
+    if ((receipt.apiVersion != 18u && receipt.apiVersion != 19u &&
+            receipt.apiVersion != kApiVersion) ||
         receipt.structSize != sizeof(receipt) ||
         receipt.result != IslandSnapshotOk ||
         receipt.phase != IslandSnapshotSettled ||
@@ -14556,6 +15182,15 @@ static int RestoreExistingActorShapePoses(uintptr_t unityBase, uintptr_t rigidbo
 
 extern "C" __declspec(dllexport) uint32_t __cdecl oc2_rigidbody_rebuild_api_version() {
     return kApiVersion;
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_nphase_pool_capture_snapshot_v1(uintptr_t unityBase,
+    uintptr_t nphaseCore, uint32_t poolKind,
+    const NPhasePoolSnapshotBuffersV1* buffers,
+    NPhasePoolSnapshotReceiptV1* receipt) {
+    return CaptureNPhasePoolSnapshotV1(unityBase, nphaseCore, poolKind,
+        buffers, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_island_capture_snapshot_v1(

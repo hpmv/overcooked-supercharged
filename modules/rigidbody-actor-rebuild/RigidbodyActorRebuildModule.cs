@@ -21,7 +21,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // chefs during the checkpoint restore's internal main-physics unfreeze.
     public sealed class RigidbodyActorRebuildModule : IAuthoringModule
     {
-        private const uint NativeAbiVersion=19;
+        private const uint NativeAbiVersion=20;
         // Four active chef actors plus Unity's one replacement allocation form
         // the observed five-address cycle. Rebuilding five times removes every
         // chef actor/contact set while restoring the incoming chef/address map.
@@ -29,6 +29,9 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int MaximumContactManagers=4096;
         private const int MaximumManifolds=4096;
         private const int MaximumShapeInstancePairs=4096;
+        private const int MaximumNPhasePoolSlabs=128;
+        private const int MaximumNPhasePoolSlabBytes=MaximumNPhasePoolSlabs*0x880;
+        private const int NPhasePoolKindCount=5;
         private const int MaximumContactReportBufferSize=64*1024*1024;
         private const int MaximumDirtyInteractions=4096;
         private const int MaximumInteractionGraphActors=4096;
@@ -210,6 +213,31 @@ namespace SuperchargedPatch.Authoring.Modules
             public uint TotalElements,FreeCount,FreeOrderHash,AllocatedCount,AllocatedOrderHash,ValidationFlags;
             [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopFree;
             [MarshalAs(UnmanagedType.ByValArray,SizeConst=16)] public UIntPtr[] TopAllocated;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeNPhasePoolSnapshotBuffers
+        {
+            public IntPtr SlabBases;public uint SlabBaseCapacity;
+            public IntPtr FreeSlots;public uint FreeSlotCapacity;
+            public IntPtr AllocationWords;public uint AllocationWordCapacity;
+            public IntPtr SlabBytes;public uint SlabByteCapacity;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeNPhasePoolSnapshotReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,Pool,SlabsData,FreeHead;
+            public uint PoolKind,PoolOffset,ElementSize,ElementsPerSlab,SlabSize;
+            public uint SlabCount,SlabCapacityRaw,TotalSlots,Used,Unreleased,FreeHeadSlot;
+            public uint SlabBasesRequired,SlabBasesWritten;
+            public uint FreeSlotsRequired,FreeSlotsWritten;
+            public uint AllocationWordsRequired,AllocationWordsWritten;
+            public uint SlabBytesRequired,SlabBytesWritten;
+            public uint MetadataHash,SlabBaseHash,FreeSlotOrderHash;
+            public uint AllocationBitmapHash,SlabByteHash,SnapshotHash;
+            public uint ValidationFlags,InvalidKind,InvalidIndex,Detail;
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
@@ -504,6 +532,8 @@ namespace SuperchargedPatch.Authoring.Modules
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeActorPairReportPoolCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,IntPtr freeSnapshot,uint freeCapacity,
             IntPtr allocatedSnapshot,uint allocatedCapacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeNPhasePoolCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,uint poolKind,IntPtr buffers,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeNPhaseReportStateCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,IntPtr actorPairs,uint actorPairCapacity,
             IntPtr persistentSips,uint persistentCapacity,IntPtr forceThresholdSips,
@@ -637,6 +667,13 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint ElementSize,ElementsPerSlab,Used,Unreleased,SlabSize,SlabCount,TotalElements;
             internal uint[] FreeOrder,AllocatedOrder;
             internal byte[][] AllocatedBytes;
+        }
+
+        private sealed class NPhasePoolImageState
+        {
+            internal NativeNPhasePoolSnapshotReceipt Receipt;
+            internal uint[] SlabBases,FreeSlots,AllocationWords;
+            internal byte[] SlabBytes;
         }
 
         private sealed class NPhaseReportState
@@ -861,6 +898,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal SipPoolState ShapeInstancePairPool;
             internal ActorPairPoolState ActorPairPool;
             internal ActorPairReportPoolState ActorPairReportPool;
+            internal NPhasePoolImageState[] NPhasePoolImages;
             internal NPhaseReportState NPhaseReports;
             internal InteractionGraphState InteractionGraph;
             internal TransformCacheState TransformCache;
@@ -880,6 +918,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal SipPoolState ShapeInstancePairPool;
             internal ActorPairPoolState ActorPairPool;
             internal ActorPairReportPoolState ActorPairReportPool;
+            internal NPhasePoolImageState[] NPhasePoolImages;
             internal NPhaseReportState NPhaseReports;
             internal InteractionGraphState InteractionGraph;
             internal TransformCacheState TransformCache;
@@ -922,6 +961,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeSipPoolCaptureSnapshot captureSipPoolSnapshot;
         private NativeActorPairPoolCaptureSnapshot captureActorPairPoolSnapshot;
         private NativeActorPairReportPoolCaptureSnapshot captureActorPairReportPoolSnapshot;
+        private NativeNPhasePoolCaptureSnapshot captureNPhasePoolSnapshot;
         private NativeNPhaseReportStateCaptureSnapshot captureNPhaseReportStateSnapshot;
         private NativeInteractionGraphCaptureSnapshot captureInteractionGraphSnapshot;
         private NativeTransformCacheCaptureSnapshot captureTransformCacheSnapshot;
@@ -1073,6 +1113,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 captureActorPairPoolSnapshot=Export<NativeActorPairPoolCaptureSnapshot>("oc2_actor_pair_pool_capture_snapshot");
                 captureActorPairReportPoolSnapshot=Export<NativeActorPairReportPoolCaptureSnapshot>(
                     "oc2_actor_pair_report_pool_capture_snapshot");
+                captureNPhasePoolSnapshot=Export<NativeNPhasePoolCaptureSnapshot>(
+                    "oc2_nphase_pool_capture_snapshot_v1");
                 captureNPhaseReportStateSnapshot=Export<NativeNPhaseReportStateCaptureSnapshot>(
                     "oc2_nphase_report_state_capture_snapshot");
                 captureInteractionGraphSnapshot=Export<NativeInteractionGraphCaptureSnapshot>(
@@ -1677,7 +1719,8 @@ namespace SuperchargedPatch.Authoring.Modules
             if(captureContactPoolSnapshot==null||restoreContactPoolSnapshot==null||
                 captureContactManagerActiveOwners==null||captureManifoldPoolSnapshot==null||
                 restoreManifoldPoolSnapshot==null||captureSipPoolSnapshot==null||
-                captureActorPairPoolSnapshot==null||captureActorPairReportPoolSnapshot==null)
+                captureActorPairPoolSnapshot==null||captureActorPairReportPoolSnapshot==null||
+                captureNPhasePoolSnapshot==null)
                 throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
@@ -1756,6 +1799,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 ActorPairPoolState actorPairs=CaptureActorPairPoolState(captureNPhase,actionFrame);
                 ActorPairReportPoolState actorPairReports=CaptureActorPairReportPoolState(
                     captureNPhase,actionFrame);
+                NPhasePoolImageState[] nphasePoolImages=CaptureNPhasePoolImages(
+                    captureNPhase,actionFrame);
                 NPhaseReportState nphaseReports=CaptureNPhaseReportState(captureNPhase,actionFrame);
                 InteractionGraphState interactionGraph=CaptureInteractionGraphState(
                     captureNPhase,actionFrame);
@@ -1774,6 +1819,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     ShapeInstancePairPool=sip,
                     ActorPairPool=actorPairs,
                     ActorPairReportPool=actorPairReports,
+                    NPhasePoolImages=nphasePoolImages,
                     NPhaseReports=nphaseReports,
                     InteractionGraph=interactionGraph,
                     TransformCache=transformCache,
@@ -1936,6 +1982,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 ShapeInstancePairPool=CaptureSipPoolState(nphase,frame),
                 ActorPairPool=CaptureActorPairPoolState(nphase,frame),
                 ActorPairReportPool=CaptureActorPairReportPoolState(nphase,frame),
+                NPhasePoolImages=CaptureNPhasePoolImages(nphase,frame),
                 NPhaseReports=CaptureNPhaseReportState(nphase,frame),
                 InteractionGraph=CaptureInteractionGraphState(nphase,frame),
                 TransformCache=CaptureTransformCacheState(nphase,frame),
@@ -1979,8 +2026,15 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateSipPoolState(value.ShapeInstancePairPool);
             ValidateActorPairPoolState(value.ActorPairPool);
             ValidateActorPairReportPoolState(value.ActorPairReportPool);
+            ValidateNPhasePoolImages(value.NPhasePoolImages);
             ValidateNPhaseReportState(value.NPhaseReports);
             ValidateInteractionGraphState(value.InteractionGraph);
+            bool completePoolsCoherent=NPhasePoolImagesCoherentWithLegacy(
+                value.NPhasePoolImages,value.ShapeInstancePairPool,value.ActorPairPool,
+                value.ActorPairReportPool,value.InteractionGraph);
+            if(!completePoolsCoherent)
+                throw new InvalidOperationException(
+                    "The complete NPhase-pool images disagree with the legacy pool or interaction-graph captures.");
             ValidateTransformCacheState(value.TransformCache);
             ValidateIslandSnapshotState(value.IslandSnapshot,IslandPhaseSettled);
             ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
@@ -1993,6 +2047,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 ShapeInstancePairPool=value.ShapeInstancePairPool,
                 ActorPairPool=value.ActorPairPool,
                 ActorPairReportPool=value.ActorPairReportPool,
+                NPhasePoolImages=value.NPhasePoolImages,
                 NPhaseReports=value.NPhaseReports,
                 InteractionGraph=value.InteractionGraph,
                 TransformCache=value.TransformCache,
@@ -4318,6 +4373,106 @@ namespace SuperchargedPatch.Authoring.Modules
             return state;
         }
 
+        private NPhasePoolImageState[] CaptureNPhasePoolImages(uint nphaseCore,int frame)
+        {
+            var values=new NPhasePoolImageState[NPhasePoolKindCount];
+            for(uint kind=0;kind<NPhasePoolKindCount;kind++)
+                values[kind]=CaptureNPhasePoolImage(nphaseCore,kind,frame);
+            ValidateNPhasePoolImages(values);
+            return values;
+        }
+
+        private NPhasePoolImageState CaptureNPhasePoolImage(
+            uint nphaseCore,uint poolKind,int frame)
+        {
+            if(captureNPhasePoolSnapshot==null||nphaseCore==0||
+                poolKind>=NPhasePoolKindCount)
+                throw new InvalidOperationException(
+                    "Native complete NPhase-pool capture is unavailable.");
+            int bufferSize=Marshal.SizeOf(typeof(NativeNPhasePoolSnapshotBuffers));
+            int receiptSize=Marshal.SizeOf(typeof(NativeNPhasePoolSnapshotReceipt));
+            if(bufferSize!=32||receiptSize!=152)
+                throw new InvalidOperationException(
+                    "Managed complete NPhase-pool ABI size differs.");
+            IntPtr slabBaseBuffer=Marshal.AllocHGlobal(
+                MaximumNPhasePoolSlabs*IntPtr.Size);
+            IntPtr freeSlotBuffer=Marshal.AllocHGlobal(
+                MaximumShapeInstancePairs*sizeof(uint));
+            IntPtr allocationBuffer=Marshal.AllocHGlobal(
+                MaximumNPhasePoolSlabs*sizeof(uint));
+            IntPtr slabByteBuffer=Marshal.AllocHGlobal(MaximumNPhasePoolSlabBytes);
+            IntPtr buffersPointer=Marshal.AllocHGlobal(bufferSize);
+            IntPtr receiptPointer=Marshal.AllocHGlobal(receiptSize);
+            NativeNPhasePoolSnapshotReceipt receipt;
+            uint[] slabBases=null,freeSlots=null,allocationWords=null;
+            byte[] slabBytes=null;
+            try
+            {
+                var buffers=new NativeNPhasePoolSnapshotBuffers {
+                    SlabBases=slabBaseBuffer,
+                    SlabBaseCapacity=MaximumNPhasePoolSlabs,
+                    FreeSlots=freeSlotBuffer,
+                    FreeSlotCapacity=MaximumShapeInstancePairs,
+                    AllocationWords=allocationBuffer,
+                    AllocationWordCapacity=MaximumNPhasePoolSlabs,
+                    SlabBytes=slabByteBuffer,
+                    SlabByteCapacity=MaximumNPhasePoolSlabBytes
+                };
+                Marshal.StructureToPtr(buffers,buffersPointer,false);
+                IslandSnapshotBufferOwner.Zero(receiptPointer,receiptSize);
+                int ok=captureNPhasePoolSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),poolKind,buffersPointer,receiptPointer);
+                receipt=(NativeNPhasePoolSnapshotReceipt)Marshal.PtrToStructure(
+                    receiptPointer,typeof(NativeNPhasePoolSnapshotReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException(
+                        "Native complete NPhase-pool capture failed at frame "+frame+
+                        " for kind "+poolKind+": result="+receipt.Result+
+                        ", Win32/error="+receipt.LastError+", invalidKind="+
+                        receipt.InvalidKind+", invalidIndex="+receipt.InvalidIndex+
+                        ", detail="+receipt.Detail+".");
+                if(receipt.ApiVersion!=NativeAbiVersion||
+                    receipt.StructSize!=(uint)receiptSize||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||
+                    receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero||
+                    receipt.SlabBasesRequired>MaximumNPhasePoolSlabs||
+                    receipt.FreeSlotsRequired>MaximumShapeInstancePairs||
+                    receipt.AllocationWordsRequired>MaximumNPhasePoolSlabs||
+                    receipt.SlabBytesRequired>MaximumNPhasePoolSlabBytes||
+                    receipt.SlabBasesWritten!=receipt.SlabBasesRequired||
+                    receipt.FreeSlotsWritten!=receipt.FreeSlotsRequired||
+                    receipt.AllocationWordsWritten!=receipt.AllocationWordsRequired||
+                    receipt.SlabBytesWritten!=receipt.SlabBytesRequired||
+                    receipt.ValidationFlags!=0xFFu)
+                    throw new InvalidOperationException(
+                        "Native complete NPhase-pool receipt contract differs.");
+                slabBases=ReadPointerBuffer(slabBaseBuffer,
+                    receipt.SlabBasesWritten);
+                freeSlots=ReadUInt32Buffer(freeSlotBuffer,
+                    receipt.FreeSlotsWritten);
+                allocationWords=ReadUInt32Buffer(allocationBuffer,
+                    receipt.AllocationWordsWritten);
+                slabBytes=new byte[checked((int)receipt.SlabBytesWritten)];
+                if(slabBytes.Length!=0)
+                    Marshal.Copy(slabByteBuffer,slabBytes,0,slabBytes.Length);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(receiptPointer);
+                Marshal.FreeHGlobal(buffersPointer);
+                Marshal.FreeHGlobal(slabByteBuffer);
+                Marshal.FreeHGlobal(allocationBuffer);
+                Marshal.FreeHGlobal(freeSlotBuffer);
+                Marshal.FreeHGlobal(slabBaseBuffer);
+            }
+            var state=new NPhasePoolImageState {Receipt=receipt,
+                SlabBases=slabBases,FreeSlots=freeSlots,
+                AllocationWords=allocationWords,SlabBytes=slabBytes};
+            ValidateNPhasePoolImage(state,poolKind);
+            return state;
+        }
+
         private NPhaseReportState CaptureNPhaseReportState(uint nphaseCore,int frame)
         {
             if(captureNPhaseReportStateSnapshot==null||nphaseCore==0)
@@ -4542,6 +4697,14 @@ namespace SuperchargedPatch.Authoring.Modules
             var values=new uint[checked((int)count)];
             for(int i=0;i<values.Length;i++)values[i]=unchecked((uint)Marshal.ReadInt32(
                 buffer,i*IntPtr.Size));
+            return values;
+        }
+
+        private static uint[] ReadUInt32Buffer(IntPtr buffer,uint count)
+        {
+            var values=new uint[checked((int)count)];
+            for(int i=0;i<values.Length;i++)values[i]=unchecked((uint)
+                Marshal.ReadInt32(buffer,i*sizeof(uint)));
             return values;
         }
 
@@ -5778,6 +5941,228 @@ namespace SuperchargedPatch.Authoring.Modules
             return hash;
         }
 
+        private static uint AppendByteHash(uint hash,byte value)
+        {
+            hash^=value;return hash*16777619u;
+        }
+
+        private static uint AppendUInt32ByteHash(uint hash,uint value)
+        {
+            for(int shift=0;shift<32;shift+=8)
+                hash=AppendByteHash(hash,(byte)(value>>shift));
+            return hash;
+        }
+
+        private static uint AppendUInt32ArrayByteHash(uint hash,uint[] values)
+        {
+            if(values==null)throw new ArgumentNullException("values");
+            foreach(uint value in values)hash=AppendUInt32ByteHash(hash,value);
+            return hash;
+        }
+
+        private static uint AppendByteArrayHash(uint hash,byte[] values)
+        {
+            if(values==null)throw new ArgumentNullException("values");
+            foreach(byte value in values)hash=AppendByteHash(hash,value);
+            return hash;
+        }
+
+        private static void NPhasePoolLayout(uint poolKind,out uint poolOffset,
+            out uint elementSize,out uint slabSize)
+        {
+            if(poolKind==0u){poolOffset=0x90u;elementSize=0x18u;slabSize=0x300u;return;}
+            if(poolKind==1u){poolOffset=0x2E0u;elementSize=0x44u;slabSize=0x880u;return;}
+            if(poolKind==2u){poolOffset=0x408u;elementSize=0x3Cu;slabSize=0x780u;return;}
+            if(poolKind==3u){poolOffset=0x530u;elementSize=0x24u;slabSize=0x480u;return;}
+            if(poolKind==4u){poolOffset=0x658u;elementSize=0x28u;slabSize=0x500u;return;}
+            throw new InvalidOperationException("Unsupported NPhase pool kind "+poolKind+".");
+        }
+
+        private static uint NPhasePoolSlotAddress(NPhasePoolImageState value,uint ordinal)
+        {
+            NativeNPhasePoolSnapshotReceipt receipt=value.Receipt;
+            if(ordinal>=receipt.TotalSlots)throw new InvalidOperationException(
+                "NPhase pool slot ordinal is outside its captured partition.");
+            uint slab=ordinal/32u,element=ordinal%32u;
+            return checked(value.SlabBases[slab]+element*receipt.ElementSize);
+        }
+
+        private static uint[] NPhasePoolFreeAddresses(NPhasePoolImageState value)
+        {
+            return value.FreeSlots.Select(slot=>NPhasePoolSlotAddress(value,slot)).ToArray();
+        }
+
+        private static uint[] NPhasePoolAllocatedAddresses(NPhasePoolImageState value)
+        {
+            var result=new List<uint>();
+            for(uint slot=0;slot<value.Receipt.TotalSlots;slot++)
+                if((value.AllocationWords[slot>>5]&(1u<<(int)(slot&31u)))!=0u)
+                    result.Add(NPhasePoolSlotAddress(value,slot));
+            return result.ToArray();
+        }
+
+        private static void ValidateNPhasePoolImages(NPhasePoolImageState[] values)
+        {
+            if(values==null||values.Length!=NPhasePoolKindCount)
+                throw new InvalidOperationException(
+                    "The complete NPhase-pool image set is incomplete.");
+            uint nphase=0;
+            for(uint kind=0;kind<NPhasePoolKindCount;kind++)
+            {
+                ValidateNPhasePoolImage(values[kind],kind);
+                uint current=values[kind].Receipt.NPhaseCore.ToUInt32();
+                if(kind==0u)nphase=current;
+                else if(current!=nphase)throw new InvalidOperationException(
+                    "Complete NPhase-pool images belong to different NPhaseCore instances.");
+            }
+        }
+
+        private static void ValidateNPhasePoolImage(NPhasePoolImageState value,uint poolKind)
+        {
+            if(value==null||value.SlabBases==null||value.FreeSlots==null||
+                value.AllocationWords==null||value.SlabBytes==null)
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool image is incomplete.");
+            NativeNPhasePoolSnapshotReceipt receipt=value.Receipt;
+            uint poolOffset,elementSize,slabSize;
+            NPhasePoolLayout(poolKind,out poolOffset,out elementSize,out slabSize);
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=152u||
+                receipt.Result!=1u||receipt.LastError!=0u||
+                receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
+                receipt.PoolKind!=poolKind||receipt.PoolOffset!=poolOffset||
+                receipt.Pool.ToUInt32()!=checked(receipt.NPhaseCore.ToUInt32()+poolOffset)||
+                receipt.ElementSize!=elementSize||receipt.ElementsPerSlab!=32u||
+                receipt.SlabSize!=slabSize||receipt.SlabCount>MaximumNPhasePoolSlabs||
+                receipt.TotalSlots!=receipt.SlabCount*32u||
+                receipt.Used+receipt.Unreleased!=receipt.TotalSlots||
+                receipt.SlabCount>(receipt.SlabCapacityRaw&0x7FFFFFFFu)||
+                receipt.SlabBasesRequired!=receipt.SlabCount||
+                receipt.SlabBasesWritten!=receipt.SlabBasesRequired||
+                receipt.FreeSlotsRequired!=receipt.Unreleased||
+                receipt.FreeSlotsWritten!=receipt.FreeSlotsRequired||
+                receipt.AllocationWordsRequired!=receipt.SlabCount||
+                receipt.AllocationWordsWritten!=receipt.AllocationWordsRequired||
+                receipt.SlabBytesRequired!=receipt.SlabCount*receipt.SlabSize||
+                receipt.SlabBytesWritten!=receipt.SlabBytesRequired||
+                receipt.ValidationFlags!=0xFFu||receipt.InvalidKind!=0xFFFFFFFFu||
+                receipt.InvalidIndex!=0xFFFFFFFFu||receipt.Detail!=0u||
+                value.SlabBases.Length!=receipt.SlabBasesWritten||
+                value.FreeSlots.Length!=receipt.FreeSlotsWritten||
+                value.AllocationWords.Length!=receipt.AllocationWordsWritten||
+                value.SlabBytes.Length!=receipt.SlabBytesWritten)
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool receipt or image contract differs.");
+            if((receipt.SlabCount!=0u&&receipt.SlabsData==UIntPtr.Zero)||
+                value.SlabBases.Any(pointer=>pointer==0u)||
+                value.SlabBases.Distinct().Count()!=value.SlabBases.Length||
+                value.FreeSlots.Any(slot=>slot>=receipt.TotalSlots)||
+                value.FreeSlots.Distinct().Count()!=value.FreeSlots.Length)
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool image contains an invalid slab or free slot.");
+            uint[] freeAddresses=NPhasePoolFreeAddresses(value);
+            uint expectedHead=freeAddresses.Length==0?0u:freeAddresses[0];
+            if(receipt.FreeHead.ToUInt32()!=expectedHead||
+                receipt.FreeHeadSlot!=(value.FreeSlots.Length==0?0xFFFFFFFFu:value.FreeSlots[0]))
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool image disagrees with its free head.");
+            uint allocated=0u;
+            var freeSet=new HashSet<uint>(value.FreeSlots);
+            for(uint slot=0;slot<receipt.TotalSlots;slot++)
+            {
+                bool marked=(value.AllocationWords[slot>>5]&
+                    (1u<<(int)(slot&31u)))!=0u;
+                if(marked)allocated++;
+                if(marked==freeSet.Contains(slot))
+                    throw new InvalidOperationException(
+                        "A complete NPhase-pool bitmap disagrees with its free partition.");
+            }
+            if(allocated!=receipt.Used)
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool bitmap has the wrong allocated count.");
+            for(int index=0;index<value.FreeSlots.Length;index++)
+            {
+                uint slot=value.FreeSlots[index],slab=slot/32u,element=slot%32u;
+                int byteOffset=checked((int)(slab*receipt.SlabSize+
+                    element*receipt.ElementSize));
+                uint next=BitConverter.ToUInt32(value.SlabBytes,byteOffset);
+                uint expected=index+1<value.FreeSlots.Length?
+                    NPhasePoolSlotAddress(value,value.FreeSlots[index+1]):0u;
+                if(next!=expected)throw new InvalidOperationException(
+                    "A complete NPhase-pool image has a free link inconsistent with its ordinal order.");
+            }
+            if(receipt.SlabBaseHash!=ContactPoolOrderHash(value.SlabBases)||
+                receipt.FreeSlotOrderHash!=ContactPoolOrderHash(value.FreeSlots)||
+                receipt.AllocationBitmapHash!=ContactPoolOrderHash(value.AllocationWords)||
+                receipt.SlabByteHash!=ByteHash(value.SlabBytes,value.SlabBytes.Length))
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool image differs from its native content hashes.");
+            uint metadata=2166136261u;
+            metadata=AppendUInt32ByteHash(metadata,receipt.SlabsData.ToUInt32());
+            metadata=AppendUInt32ByteHash(metadata,receipt.FreeHead.ToUInt32());
+            foreach(uint word in new[]{receipt.PoolKind,receipt.PoolOffset,
+                receipt.ElementSize,receipt.ElementsPerSlab,receipt.SlabSize,
+                receipt.SlabCount,receipt.SlabCapacityRaw,receipt.TotalSlots,
+                receipt.Used,receipt.Unreleased,receipt.FreeHeadSlot})
+                metadata=AppendUInt32ByteHash(metadata,word);
+            uint snapshot=metadata;
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.SlabBases);
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.FreeSlots);
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.AllocationWords);
+            snapshot=AppendByteArrayHash(snapshot,value.SlabBytes);
+            if(receipt.MetadataHash!=metadata||receipt.SnapshotHash!=snapshot)
+                throw new InvalidOperationException(
+                    "A complete NPhase-pool aggregate hash differs from its captured image.");
+        }
+
+        private static bool NPhasePoolImagesCoherentWithLegacy(
+            NPhasePoolImageState[] images,SipPoolState sipPool,
+            ActorPairPoolState actorPairPool,ActorPairReportPoolState reportPool,
+            InteractionGraphState graph)
+        {
+            if(images==null||images.Length!=NPhasePoolKindCount||sipPool==null||
+                actorPairPool==null||reportPool==null||graph==null||
+                graph.Interactions==null)return false;
+            NPhasePoolImageState actorPairImage=images[0];
+            NPhasePoolImageState sipImage=images[1];
+            NPhasePoolImageState triggerImage=images[2];
+            NPhasePoolImageState reportImage=images[3];
+            NPhasePoolImageState markerImage=images[4];
+            uint[] graphSips=graph.Interactions.Where(item=>item.InteractionType==0)
+                .Select(item=>checked(item.Interaction.ToUInt32()-8u)).ToArray();
+            uint[] graphTriggers=graph.Interactions.Where(item=>item.InteractionType==2)
+                .Select(item=>checked(item.Interaction.ToUInt32()-8u)).ToArray();
+            uint[] graphMarkers=graph.Interactions.Where(item=>item.InteractionType==3)
+                .Select(item=>checked(item.Interaction.ToUInt32()-8u)).ToArray();
+            return actorPairImage.Receipt.NPhaseCore.ToUInt32()==sipPool.NPhaseCore&&
+                sipImage.Receipt.NPhaseCore==actorPairImage.Receipt.NPhaseCore&&
+                triggerImage.Receipt.NPhaseCore==actorPairImage.Receipt.NPhaseCore&&
+                reportImage.Receipt.NPhaseCore==actorPairImage.Receipt.NPhaseCore&&
+                markerImage.Receipt.NPhaseCore==actorPairImage.Receipt.NPhaseCore&&
+                actorPairImage.Receipt.Pool.ToUInt32()==actorPairPool.Pool&&
+                actorPairImage.Receipt.Used==actorPairPool.Used&&
+                actorPairImage.Receipt.Unreleased==actorPairPool.Unreleased&&
+                NPhasePoolFreeAddresses(actorPairImage).SequenceEqual(
+                    actorPairPool.FreeOrder)&&
+                NPhasePoolAllocatedAddresses(actorPairImage).SequenceEqual(
+                    actorPairPool.AllocatedOrder)&&
+                sipImage.Receipt.Pool.ToUInt32()==sipPool.Pool&&
+                sipImage.Receipt.Used==sipPool.Used&&
+                sipImage.Receipt.Unreleased==sipPool.Unreleased&&
+                NPhasePoolFreeAddresses(sipImage).SequenceEqual(sipPool.Order)&&
+                new HashSet<uint>(NPhasePoolAllocatedAddresses(sipImage)).SetEquals(
+                    graphSips)&&
+                reportImage.Receipt.Pool.ToUInt32()==reportPool.Pool&&
+                reportImage.Receipt.Used==reportPool.Used&&
+                reportImage.Receipt.Unreleased==reportPool.Unreleased&&
+                NPhasePoolFreeAddresses(reportImage).SequenceEqual(reportPool.FreeOrder)&&
+                NPhasePoolAllocatedAddresses(reportImage).SequenceEqual(
+                    reportPool.AllocatedOrder)&&
+                new HashSet<uint>(NPhasePoolAllocatedAddresses(triggerImage)).SetEquals(
+                    graphTriggers)&&
+                new HashSet<uint>(NPhasePoolAllocatedAddresses(markerImage)).SetEquals(
+                    graphMarkers);
+        }
+
         private static uint FloatBits(float value)
         {
             return unchecked((uint)BitConverter.ToInt32(BitConverter.GetBytes(value),0));
@@ -6569,6 +6954,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"actorPairPool",DescribeActorPairPoolState(value.ActorPairPool)},
                 {"actorPairReportPool",DescribeActorPairReportPoolState(
                     value.ActorPairReportPool)},
+                {"nphasePoolImages",DescribeNPhasePoolImages(value.NPhasePoolImages)},
                 {"nphaseReports",DescribeNPhaseReportState(value.NPhaseReports)},
                 {"interactionGraph",DescribeInteractionGraphState(value.InteractionGraph)},
                 {"transformCache",DescribeTransformCacheState(value.TransformCache)},
@@ -6596,6 +6982,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 restored.ActorPairPool);
             bool actorPairReport=SameActorPairReportPoolSnapshot(
                 target.ActorPairReportPool,restored.ActorPairReportPool);
+            bool nphasePoolsRaw=SameRawNPhasePoolImages(target.NPhasePoolImages,
+                restored.NPhasePoolImages);
             bool nphaseReports=SameNPhaseReportState(target.NPhaseReports,
                 restored.NPhaseReports);
             bool graph=SameInteractionGraphState(target.InteractionGraph,
@@ -6619,13 +7007,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactFreeEqual",contactFree},{"contactOwnersEqual",contactOwners},
                 {"shapeInstancePairPoolEqual",sip},{"actorPairPoolEqual",actorPair},
                 {"actorPairReportPoolEqual",actorPairReport},
+                {"nphasePoolImagesRawEqual",nphasePoolsRaw},
                 {"nphaseReportsEqual",nphaseReports},{"interactionGraphEqual",graph},
                 {"transformCacheEqual",transformCache},{"islandSnapshotEqual",island},
                 {"islandSnapshotRawEqual",islandRaw},
                 {"largeManifoldPoolEqual",large},{"sphereManifoldPoolEqual",sphere},
                 {"transformDispatchEqual",dispatch},{"dirtyInteractionsEqual",dirty},
-                {"allFamiliesEqual",frame&&contactFree&&contactOwners&&sip&&actorPair&&
-                    actorPairReport&&nphaseReports&&graph&&transformCache&&island&&large&&
+                {"allRawFamiliesEqual",frame&&contactFree&&contactOwners&&sip&&actorPair&&
+                    actorPairReport&&nphasePoolsRaw&&nphaseReports&&graph&&transformCache&&island&&large&&
                     sphere&&dispatch&&dirty}};
         }
 
@@ -6674,6 +7063,40 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"freeOrderHash","0x"+value.FreeOrderHash.ToString("X8")},
                 {"allocatedOrderHash","0x"+value.AllocatedOrderHash.ToString("X8")},
                 {"topFree",topFree},{"topAllocated",topAllocated},{"contentSha256",contentHashes}};
+        }
+
+        private static object DescribeNPhasePoolImages(NPhasePoolImageState[] values)
+        {
+            if(values==null)return null;
+            return values.Select(value=>(object)new Dictionary<string,object>{
+                {"poolKind",value.Receipt.PoolKind},
+                {"nphaseCore",Hex(value.Receipt.NPhaseCore)},
+                {"pool",Hex(value.Receipt.Pool)},
+                {"slabsData",Hex(value.Receipt.SlabsData)},
+                {"slabCapacityRaw","0x"+value.Receipt.SlabCapacityRaw.ToString("X8")},
+                {"slabCount",value.Receipt.SlabCount},
+                {"elementSize",value.Receipt.ElementSize},
+                {"slabSize",value.Receipt.SlabSize},
+                {"totalSlots",value.Receipt.TotalSlots},
+                {"used",value.Receipt.Used},
+                {"unreleased",value.Receipt.Unreleased},
+                {"freeHead",Hex(value.Receipt.FreeHead)},
+                {"freeHeadSlot",value.Receipt.FreeHeadSlot==0xFFFFFFFFu?
+                    (object)null:value.Receipt.FreeHeadSlot},
+                {"slabBases",HexArray(value.SlabBases)},
+                {"freeSlots",value.FreeSlots.Cast<object>().ToArray()},
+                {"allocationWords",value.AllocationWords.Select(word=>(object)
+                    ("0x"+word.ToString("X8"))).ToArray()},
+                {"metadataHash","0x"+value.Receipt.MetadataHash.ToString("X8")},
+                {"slabBaseHash","0x"+value.Receipt.SlabBaseHash.ToString("X8")},
+                {"freeSlotOrderHash","0x"+value.Receipt.FreeSlotOrderHash.ToString("X8")},
+                {"allocationBitmapHash","0x"+
+                    value.Receipt.AllocationBitmapHash.ToString("X8")},
+                {"slabByteHash","0x"+value.Receipt.SlabByteHash.ToString("X8")},
+                {"snapshotHash","0x"+value.Receipt.SnapshotHash.ToString("X8")},
+                {"slabBytesSha256",ContentSha256(value.SlabBytes)},
+                {"validationFlags","0x"+value.Receipt.ValidationFlags.ToString("X8")}
+            }).ToArray();
         }
 
         private static object DescribeNPhaseReportState(NPhaseReportState value)
@@ -6965,6 +7388,7 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateSipPoolState(value.ShapeInstancePairPool);
             ValidateActorPairPoolState(value.ActorPairPool);
             ValidateActorPairReportPoolState(value.ActorPairReportPool);
+            ValidateNPhasePoolImages(value.NPhasePoolImages);
             ValidateNPhaseReportState(value.NPhaseReports);
             ValidateInteractionGraphState(value.InteractionGraph);
             ValidateTransformCacheState(value.TransformCache);
@@ -6994,6 +7418,8 @@ namespace SuperchargedPatch.Authoring.Modules
             if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
+                value.NPhasePoolImages.Any(pool=>pool.Receipt.NPhaseCore.ToUInt32()!=
+                    value.DirtyInteractions.NPhaseCore)||
                 value.NPhaseReports.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
                 value.InteractionGraph.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
                 value.TransformCache.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
@@ -7015,6 +7441,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameSipPoolSnapshot(previous.ShapeInstancePairPool,value.ShapeInstancePairPool)&&
                     SameActorPairPoolSnapshot(previous.ActorPairPool,value.ActorPairPool)&&
                     SameActorPairReportPoolSnapshot(previous.ActorPairReportPool,value.ActorPairReportPool)&&
+                    SameRawNPhasePoolImages(previous.NPhasePoolImages,value.NPhasePoolImages)&&
                     SameNPhaseReportState(previous.NPhaseReports,value.NPhaseReports)&&
                     SameInteractionGraphState(previous.InteractionGraph,value.InteractionGraph)&&
                     SameTransformCacheState(previous.TransformCache,value.TransformCache)&&
@@ -7044,6 +7471,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ActorPairPool.AllocatedOrder==null||
                 value.ActorPairReportPool==null||value.ActorPairReportPool.FreeOrder==null||
                 value.ActorPairReportPool.AllocatedOrder==null||
+                value.NPhasePoolImages==null||
                 value.NPhaseReports==null||
                 value.InteractionGraph==null||value.InteractionGraph.Interactions==null||
                 value.TransformCache==null||value.TransformCache.Entries==null||
@@ -7052,6 +7480,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
                 value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
                 throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
+            ValidateNPhasePoolImages(value.NPhasePoolImages);
+            bool completePoolsCoherent=NPhasePoolImagesCoherentWithLegacy(
+                value.NPhasePoolImages,value.ShapeInstancePairPool,value.ActorPairPool,
+                value.ActorPairReportPool,value.InteractionGraph);
             NativeContactManagerOwnerRecord[] owners=value.ContactManagerOwners.Records;
             var contactFree=new HashSet<uint>(value.ContactPoolOrder);
             var sipFree=new HashSet<uint>(value.ShapeInstancePairPool.Order);
@@ -7195,7 +7627,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ShapeInstancePairPool.Used<(uint)sips.Length||
                 value.ActorPairPool.Used!=(uint)actorPairs.Length||
                 !actorPairRowsCoherent||!nphaseReportCoherent||!interactionGraphCoherent||
-                !transformCacheCoherent||
+                !completePoolsCoherent||!transformCacheCoherent||
                 value.LargeManifoldPool.Used<(uint)large.Length||
                 value.SphereManifoldPool.Used<(uint)sphere.Length)
                 throw new InvalidOperationException("Checkpoint contact owners and allocator partitions were not captured at one coherent physics boundary.");
@@ -7255,6 +7687,30 @@ namespace SuperchargedPatch.Authoring.Modules
             for(int i=0;i<left.AllocatedBytes.Length;i++)
                 if(!left.AllocatedBytes[i].SequenceEqual(right.AllocatedBytes[i]))return false;
             return true;
+        }
+
+        private static bool SameRawNPhasePoolImages(NPhasePoolImageState[] left,
+            NPhasePoolImageState[] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)
+                if(!SameRawNPhasePoolImage(left[i],right[i]))return false;
+            return true;
+        }
+
+        private static bool SameRawNPhasePoolImage(NPhasePoolImageState left,
+            NPhasePoolImageState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.Receipt.Equals(right.Receipt)&&
+                left.SlabBases!=null&&right.SlabBases!=null&&
+                left.FreeSlots!=null&&right.FreeSlots!=null&&
+                left.AllocationWords!=null&&right.AllocationWords!=null&&
+                left.SlabBytes!=null&&right.SlabBytes!=null&&
+                left.SlabBases.SequenceEqual(right.SlabBases)&&
+                left.FreeSlots.SequenceEqual(right.FreeSlots)&&
+                left.AllocationWords.SequenceEqual(right.AllocationWords)&&
+                left.SlabBytes.SequenceEqual(right.SlabBytes);
         }
 
         private static bool SameNPhaseReportState(NPhaseReportState left,NPhaseReportState right)
@@ -7493,6 +7949,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 SameActorPairPoolSnapshot(left.ActorPairPool,right.ActorPairPool)&&
                 SameActorPairReportPoolSnapshot(left.ActorPairReportPool,
                     right.ActorPairReportPool)&&
+                SameRawNPhasePoolImages(left.NPhasePoolImages,right.NPhasePoolImages)&&
                 SameNPhaseReportState(left.NPhaseReports,right.NPhaseReports)&&
                 SameInteractionGraphState(left.InteractionGraph,right.InteractionGraph)&&
                 SameTransformCacheState(left.TransformCache,right.TransformCache)&&
@@ -7689,6 +8146,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"shapeInstancePairPool",found?DescribeSipPoolState(value.ShapeInstancePairPool):null},
                 {"actorPairPool",found?DescribeActorPairPoolState(value.ActorPairPool):null},
                 {"actorPairReportPool",found?DescribeActorPairReportPoolState(value.ActorPairReportPool):null},
+                {"nphasePoolImages",found?DescribeNPhasePoolImages(value.NPhasePoolImages):null},
                 {"nphaseReports",found?DescribeNPhaseReportState(value.NPhaseReports):null},
                 {"interactionGraph",found?DescribeInteractionGraphState(value.InteractionGraph):null},
                 {"transformCache",found?DescribeTransformCacheState(value.TransformCache):null},
@@ -7876,6 +8334,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     DescribeActorPairPoolState(latest.ActorPairPool)},
                 {"actorPairReportPoolSnapshot",latest==null?null:
                     DescribeActorPairReportPoolState(latest.ActorPairReportPool)},
+                {"nphasePoolImagesSnapshot",latest==null?null:
+                    DescribeNPhasePoolImages(latest.NPhasePoolImages)},
                 {"nphaseReportSnapshot",latest==null?null:
                     DescribeNPhaseReportState(latest.NPhaseReports)},
                 {"interactionGraphSnapshot",latest==null?null:
@@ -8023,6 +8483,7 @@ namespace SuperchargedPatch.Authoring.Modules
             captureManifoldPoolSnapshot=null;restoreManifoldPoolSnapshot=null;captureSipPoolSnapshot=null;
             captureActorPairPoolSnapshot=null;
             captureActorPairReportPoolSnapshot=null;
+            captureNPhasePoolSnapshot=null;
             captureNPhaseReportStateSnapshot=null;
             captureInteractionGraphSnapshot=null;
             captureTransformCacheSnapshot=null;

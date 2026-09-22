@@ -12,6 +12,7 @@ using var assembly=AssemblyDefinition.ReadAssembly(Path.GetFullPath(args[0]));
 var type=assembly.MainModule.Types.Single(value=>value.FullName==
     "SuperchargedPatch.Authoring.Modules.RigidbodyActorRebuildModule");
 MethodDefinition Method(string name)=>type.Methods.Single(value=>value.Name==name);
+TypeDefinition Nested(string name)=>type.NestedTypes.Single(value=>value.Name==name);
 Instruction[] Instructions(string name)=>Method(name).Body.Instructions.ToArray();
 string[] Calls(string name)=>Instructions(name).Where(value=>value.Operand is MethodReference)
     .Select(value=>((MethodReference)value.Operand).Name).ToArray();
@@ -33,6 +34,14 @@ int CallIndex(string name,string called)=>Array.FindIndex(Instructions(name),val
     value.Operand is MethodReference method&&method.Name==called);
 int StoreIndex(string name,string field)=>Array.FindIndex(Instructions(name),value=>
     value.OpCode.Code==Code.Stfld&&value.Operand is FieldReference target&&target.Name==field);
+bool StoresNull(string name,string field)
+{
+    var body=Instructions(name);
+    for(int index=1;index<body.Length;index++)
+        if(body[index].OpCode.Code==Code.Stfld&&body[index].Operand is FieldReference target&&
+            target.Name==field&&body[index-1].OpCode.Code==Code.Ldnull)return true;
+    return false;
+}
 bool StoresMinusOne(string name,string field)
 {
     var body=Instructions(name);
@@ -106,7 +115,8 @@ Check(outputCalls.Contains("CaptureFirstReplayTransitionAuditAtOutput")&&
 var phaseCalls=Calls("CapturePhysicsPhaseSnapshot");
 foreach(string family in new[]{"CurrentCheckpointFrame","CoreCheckpointSnapshot",
     "CaptureLiveContactPoolState","CaptureContactManagerOwners","CaptureSipPoolState",
-    "CaptureActorPairPoolState","CaptureActorPairReportPoolState","CaptureNPhaseReportState",
+    "CaptureActorPairPoolState","CaptureActorPairReportPoolState","CaptureNPhasePoolImages",
+    "CaptureNPhaseReportState",
     "CaptureInteractionGraphState","CaptureTransformCacheState","CaptureIslandSnapshotState",
     "CaptureManifoldPoolStateReadOnly","RunTransformDispatchAction",
     "CaptureDirtyInteractionStateReadOnly"})
@@ -129,9 +139,89 @@ Check(Calls("CaptureInteractionGraphState").Contains("CaptureInteractionPrimaryB
     "interaction-graph capture reads rigid primary objects at the checkpoint boundary");
 Check(Calls("SameInteractionGraphState").Contains("SameByteMatrix"),
     "interaction-graph equality includes rigid primary-object history");
+var nativeAbi=type.Fields.Single(value=>value.Name=="NativeAbiVersion");
+Check(nativeAbi.HasConstant&&Convert.ToUInt32(nativeAbi.Constant)==20u,
+    "managed activation is pinned to native ABI version 20");
+var poolBuffers=Nested("NativeNPhasePoolSnapshotBuffers");
+Check(poolBuffers.IsSequentialLayout&&poolBuffers.PackingSize==8&&
+    poolBuffers.Fields.Select(value=>value.Name).SequenceEqual(new[]{
+        "SlabBases","SlabBaseCapacity","FreeSlots","FreeSlotCapacity",
+        "AllocationWords","AllocationWordCapacity","SlabBytes","SlabByteCapacity"})&&
+    poolBuffers.Fields.Where((value,index)=>(index&1)==0).All(value=>
+        value.FieldType.MetadataType==MetadataType.IntPtr)&&
+    poolBuffers.Fields.Where((value,index)=>(index&1)!=0).All(value=>
+        value.FieldType.MetadataType==MetadataType.UInt32),
+    "complete NPhase-pool output buffers preserve the API20 32-byte ABI");
+var poolReceipt=Nested("NativeNPhasePoolSnapshotReceipt");
+var poolReceiptFields=new[]{"ApiVersion","StructSize","Result","LastError",
+    "UnityBase","NPhaseCore","Pool","SlabsData","FreeHead","PoolKind","PoolOffset",
+    "ElementSize","ElementsPerSlab","SlabSize","SlabCount","SlabCapacityRaw",
+    "TotalSlots","Used","Unreleased","FreeHeadSlot","SlabBasesRequired",
+    "SlabBasesWritten","FreeSlotsRequired","FreeSlotsWritten","AllocationWordsRequired",
+    "AllocationWordsWritten","SlabBytesRequired","SlabBytesWritten","MetadataHash",
+    "SlabBaseHash","FreeSlotOrderHash","AllocationBitmapHash","SlabByteHash",
+    "SnapshotHash","ValidationFlags","InvalidKind","InvalidIndex","Detail"};
+Check(poolReceipt.IsSequentialLayout&&poolReceipt.PackingSize==8&&
+    poolReceipt.Fields.Select(value=>value.Name).SequenceEqual(poolReceiptFields)&&
+    poolReceipt.Fields.Where(value=>new[]{"UnityBase","NPhaseCore","Pool","SlabsData","FreeHead"}
+        .Contains(value.Name)).All(value=>value.FieldType.MetadataType==MetadataType.UIntPtr)&&
+    poolReceipt.Fields.Where(value=>!new[]{"UnityBase","NPhaseCore","Pool","SlabsData","FreeHead"}
+        .Contains(value.Name)).All(value=>value.FieldType.MetadataType==MetadataType.UInt32),
+    "complete NPhase-pool receipt preserves the API20 152-byte field contract");
+var poolCaptureInvoke=Nested("NativeNPhasePoolCaptureSnapshot").Methods.Single(value=>
+    value.Name=="Invoke");
+Check(poolCaptureInvoke.ReturnType.MetadataType==MetadataType.Int32&&
+    poolCaptureInvoke.Parameters.Select(value=>value.ParameterType.MetadataType).SequenceEqual(
+        new[]{MetadataType.UIntPtr,MetadataType.UIntPtr,MetadataType.UInt32,
+            MetadataType.IntPtr,MetadataType.IntPtr}),
+    "complete NPhase-pool capture delegate matches the five-argument native export");
+var poolImage=Nested("NPhasePoolImageState");
+Check(poolImage.Fields.Select(value=>value.Name).SequenceEqual(
+        new[]{"Receipt","SlabBases","FreeSlots","AllocationWords","SlabBytes"})&&
+    poolImage.Fields.Single(value=>value.Name=="Receipt").FieldType.Name==
+        "NativeNPhasePoolSnapshotReceipt"&&
+    new[]{"SlabBases","FreeSlots","AllocationWords"}.All(name=>
+        poolImage.Fields.Single(value=>value.Name==name).FieldType.FullName=="System.UInt32[]")&&
+    poolImage.Fields.Single(value=>value.Name=="SlabBytes").FieldType.FullName=="System.Byte[]",
+    "complete NPhase-pool state owns metadata, topology, partition, and full slab bytes");
+foreach(string owner in new[]{"PhysicsPhaseSnapshot","CheckpointSidecar"})
+    Check(Nested(owner).Fields.Any(value=>value.Name=="NPhasePoolImages"&&
+        value.FieldType.FullName.EndsWith("/NPhasePoolImageState[]")),
+        owner+" retains all complete NPhase-pool images");
 Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot")&&
-    Strings("Activate").Contains("oc2_island_restore_snapshot_v1"),
-    "activation requires the API19 stateless capture and island-restore exports");
+    Strings("Activate").Contains("oc2_island_restore_snapshot_v1")&&
+    Strings("Activate").Contains("oc2_nphase_pool_capture_snapshot_v1"),
+    "activation requires the API20 complete-pool, stateless-capture, and island-restore exports");
+Check(Calls("CaptureNPhasePoolImages").Contains("CaptureNPhasePoolImage")&&
+    Calls("CaptureNPhasePoolImages").Contains("ValidateNPhasePoolImages")&&
+    Calls("CaptureNPhasePoolImage").Contains("ReadPointerBuffer")&&
+    Calls("CaptureNPhasePoolImage").Count(value=>value=="ReadUInt32Buffer")==2&&
+    Calls("CaptureNPhasePoolImage").Contains("ValidateNPhasePoolImage"),
+    "complete NPhase-pool capture copies and validates every native output family");
+Check(Calls("RunContactPoolAction").Contains("CaptureNPhasePoolImages")&&
+    Calls("RunContactPoolAction").Contains("ValidateCheckpointPoolCoherence")&&
+    Calls("ValidatePhysicsPhaseSnapshot").Contains("ValidateNPhasePoolImages")&&
+    Calls("ValidatePhysicsPhaseSnapshot").Contains("ValidateCheckpointPoolCoherence"),
+    "entry and post-transition captures validate complete pool images in cross-family context");
+Check(Calls("ValidateCheckpointPoolCoherence").Contains("ValidateNPhasePoolImages")&&
+    Calls("ValidateCheckpointPoolCoherence").Contains("NPhasePoolImagesCoherentWithLegacy")&&
+    Calls("NPhasePoolImagesCoherentWithLegacy").Contains("NPhasePoolFreeAddresses")&&
+    Calls("NPhasePoolImagesCoherentWithLegacy").Contains("NPhasePoolAllocatedAddresses"),
+    "checkpoint coherence projects complete-pool free and allocated partitions into legacy families");
+Check(Calls("StoreCheckpointSidecar").Contains("ValidateNPhasePoolImages")&&
+    Calls("StoreCheckpointSidecar").Contains("SameRawNPhasePoolImages")&&
+    Calls("StoreCheckpointSidecar").Contains("ValidateCheckpointPoolCoherence")&&
+    Calls("SamePhysicsPhaseSnapshot").Contains("SameRawNPhasePoolImages"),
+    "publication and phase equality include complete NPhase-pool identity");
+Check(Calls("DescribePhysicsPhaseSnapshot").Contains("DescribeNPhasePoolImages")&&
+    Strings("DescribePhysicsPhaseSnapshot").Contains("nphasePoolImages")&&
+    Calls("DescribePhysicsPhaseComparison").Contains("SameRawNPhasePoolImages")&&
+    Strings("DescribePhysicsPhaseComparison").Contains("nphasePoolImagesRawEqual")&&
+    Strings("DescribePhysicsPhaseComparison").Contains("allRawFamiliesEqual")&&
+    !Strings("DescribePhysicsPhaseComparison").Contains("allFamiliesEqual"),
+    "phase diagnostics explicitly distinguish raw complete NPhase-pool equality");
+Check(StoresNull("Deactivate","captureNPhasePoolSnapshot"),
+    "deactivation clears the API20 complete NPhase-pool capture delegate");
 Check(Calls("CaptureDirtyInteractionStateReadOnly").Contains("Equals")&&
     Strings("CaptureDirtyInteractionStateReadOnly").Any(value=>
         value.Contains("changed the pending hook transaction receipt")),

@@ -121,6 +121,27 @@ struct ActorPairPoolReceipt {
 
 typedef ActorPairPoolReceipt ActorPairReportPoolReceipt;
 
+struct NPhasePoolSnapshotBuffersV1 {
+    uintptr_t* slabBases; uint32_t slabBaseCapacity;
+    uint32_t* freeSlots; uint32_t freeSlotCapacity;
+    uint32_t* allocationWords; uint32_t allocationWordCapacity;
+    uint8_t* slabBytes; uint32_t slabByteCapacity;
+};
+
+struct NPhasePoolSnapshotReceiptV1 {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, pool, slabsData, freeHead;
+    uint32_t poolKind, poolOffset, elementSize, elementsPerSlab, slabSize,
+        slabCount, slabCapacityRaw, totalSlots, used, unreleased,
+        freeHeadSlot;
+    uint32_t slabBasesRequired, slabBasesWritten, freeSlotsRequired,
+        freeSlotsWritten, allocationWordsRequired, allocationWordsWritten,
+        slabBytesRequired, slabBytesWritten;
+    uint32_t metadataHash, slabBaseHash, freeSlotOrderHash,
+        allocationBitmapHash, slabByteHash, snapshotHash, validationFlags,
+        invalidKind, invalidIndex, detail;
+};
+
 struct NPhaseReportStateReceipt {
     uint32_t apiVersion, structSize, result, lastError;
     uintptr_t unityBase, nphaseCore, ownerScene, actorPairData;
@@ -381,6 +402,10 @@ static_assert(sizeof(SipPoolReceipt) == 128,
     "Unexpected Win32 shape-pair-pool receipt ABI");
 static_assert(sizeof(ActorPairPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-pool receipt ABI");
+static_assert(sizeof(NPhasePoolSnapshotBuffersV1) == 32,
+    "Unexpected Win32 NPhase-pool snapshot buffer ABI");
+static_assert(sizeof(NPhasePoolSnapshotReceiptV1) == 152,
+    "Unexpected Win32 NPhase-pool snapshot receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
 static_assert(sizeof(InteractionGraphActorRecord) == 72,
@@ -464,6 +489,9 @@ typedef int (__cdecl *CaptureActorPairSnapshot)(uintptr_t, uintptr_t,
 typedef int (__cdecl *CaptureActorPairReportSnapshot)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t,
     ActorPairReportPoolReceipt*);
+typedef int (__cdecl *CaptureNPhasePoolSnapshotV1)(uintptr_t, uintptr_t,
+    uint32_t, const NPhasePoolSnapshotBuffersV1*,
+    NPhasePoolSnapshotReceiptV1*);
 typedef int (__cdecl *CaptureNPhaseReportState)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t, uintptr_t*, uint32_t,
     uint8_t*, uint32_t, NPhaseReportStateReceipt*);
@@ -617,6 +645,8 @@ static const uint32_t kSpherePoolCallsiteRva = 0xA69F32;
 static const uint32_t kDirtyUpdateRva = 0xA540F0;
 static const uint32_t kCreateManagerRva = 0xA69E80;
 static const uint32_t kCreateShapeInstancePairRva = 0xA4E560;
+static const uint32_t kCreateMarkerPoolLayoutRva = 0xA4E525;
+static const uint32_t kCreateTriggerPoolLayoutRva = 0xA4E66A;
 static const uint32_t kFindActorPairRva = 0xA4F7B0;
 static const uint32_t kActorPairSlabRva = 0xA4D9BA;
 static const uint32_t kCreateActorPairReportDataRva = 0xA4E370;
@@ -659,6 +689,14 @@ static const uint8_t kCreateShapeInstancePairBytes[] = {
 static const uint8_t kCreateShapeInstancePairPoolBytes[] = {
     0x81,0xC6,0xE0,0x02,0x00,0x00,0x8B,0xD8,
     0x83,0xBE,0x24,0x01,0x00,0x00,0x00,0x75,0x07,0x8B,0xCE
+};
+static const uint8_t kCreateMarkerPoolLayoutBytes[] = {
+    0x56,0x57,0x8D,0x8B,0x58,0x06,0x00,0x00,
+    0xE8,0x2E,0xC8,0xFF,0xFF
+};
+static const uint8_t kCreateTriggerPoolLayoutBytes[] = {
+    0x52,0x50,0x81,0xC1,0x08,0x04,0x00,0x00,
+    0xE8,0x79,0xC7,0xFF,0xFF
 };
 static const uint8_t kFindActorPairBytes[] = {
     0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
@@ -988,6 +1026,12 @@ static uint8_t* CreateRevisionImage() {
     CopyBytes(image + kCreateShapeInstancePairRva + 0x65,
         kCreateShapeInstancePairPoolBytes,
         sizeof(kCreateShapeInstancePairPoolBytes));
+    CopyBytes(image + kCreateMarkerPoolLayoutRva,
+        kCreateMarkerPoolLayoutBytes,
+        sizeof(kCreateMarkerPoolLayoutBytes));
+    CopyBytes(image + kCreateTriggerPoolLayoutRva,
+        kCreateTriggerPoolLayoutBytes,
+        sizeof(kCreateTriggerPoolLayoutBytes));
     CopyBytes(image + kFindActorPairRva, kFindActorPairBytes,
         sizeof(kFindActorPairBytes));
     CopyBytes(image + kFindActorPairRva + 0x91,
@@ -1727,7 +1771,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 19 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1814,7 +1858,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 19 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1868,6 +1912,333 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         revisionReceipt.result == 3,
         "ActorPair report capture rejects a shipped-code revision mismatch");
     image[kCreateActorPairReportDataRva] ^= 1;
+}
+
+struct NPhasePoolTestLayout {
+    uint32_t offset;
+    uint32_t elementSize;
+    uint32_t slabSize;
+};
+
+static NPhasePoolTestLayout GetNPhasePoolTestLayout(uint32_t kind) {
+    NPhasePoolTestLayout layout = {};
+    if (kind == 0u) {
+        layout.offset = 0x90u;
+        layout.elementSize = 0x18u;
+        layout.slabSize = 0x300u;
+    } else if (kind == 1u) {
+        layout.offset = 0x2E0u;
+        layout.elementSize = 0x44u;
+        layout.slabSize = 0x880u;
+    } else if (kind == 2u) {
+        layout.offset = 0x408u;
+        layout.elementSize = 0x3Cu;
+        layout.slabSize = 0x780u;
+    } else if (kind == 3u) {
+        layout.offset = 0x530u;
+        layout.elementSize = 0x24u;
+        layout.slabSize = 0x480u;
+    } else if (kind == 4u) {
+        layout.offset = 0x658u;
+        layout.elementSize = 0x28u;
+        layout.slabSize = 0x500u;
+    }
+    return layout;
+}
+
+static void InitializeNPhasePoolTest(uint8_t* nphase, uint8_t* slab,
+    uintptr_t* slabs, uint32_t kind, uint32_t* expectedFree) {
+    const NPhasePoolTestLayout layout = GetNPhasePoolTestLayout(kind);
+    memset(nphase, 0, 0x800u);
+    for (uint32_t i = 0; i < 0x880u; ++i)
+        slab[i] = static_cast<uint8_t>((i * 13u + kind * 37u + 11u) & 0xFFu);
+    slabs[0] = reinterpret_cast<uintptr_t>(slab);
+    uint8_t* pool = nphase + layout.offset;
+    *reinterpret_cast<uintptr_t*>(pool + 0x108u) =
+        reinterpret_cast<uintptr_t>(slabs);
+    *reinterpret_cast<uint32_t*>(pool + 0x10Cu) = 1u;
+    *reinterpret_cast<uint32_t*>(pool + 0x110u) = 0x80000080u;
+    *reinterpret_cast<uint32_t*>(pool + 0x114u) = 32u;
+    *reinterpret_cast<uint32_t*>(pool + 0x118u) = 3u;
+    *reinterpret_cast<uint32_t*>(pool + 0x11Cu) = 29u;
+    *reinterpret_cast<uint32_t*>(pool + 0x120u) = layout.slabSize;
+    uint32_t freeCount = 0;
+    for (uint32_t ordinal = 32u; ordinal-- > 0u;) {
+        if (ordinal == 1u || ordinal == 7u || ordinal == 30u) continue;
+        expectedFree[freeCount++] = ordinal;
+    }
+    for (uint32_t i = 0; i < freeCount; ++i) {
+        uint8_t* element = slab + expectedFree[i] * layout.elementSize;
+        *reinterpret_cast<uintptr_t*>(element) = i + 1u < freeCount ?
+            reinterpret_cast<uintptr_t>(slab +
+                expectedFree[i + 1u] * layout.elementSize) : 0u;
+    }
+    *reinterpret_cast<uintptr_t*>(pool + 0x124u) =
+        reinterpret_cast<uintptr_t>(slab +
+            expectedFree[0] * layout.elementSize);
+}
+
+static void RunNPhasePoolSnapshotTests(uint8_t* image,
+    CaptureNPhasePoolSnapshotV1 capture) {
+    bool allKindsExact = true;
+    bool allKindsRepeatable = true;
+    for (uint32_t kind = 0; kind < 5u; ++kind) {
+        const NPhasePoolTestLayout layout = GetNPhasePoolTestLayout(kind);
+        __declspec(align(16)) uint8_t nphase[0x800] = {};
+        __declspec(align(16)) uint8_t slab[0x880] = {};
+        uintptr_t slabs[128] = {};
+        uint32_t expectedFree[29] = {};
+        InitializeNPhasePoolTest(nphase, slab, slabs, kind, expectedFree);
+        uint8_t nphaseBefore[sizeof(nphase)] = {};
+        uint8_t slabBefore[sizeof(slab)] = {};
+        memcpy(nphaseBefore, nphase, sizeof(nphase));
+        memcpy(slabBefore, slab, sizeof(slab));
+
+        uintptr_t slabBases[1] = {};
+        uint32_t freeSlots[29] = {};
+        uint32_t allocationWords[1] = {};
+        uint8_t slabBytes[0x880] = {};
+        NPhasePoolSnapshotBuffersV1 buffers = {
+            slabBases, 1u, freeSlots, 29u, allocationWords, 1u,
+            slabBytes, layout.slabSize
+        };
+        NPhasePoolSnapshotReceiptV1 receipt = {};
+        const int captured = capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), kind, &buffers, &receipt);
+        const bool exact = captured == 1 && receipt.result == 1u &&
+            receipt.apiVersion == 20u &&
+            receipt.structSize == sizeof(receipt) &&
+            receipt.pool == reinterpret_cast<uintptr_t>(
+                nphase + layout.offset) &&
+            receipt.slabsData == reinterpret_cast<uintptr_t>(slabs) &&
+            receipt.freeHead == reinterpret_cast<uintptr_t>(slab +
+                expectedFree[0] * layout.elementSize) &&
+            receipt.poolKind == kind && receipt.poolOffset == layout.offset &&
+            receipt.elementSize == layout.elementSize &&
+            receipt.elementsPerSlab == 32u &&
+            receipt.slabSize == layout.slabSize &&
+            receipt.slabCount == 1u &&
+            receipt.slabCapacityRaw == 0x80000080u &&
+            receipt.totalSlots == 32u && receipt.used == 3u &&
+            receipt.unreleased == 29u &&
+            receipt.freeHeadSlot == expectedFree[0] &&
+            receipt.slabBasesRequired == 1u &&
+            receipt.slabBasesWritten == 1u &&
+            receipt.freeSlotsRequired == 29u &&
+            receipt.freeSlotsWritten == 29u &&
+            receipt.allocationWordsRequired == 1u &&
+            receipt.allocationWordsWritten == 1u &&
+            receipt.slabBytesRequired == layout.slabSize &&
+            receipt.slabBytesWritten == layout.slabSize &&
+            receipt.validationFlags == 0xFFu &&
+            receipt.metadataHash != 0u && receipt.slabBaseHash != 0u &&
+            receipt.freeSlotOrderHash != 0u &&
+            receipt.allocationBitmapHash != 0u &&
+            receipt.slabByteHash != 0u && receipt.snapshotHash != 0u &&
+            slabBases[0] == reinterpret_cast<uintptr_t>(slab) &&
+            memcmp(freeSlots, expectedFree, sizeof(expectedFree)) == 0 &&
+            allocationWords[0] ==
+                ((1u << 1u) | (1u << 7u) | (1u << 30u)) &&
+            memcmp(slabBytes, slab, layout.slabSize) == 0 &&
+            memcmp(nphaseBefore, nphase, sizeof(nphase)) == 0 &&
+            memcmp(slabBefore, slab, sizeof(slab)) == 0;
+        allKindsExact = allKindsExact && exact;
+
+        uintptr_t repeatedBases[1] = {};
+        uint32_t repeatedFree[29] = {};
+        uint32_t repeatedWords[1] = {};
+        uint8_t repeatedBytes[0x880] = {};
+        NPhasePoolSnapshotBuffersV1 repeatedBuffers = {
+            repeatedBases, 1u, repeatedFree, 29u, repeatedWords, 1u,
+            repeatedBytes, layout.slabSize
+        };
+        NPhasePoolSnapshotReceiptV1 repeatedReceipt = {};
+        const int repeated = capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), kind, &repeatedBuffers,
+            &repeatedReceipt);
+        allKindsRepeatable = allKindsRepeatable && repeated == 1 &&
+            memcmp(&receipt, &repeatedReceipt, sizeof(receipt)) == 0 &&
+            memcmp(slabBases, repeatedBases, sizeof(slabBases)) == 0 &&
+            memcmp(freeSlots, repeatedFree, sizeof(freeSlots)) == 0 &&
+            memcmp(allocationWords, repeatedWords,
+                sizeof(allocationWords)) == 0 &&
+            memcmp(slabBytes, repeatedBytes, layout.slabSize) == 0;
+    }
+    Check(allKindsExact,
+        "NPhase pool capture preserves exact metadata and bytes for all five pools");
+    Check(allKindsRepeatable,
+        "NPhase pool capture is byte-repeatable for all five pools");
+
+    {
+        const NPhasePoolTestLayout inlineLayout = GetNPhasePoolTestLayout(0u);
+        __declspec(align(16)) uint8_t inlineNphase[0x800] = {};
+        __declspec(align(16)) uint8_t inlineSlab[0x880] = {};
+        uintptr_t externalSlabs[128] = {};
+        uint32_t inlineExpectedFree[29] = {};
+        InitializeNPhasePoolTest(inlineNphase, inlineSlab, externalSlabs, 0u,
+            inlineExpectedFree);
+        uint8_t* inlinePool = inlineNphase + inlineLayout.offset;
+        uintptr_t* inlineSlabs = reinterpret_cast<uintptr_t*>(
+            inlinePool + 0x04u);
+        inlineSlabs[0] = reinterpret_cast<uintptr_t>(inlineSlab);
+        *reinterpret_cast<uintptr_t*>(inlinePool + 0x108u) =
+            reinterpret_cast<uintptr_t>(inlineSlabs);
+        *reinterpret_cast<uint32_t*>(inlinePool + 0x110u) = 0x80000040u;
+        inlinePool[0x104u] = 1u;
+        uintptr_t inlineBases[1] = {};
+        uint32_t inlineFree[29] = {};
+        uint32_t inlineWords[1] = {};
+        uint8_t inlineBytes[0x880] = {};
+        NPhasePoolSnapshotBuffersV1 inlineBuffers = {
+            inlineBases, 1u, inlineFree, 29u, inlineWords, 1u,
+            inlineBytes, inlineLayout.slabSize
+        };
+        NPhasePoolSnapshotReceiptV1 inlineReceipt = {};
+        Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(inlineNphase), 0u, &inlineBuffers,
+            &inlineReceipt) == 1 && inlineReceipt.result == 1u &&
+            inlineReceipt.slabsData == reinterpret_cast<uintptr_t>(
+                inlinePool + 0x04u) &&
+            inlineBases[0] == reinterpret_cast<uintptr_t>(inlineSlab) &&
+            memcmp(inlineFree, inlineExpectedFree,
+                sizeof(inlineExpectedFree)) == 0 &&
+            memcmp(inlineBytes, inlineSlab, inlineLayout.slabSize) == 0,
+            "NPhase pool capture accepts the canonical inline slab table");
+
+        *reinterpret_cast<uint32_t*>(inlinePool + 0x110u) = 128u;
+        inlineReceipt = {};
+        Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(inlineNphase), 0u, &inlineBuffers,
+            &inlineReceipt) == 0 && inlineReceipt.result == 6u,
+            "NPhase pool capture rejects corrupt inline slab capacity");
+
+        *reinterpret_cast<uint32_t*>(inlinePool + 0x110u) = 0x80000040u;
+        inlinePool[0x104u] = 0u;
+        inlineReceipt = {};
+        Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(inlineNphase), 0u, &inlineBuffers,
+            &inlineReceipt) == 0 && inlineReceipt.result == 6u,
+            "NPhase pool capture rejects corrupt inline allocator ownership");
+    }
+
+    const NPhasePoolTestLayout layout = GetNPhasePoolTestLayout(0u);
+    __declspec(align(16)) uint8_t nphase[0x800] = {};
+    __declspec(align(16)) uint8_t slab[0x880] = {};
+    uintptr_t slabs[128] = {};
+    uint32_t expectedFree[29] = {};
+    uintptr_t slabBases[1] = {};
+    uint32_t freeSlots[29] = {};
+    uint32_t allocationWords[1] = {};
+    uint8_t slabBytes[0x880] = {};
+    NPhasePoolSnapshotBuffersV1 buffers = {
+        slabBases, 1u, freeSlots, 29u, allocationWords, 1u,
+        slabBytes, layout.slabSize
+    };
+    NPhasePoolSnapshotReceiptV1 receipt = {};
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    uint8_t* pool = nphase + layout.offset;
+    *reinterpret_cast<uint32_t*>(pool + 0x114u) = 31u;
+    memset(slabBytes, 0xCD, sizeof(slabBytes));
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &buffers, &receipt) == 0 &&
+        receipt.result == 6u && slabBytes[0] == 0xCDu,
+        "NPhase pool capture rejects corrupt layout metadata before output");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    uint8_t* freeHead = slab + expectedFree[0] * layout.elementSize;
+    *reinterpret_cast<uintptr_t*>(freeHead) =
+        reinterpret_cast<uintptr_t>(freeHead);
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &buffers, &receipt) == 0 &&
+        receipt.result == 9u,
+        "NPhase pool capture rejects a cyclic duplicate free chain");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    bool allShortBuffersRejected = true;
+    for (uint32_t bufferKind = 0; bufferKind < 4u; ++bufferKind) {
+        NPhasePoolSnapshotBuffersV1 shortBuffers = buffers;
+        if (bufferKind == 0u) shortBuffers.slabBaseCapacity = 0u;
+        else if (bufferKind == 1u) shortBuffers.freeSlotCapacity = 28u;
+        else if (bufferKind == 2u)
+            shortBuffers.allocationWordCapacity = 0u;
+        else shortBuffers.slabByteCapacity = layout.slabSize - 1u;
+        receipt = {};
+        allShortBuffersRejected = allShortBuffersRejected &&
+            capture(reinterpret_cast<uintptr_t>(image),
+                reinterpret_cast<uintptr_t>(nphase), 0u, &shortBuffers,
+                &receipt) == 0 && receipt.result == 10u &&
+            receipt.slabBasesRequired == 1u &&
+            receipt.freeSlotsRequired == 29u &&
+            receipt.allocationWordsRequired == 1u &&
+            receipt.slabBytesRequired == layout.slabSize;
+    }
+    Check(allShortBuffersRejected,
+        "NPhase pool capture reports every undersized caller buffer");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    uint8_t overlapStorage[128] = {};
+    NPhasePoolSnapshotBuffersV1 overlapBuffers = buffers;
+    overlapBuffers.slabBases =
+        reinterpret_cast<uintptr_t*>(overlapStorage);
+    overlapBuffers.freeSlots = reinterpret_cast<uint32_t*>(overlapStorage);
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &overlapBuffers,
+        &receipt) == 0 && receipt.result == 12u,
+        "NPhase pool capture rejects overlapping caller outputs");
+
+    NPhasePoolSnapshotBuffersV1 sourceOverlapBuffers = buffers;
+    sourceOverlapBuffers.slabBytes = slab;
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &sourceOverlapBuffers,
+        &receipt) == 0 && receipt.result == 12u,
+        "NPhase pool capture rejects output that aliases live pool storage");
+
+    NPhasePoolSnapshotBuffersV1 inactiveTableTailBuffers = buffers;
+    inactiveTableTailBuffers.slabBases = slabs + 64u;
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &inactiveTableTailBuffers,
+        &receipt) == 0 && receipt.result == 12u,
+        "NPhase pool capture protects the external slab-table capacity tail");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    uint8_t* overlappingSlabTable = slab + layout.elementSize;
+    *reinterpret_cast<uintptr_t*>(overlappingSlabTable) =
+        reinterpret_cast<uintptr_t>(slab);
+    *reinterpret_cast<uintptr_t*>(pool + 0x108u) =
+        reinterpret_cast<uintptr_t>(overlappingSlabTable);
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &buffers, &receipt) == 0 &&
+        receipt.result == 6u,
+        "NPhase pool capture rejects overlapping source partitions");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    slabs[0] = reinterpret_cast<uintptr_t>(slab + 1u);
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &buffers, &receipt) == 0 &&
+        receipt.result == 7u,
+        "NPhase pool capture rejects an unaligned slab base");
+
+    InitializeNPhasePoolTest(nphase, slab, slabs, 0u, expectedFree);
+    image[kCreateMarkerPoolLayoutRva] ^= 1u;
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 0u, &buffers, &receipt) == 0 &&
+        receipt.result == 3u,
+        "NPhase pool capture rejects a shipped-code revision mismatch");
+    image[kCreateMarkerPoolLayoutRva] ^= 1u;
+
+    receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), 5u, &buffers, &receipt) == 0 &&
+        receipt.result == 4u,
+        "NPhase pool capture rejects an unknown pool kind");
 }
 
 static void RunNPhaseReportStateTests(uint8_t* image,
@@ -1937,7 +2308,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 19 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -2017,7 +2388,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 19 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -2989,7 +3360,7 @@ static void RunInteractionGraphTests(uint8_t* image,
             receipt.detail, receipt.lastError);
     Check(firstCapture == 1,
         "interaction graph capture succeeds");
-    Check(receipt.apiVersion == 19 && receipt.structSize == sizeof(receipt) &&
+    Check(receipt.apiVersion == 20 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.validationFlags == 0xFF &&
         receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
         receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
@@ -3246,7 +3617,7 @@ static void RunTransformCacheTests(uint8_t* image,
         printf("transform cache diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
             receipt.result, receipt.invalidKind, receipt.invalidIndex,
             receipt.detail, receipt.lastError);
-    Check(captured == 1 && receipt.apiVersion == 19 &&
+    Check(captured == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt) && receipt.result == 1 &&
         receipt.validationFlags == 0xFF && receipt.currentId == 3 &&
         receipt.entriesWritten == 3 && receipt.freeWritten == 1 &&
@@ -3363,7 +3734,7 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
 
     FinishBroadPhaseObserverReceipt receipt = {};
     Check(installObserver(imagePointer, &receipt) == 1 &&
-        receipt.apiVersion == 19 && receipt.structSize == sizeof(receipt) &&
+        receipt.apiVersion == 20 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.installed == 1 && receipt.state == 1,
         "finishBroadPhase observer reactivates landed dormant detour");
 
@@ -4345,7 +4716,7 @@ static void RunIslandRestoreTests(uint8_t* image,
         verifyStorage);
     IslandSnapshotReceiptV1 targetReceipt = {};
     Check(capture(unity, nphase, 1u, &targetBuffers, &targetReceipt) == 1 &&
-        targetReceipt.apiVersion == 19u &&
+        targetReceipt.apiVersion == 20u &&
         targetReceipt.node.freeCount == 247u &&
         targetReceipt.edge.freeCount == 244u &&
         targetReceipt.island.freeCount == 247u &&
@@ -4419,7 +4790,7 @@ static void RunIslandRestoreTests(uint8_t* image,
     }
     IslandSnapshotReceiptV1 rollbackReceipt = {}, verifyReceipt = {};
     IslandRestoreRequestV1 request = {};
-    request.apiVersion = 19u;
+    request.apiVersion = 20u;
     request.structSize = sizeof(request);
     request.flags = 1u;
     request.expectedThreadId = GetCurrentThreadId();
@@ -4451,6 +4822,9 @@ static void RunIslandRestoreTests(uint8_t* image,
         receipt.result == 14u && receipt.mutationStarted == 0u,
         "island restore rejects partially overlapping image ranges");
     request.verifyBuffers = &verifyBuffers;
+    // API 20 adds only the generic pool-capture surface.  The settled island
+    // image itself is unchanged, so an API-19 target remains supported.
+    targetReceipt.apiVersion = 19u;
     receipt = {};
     const int restored = restore(unity, nphase, &request, &receipt);
     if (!restored)
@@ -4465,7 +4839,7 @@ static void RunIslandRestoreTests(uint8_t* image,
             nodeBindings[i].targetBodyCore != nodeBindings[i].liveBodyCore &&
             nodeBindings[i].currentNodeId != nodeBindings[i].targetNodeId;
     Check(restored == 1 && distinctBodyIncarnations &&
-        receipt.apiVersion == 19u &&
+        receipt.apiVersion == 20u &&
         receipt.result == 1u && receipt.stage == 8u &&
         receipt.validationFlags == 0xFFu &&
         receipt.nodeBindingsValidated == 9u &&
@@ -4476,7 +4850,8 @@ static void RunIslandRestoreTests(uint8_t* image,
         receipt.targetRawHash != receipt.targetRebasedHash &&
         rollbackReceipt.edgeCreated.required == 12u &&
         rollbackReceipt.edgeJoined.required == 12u,
-        "island restore atomically projects settled target after twelve direct creates");
+        "island restore accepts an API-19 target and atomically projects it");
+    targetReceipt.apiVersion = 20u;
     bool hooksRebound = true;
     for (uint32_t i = 0; i < 12u; ++i)
         hooksRebound = hooksRebound &&
@@ -4570,6 +4945,9 @@ int main(int argc, char** argv) {
     CaptureActorPairReportSnapshot captureActorPairReport =
         reinterpret_cast<CaptureActorPairReportSnapshot>(GetProcAddress(
             library, "oc2_actor_pair_report_pool_capture_snapshot"));
+    CaptureNPhasePoolSnapshotV1 captureNPhasePool =
+        reinterpret_cast<CaptureNPhasePoolSnapshotV1>(GetProcAddress(
+            library, "oc2_nphase_pool_capture_snapshot_v1"));
     CaptureNPhaseReportState captureNPhaseReport =
         reinterpret_cast<CaptureNPhaseReportState>(GetProcAddress(
             library, "oc2_nphase_report_state_capture_snapshot"));
@@ -4656,7 +5034,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 19, "API version");
+    Check(version && version() == 20, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -4665,6 +5043,7 @@ int main(int argc, char** argv) {
     Check(captureActorPair != 0, "ActorPair pool capture export");
     Check(captureActorPairReport != 0,
         "ActorPair report pool capture export");
+    Check(captureNPhasePool != 0, "NPhase pool snapshot export");
     Check(captureNPhaseReport != 0,
         "NPhase report-state capture export");
     Check(captureInteractionGraph != 0,
@@ -4685,7 +5064,7 @@ int main(int argc, char** argv) {
     Check(installObserver && uninstallObserver && auditRecreate && armRecreate &&
         statusRecreate && cancelRecreate, "contact recreation exports");
     if (!version || !capture || !restore || !captureManifold || !captureSip ||
-        !captureActorPair || !captureActorPairReport ||
+        !captureActorPair || !captureActorPairReport || !captureNPhasePool ||
         !captureNPhaseReport || !captureInteractionGraph ||
         !captureTransformCache || !installFinishBroadPhaseObserver ||
         !statusFinishBroadPhaseObserver || !armFinishBroadPhaseObserver ||
@@ -4721,7 +5100,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 19 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -4769,6 +5148,7 @@ int main(int argc, char** argv) {
     if (revisionImage) {
         RunActorPairPoolTests(revisionImage, captureActorPair);
         RunActorPairReportPoolTests(revisionImage, captureActorPairReport);
+        RunNPhasePoolSnapshotTests(revisionImage, captureNPhasePool);
         RunNPhaseReportStateTests(revisionImage, captureNPhaseReport);
         RunInteractionGraphTests(revisionImage, captureInteractionGraph);
         RunTransformCacheTests(revisionImage, captureTransformCache);

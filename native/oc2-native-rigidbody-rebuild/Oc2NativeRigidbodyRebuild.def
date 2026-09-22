@@ -36,6 +36,7 @@ EXPORTS
     oc2_island_update_observer_cancel
     oc2_island_update_observer_uninstall
     oc2_island_edge_journal_copy
+    oc2_nphase_pool_capture_snapshot_v1
     oc2_contact_manager_context_observer_install
     oc2_contact_manager_context_observer_status
     oc2_contact_manager_context_observer_uninstall

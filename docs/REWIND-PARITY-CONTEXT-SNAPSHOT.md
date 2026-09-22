@@ -6,6 +6,35 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest implementation — complete five-pool history image
+
+Managed RigidbodyActorRebuild r23 and native API 20 now capture all five
+embedded NPhase pools at both the settled checkpoint boundary and the complete
+post-transition boundary.  The snapshot includes exact allocator metadata,
+raw capacity mode, slab identity/order, free-list ordinals, allocation bits,
+and all slab bytes—including opaque tails of free objects.  Cross-family
+validation proves that the generic ActorPair, SIP, and report partitions agree
+with the older specialized captures and that allocated SIPs, triggers, and
+markers exactly match the interaction graph.
+
+The native capture is fail-closed and read-only.  It validates the real
+PhysX inline-slab layout (`pool+0x04`, capacity 64, allocator-used byte 1) as
+well as grown external storage, rejects overlapping caller/source ranges, and
+rereads the header, slab table, slab bytes, free chain, and bitmap before
+publishing hashes.  An independent review caught the inline-table relationship
+before live wiring; the harness now reproduces it explicitly.  Win32
+`/W4 /WX`, the full native history harness, and all 73 managed activation checks
+pass.  Managed/native SHA-256 values are respectively
+`F47C67ABF94C3E17D1AF89F65909682396B4C2CD87B5CB8FEF2144E7522A6115` and
+`577D2DEA3CF77C93E25C138DF33AEF00EDB3B23E7705F21C493B1E0512288E86`.
+
+No live restore calls this API.  The present phase comparison reports
+`nphasePoolImagesRawEqual` only; semantic parity must compare a target image
+after declared pointer/ID projection, not historical address-bearing bytes.
+The next read-only dependency is full report history (Scene timestamps and
+complete backing arrays), followed by complete SAP/BPElem capture at the
+finishBroadPhase hook.  Search remains disabled.
+
 ## Latest implementation — atomic rebased island restore primitive
 
 Native RigidbodyActorRebuild r37/API 19 now contains a caller-owned,
@@ -46,7 +75,9 @@ evidence but contain native pointers (and a self-relative manifold pointer),
 so final equality and restore must normalize/rewrite those fields rather than
 treat historical virtual addresses as gameplay state.  Island publication
 must be last, immediately before the canonical broadphase/island transition.
-Search remains disabled.
+The consolidated dependency order and pointer-projection rules are in
+[`PHYSICS-PREDECESSOR-RESTORE.md`](PHYSICS-PREDECESSOR-RESTORE.md).  Search
+remains disabled.
 
 ## Latest result — the complete f445 post image is captured
 

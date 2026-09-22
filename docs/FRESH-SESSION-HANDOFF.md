@@ -1,5 +1,70 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Complete five-pool history capture milestone (2026-09-22, managed r23 /
+> native API 20):** every settled checkpoint and post-transition oracle now
+> owns a stable caller-owned image of all five `Sc::NPhaseCore` `Ps::Pool`
+> instances: ActorPair, ShapeInstancePairLL, TriggerInteraction,
+> ActorPairContactReportData, and ElementInteractionMarker.  Each image keeps
+> the exact pool header, raw capacity mode, slab-base order, free-list order as
+> address-independent ordinals, allocation bitmap, and every byte of every
+> slab—including free-object tails and intrusive links.  The managed boundary
+> cross-checks the overlapping ActorPair/SIP/report views and the allocated
+> SIP/trigger/marker partition against the interaction graph before publishing
+> a sidecar.
+>
+> This is read-only and does not yet restore or project a pool, so it cannot
+> change live gameplay.  Its target/replay diagnostic is deliberately named
+> `nphasePoolImagesRawEqual`: raw object bytes contain native pointers and are
+> not the future semantic parity gate.  The restore must first apply the
+> declared target-to-live pointer projection and then compare the projected
+> image.
+>
+> Independent review found and closed two live-layout gaps that the first
+> synthetic fixture missed.  PhysX's ordinary <=64-slab pointer table is the
+> pool's inline buffer at `pool+0x04`, and `InlineAllocator::mBufferUsed` at
+> `pool+0x104` must agree with inline/external capacity mode.  API 20 now
+> admits only the exact inline (`capacity 64`, used byte 1) or grown external
+> (`capacity >64`, used byte 0) form, rereads that state for stability, and
+> tests both valid nesting and corrupt ownership/capacity.
+>
+> Win32 `/W4 /WX` and the full native history harness pass.  The managed
+> checker passes 73 contracts.  Managed DLL SHA-256 is
+> `F47C67ABF94C3E17D1AF89F65909682396B4C2CD87B5CB8FEF2144E7522A6115`;
+> native DLL SHA-256 is
+> `577D2DEA3CF77C93E25C138DF33AEF00EDB3B23E7705F21C493B1E0512288E86`.
+> Next complete Scene report timestamps and full report-container backing,
+> then implement the complete finishBroadPhase-entry SAP/BPElem observer.
+> Search remains disabled.
+
+> **Atomic island-restore primitive milestone (2026-09-22, managed r22 /
+> native r37 / API 19, commit `c5cac22`):** the native component now has an
+> unwired, caller-owned primitive that restores the settled Story 1-1 island
+> image under one admission gate.  It captures a rollback image, maps the
+> checkpoint's nine nodes and twelve contact edges onto the current BodySim,
+> BodyCore, SIP, contact-manager, node-ID, and edge-ID incarnation, publishes
+> backing bytes before metadata, and rereads the complete result.  A failed
+> post-write verification either proves and restores the prior image or keeps
+> the gate closed with an odd epoch and terminal failure state.  Caller
+> request, receipts, bindings, and all target/rollback/verification buffers
+> must be pairwise disjoint, including partial overlaps.
+>
+> The independent safety review found no remaining P0/P1 issue.  The Win32
+> `/W4 /WX` harness passes with deliberately different target/live BodyCore
+> addresses and permuted node/edge IDs, and the managed checker passes 59
+> contracts.  The managed module resolves the export but never invokes it, so
+> this commit changes no live gameplay.  Before live wiring, add deterministic
+> fault injection for the rollback-success and fail-stop branches.
+>
+> This is one dependency of the f444 predecessor transaction, not full rewind
+> parity.  Next capture all five NPhase pools including every free slot's
+> opaque tail, Scene report timestamps and complete report-container backing,
+> plus exact finishBroadPhase-entry SAP/BPElem state.  Restore/project those
+> object graphs first, publish the island image last, and inject the canonical
+> six deleted AABB rows only if the target and replay post-update SAP states
+> prove equivalent.  Search remains disabled.
+> The consolidated dependency and projection plan is
+> [`PHYSICS-PREDECESSOR-RESTORE.md`](PHYSICS-PREDECESSOR-RESTORE.md).
+
 > **Complete post-transition oracle milestone (2026-09-22, managed r21 /
 > native r37 / API 18):** the f444 checkpoint now owns three explicitly linked
 > artifacts: its settled entry snapshot, the passive f444 -> f445 broadphase
