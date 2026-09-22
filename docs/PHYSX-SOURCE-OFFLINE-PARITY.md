@@ -10,17 +10,28 @@ track. A source-built result is not yet a claim about Unity's shipped binary.
 
 The expanded six-contact same-scene joined rewind passes 100
 checkpoint-to-next-step cycles with full component-image comparisons and a
-five-step suffix. It includes cached worker-context state and a guarded
-semantic rebase when the scene-query pruner replaces its FIFO stack backing.
-A separate 12→8 contact fixture reproduces four lost callbacks
-under a public-only rewind. Its subset lifecycle bridge restores the four
-missing pair objects and their exact physical slots while preserving eight
-survivors, but contact/report payload and the full checkpoint image still
-differ; it does not simulate after that partial reconstruction. A settled
-kinematic-target body-image component test passes 100 A↔B round trips, not a
-joined next-step proof. See [the detailed source-state audit](PHYSX-SOURCE-STATE-AUDIT.md)
-for the current coverage and feature gates. The older milestone narrative
-below records how the experiment reached this point.
+five-step suffix. The separate 12→8 box/box fixture now also passes a complete
+same-scene checkpoint restore and next-step replay for 100 cycles in each of
+four modes: cold and warmed allocation states, each with either twelve
+touching pairs or ten touching and two overlapping/non-touching pairs. It
+matches ordered callbacks, all 39 implemented source-Oracle sections, and
+the SAP, island, interaction, cache, body, clock, context, query, and contact
+memory component images. A diagnostic fixed-address allocator independently
+replays the two cold variants with matching initialized arena bytes and
+allocation ledgers for 100 cycles each. See the
+[12→8 fixture](../experiments/physx333-offline/partial_contacts/README.md),
+[arena diagnostic](../experiments/physx333-offline/arena_snapshot/README.md),
+and [source-state audit](PHYSX-SOURCE-STATE-AUDIT.md). The older milestone
+narrative below records how the experiment reached this point.
+
+This is not complete PhysX-only parity for the level. The fixture still uses
+box/box rather than the observed capsule/box contacts, deletes only four
+contact pairs rather than the level's four contact plus two trigger pairs,
+and has no trigger/marker interactions. Actor and
+shape lifetime, CCD, and several other native-state families remain gated.
+Unity integration is separate: the user independently confirmed that Unity
+2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and
+game-side ABI have not been proven from the source-built fixtures.
 
 ## Source and existing evidence
 
