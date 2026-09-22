@@ -111,6 +111,16 @@ bool RestoreInteractionMetadata(physx::PxScene& scene,
                                 const InteractionImage& target,
                                 std::string& error);
 
+// Twelve-box partial-contact fixture only. Call after RestoreNPhaseSubset:
+// eight survivor ActorPairs already own report data, four recreated pairs do
+// not. The source-built v2 report bridge creates exactly those four through
+// the SDK lazy path, then this stage restores all twelve report/touch rows,
+// ordered persistent events, and contact-manager bitmaps. Fail-stop on any
+// postwrite failure; do not simulate until contact/memory/island companions.
+bool RestoreInteractionMetadataSubset12(physx::PxScene& scene,
+                                         const InteractionImage& target,
+                                         std::string& error);
+
 // Stage 1: install source WorkUnit pointer/size bindings and owned PCM data
 // before moving/restoring the NpMemBlockPool backing. The source bytes at
 // those pointers are not expected to match yet. Never simulate in this state.
@@ -124,5 +134,18 @@ bool InstallInteractionContactBindings(physx::PxScene& scene,
 bool RestoreInteractionContactPayload(physx::PxScene& scene,
                                       const InteractionImage& target,
                                       std::string& error);
+
+// Twelve-box partial-contact fixture stages. All twelve report/touch rows
+// must already be restored. The first stage installs guarded work-unit and
+// single-manifold bindings, including eight surviving CMs. Restore the saved
+// NpMemBlockPool image next; the second stage requires its stream bytes and
+// verifies every pair's semantic contact payload. Neither stage is runnable
+// alone. Any postwrite failure is fail-stop.
+bool InstallInteractionContactBindingsSubset12(
+    physx::PxScene& scene, const InteractionImage& target,
+    std::string& error);
+bool RestoreInteractionContactPayloadSubset12(
+    physx::PxScene& scene, const InteractionImage& target,
+    std::string& error);
 
 } // namespace physx333_offline

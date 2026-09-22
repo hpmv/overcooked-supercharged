@@ -64,3 +64,65 @@ oc2_physx333_report_create_v1(void* nphaseCore,
     }
     return InteractionReportBridgeSuccess;
 }
+
+extern "C" __declspec(dllexport) physx::PxU32 __cdecl
+oc2_physx333_report_create_subset_v2(
+    void* nphaseCore, void* const* orderedMissingActorPairs,
+    physx::PxU32 missingCount, physx::PxU32 expectedOverlapCount,
+    physx::PxU32 expectedAlreadyReported)
+{
+    using namespace physx;
+    using namespace physx333_offline;
+    if (!nphaseCore || !orderedMissingActorPairs || !missingCount ||
+        missingCount > 64 || expectedOverlapCount > 64 ||
+        missingCount + expectedAlreadyReported != expectedOverlapCount)
+        return InteractionReportBridgeInvalidInput;
+    Sc::NPhaseCore& nphase = *static_cast<Sc::NPhaseCore*>(nphaseCore);
+    Sc::InteractionScene& interactions =
+        nphase.getScene().getInteractionScene();
+    if (interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) !=
+            expectedOverlapCount ||
+        interactions.getActiveInteractionCount(
+            Sc::PX_INTERACTION_TYPE_OVERLAP) != expectedOverlapCount ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER))
+        return InteractionReportBridgeUnsupportedScene;
+
+    std::set<Sc::ActorPair*> live;
+    PxU32 alreadyReported = 0;
+    Cm::Range<Sc::Interaction*const> range =
+        interactions.getInteractions(Sc::PX_INTERACTION_TYPE_OVERLAP);
+    while (!range.empty())
+    {
+        Sc::ShapeInstancePairLL* sip =
+            static_cast<Sc::ShapeInstancePairLL*>(range.front());
+        range.popFront();
+        Sc::ActorPair* pair = sip->getActorPair();
+        if (!live.insert(pair).second)
+            return InteractionReportBridgeUnsupportedScene;
+        if (pair->hasReportData()) ++alreadyReported;
+    }
+    if (live.size() != expectedOverlapCount ||
+        alreadyReported != expectedAlreadyReported)
+        return InteractionReportBridgeUnsupportedScene;
+    std::set<Sc::ActorPair*> requested;
+    for (PxU32 i = 0; i < missingCount; ++i)
+    {
+        Sc::ActorPair* pair =
+            static_cast<Sc::ActorPair*>(orderedMissingActorPairs[i]);
+        if (!pair || !live.count(pair) || !requested.insert(pair).second)
+            return InteractionReportBridgeUnknownPair;
+        if (pair->hasReportData())
+            return InteractionReportBridgeAlreadyAllocated;
+    }
+
+    for (PxU32 i = 0; i < missingCount; ++i)
+    {
+        Sc::ActorPair* pair =
+            static_cast<Sc::ActorPair*>(orderedMissingActorPairs[i]);
+        pair->getContactStreamManager();
+        if (!pair->hasReportData())
+            return InteractionReportBridgeAllocationFailure;
+    }
+    return InteractionReportBridgeSuccess;
+}

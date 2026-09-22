@@ -16,6 +16,14 @@
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
 #include "../nphase/NPhaseTopology.h"
+#include "../interaction/InteractionImage.h"
+#include "../memblock_restore/MemBlockRestore.h"
+#include "../cache/TransformCacheImage.h"
+#include "../shape_cache/ShapeCacheBindings.h"
+#include "../body/BodyImage.h"
+#include "../scene_clock/SceneClockImage.h"
+#include "../context_image/ContextImage.h"
+#include "../query_image/QueryImage.h"
 
 using namespace physx;
 
@@ -84,6 +92,15 @@ std::uint32_t sapScalar(const oc2::offline::SapImage& image,
         }
     }
     fail(std::string("SAP scalar absent: ") + name);
+    return 0;
+}
+
+std::uintptr_t sapBufferAddress(const oc2::offline::SapImage& image,
+                                const char* name)
+{
+    for (const auto& buffer : image.buffers)
+        if (buffer.name == name) return buffer.address;
+    fail(std::string("SAP buffer absent: ") + name);
     return 0;
 }
 
@@ -267,6 +284,8 @@ struct World
         desc.filterShader = reportFilter;
         desc.simulationEventCallback = &callback;
         desc.broadPhaseType = PxBroadPhaseType::eSAP;
+        desc.staticStructure = PxPruningStructure::eSTATIC_AABB_TREE;
+        desc.dynamicStructure = PxPruningStructure::eDYNAMIC_AABB_TREE;
         scene = rt.physics->createScene(desc);
         if (!scene) fail("createScene");
 
@@ -342,6 +361,121 @@ struct World
         return image;
     }
 };
+
+struct JoinedCapture
+{
+    oc2::offline::TransformCacheImage cache;
+    oc2::offline::ShapeCacheBindings shapeCache;
+    oc2::offline::BodyImage body;
+    oc2::offline::SceneClockImage clock;
+    oc2::offline::ContextImage context;
+    oc2::offline::QueryImage query;
+    physx333_offline::MemBlockRestoreImage blocks;
+};
+
+void captureJoined(World& world,
+                   physx333_offline::MemBlockIdentityRegistry& memoryIds,
+                   JoinedCapture& image, const char* stage)
+{
+    std::string error;
+    if (!oc2::offline::CaptureTransformCache(*world.scene,
+                                              image.cache, error))
+        fail(std::string(stage) + " transform-cache capture: " + error);
+    if (!oc2::offline::CaptureShapeCacheBindings(*world.scene,
+                                                 image.shapeCache, error))
+        fail(std::string(stage) + " shape-cache capture: " + error);
+    if (!oc2::offline::CaptureBodies(*world.scene, image.body, error))
+        fail(std::string(stage) + " body capture: " + error);
+    if (!oc2::offline::CaptureSceneClock(*world.scene, image.clock, error))
+        fail(std::string(stage) + " scene-clock capture: " + error);
+    if (!oc2::offline::CaptureContextImage(*world.scene,
+                                           image.context, error))
+        fail(std::string(stage) + " context capture: " + error);
+    if (!oc2::offline::CaptureQueryImage(*world.scene, image.query, error))
+        fail(std::string(stage) + " query capture: " + error);
+    if (!physx333_offline::CaptureMemBlockRestore(
+            *world.scene, memoryIds, image.blocks, error))
+        fail(std::string(stage) + " memory-block capture: " + error);
+}
+
+void verifyJoined(const JoinedCapture& expected,
+                  const JoinedCapture& actual, const char* stage)
+{
+    std::string error;
+    if (!expected.cache.equals(actual.cache, error))
+        fail(std::string(stage) + " transform-cache image: " + error);
+    if (!expected.shapeCache.equals(actual.shapeCache, error))
+        fail(std::string(stage) + " shape-cache image: " + error);
+    if (!expected.body.equals(actual.body, error))
+        fail(std::string(stage) + " body image: " + error);
+    if (!expected.clock.equals(actual.clock, error))
+        fail(std::string(stage) + " scene-clock image: " + error);
+    if (!expected.context.equals(actual.context, error))
+        fail(std::string(stage) + " context image: " + error);
+    if (!expected.query.equalsWithRebasedStack(actual.query, error))
+        fail(std::string(stage) + " query image: " + error);
+    if (!expected.blocks.pool.equals(actual.blocks.pool, error) ||
+        expected.blocks.contactBindings != actual.blocks.contactBindings)
+        fail(std::string(stage) + " memory-block image: " + error);
+}
+
+void restoreJoinedSubset(World& world,
+                         const physx333_offline::NPhaseTopologyImage& topology,
+                         const physx333_offline::InteractionImage& interaction,
+                         physx333_offline::MemBlockIdentityRegistry& memoryIds,
+                         const Capture& checkpoint,
+                         const JoinedCapture& checkpointJoined,
+                         const char* stage)
+{
+    std::string error;
+    if (!physx333_offline::RestoreNPhaseSubset(
+            *world.scene, topology, error))
+        fail(std::string(stage) + " NPhase subset: " + error);
+    if (!physx333_offline::RestoreInteractionMetadataSubset12(
+            *world.scene, interaction, error))
+        fail(std::string(stage) + " interaction metadata: " + error);
+    if (!physx333_offline::InstallInteractionContactBindingsSubset12(
+            *world.scene, interaction, error))
+        fail(std::string(stage) + " contact bindings: " + error);
+    if (!physx333_offline::RestoreMemBlockPoolForJoin(
+            *world.scene, memoryIds, checkpointJoined.blocks, error))
+        fail(std::string(stage) + " memory blocks: " + error);
+    if (!physx333_offline::RestoreInteractionContactPayloadSubset12(
+            *world.scene, interaction, error))
+        fail(std::string(stage) + " contact payload: " + error);
+    if (!oc2::offline::RestoreIslandForJoin(
+            *world.scene, checkpoint.island, error))
+        fail(std::string(stage) + " island: " + error);
+    if (!oc2::offline::RestoreSap(
+            *world.scene, checkpoint.sap, error))
+        fail(std::string(stage) + " SAP: " + error);
+    if (!oc2::offline::RestoreTransformCache(
+            *world.scene, checkpointJoined.cache, error))
+        fail(std::string(stage) + " transform cache: " + error);
+    if (!oc2::offline::RestoreShapeCacheBindings(
+            *world.scene, checkpointJoined.shapeCache, error))
+        fail(std::string(stage) + " shape cache: " + error);
+    if (!oc2::offline::RestoreBodies(
+            *world.scene, checkpointJoined.body, error))
+        fail(std::string(stage) + " body: " + error);
+    if (!oc2::offline::RestoreSceneClock(
+            *world.scene, checkpointJoined.clock, error))
+        fail(std::string(stage) + " scene clock: " + error);
+    if (!oc2::offline::RestoreContextImage(
+            *world.scene, checkpointJoined.context, error))
+        fail(std::string(stage) + " context: " + error);
+    if (!oc2::offline::RestoreQueryImage(
+            *world.scene, checkpointJoined.query, error))
+        fail(std::string(stage) + " query: " + error);
+    const Capture restored = world.capture();
+    if (!checkpoint.oracle.equals(restored.oracle, error) ||
+        !checkpoint.sap.equals(restored.sap, error) ||
+        !checkpoint.island.equals(restored.island, error))
+        fail(std::string(stage) + " checkpoint Oracle/SAP/island: " + error);
+    JoinedCapture restoredJoined;
+    captureJoined(world, memoryIds, restoredJoined, stage);
+    verifyJoined(checkpointJoined, restoredJoined, stage);
+}
 
 void verifyEventSet(const std::vector<Event>& rows, PxU32 mask,
                     PxU32 first, PxU32 last, const char* stage)
@@ -450,9 +584,17 @@ void verifyFreshEqual(const Capture& a, const Capture& b,
     }
 }
 
-void subsetProbe(Runtime& runtime)
+void subsetProbe(Runtime& runtime, bool warm)
 {
     World world(runtime);
+    if (warm)
+    {
+        // A separate control: preallocate the broadphase deletion-output
+        // buffer, then re-establish all twelve pairs before checkpoint A.
+        // This does not replace the hard cold A->B predecessor test.
+        world.step(0.0f);
+        world.step(-0.2f);
+    }
     world.step(0.0f);
     world.step(0.0f);
     const Capture checkpoint = world.capture();
@@ -461,8 +603,30 @@ void subsetProbe(Runtime& runtime)
     if (!physx333_offline::CaptureNPhaseTopology(*world.scene,
                                                  target, error))
         fail("NPhase checkpoint capture: " + error);
+    physx333_offline::InteractionImage checkpointInteraction;
+    if (!physx333_offline::CaptureInteractionImage(
+            *world.scene, checkpointInteraction, error))
+        fail("12-pair interaction checkpoint capture: " + error);
+    physx333_offline::MemBlockIdentityRegistry memoryIds;
+    JoinedCapture checkpointJoined;
+    captureJoined(world, memoryIds, checkpointJoined, "checkpoint");
+    const physx333_offline::MemBlockRestoreImage& checkpointMemory =
+        checkpointJoined.blocks;
     world.step(-0.2f);
     const Capture successor = world.capture();
+    JoinedCapture successorJoined;
+    captureJoined(world, memoryIds, successorJoined, "successor");
+    std::cout << "REPORT_FACTS A_report_objects="
+              << part(checkpoint.oracle,
+                      "nphase.pool.actor_pair_report.header")[2]
+              << " B_report_objects="
+              << part(successor.oracle,
+                      "nphase.pool.actor_pair_report.header")[2]
+              << " A_persistent_pairs="
+              << part(checkpoint.oracle, "nphase.event_lists")[0]
+              << " B_persistent_pairs="
+              << part(successor.oracle, "nphase.event_lists")[0]
+              << '\n';
     physx333_offline::NPhaseTopologyImage current;
     if (!physx333_offline::CaptureNPhaseTopology(*world.scene,
                                                  current, error))
@@ -493,6 +657,13 @@ void subsetProbe(Runtime& runtime)
                                                  restored, error) ||
         !target.sameShapePairs(restored, error))
         fail("NPhase subset ordered topology differs: " + error);
+    physx333_offline::InteractionImage recreatedInteraction;
+    if (!physx333_offline::CaptureInteractionImage(
+            *world.scene, recreatedInteraction, error))
+        fail("12-pair interaction post-lifecycle capture: " + error);
+    if (checkpointInteraction.pairs.size() != 12 ||
+        recreatedInteraction.pairs.size() != 12)
+        fail("12-pair interaction images are incomplete");
     for (std::size_t i = 0; i < target.pairs.size(); ++i)
     {
         if (target.pairs[i].sipPoolSlot != restored.pairs[i].sipPoolSlot ||
@@ -506,9 +677,138 @@ void subsetProbe(Runtime& runtime)
     if (checkpoint.oracle.equals(projected, error))
         fail("Lifecycle-only subset unexpectedly matched the full checkpoint");
     std::cout << "SUBSET_ORACLE_FIRST_DIFFERENCE " << error << '\n';
-    std::cout << "PASS preflighted subset lifecycle preserved eight survivors "
-                 "and recreated four missing SIP/CM physical slots in "
-                 "checkpoint order; no simulation follows\n";
+    if (!physx333_offline::RestoreInteractionMetadataSubset12(
+            *world.scene, checkpointInteraction, error))
+        fail("12-pair report/touch restore failed; scene is fail-stop: " + error);
+    physx333_offline::OracleImage metadataProjected;
+    if (!physx333_offline::CaptureOracle(
+            *world.scene, metadataProjected, error))
+        fail("12-pair metadata Oracle capture: " + error);
+    if (checkpoint.oracle.equals(metadataProjected, error))
+        fail("Metadata-only subset unexpectedly matched full checkpoint");
+    std::cout << "METADATA_ORACLE_FIRST_DIFFERENCE " << error << '\n';
+    if (!physx333_offline::InstallInteractionContactBindingsSubset12(
+            *world.scene, checkpointInteraction, error))
+        fail("12-pair contact binding install failed; scene is fail-stop: " +
+             error);
+    if (!physx333_offline::RestoreMemBlockPoolForJoin(
+            *world.scene, memoryIds, checkpointMemory, error))
+        fail("12-pair contact block restore failed; scene is fail-stop: " +
+             error);
+    if (!physx333_offline::RestoreInteractionContactPayloadSubset12(
+            *world.scene, checkpointInteraction, error))
+        fail("12-pair contact payload restore failed; scene is fail-stop: " +
+             error);
+    physx333_offline::OracleImage contactProjected;
+    if (!physx333_offline::CaptureOracle(
+            *world.scene, contactProjected, error))
+        fail("12-pair contact Oracle capture: " + error);
+    for (const auto& section : checkpoint.oracle.parts)
+    {
+        if (section.first.find("contact.") != 0 &&
+            section.first.find("nphase.") != 0) continue;
+        if (part(contactProjected, section.first) != section.second)
+            fail("12-pair interaction Oracle section differs: " +
+                 section.first);
+    }
+    std::cout << "PASS all contact.* and nphase.* Oracle sections match A\n";
+    if (checkpoint.oracle.equals(contactProjected, error))
+        fail("Interaction-only subset unexpectedly matched full checkpoint");
+    std::cout << "CONTACT_ORACLE_FIRST_DIFFERENCE " << error << '\n';
+    if (!oc2::offline::RestoreIslandForJoin(
+            *world.scene, checkpoint.island, error))
+        fail("12-pair joined island restore failed; scene is fail-stop: " +
+             error);
+    physx333_offline::OracleImage islandProjected;
+    if (!physx333_offline::CaptureOracle(
+            *world.scene, islandProjected, error))
+        fail("12-pair island Oracle capture: " + error);
+    if (!checkpoint.oracle.equals(islandProjected, error))
+        fail("12-pair island restore did not match full Oracle: " + error);
+    oc2::offline::IslandImage restoredIsland;
+    if (!oc2::offline::CaptureIsland(*world.scene, restoredIsland, error) ||
+        !checkpoint.island.equals(restoredIsland, error))
+        fail("12-pair island image differs: " + error);
+    std::cout << "PASS twelve-pair full Oracle and island checkpoint image\n";
+
+    oc2::offline::SapImage preRestoreSap;
+    if (!oc2::offline::CaptureSap(*world.scene, preRestoreSap, error))
+        fail("12-pair pre-restore SAP capture: " + error);
+    std::cout << "SAP_DELETED_OVERLAP_CAPACITY checkpoint="
+              << sapScalar(checkpoint.sap, "aabb.deletedOverlapCapacity")
+              << " current="
+              << sapScalar(preRestoreSap, "aabb.deletedOverlapCapacity")
+              << " checkpoint_size="
+              << sapScalar(checkpoint.sap, "aabb.deletedOverlapSize")
+              << " current_size="
+              << sapScalar(preRestoreSap, "aabb.deletedOverlapSize")
+              << " checkpoint_buffer=0x" << std::hex
+              << sapBufferAddress(checkpoint.sap, "aabb.deletedOverlaps")
+              << " current_buffer=0x"
+              << sapBufferAddress(preRestoreSap, "aabb.deletedOverlaps")
+              << std::dec
+              << '\n';
+
+    if (!oc2::offline::RestoreSap(*world.scene, checkpoint.sap, error))
+        fail("12-pair SAP restore failed; scene is fail-stop: " + error);
+    if (!oc2::offline::RestoreTransformCache(
+            *world.scene, checkpointJoined.cache, error))
+        fail("12-pair transform-cache restore failed; scene is fail-stop: " +
+             error);
+    if (!oc2::offline::RestoreShapeCacheBindings(
+            *world.scene, checkpointJoined.shapeCache, error))
+        fail("12-pair shape-cache restore failed; scene is fail-stop: " +
+             error);
+    if (!oc2::offline::RestoreBodies(
+            *world.scene, checkpointJoined.body, error))
+        fail("12-pair body restore failed; scene is fail-stop: " + error);
+    if (!oc2::offline::RestoreSceneClock(
+            *world.scene, checkpointJoined.clock, error))
+        fail("12-pair clock restore failed; scene is fail-stop: " + error);
+    if (!oc2::offline::RestoreContextImage(
+            *world.scene, checkpointJoined.context, error))
+        fail("12-pair context restore failed; scene is fail-stop: " + error);
+    if (!oc2::offline::RestoreQueryImage(
+            *world.scene, checkpointJoined.query, error))
+        fail("12-pair query restore failed; scene is fail-stop: " + error);
+    const Capture restoredA = world.capture();
+    if (!checkpoint.oracle.equals(restoredA.oracle, error) ||
+        !checkpoint.sap.equals(restoredA.sap, error) ||
+        !checkpoint.island.equals(restoredA.island, error))
+        fail("12-pair complete checkpoint image differs: " + error);
+    JoinedCapture restoredJoined;
+    captureJoined(world, memoryIds, restoredJoined, "restored checkpoint");
+    verifyJoined(checkpointJoined, restoredJoined, "restored checkpoint");
+    std::cout << "PASS twelve-pair complete checkpoint component images\n";
+
+    world.step(-0.2f);
+    const Capture replayedB = world.capture();
+    verifyFreshEqual(successor, replayedB, "joined next-step");
+    if (!successor.sap.equals(replayedB.sap, error) ||
+        !successor.island.equals(replayedB.island, error))
+        fail("12-pair joined next-step SAP/island image: " + error);
+    JoinedCapture replayedJoined;
+    captureJoined(world, memoryIds, replayedJoined, "replayed successor");
+    verifyJoined(successorJoined, replayedJoined, "joined next-step");
+    std::cout << "PASS 12-to-8 joined next-step ordered callbacks, Oracle, "
+                 "and all component images\n";
+    for (unsigned iteration = 1; iteration < 100; ++iteration)
+    {
+        const std::string stage = "joined repeat " +
+            std::to_string(iteration);
+        restoreJoinedSubset(world, target, checkpointInteraction, memoryIds,
+                            checkpoint, checkpointJoined, stage.c_str());
+        world.step(-0.2f);
+        const Capture repeatedB = world.capture();
+        verifyFreshEqual(successor, repeatedB, stage.c_str());
+        if (!successor.sap.equals(repeatedB.sap, error) ||
+            !successor.island.equals(repeatedB.island, error))
+            fail(stage + " successor SAP/island: " + error);
+        JoinedCapture repeatedJoined;
+        captureJoined(world, memoryIds, repeatedJoined, stage.c_str());
+        verifyJoined(successorJoined, repeatedJoined, stage.c_str());
+    }
+    std::cout << "PASS 12-to-8 joined replay and all component images x100\n";
     std::cout.flush();
     std::_Exit(0);
 }
@@ -519,9 +819,12 @@ int main(int argc, char** argv)
 {
     static_assert(sizeof(void*) == 4, "Requires Win32 PhysX");
     const bool subset = argc == 2 && std::string(argv[1]) == "--subset-probe";
-    if (argc != 1 && !subset) fail("Unknown partial-contact fixture argument");
+    const bool warmSubset = argc == 2 &&
+        std::string(argv[1]) == "--subset-warm-probe";
+    if (argc != 1 && !subset && !warmSubset)
+        fail("Unknown partial-contact fixture argument");
     Runtime runtime;
-    if (subset) subsetProbe(runtime);
+    if (subset || warmSubset) subsetProbe(runtime, warmSubset);
     Capture checkpoint, successor;
     std::vector<Event> publicRepeat;
     {

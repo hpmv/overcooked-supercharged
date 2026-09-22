@@ -18,4 +18,12 @@ enum InteractionReportBridgeResultV1 {
 typedef std::uint32_t (__cdecl* InteractionReportCreateFnV1)(
     void* nphaseCore, void* const* orderedActorPairs, std::uint32_t count);
 
+// Export: oc2_physx333_report_create_subset_v2. All existing report objects
+// are preserved; only the supplied absent ActorPairs use the SDK lazy path.
+// The bridge requires every live overlap to have report data afterward.
+typedef std::uint32_t (__cdecl* InteractionReportCreateSubsetFnV2)(
+    void* nphaseCore, void* const* orderedMissingActorPairs,
+    std::uint32_t missingCount, std::uint32_t expectedOverlapCount,
+    std::uint32_t expectedAlreadyReported);
+
 } // namespace physx333_offline

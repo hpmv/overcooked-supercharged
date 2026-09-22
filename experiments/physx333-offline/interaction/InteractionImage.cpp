@@ -33,7 +33,7 @@ static_assert(sizeof(void*) == 4, "Interaction image requires Win32 PhysX");
 static_assert(sizeof(PxsIslandManagerEdgeHook) == sizeof(PxU32),
               "Unexpected island edge hook layout");
 
-typedef std::array<Sc::ShapeInstancePairLL*, 6> PairPointers;
+typedef std::vector<Sc::ShapeInstancePairLL*> PairPointers;
 
 InteractionImage::Bitmap captureBitmap(const Cm::BitMap& bitmap)
 {
@@ -111,32 +111,34 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         return false;
     }
     if (!CaptureNPhaseTopology(scene, next.topology, error)) return false;
-    if (next.topology.pairs.size() != 6 ||
-        next.topology.activePairCount != 6)
+    const PxU32 pairCount = static_cast<PxU32>(
+        next.topology.pairs.size());
+    if ((pairCount != 6 && pairCount != 12) ||
+        next.topology.activePairCount != pairCount)
     {
-        error = "Interaction image requires six active fixture pairs";
+        error = "Interaction image requires six or twelve active fixture pairs";
         return false;
     }
 
     Sc::Scene& sc = np.getScene().getScScene();
     Sc::InteractionScene& interactions = sc.getInteractionScene();
     Sc::NPhaseCore& nphase = *sc.getNPhaseCore();
-    if (interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != 6 ||
-        interactions.getActiveInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != 6 ||
+    if (interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != pairCount ||
+        interactions.getActiveInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != pairCount ||
         interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) ||
         interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER))
     {
-        error = "Interaction scene is outside the six-active-pair fixture";
+        error = "Interaction scene is outside the active box-pair fixture";
         return false;
     }
 
-    byShape.fill(NULL);
+    byShape.assign(pairCount, NULL);
     next.scene = reinterpret_cast<uintptr_t>(&scene);
-    next.sceneActiveCount = 6;
-    next.pairs.resize(6);
+    next.sceneActiveCount = pairCount;
+    next.pairs.resize(pairCount);
     Cm::Range<Sc::Interaction*const> range =
         interactions.getInteractions(Sc::PX_INTERACTION_TYPE_OVERLAP);
-    for (size_t sceneIndex = 0; sceneIndex < 6; ++sceneIndex)
+    for (size_t sceneIndex = 0; sceneIndex < pairCount; ++sceneIndex)
     {
         if (range.empty())
         {
@@ -148,7 +150,8 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         range.popFront();
         const NPhasePairTopology& topology = next.topology.pairs[sceneIndex];
         const PxU32 shape = topology.shape0.shapeIndex;
-        if (topology.shape0.actorId != 7 || shape >= 6 ||
+        if (topology.shape0.actorId != pairCount + 1 ||
+            shape >= pairCount ||
             topology.shape1.actorId != shape + 1 ||
             topology.shape1.shapeIndex != 0 || byShape[shape] ||
             sip->mSceneId != sceneIndex || !sip->mManager)
@@ -267,9 +270,10 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
                 begin, begin + sizeof(Sc::ContactStreamManager));
         }
     }
-    if (!range.empty() || !mover || mover->mInteractions.size() != 6)
+    if (!range.empty() || !mover ||
+        mover->mInteractions.size() != pairCount)
     {
-        error = "Fixture mover interaction count is not six";
+        error = "Fixture mover interaction count differs from pair count";
         return false;
     }
     next.moverTransferringCount = mover->mNumTransferringInteractions;
@@ -278,11 +282,11 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         error = "Fixture mover has unsupported transferring interactions";
         return false;
     }
-    for (PxU32 i = 0; i < 6; ++i)
+    for (PxU32 i = 0; i < pairCount; ++i)
     {
         Sc::Interaction* interaction = mover->mInteractions[i];
         bool found = false;
-        for (PxU32 shape = 0; shape < 6; ++shape)
+        for (PxU32 shape = 0; shape < pairCount; ++shape)
         {
             if (byShape[shape] == interaction)
             {
@@ -305,7 +309,7 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
 
     std::map<const Sc::ShapeInstancePairLL*, PxU32> shapeBySip;
     std::map<const Sc::ActorPair*, PxU32> shapeByActorPair;
-    for (PxU32 i = 0; i < 6; ++i)
+    for (PxU32 i = 0; i < pairCount; ++i)
     {
         shapeBySip[byShape[i]] = i;
         shapeByActorPair[byShape[i]->getActorPair()] = i;
@@ -583,7 +587,7 @@ bool RestoreInteractionOrder(PxScene& scene, const InteractionImage& target,
     Sc::InteractionScene& interactions =
         np.getScene().getScScene().getInteractionScene();
     PairPointers byShape;
-    byShape.fill(NULL);
+    byShape.assign(6, NULL);
     for (size_t i = 0; i < 6; ++i)
     {
         const PxU32 shape = recreated.sceneOrder[i];
@@ -704,7 +708,7 @@ bool RestoreInteractionMetadata(PxScene& scene,
     Sc::NPhaseCore& nphase = *sc.getNPhaseCore();
     Sc::InteractionScene& interactions = sc.getInteractionScene();
     PairPointers byShape;
-    byShape.fill(NULL);
+    byShape.assign(6, NULL);
     for (PxU32 i = 0; i < 6; ++i)
         byShape[current.sceneOrder[i]] =
             static_cast<Sc::ShapeInstancePairLL*>(
@@ -870,20 +874,301 @@ bool RestoreInteractionMetadata(PxScene& scene,
     return true;
 }
 
-static bool restoreInteractionContactPayload(PxScene& scene,
-                                             const InteractionImage& target,
-                                             std::string& error,
-                                             bool requireBackingBytes)
+bool RestoreInteractionMetadataSubset12(PxScene& scene,
+                                         const InteractionImage& target,
+                                         std::string& error)
 {
     InteractionImage current;
     if (!CaptureInteractionImage(scene, current, error)) return false;
-    if (!target.sameSlotsAndOrder(current, error) ||
+    if (target.scene != reinterpret_cast<uintptr_t>(&scene) ||
+        target.pairs.size() != 12 || current.pairs.size() != 12 ||
+        target.sceneActiveCount != 12 || current.sceneActiveCount != 12 ||
+        target.sceneOrder != current.sceneOrder ||
+        target.moverActorOrder != current.moverActorOrder ||
+        target.managerSlabCount != current.managerSlabCount ||
+        target.managerFreeCount != current.managerFreeCount ||
+        target.managerFreeOrder != current.managerFreeOrder ||
+        target.moverTransferringCount || current.moverTransferringCount)
+    {
+        error = "Subset interaction order or manager-pool topology differs";
+        return false;
+    }
+    for (PxU32 shape = 0; shape < 12; ++shape)
+    {
+        const InteractionPairImage& a = target.pairs[shape];
+        const InteractionPairImage& b = current.pairs[shape];
+        if (a.moverShape != shape || b.moverShape != shape ||
+            a.sipPoolSlot != b.sipPoolSlot ||
+            a.actorPairPoolSlot != b.actorPairPoolSlot ||
+            a.managerSlot != b.managerSlot ||
+            a.islandEdge != b.islandEdge ||
+            a.actorPairRefCount != b.actorPairRefCount ||
+            a.reportDataPresent != 1 ||
+            b.reportDataPresent != (shape < 8 ? 1u : 0u) ||
+            (shape < 8 && a.reportPoolSlot != b.reportPoolSlot) ||
+            a.reportStreamManager.size() !=
+                sizeof(Sc::ContactStreamManager))
+        {
+            error = "Subset pair slot, survivor report, or actor ownership differs";
+            return false;
+        }
+    }
+    if (target.reportPoolSlabCount != current.reportPoolSlabCount ||
+        target.reportPoolUsedCount != current.reportPoolUsedCount + 4 ||
+        current.reportPoolFreeOrder.size() !=
+            target.reportPoolFreeOrder.size() + 4 ||
+        !std::equal(target.reportPoolFreeOrder.begin(),
+                    target.reportPoolFreeOrder.end(),
+                    current.reportPoolFreeOrder.begin() + 4) ||
+        target.reportBufferIndex || current.reportBufferIndex ||
+        !target.reportBufferBytes.empty() ||
+        !current.reportBufferBytes.empty() ||
+        target.reportBufferSize != current.reportBufferSize ||
+        target.reportBufferDefaultSize != current.reportBufferDefaultSize ||
+        target.reportBufferAllocationLocked !=
+            current.reportBufferAllocationLocked ||
+        !target.forceThresholdEventOrder.empty() ||
+        !current.forceThresholdEventOrder.empty() ||
+        !target.reportActorPairOrder.empty() ||
+        !current.reportActorPairOrder.empty() ||
+        target.persistentEventOrder.size() != 12 ||
+        target.nextPersistentPair != 12 ||
+        current.persistentEventOrder.size() != 8 ||
+        current.nextPersistentPair != 8)
+    {
+        error = "Subset report pool, event list, or buffer topology differs";
+        return false;
+    }
+    std::set<PxU32> persistentShapes(
+        target.persistentEventOrder.begin(),
+        target.persistentEventOrder.end());
+    if (persistentShapes.size() != 12 ||
+        *persistentShapes.begin() != 0 ||
+        *persistentShapes.rbegin() != 11)
+    {
+        error = "Target persistent event list is not a twelve-pair permutation";
+        return false;
+    }
+
+    NpScene& np = static_cast<NpScene&>(scene);
+    Sc::Scene& sc = np.getScene().getScScene();
+    Sc::NPhaseCore& nphase = *sc.getNPhaseCore();
+    Sc::InteractionScene& interactions = sc.getInteractionScene();
+    PxsContext& lowLevel = *interactions.getLowLevelContext();
+    if (nphase.mPersistentContactEventPairList.capacity() < 12 ||
+        !bitmapStorageSame(lowLevel.mContactManagerPool.mUseBitmap,
+                           target.managerPoolUseBitmap) ||
+        !bitmapStorageSame(lowLevel.mActiveContactManager,
+                           target.activeManagerBitmap) ||
+        !bitmapStorageSame(lowLevel.mModifiableContactManager,
+                           target.modifiableManagerBitmap) ||
+        !bitmapStorageSame(lowLevel.mContactManagerTouchEvent,
+                           target.touchEventBitmap) ||
+        current.managerPoolUseBitmap.words !=
+            target.managerPoolUseBitmap.words)
+    {
+        error = "Subset event-list capacity or bitmap storage differs";
+        return false;
+    }
+    PairPointers byShape(12, NULL);
+    for (PxU32 i = 0; i < 12; ++i)
+        byShape[current.sceneOrder[i]] =
+            static_cast<Sc::ShapeInstancePairLL*>(
+                interactions.mInteractions[Sc::PX_INTERACTION_TYPE_OVERLAP][i]);
+
+    std::map<PxU32, PxU32> missingByReportSlot;
+    for (PxU32 shape = 8; shape < 12; ++shape)
+        if (!missingByReportSlot.insert(std::make_pair(
+                target.pairs[shape].reportPoolSlot, shape)).second)
+        {
+            error = "Missing report pool slots are duplicated";
+            return false;
+        }
+    void* creationOrder[4];
+    for (PxU32 i = 0; i < 4; ++i)
+    {
+        const auto found = missingByReportSlot.find(
+            current.reportPoolFreeOrder[i]);
+        if (found == missingByReportSlot.end())
+        {
+            error = "Next report slots cannot realize the checkpoint";
+            return false;
+        }
+        creationOrder[i] = byShape[found->second]->getActorPair();
+    }
+    HMODULE physxDll = GetModuleHandleA("PhysX3_x86.dll");
+    FARPROC exported = physxDll ? GetProcAddress(
+        physxDll, "oc2_physx333_report_create_subset_v2") : NULL;
+    if (!exported && physxDll)
+        exported = GetProcAddress(
+            physxDll, "_oc2_physx333_report_create_subset_v2");
+    if (!exported)
+    {
+        error = "Test-only report subset lifecycle bridge is not installed";
+        return false;
+    }
+    const InteractionReportCreateSubsetFnV2 create =
+        reinterpret_cast<InteractionReportCreateSubsetFnV2>(exported);
+    const PxU32 result = create(&nphase, creationOrder, 4, 12, 8);
+    if (result != InteractionReportBridgeSuccess)
+    {
+        std::ostringstream out;
+        out << "Report subset bridge rejected or changed scene (code "
+            << result << "); dispose it";
+        error = out.str();
+        return false;
+    }
+
+    // Source lifecycle has written the scene. Every failure from here is
+    // fail-stop; the disposable scene must never be simulated.
+    if (!CaptureInteractionImage(scene, current, error) ||
+        current.reportPoolUsedCount != target.reportPoolUsedCount ||
+        current.reportPoolFreeOrder != target.reportPoolFreeOrder)
+    {
+        error = "Report subset lifecycle pool readback differs; dispose it: " +
+            error;
+        return false;
+    }
+    for (PxU32 shape = 0; shape < 12; ++shape)
+    {
+        const InteractionPairImage& a = target.pairs[shape];
+        const InteractionPairImage& b = current.pairs[shape];
+        if (!b.reportDataPresent ||
+            a.reportPoolSlot != b.reportPoolSlot ||
+            a.reportActorAId != b.reportActorAId ||
+            a.reportActorBId != b.reportActorBId ||
+            a.actorPairRefCount != b.actorPairRefCount)
+        {
+            error = "Report subset lifecycle owner binding differs; dispose it";
+            return false;
+        }
+    }
+
+    nphase.mPersistentContactEventPairList.clear();
+    for (PxU32 shape : target.persistentEventOrder)
+        nphase.mPersistentContactEventPairList.pushBack(byShape[shape]);
+    nphase.mNextFramePersistentContactEventPairIndex =
+        target.nextPersistentPair;
+    for (PxU32 shape = 0; shape < 12; ++shape)
+    {
+        const InteractionPairImage& saved = target.pairs[shape];
+        Sc::ShapeInstancePairLL& sip = *byShape[shape];
+        Sc::ActorPair& actorPair = *sip.getActorPair();
+        Sc::ActorPairContactReportData& report = *actorPair.mReportData;
+        sip.mFlags = saved.sipFlags;
+        sip.mContactReportStamp = saved.contactReportStamp;
+        sip.mReportPairIndex = saved.reportPairIndex;
+        sip.mReportStreamIndex =
+            static_cast<PxU16>(saved.reportStreamIndex);
+        actorPair.mInternalFlags =
+            static_cast<PxU16>(saved.actorPairFlags);
+        actorPair.mTouchCount =
+            static_cast<PxU16>(saved.actorPairTouchCount);
+        report.mStrmResetStamp = saved.reportResetStamp;
+        std::memcpy(&report.mContactStreamManager,
+                    saved.reportStreamManager.data(),
+                    saved.reportStreamManager.size());
+        sip.mManager->mFlags = saved.managerFlags;
+        sip.mManager->getWorkUnit().statusFlags =
+            static_cast<PxU16>(saved.managerStatusFlags);
+    }
+    nphase.mContactReportBuffer.mLastBufferIndex =
+        target.reportBufferLastIndex;
+    writeBitmap(lowLevel.mActiveContactManager,
+                target.activeManagerBitmap);
+    writeBitmap(lowLevel.mModifiableContactManager,
+                target.modifiableManagerBitmap);
+    writeBitmap(lowLevel.mContactManagerTouchEvent,
+                target.touchEventBitmap);
+
+    InteractionImage restored;
+    if (!CaptureInteractionImage(scene, restored, error) ||
+        restored.persistentEventOrder != target.persistentEventOrder ||
+        restored.nextPersistentPair != target.nextPersistentPair ||
+        restored.reportPoolFreeOrder != target.reportPoolFreeOrder ||
+        restored.reportBufferLastIndex != target.reportBufferLastIndex ||
+        restored.managerPoolUseBitmap.words !=
+            target.managerPoolUseBitmap.words ||
+        restored.activeManagerBitmap.words !=
+            target.activeManagerBitmap.words ||
+        restored.modifiableManagerBitmap.words !=
+            target.modifiableManagerBitmap.words ||
+        restored.touchEventBitmap.words !=
+            target.touchEventBitmap.words)
+    {
+        error = "Report/touch subset readback differs; dispose it: " + error;
+        return false;
+    }
+    for (PxU32 shape = 0; shape < 12; ++shape)
+    {
+        const InteractionPairImage& a = target.pairs[shape];
+        const InteractionPairImage& b = restored.pairs[shape];
+        if (a.sipFlags != b.sipFlags ||
+            a.contactReportStamp != b.contactReportStamp ||
+            a.reportPairIndex != b.reportPairIndex ||
+            a.reportStreamIndex != b.reportStreamIndex ||
+            a.actorPairFlags != b.actorPairFlags ||
+            a.actorPairTouchCount != b.actorPairTouchCount ||
+            a.actorPairRefCount != b.actorPairRefCount ||
+            a.reportPoolSlot != b.reportPoolSlot ||
+            a.reportResetStamp != b.reportResetStamp ||
+            a.reportStreamManager != b.reportStreamManager ||
+            a.managerFlags != b.managerFlags ||
+            a.managerStatusFlags != b.managerStatusFlags)
+        {
+            error = "Pair report/touch subset readback differs; dispose it";
+            return false;
+        }
+    }
+    error.clear();
+    return true;
+}
+
+static bool restoreInteractionContactPayload(PxScene& scene,
+                                             const InteractionImage& target,
+                                             std::string& error,
+                                             bool requireBackingBytes,
+                                             PxU32 pairCount)
+{
+    InteractionImage current;
+    if (!CaptureInteractionImage(scene, current, error)) return false;
+    if (pairCount == 6 && !target.sameSlotsAndOrder(current, error))
+    {
+        error = "Six-pair interaction slot/order stage is incomplete: " + error;
+        return false;
+    }
+    if ((pairCount != 6 && pairCount != 12) ||
+        target.scene != current.scene ||
+        target.pairs.size() != pairCount ||
+        current.pairs.size() != pairCount ||
+        target.sceneActiveCount != current.sceneActiveCount ||
+        target.moverTransferringCount != current.moverTransferringCount ||
+        target.sceneOrder != current.sceneOrder ||
+        target.moverActorOrder != current.moverActorOrder ||
+        target.managerSlabCount != current.managerSlabCount ||
+        target.managerFreeCount != current.managerFreeCount ||
+        target.managerFreeOrder != current.managerFreeOrder ||
         target.persistentEventOrder != current.persistentEventOrder ||
         target.nextPersistentPair != current.nextPersistentPair ||
         target.reportPoolFreeOrder != current.reportPoolFreeOrder)
     {
-        error = "Interaction metadata stage is not complete: " + error;
+        error = "Interaction metadata/order stage is incomplete";
         return false;
+    }
+    for (PxU32 shape = 0; shape < pairCount; ++shape)
+    {
+        const InteractionPairImage& a = target.pairs[shape];
+        const InteractionPairImage& b = current.pairs[shape];
+        if (a.moverShape != shape || b.moverShape != shape ||
+            a.sipPoolSlot != b.sipPoolSlot ||
+            a.actorPairPoolSlot != b.actorPairPoolSlot ||
+            a.managerSlot != b.managerSlot ||
+            a.islandEdge != b.islandEdge ||
+            a.reportPoolSlot != b.reportPoolSlot)
+        {
+            error = "Interaction pair physical slots are not restored";
+            return false;
+        }
     }
 
     NpScene& np = static_cast<NpScene&>(scene);
@@ -894,8 +1179,8 @@ static bool restoreInteractionContactPayload(PxScene& scene,
     if (!allocatedMemBlocks(context, blocks, error)) return false;
 
     PairPointers byShape;
-    byShape.fill(NULL);
-    for (PxU32 i = 0; i < 6; ++i)
+    byShape.assign(pairCount, NULL);
+    for (PxU32 i = 0; i < pairCount; ++i)
         byShape[current.sceneOrder[i]] =
             static_cast<Sc::ShapeInstancePairLL*>(
                 interactions.mInteractions[Sc::PX_INTERACTION_TYPE_OVERLAP][i]);
@@ -905,8 +1190,8 @@ static bool restoreInteractionContactPayload(PxScene& scene,
         PxcNpWorkUnit work;
         Gu::PersistentContactManifold* manifold;
     };
-    RestorePlan plan[6];
-    for (PxU32 shape = 0; shape < 6; ++shape)
+    RestorePlan plan[12];
+    for (PxU32 shape = 0; shape < pairCount; ++shape)
     {
         const InteractionPairImage& source = target.pairs[shape];
         const InteractionPairImage& liveRow = current.pairs[shape];
@@ -999,7 +1284,7 @@ static bool restoreInteractionContactPayload(PxScene& scene,
     // verifies that the memory-block restore installed the saved bytes.
     // The manifold object was allocated by PhysX's lifecycle path. Its
     // mContactPoints self-pointer must stay bound to that new object.
-    for (PxU32 shape = 0; shape < 6; ++shape)
+    for (PxU32 shape = 0; shape < pairCount; ++shape)
     {
         const InteractionPairImage& source = target.pairs[shape];
         RestorePlan& item = plan[shape];
@@ -1029,7 +1314,7 @@ static bool restoreInteractionContactPayload(PxScene& scene,
         error = "Contact payload changed scene; dispose it: " + error;
         return false;
     }
-    for (PxU32 shape = 0; shape < 6; ++shape)
+    for (PxU32 shape = 0; shape < pairCount; ++shape)
     {
         const InteractionPairImage& a = target.pairs[shape];
         const InteractionPairImage& b = restored.pairs[shape];
@@ -1058,14 +1343,26 @@ bool InstallInteractionContactBindings(PxScene& scene,
                                        const InteractionImage& target,
                                        std::string& error)
 {
-    return restoreInteractionContactPayload(scene, target, error, false);
+    return restoreInteractionContactPayload(scene, target, error, false, 6);
 }
 
 bool RestoreInteractionContactPayload(PxScene& scene,
                                       const InteractionImage& target,
                                       std::string& error)
 {
-    return restoreInteractionContactPayload(scene, target, error, true);
+    return restoreInteractionContactPayload(scene, target, error, true, 6);
+}
+
+bool InstallInteractionContactBindingsSubset12(
+    PxScene& scene, const InteractionImage& target, std::string& error)
+{
+    return restoreInteractionContactPayload(scene, target, error, false, 12);
+}
+
+bool RestoreInteractionContactPayloadSubset12(
+    PxScene& scene, const InteractionImage& target, std::string& error)
+{
+    return restoreInteractionContactPayload(scene, target, error, true, 12);
 }
 
 } // namespace physx333_offline

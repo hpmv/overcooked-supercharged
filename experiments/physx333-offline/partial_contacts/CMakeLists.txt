@@ -23,6 +23,15 @@ add_executable(physx333_partial_contacts
   ../sap/SapImage.cpp
   ../island/IslandImage.cpp
   ../nphase/NPhaseTopology.cpp
+  ../interaction/InteractionImage.cpp
+  ../memblock/MemBlockImage.cpp
+  ../memblock_restore/MemBlockRestore.cpp
+  ../cache/TransformCacheImage.cpp
+  ../shape_cache/ShapeCacheBindings.cpp
+  ../body/BodyImage.cpp
+  ../scene_clock/SceneClockImage.cpp
+  ../context_image/ContextImage.cpp
+  ../query_image/QueryImage.cpp
 )
 target_compile_features(physx333_partial_contacts PRIVATE cxx_std_11)
 target_compile_definitions(physx333_partial_contacts PRIVATE

@@ -68,10 +68,10 @@ The existing six-contact restore cannot consume this fixture as-is:
    contact memory-block allocations before publishing the restored island,
    SAP, body, context, and clock images.
 
-This is a deterministic red test and component-state inventory. It does not
-mutate PhysX internals or claim a 12-to-8 rewind implementation. The shipped
-Story 1-1 trace also has a distinct broadphase pattern (zero created/six
-deleted), so this fixture is not intended as an exact scene reconstruction.
+The default run is a deterministic public-only red test and component-state
+inventory. The shipped Story 1-1 trace has a distinct broadphase pattern
+(zero created/six deleted), so this fixture is not an exact scene
+reconstruction.
 
 For the bounded source-lifecycle subset stage, run:
 
@@ -84,9 +84,38 @@ slots, checks that corrupt shape and physical-slot requests are rejected
 without a scene change, then preflights and creates only the four missing B
 pairs through the original
 `NPhaseCore::onOverlapCreated` path. It verifies the ordered twelve-pair
-topology and exact SIP/CM slot mapping. It prints the first full-Oracle
-difference and exits without a physics step or normal scene teardown, since
-contact payload, reports, island, SAP, body, and context still describe B.
-In the observed source run, the first difference is
-`contact.managers[7] 0x0 vs 0xa`, within a surviving manager's contact work
-state. This lifecycle stage therefore has no full rewind claim.
+topology and exact SIP/CM slot mapping. The report stage preserves all eight
+survivor report objects and creates four missing report objects via the SDK's
+lazy path; it restores all twelve ordered persistent events, SIP/ActorPair
+touch metadata, and contact-manager bitmaps. The contact stage restores all
+twelve work units and single box/box manifolds, with the saved contact-memory
+blocks installed between binding and payload stages.
+
+All `contact.*` and `nphase.*` source-Oracle sections then match A. The
+existing island restore closes the next difference: the complete source
+Oracle and separate island image match A exactly. The cold fixture then
+stops at a strict SAP preflight. At A,
+`AABBManager::mDeletedPairsSize/Capacity` are `0/0` and its buffer pointer
+is null; after B they are `4/32` with a new allocation. The same-allocation
+SAP restore correctly rejects the changed capacity before writing. No
+post-restore physics step occurs in this cold mode.
+
+A separate high-water control first runs a 12-to-8-to-12 warm-up cycle, so
+the broadphase deletion-output buffer exists at both A and B. Run it with:
+
+```bat
+cmd /c experiments\physx333-offline\partial_contacts\Build-Check.cmd --subset-warm-probe
+```
+
+In that control the full source Oracle and the SAP, island, transform-cache,
+shape-cache-binding, body, scene-clock, context, query, and contact-memory
+images all match checkpoint A after restore. The next B step reproduces
+ordered contact callbacks, the full Oracle, and every listed component image.
+This high-water condition is a control, not a fix for the cold fixture's
+allocation-lifetime problem. Repeated replay is separately tested x100.
+
+The real Story 1-1 checkpoint has twelve capsule/box managers with zero
+current contact points; ten pairs still have the touch bit and a report
+object, while two do not. It also has trigger and marker interactions. This
+fixture instead uses twelve touching box/box pairs and gates out triggers and
+markers; those level features require separate source-built coverage.
