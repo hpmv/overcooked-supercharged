@@ -29,7 +29,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private float deadline;
         private readonly List<object> transitions = new List<object>();
         private StoryTimerPolicy timerPolicy;
-        public string Name { get { return "native-main-one-one-session-v2-immediate-timer"; } }
+        private StoryTutorialSkipPolicy tutorialPolicy;
+        public string Name { get { return "native-main-one-one-session-v3-early-tutorial-skip"; } }
         public int ApiVersion { get { return 1; } }
 
         public object Invoke(string operation, Dictionary<string,object> args)
@@ -43,6 +44,8 @@ namespace SuperchargedPatch.Authoring.Modules
             seed = ReadSeed(args);
             Preflight();
             if(timerPolicy == null) { timerPolicy = new StoryTimerPolicy(Record); timerPolicy.Install(); }
+            if(tutorialPolicy == null) { tutorialPolicy = new StoryTutorialSkipPolicy(()=>stage); tutorialPolicy.Install(); }
+            tutorialPolicy.BeginRequest();
             // All controls stay under X's existing neutral/loading fence. Its own
             // LateUpdate resumes native loading and FinishLoad refreshes metadata,
             // pauses at InLevel, and exposes the original arm handshake.
@@ -104,6 +107,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 catch(Exception ex) { failure = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex; }
                 if (failure != null)
                 {
+                    if(tutorialPolicy!=null)tutorialPolicy.CancelRequest("level-session-failed");
                     error = failure.ToString();
                     Set(setup,"error",error); SetStage("failed");
                     Method(bridge,"FinishLoad",new[]{typeof(bool),typeof(string)},true).Invoke(null,new object[]{false,error});
@@ -183,6 +187,7 @@ namespace SuperchargedPatch.Authoring.Modules
             session.GameModeKind = Kind.Campaign;
             session.LevelSettings.SceneDirectoryVarientEntry = variant;
             timerPolicy.ApplySelected(variant.LevelConfig as KitchenLevelConfigBase,"before-native-load");
+            tutorialPolicy.Arm();
             session.FillShownMetaDialogStatus();
             SetStage("external_preparing_main_1_1");
             if(!(bool)InvokeNative("ServerMessenger","SetupCoopSession",new[]{typeof(int),typeof(GameProgress.GameProgressData),typeof(bool[]),typeof(SessionConfig)},
@@ -195,12 +200,14 @@ namespace SuperchargedPatch.Authoring.Modules
             InvokeNative("ServerMessenger","LoadLevel",new[]{typeof(uint),typeof(uint),typeof(GameState),typeof(GameState)},
                 new object[]{(uint)selected.Index,4u,GameState.LoadKitchen,GameState.RunKitchen});
             yield return null;
-            while(!Loaded(prior)) { CheckDeadline(); yield return null; }
+            while(!Loaded(prior)) { CheckDeadline(); tutorialPolicy.ObserveCleanup(); yield return null; }
             ValidatePlayers();
             SetStage("kitchen_ready");
             // Original X FinishLoad performs metadata refresh/pause. The scoped
             // config instrumentation avoids the native first-delivery suppressor.
-            while(!NativeSessionBridge.KitchenReady) { CheckDeadline(); yield return null; }
+            while(!NativeSessionBridge.KitchenReady) { CheckDeadline(); tutorialPolicy.ObserveCleanup(); yield return null; }
+            tutorialPolicy.ObserveCleanup();
+            tutorialPolicy.RequireCompleted();
             stage = "complete"; Record();
         }
 
@@ -246,7 +253,7 @@ namespace SuperchargedPatch.Authoring.Modules
         }
         private void ValidatePlayers() { Method(setup,"ValidateFourLocalUsers",Type.EmptyTypes,true).Invoke(null,null); }
         private void SetStage(string value) { stage=value; Set(setup,"stage",value); Set(setup,"waitingFor",value); Record(); }
-        private object Status() { return new Dictionary<string,object>{{"name",Name},{"stage",stage},{"pending",pending!=null},{"error",error},{"seed",seed},{"dlc",dlc},{"selected",selected},{"scene",SceneManager.GetActiveScene().name},{"coreReady",NativeSessionBridge.KitchenReady},{"immediateStory11Timer",true},{"timerPolicy",timerPolicy==null?null:timerPolicy.Diagnostics()},{"transitions",transitions.ToArray()}}; }
+        private object Status() { return new Dictionary<string,object>{{"name",Name},{"stage",stage},{"pending",pending!=null},{"error",error},{"seed",seed},{"dlc",dlc},{"selected",selected},{"scene",SceneManager.GetActiveScene().name},{"coreReady",NativeSessionBridge.KitchenReady},{"immediateStory11Timer",true},{"tutorialSkipSupported",true},{"tutorialSkip",tutorialPolicy==null?null:tutorialPolicy.Diagnostics()},{"timerPolicy",timerPolicy==null?null:timerPolicy.Diagnostics()},{"transitions",transitions.ToArray()}}; }
         private void Record()
         {
             var row=new Dictionary<string,object>{{"utc",DateTime.UtcNow.ToString("o")},{"unityFrame",Time.frameCount},{"stage",stage},{"scene",SceneManager.GetActiveScene().name},{"dlc",dlc},{"selected",selected},{"error",error},{"seed",seed},{"immediateStory11Timer",true},{"timerPolicy",timerPolicy==null?null:timerPolicy.Diagnostics()}};
@@ -258,6 +265,7 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(disposed) return;
             if(pending!=null) throw new InvalidOperationException("Cannot dispose an active native level transition.");
+            if(tutorialPolicy!=null)tutorialPolicy.Dispose();
             if(timerPolicy!=null)timerPolicy.Dispose();
             disposed=true; if(runner!=null) UnityEngine.Object.Destroy(runner.gameObject);
         }

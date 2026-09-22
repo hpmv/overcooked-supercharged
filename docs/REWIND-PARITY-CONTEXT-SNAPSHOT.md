@@ -6,6 +6,27 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest setup result — sashimi tutorial wait is skipped safely
+
+LevelSession r4b now shortens only the sashimi popup's native 15-second wait.
+It arms an exact offline/four-local/Story 1-1 gate before `LoadLevel`, replaces
+the returned enumerator from the private native `TutorialDismissRoutine` with
+an already-complete enumerator, and leaves `ClientTutorialPopupController` to
+perform its original dismissal callback, one-frame yield, popup/canvas cleanup,
+pause-owner releases, and `Shutdown`.  The policy itself calls none of those
+mutators and writes no installed-game field.
+
+The clean minimized v80 load intercepted once at frame 4736 and observed the
+complete native shutdown at frame 4737.  Final frame 4972 retained the bridge's
+authoring pause/input fence with Camera unpaused and no popup or intro pause
+owner.  Evidence is
+`artifacts/framework-migration/island-first-replay-audit-story11-v80-r1/stack-load.json`;
+LevelSession DLL SHA-256 is
+`D4A78568C320BDAA0A73B18F2C539D06D06C32B06E26B2519C00ABC86A2D0508`.
+This fixes the premature frame-1 resume failure and removes roughly 900 Unity
+frames from each fresh Story 1-1 setup.  It does not establish rewind parity
+and search remains disabled.
+
 ## Latest result — complete island state and first update are exact
 
 Managed RigidbodyActorRebuild r18/API 17 and native r35 complete the current

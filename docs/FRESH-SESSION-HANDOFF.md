@@ -1,5 +1,40 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Native-lifecycle Story 1-1 tutorial skip milestone (2026-09-22,
+> LevelSession r4b):** the sashimi tutorial no longer consumes its native
+> 15-second auto-dismiss wait in local TAS setup.  A narrowly armed Harmony
+> prefix replaces only
+> `LevelIntroFlowroutine.TutorialDismissRoutine(GameObject)`'s returned wait
+> enumerator with an already-complete enumerator.  It does not set
+> `m_dismissed`, invoke the dismiss callback, change either canvas, change a
+> pause owner, deactivate/destroy the popup, or call `Shutdown`.  The original
+> `ClientTutorialPopupController.RunTutorial` performs all of those lifecycle
+> operations in its ordinary order.
+>
+> Clean minimized evidence is
+> `artifacts/framework-migration/island-first-replay-audit-story11-v80-r1/stack-load.json`
+> (SHA-256
+> `B4892B5CC862FFBB73232DBA248F09E9B2853AE1AD647AEFE6BC31E35F2CF6B5`).
+> The exact four-local Story 1-1 popup was intercepted once at Unity frame
+> 4736.  At frame 4737, native code had set dismissed, made the popup inactive,
+> re-enabled `ScalingHUDCanvas` and `HoverIconCanvas`, removed the client from
+> Main and Camera pause arbitration while retaining the outer intro's Main
+> owner, and called `Shutdown`; its postfix observed the popup field cleared.
+> Final KitchenReady validation found both tutorial/intro owners absent, Camera
+> unpaused, the bridge's independent Main pause/input fence active, and no
+> controller resume error.  The load completed in 17.2 wall seconds rather
+> than paying the additional 15-second tutorial wait.
+>
+> Compiled module SHA-256 is
+> `D4A78568C320BDAA0A73B18F2C539D06D06C32B06E26B2519C00ABC86A2D0508`;
+> installed `Assembly-CSharp.dll` SHA-256 is
+> `9BB6A3791331201D32CA89C3509F019A9780309DA7110002F04020E8491E1908`.
+> `Check-FrameworkStoryTutorialSkip.ps1` passes 17 offline native/module IL
+> contracts, including zero direct native mutation calls and zero writes to
+> game fields.  This is a setup-speed milestone, not rewind parity.  The same
+> live process is now ready for the read-only restored-f445 island audit;
+> search remains disabled.
+
 > **Complete PhysX island capture milestone (2026-09-22, managed
 > r18/API 17/native r35):** the comprehensive read-only planning pass now
 > captures the complete settled `PxsIslandManager` state at f444 and the exact

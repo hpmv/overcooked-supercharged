@@ -171,6 +171,39 @@ def main() -> int:
                 raise TimeoutError("Story 1-1 load timed out")
             time.sleep(.1)
 
+        level_session_status = bridge.call({
+            "command": "hot-call", "slot": "level-session",
+            "operation": "status", "args": {},
+        })["detail"]["result"]
+        if level_session_status.get("tutorialSkipSupported") is True:
+            deadline = time.monotonic() + 15
+            while level_session_status.get("pending") is True:
+                if level_session_status.get("error"):
+                    raise RuntimeError("Story 1-1 tutorial skip failed: " +
+                                       level_session_status["error"])
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Story 1-1 tutorial skip did not settle")
+                time.sleep(.05)
+                level_session_status = bridge.call({
+                    "command": "hot-call", "slot": "level-session",
+                    "operation": "status", "args": {},
+                })["detail"]["result"]
+            tutorial_skip = level_session_status.get("tutorialSkip") or {}
+            if (tutorial_skip.get("intercepted") is not True or
+                    tutorial_skip.get("cleanupObserved") is not True or
+                    tutorial_skip.get("prefixCalls") != 1 or
+                    tutorial_skip.get("shutdownPrefixCalls") != 1 or
+                    tutorial_skip.get("shutdownPostfixCalls") != 1 or
+                    tutorial_skip.get("requestOpen") is not False or
+                    tutorial_skip.get("lastError")):
+                raise RuntimeError("Story 1-1 tutorial skip receipt is incomplete: " +
+                                   json.dumps(tutorial_skip, sort_keys=True))
+
+        # The tutorial policy completes inside the session coroutine after the
+        # bridge's first InLevel observation. Refresh this receipt so the saved
+        # session stage cannot retain an earlier in-flight value.
+        status = bridge.call({"command": "status"})["bridge"]
+
         deadline = time.monotonic() + 30
         while True:
             controller = host.call({"command": "inspect", "full": True})
@@ -197,6 +230,7 @@ def main() -> int:
             readyUnityFrame=status.get("readyUnityFrame"),
             controllerFrame=controller.get("frame"),
             session=session,
+            levelSession=level_session_status,
             actorAfterStoryLoad=actor,
         )
     except Exception as error:
