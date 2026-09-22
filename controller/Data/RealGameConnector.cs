@@ -34,6 +34,10 @@ namespace Hpmv
         private ConcurrentQueue<RealGameStateRequest> requests = new ConcurrentQueue<RealGameStateRequest>();
         // Current request that is being processed by the RPC handling thread; only used by RPC handling thread.
         private RealGameStateRequest currentRequest;
+        // Resume-phase metadata protocol v1 carries the saved phase p of the
+        // still-paused release callback. ControllerHandler captures that
+        // callback before Helpers.Resume; under the validated six-phase
+        // schedule, the first advancing output is therefore (p + 1) % 6.
         internal const int ResumePhaseMetadataProtocolVersion = 1;
         private const double NativeResumePhaseMetadataBase = 1000.0;
         public long ResumePhaseMetadataEmissions { get; private set; }
@@ -344,8 +348,9 @@ namespace Hpmv
                             // GameSpeed is unused by the frozen game/patch. In
                             // this one plain-resume envelope it is a wire-stable
                             // metadata carrier for the active ResumePhase
-                            // module, which consumes the exact saved phase and
-                            // holds native pause until that phase is observed.
+                            // module, which consumes the exact saved release
+                            // phase p and holds native pause until p is observed.
+                            // The following advancing output is (p + 1) % 6.
                             inputs.GameSpeed = NativeResumePhaseMetadataBase + targetPhase;
                             ResumePhaseMetadataEmissions++;
                             State = RealGameState.AwaitingResume;

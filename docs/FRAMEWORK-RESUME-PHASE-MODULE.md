@@ -10,18 +10,20 @@ The immutable prefix is `artifacts/framework-migration/native-x/offline-exact-fr
 | Replay epoch1 | 1635 / 0 | 1636 / 3 | 1637 / 4 |
 | Replay epoch2 | 1708 / 0 | 1709 / 2 | 1710 / 3 |
 
-The original controller selects a resume reply using `(observedPhase + 1) % 6 == savedPhase`. The paused pump keeps Unity responsive while that reply is in flight. Extra paused callbacks mean the reply can be consumed later than the immediately following callback assumed by this formula. The trace directly establishes the phase changes above; the exact count of skipped Unity callbacks is not recoverable from these published rows alone.
+The historical controller selected a resume reply using `(observedRpcPhase + 1) % 6 == savedPhase`. Let the sampled paused RPC phase be `q` and the phase saved at logical frame N be `p`. The formula chose `q` so that the immediately following native callback would be the still-logical-N release acknowledgement at `p`. `ControllerHandler` captures that acknowledgement before calling `Helpers.Resume`; the first advancing output is the following callback at `(p + 1) % 6`. The paused pump keeps Unity responsive while the reply is in flight, so extra paused callbacks could make the reply execute later than the formula assumed. The trace directly establishes the release-to-first-advance `3 -> 4` and `2 -> 3` phase changes above; the exact count of skipped Unity callbacks is not recoverable from these published rows alone.
 
 ## External module
 
-`framework/modules/resume-phase/ResumePhaseModule.cs` is compiled separately against immutable X. It implements the existing `IAuthoringModule` API 1 and installs only two owned Harmony prefixes after explicit paused activation:
+`framework/modules/resume-phase/ResumePhaseModule.cs` is compiled separately against immutable X. It implements the existing `IAuthoringModule` API 1 and observes four owned boundaries after explicit paused activation:
 
-1. `InjectorServer.PublishReply`: bind the exact plain `RequestResume` object to its immutable originating observation, connection epoch, exchange ID, and phase. This worker-thread observer touches only managed fields and a locked bounded list.
-2. `ControllerHandler.LateUpdate`: acquire through the existing nonblocking input reader, retain that exact accepted reply, and defer the original body until the **current actual** phase equals `(originPhase + 1) % 6`. Deferred callbacks preserve the existing native-message flush, pending events, and per-callback physics reset. They perform no capture, commit, new RPC, or gameplay-frame acceptance. At the matching phase, the unchanged core handler captures, resumes, and acknowledges once.
+1. `InjectorServer.PublishReply`: bind the exact plain `RequestResume` object to its immutable originating observation, connection epoch, exchange ID, sampled RPC phase `q`, and protocol-v1 target `p` decoded from `GameSpeed = 1000 + p`. This worker-thread observer touches only managed fields and a locked bounded list.
+2. `InjectorServer.Accept`: bind that publication to the exact input object retained by the existing filter.
+3. `ControllerHandler.LateUpdate`: acquire through the existing nonblocking input reader, retain that exact accepted reply, and defer the original body until the **current actual** phase equals `p`. Deferred callbacks preserve the existing native-message flush, pending events, and per-callback physics reset. They perform no capture, commit, new RPC, or gameplay-frame acceptance. At `p`, the unchanged core handler captures the release acknowledgement, resumes, and commits once; the next advancing output is `(p + 1) % 6`.
+4. `InjectorServer.CommitFrame`: prove that the released callback commits exactly once at `p` after main pause has cleared.
 
 The module validates capture60/fixed50 (`Time.captureFramerate == 60`, `Time.fixedDeltaTime == 0.02f`) and the frozen private-envelope reflection contract. It accepts only plain alignment resumes with no input pad payload, warp, pause, seed, or speed change. Unknown provenance, changed connection, unsupported timing, and a wait beyond 12 distinct Unity callbacks fail through the existing neutral bridge fence plus `AUTHORING_RESUME_PHASE_FAILED`. It never writes a phase counter, time, or physics value, and never patches `Helpers.Resume`; warp's temporary native resume is untouched. Running callbacks bypass the module.
 
-Activation/deactivation owns only this revision's Harmony hooks. Retirement of a held resume fences it first. A second active resume-phase revision is rejected. Status contains bounded execution receipts with source/target/executed phase, epoch/exchange, and held callback count.
+Activation/deactivation owns only this revision's Harmony hooks. Retirement of a held resume fences it first. A second active resume-phase revision is rejected. Status contains bounded execution receipts whose `observedRpcPhase` is `q` and whose `targetPhase`/`executedPhase` are the release phase `p`, plus epoch/exchange and held callback count.
 
 ## Build and validation
 

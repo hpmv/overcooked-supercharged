@@ -36,6 +36,10 @@ class ReadinessAuditComplete(Exception):
     """Internal control flow after the requested no-resume audit boundary."""
 
 
+class PrefixGateComplete(Exception):
+    """Internal control flow after an explicitly bounded route-prefix gate."""
+
+
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
@@ -153,9 +157,13 @@ def main():
     parser.add_argument("--first-replay-island-audit", action="store_true",
                         help=("After restoring f444, passively capture the exact first f445 "
                               "PhysX island pre/post transition, then stop without replaying the suffix."))
-    parser.add_argument("--resume-prefix-index", type=int, choices=(0, 8), default=0,
-                        help=("Resume the same bounded route at the exact f436 boundary before "
-                              "prefix-8; intended only after a pause-fenced tooling failure."))
+    parser.add_argument("--resume-prefix-index", type=int, choices=(0, 1, 8), default=0,
+                        help=("Resume the same bounded route at the exact f60 boundary before "
+                              "prefix-1, or the exact f436 boundary before prefix-8; intended "
+                              "only after a pause-fenced bounded gate or tooling failure."))
+    parser.add_argument("--stop-after-prefix-index", type=int, choices=range(15),
+                        help=("Stop successfully at the exact settled boundary after this prefix. "
+                              "This is a diagnostic route gate, not a parity result."))
     args = parser.parse_args()
     if args.restore_transform_dispatch and not args.restore_contact_manager_free_stack:
         parser.error("--restore-transform-dispatch requires --restore-contact-manager-free-stack")
@@ -165,6 +173,9 @@ def main():
         parser.error("--first-replay-island-audit requires --restore-contact-manager-free-stack")
     if args.readiness_audit_only and args.first_replay_island_audit:
         parser.error("Choose either --readiness-audit-only or --first-replay-island-audit")
+    if (args.stop_after_prefix_index is not None and
+            args.stop_after_prefix_index < args.resume_prefix_index):
+        parser.error("--stop-after-prefix-index must not precede --resume-prefix-index")
     if not 1 <= args.settle_timeout <= 600:
         parser.error("--settle-timeout must be 1..600 seconds")
     if args.target_frame != 444:
@@ -199,6 +210,7 @@ def main():
         "transformDispatchRestored": args.restore_transform_dispatch,
         "registryReconciliation": args.reconcile_dynamic_registry,
         "resumePrefixIndex": args.resume_prefix_index,
+        "stopAfterPrefixIndex": args.stop_after_prefix_index,
         "readinessAuditOnly": args.readiness_audit_only,
         "firstReplayIslandAudit": args.first_replay_island_audit,
     }
@@ -650,7 +662,8 @@ def main():
     try:
         bridge = Client(args.bridge_port)
         host = ControllerClient(args.controller_port)
-        start_label = "fresh-start" if args.resume_prefix_index == 0 else "resume-prefix-8-start"
+        start_label = ("fresh-start" if args.resume_prefix_index == 0 else
+                       f"resume-prefix-{args.resume_prefix_index}-start")
         initial = settled(start_label)
         fresh_bridge = call("bridge", {"command": "status"}, start_label + "-bridge")
         frame = 1
@@ -856,6 +869,14 @@ def main():
                 native = native_observation(f"prefix-{index}-native")
                 require_native_boundary(native)
                 reconcile_registry(state, native, f"prefix-{index}")
+            if args.stop_after_prefix_index == index:
+                summary.update({
+                    "classification": "bounded Story11 route-prefix diagnostic gate",
+                    "prefixGateCompleted": True,
+                    "prefixGateEndFrame": frame,
+                    "prefixBoundaries": prefix_boundaries,
+                })
+                raise PrefixGateComplete()
         require(prefix_boundaries[8]["start"] == 436 and
                 prefix_boundaries[8]["start"] < args.target_frame < prefix_boundaries[8]["end"] and
                 frame == 955,
@@ -1133,7 +1154,7 @@ def main():
         summary["passed"] = (all(comparison.values()) and replay_delivery["achieved"] and
                              not changed and not any(module_failures.values()) and
                              all(item["exact"] for item in summary.get("advancingBackgroundLeases", [])))
-    except ReadinessAuditComplete:
+    except (ReadinessAuditComplete, PrefixGateComplete):
         pass
     except Exception as error:
         summary["error"] = str(error)
@@ -1171,7 +1192,10 @@ def main():
         save("observations.json", evidence)
         save("summary.json", summary)
         print(json.dumps(summary, indent=2))
-    return 0 if summary.get("auditCompleted") or summary["passed"] else 1
+    bounded_complete = summary.get("auditCompleted") or summary.get("prefixGateCompleted")
+    bounded_clean = not any(summary.get(key) for key in
+                            ("error", "pauseError", "closeError"))
+    return 0 if summary["passed"] or (bounded_complete and bounded_clean) else 1
 
 
 if __name__ == "__main__":

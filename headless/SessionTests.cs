@@ -53,6 +53,46 @@ public static class SessionTests
             "plain resume carries the exact saved native phase to the in-process gate without RPC phase sampling");
         s.getNext(Frame()).GetAwaiter().GetResult();
         Check(s.Inspect()["state"]!.ToString() == "Running", "native unpaused acknowledgement completes resume");
+        // Protocol v1 carries the phase of the still-paused release callback,
+        // not the phase of the following advancing output. Exercise every
+        // phase, including the 5 -> 0 wrap, with unrelated paused RPC aliases.
+        for (int savedPhase = 0; savedPhase < 6; savedPhase++)
+        {
+            OutputData PhaseFrame(int phase, params ServerMessage[] messages)
+            {
+                var frame = Frame(messages);
+                frame.FramesSinceLastNoPhysicsFrame = phase;
+                return frame;
+            }
+
+            var phaseSetup = Setup();
+            var phaseSession = new HeadlessSession(phaseSetup, $"synthetic resume phase {savedPhase}", evidenceRoot);
+            phaseSession.getNext(PhaseFrame(0, Load())).GetAwaiter().GetResult();
+            phaseSession.getNext(PhaseFrame(0, Start())).GetAwaiter().GetResult();
+            var phaseOne = PhaseFrame((savedPhase + 5) % 6); phaseOne.FrameNumber = 1;
+            phaseSession.getNext(phaseOne).GetAwaiter().GetResult();
+            var phasePause = PhaseFrame(savedPhase); phasePause.NextFramePaused = true; phasePause.FrameNumber = 2;
+            phaseSession.getNext(phasePause).GetAwaiter().GetResult();
+
+            phaseSession.Command(new() { ["command"] = "resume" });
+            var rpcAlias = PhaseFrame((savedPhase + 3) % 6); rpcAlias.LastFramePaused = rpcAlias.NextFramePaused = true; rpcAlias.FrameNumber = 2;
+            phaseSession.getNext(rpcAlias).GetAwaiter().GetResult();
+            var phaseResume = phaseSession.getNext(rpcAlias).GetAwaiter().GetResult();
+            Check(phaseResume.RequestResume && phaseResume.__isset.gameSpeed && phaseResume.GameSpeed == 1000.0 + savedPhase,
+                $"protocol v1 carries saved release phase {savedPhase}, independent of paused RPC phase {rpcAlias.FramesSinceLastNoPhysicsFrame}");
+
+            var release = PhaseFrame(savedPhase); release.LastFramePaused = true; release.FrameNumber = 2;
+            phaseSession.getNext(release).GetAwaiter().GetResult();
+            Check(phaseSession.Inspect()["state"]!.ToString() == "Running" && phaseSession.Inspect()["frame"]!.GetValue<int>() == 2 &&
+                  phaseSetup.entityRecords.PhysicsPhaseShift[2] == savedPhase,
+                $"release acknowledgement at phase {savedPhase} does not manufacture a logical frame or replace its saved phase");
+
+            int successor = (savedPhase + 1) % 6;
+            var firstAdvancing = PhaseFrame(successor); firstAdvancing.FrameNumber = 3;
+            phaseSession.getNext(firstAdvancing).GetAwaiter().GetResult();
+            Check(phaseSession.Inspect()["frame"]!.GetValue<int>() == 3 && phaseSetup.entityRecords.PhysicsPhaseShift[3] == successor,
+                $"release phase {savedPhase} produces first advancing output phase {successor}");
+        }
         var seeded = new HeadlessSession(Setup(), "synthetic-empty-setup", evidenceRoot, 59);
         var explicitSeed = seeded.getNext(Frame(Load())).GetAwaiter().GetResult();
         Check(explicitSeed.__isset.resetOrderSeed && explicitSeed.ResetOrderSeed == 59, "explicit seed overrides upstream UI constant");

@@ -1,5 +1,37 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Phase-compatible tutorial skip and live resume milestone (2026-09-22,
+> LevelSession r4c / headless v12r):** the Story 1-1 sashimi shortcut now
+> preserves the native 60 Hz render / 50 Hz physics scheduler residue.  The
+> shipped single-precision 15-second timer yields 901 times; replacing it with
+> zero yields removed `901 mod 6 == 1` callback and shifted every later resume
+> by one scheduler phase.  The replacement enumerator therefore yields exactly
+> once, while the shipped `RunTutorial` still owns dismissal, canvas cleanup,
+> pause releases, and shutdown.  The policy is admitted only at the audited
+> capture-60/fixed-0.02 timing.
+>
+> Fresh minimized v82 evidence is
+> `artifacts/framework-migration/island-first-replay-audit-story11-v82-r1/`
+> plus the bounded gate
+> `artifacts/island-first-replay-audit-story11-v82-r1-prefix0-phase-gate-r1/`.
+> The popup was intercepted at Unity frame 8438 and completed native shutdown
+> at 8440, exactly two callbacks later; KitchenReady arrived at frame 8674,
+> phase 4.  From logical f1 the controller emitted protocol-v1
+> `GameSpeed=1001`, the still-paused release callback executed at phase 1, and
+> the first advancing output was phase 2.  The same live session then advanced
+> without reload through every route prefix to f488.  Search remained disabled.
+>
+> LevelSession DLL SHA-256 is
+> `8CB582515EFD4B82B4E7F6749F2BBE2B7BDEB4EF3F94D5D3E2F899F743E97BA8`;
+> its compiled core SHA-256 is
+> `58EC2255F0ADA012F1FCB9C22B10F198B8AF1E1177D9403FE3DED8AB51F5B264`.
+> The focused tutorial checker passes 20 contracts and the complete headless
+> suite passes 412 checks, including all six release phases and the 5 -> 0
+> wrap.  This closes the tutorial-induced phase drift.  The f488 stop exposed
+> a different observer-only issue: PhysX armed capture on Unity's output thread
+> but ran `finishBroadPhase` on a dispatcher worker.  Do not reload-loop or
+> alter gameplay for it; validate the worker-safe observer in a fresh process.
+
 > **Resume-capability and bounded pause-owner milestone (2026-09-22,
 > headless v12r / PauseOwnerGuard r1):** the long frame-1 resume failure was
 > not a surviving tutorial pause owner or a PhysX fault.  The live controller

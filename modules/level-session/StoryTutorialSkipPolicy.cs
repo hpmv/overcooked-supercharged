@@ -13,8 +13,11 @@ namespace SuperchargedPatch.Authoring.Modules
 {
     // The native popup coroutine already owns every presentation and pause-state
     // transition.  This policy replaces only its 15-second input/timer wait with
-    // an already-complete enumerator; RunTutorial then performs its ordinary
-    // dismissal callback, one-frame handoff, canvas restore and pause release.
+    // one compatibility yield; RunTutorial then performs its ordinary dismissal
+    // callback, one-frame handoff, canvas restore and pause release.  At the
+    // authoring timing below, the native single-precision timer yields 901 times.
+    // Retaining 901 mod 6 == 1 render callback preserves the native 60 Hz render /
+    // 50 Hz physics scheduler residue while skipping the expensive full wait.
     public sealed class StoryTutorialSkipPolicy : IDisposable
     {
         private const string Owner = "supercharged.module.story11.early-tutorial-skip";
@@ -123,6 +126,8 @@ namespace SuperchargedPatch.Authoring.Modules
             {lastGuard="synchronisation-not-active";return true;}
             if(!NativeSessionBridge.InputBlocked||NativeSessionBridge.KitchenReady)
             {lastGuard="bridge-load-fence-not-active";return true;}
+            if(Time.captureFramerate!=60||Time.fixedDeltaTime!=0.02f)
+            {lastGuard="unexpected-authoring-timing";return true;}
             if(ServerUserSystem.m_Users.Count!=4||ClientUserSystem.m_Users.Count!=4)
             {lastGuard="not-four-local-users";return true;}
 
@@ -167,8 +172,10 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"mainPauseOwnerCount",mainOwners},{"cameraPauseOwnerCount",cameraOwners},
                 {"flowMainPauseOwnerCount",flowMainOwners},
                 {"hudCanvasDisabled",!hud.enabled},{"hoverCanvasDisabled",!hover.enabled},
+                {"captureFramerate",Time.captureFramerate},{"fixedDeltaTime",Time.fixedDeltaTime},
+                {"nativeTimerYieldFrames",901},{"physicsSchedulePeriod",6},{"compatibilityYieldFrames",1},
                 {"nativeDismissedBefore",false}};
-            result=ImmediateComplete();
+            result=OneFramePhaseCompatibleComplete();
             return false;
         }
 
@@ -203,7 +210,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int cameraOwners=OwnerCount(suppressors,TimeManager.PauseLayer.Camera,client);
             int flowMainOwners=OwnerCount(suppressors,TimeManager.PauseLayer.Main,interceptedFlow);
             int delta=Time.frameCount-interceptFrame;
-            shutdownPrefixValid=shutdownPrefixCalls==1&&delta==1&&dismissed&&
+            shutdownPrefixValid=shutdownPrefixCalls==1&&delta==2&&dismissed&&
                 ReferenceEquals(popup,interceptedUi)&&popup!=null&&!popup.activeSelf&&!popup.activeInHierarchy&&
                 hud!=null&&hud.enabled&&hover!=null&&hover.enabled&&
                 mainOwners==0&&cameraOwners==0&&flowMainOwners==1;
@@ -286,6 +293,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"lastGuard",lastGuard},{"lastError",lastError},{"cancelReason",cancelReason},
                 {"admission",admission},{"shutdownPrefix",shutdownPrefixState},
                 {"shutdownPostfix",shutdownPostfixState},{"cleanup",cleanupState},{"waitOnlyMutation",true},
+                {"nativeTimerYieldFrames",901},{"physicsSchedulePeriod",6},{"compatibilityYieldFrames",1},
+                {"physicsScheduleResiduePreserved",true},
                 {"nativeRunTutorialPerformsDismissAndCleanup",true}};
         }
 
@@ -297,7 +306,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ReferenceEquals(active,this))active=null;
         }
 
-        private static IEnumerator ImmediateComplete() { yield break; }
+        private static IEnumerator OneFramePhaseCompatibleComplete() { yield return null; }
 
         private static int OwnerCount(List<object>[] suppressors,TimeManager.PauseLayer layer,object owner)
         {

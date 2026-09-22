@@ -22,6 +22,17 @@ try {
  $flow=$game.MainModule.Types|Where-Object FullName -eq 'LevelIntroFlowroutine'
  $target=$flow.Methods|Where-Object Name -eq 'TutorialDismissRoutine'
  Check ($null-ne$target-and$target.IsPrivate-and-not$target.IsStatic-and$target.ReturnType.FullName-eq'System.Collections.IEnumerator'-and$target.Parameters.Count-eq1-and$target.Parameters[0].ParameterType.FullName-eq'UnityEngine.GameObject') 'Exact private native tutorial wait seam exists'
+ $dismissIterator=$flow.NestedTypes|Where-Object {$_.Name-like'<TutorialDismissRoutine>*'}
+ $dismissMove=$dismissIterator.Methods|Where-Object Name -eq 'MoveNext'
+ $timerCalls=@($dismissMove.Body.Instructions|Where-Object {$_.Operand-is[Mono.Cecil.MethodReference]-and$_.Operand.DeclaringType.FullName-eq'CoroutineUtils'-and$_.Operand.Name-eq'TimerRoutine'})
+ Check ($timerCalls.Count-eq1-and@($dismissMove.Body.Instructions|Where-Object {$_.OpCode.Code-eq[Mono.Cecil.Cil.Code]::Ldc_R4-and[single]$_.Operand-eq[single]15}).Count-eq1) 'Native dismiss seam owns the audited 15-second float timer'
+ $coroutines=$game.MainModule.Types|Where-Object FullName -eq 'CoroutineUtils'
+ $timerIterator=$coroutines.NestedTypes|Where-Object {$_.Name-like'<TimerRoutine>*'}
+ $timerMove=$timerIterator.Methods|Where-Object Name -eq 'MoveNext'
+ Check (@($timerMove.Body.Instructions|Where-Object {$_.Operand-is[Mono.Cecil.MethodReference]-and$_.Operand.DeclaringType.FullName-eq'TimeManager'-and$_.Operand.Name-eq'GetDeltaTime'}).Count-eq1-and@($timerMove.Body.Instructions|Where-Object {$_.OpCode.Code-eq[Mono.Cecil.Cil.Code]::Add}).Count-eq1) 'Native timer accumulates single-precision layer delta once per yield'
+ [single]$timerElapsed=0;[single]$timerDelta=1.0/60.0;$nativeTimerYields=0
+ while($timerElapsed-lt[single]15.0){$nativeTimerYields++;$timerElapsed=[single]($timerElapsed+$timerDelta)}
+ Check ($nativeTimerYields-eq901-and($nativeTimerYields%6)-eq1) 'Native 60 Hz timer retains one callback modulo the 60/50 six-frame schedule'
  $client=$game.MainModule.Types|Where-Object FullName -eq 'ClientTutorialPopupController'
  $shutdown=$client.Methods|Where-Object Name -eq 'Shutdown'
  Check ($null-ne$shutdown-and$shutdown.Parameters.Count-eq0-and$shutdown.ReturnType.FullName-eq'System.Void') 'Exact native popup shutdown seam exists'
@@ -40,7 +51,11 @@ try {
  Check (@($instructions|Where-Object {$_.OpCode.Code-eq[Mono.Cecil.Cil.Code]::Stfld-and$_.Operand-is[Mono.Cecil.FieldReference]-and$_.Operand.DeclaringType.Scope.Name-eq'Assembly-CSharp'}).Count-eq0) 'Policy writes no installed game field'
  $prefix=$policy.Methods|Where-Object Name -eq 'BeforeTutorialDismissRoutine'
  Check ($prefix.ReturnType.FullName-eq'System.Boolean'-and$prefix.Parameters[-1].ParameterType.FullName-eq'System.Collections.IEnumerator&') 'Harmony prefix can substitute only the returned wait enumerator'
- Check ($policy.Methods.Name-contains'ImmediateComplete') 'Replacement enumerator is explicit and bounded'
+ $delay=$policy.Methods|Where-Object Name -eq 'OneFramePhaseCompatibleComplete'
+ $delayIterator=$policy.NestedTypes|Where-Object {$_.Name-like'<OneFramePhaseCompatibleComplete>*'}
+ $delayMove=$delayIterator.Methods|Where-Object Name -eq 'MoveNext'
+ $currentStores=@($delayMove.Body.Instructions|Where-Object {$_.OpCode.Code-eq[Mono.Cecil.Cil.Code]::Stfld-and$_.Operand-is[Mono.Cecil.FieldReference]-and$_.Operand.Name-like'*current'})
+ Check ($null-ne$delay-and$null-ne$delayMove-and$currentStores.Count-eq1) 'Replacement enumerator retains exactly one scheduler-residue yield'
  $dispose=$policy.Methods|Where-Object Name -eq 'Dispose'
  Check (@($dispose.Body.Instructions|Where-Object {$_.Operand-is[Mono.Cecil.MethodReference]-and$_.Operand.Name-eq'UnpatchSelf'}).Count-eq1) 'Policy disposal unpatches its Harmony owner'
  $moduleType=$built.MainModule.Types|Where-Object FullName -eq 'SuperchargedPatch.Authoring.Modules.LevelSessionModule'

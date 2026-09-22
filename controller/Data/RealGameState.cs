@@ -53,9 +53,9 @@ namespace Hpmv
     ///       - controller ignores any data sent by the plugin, and does not advance the logical frame. It however does compute the
     ///         inputs for logical frame W + 1, and returns it to the plugin. It also sets the state to Running.
     ///     In game frame X + 5
-    ///       - game's Update() functions apply the inputs for logical frame W + 1, which advances the logical frame to W + 2
-    ///       - plugin's LateUpdate() outputs data for logical frame W + 2
-    ///       - controller advances logical frame to W + 2 and applies game data for W + 2.
+    ///       - game's Update() functions apply the inputs for logical frame W + 1, which advances the logical frame to W + 1
+    ///       - plugin's LateUpdate() outputs data for logical frame W + 1
+    ///       - controller advances logical frame to W + 1 and applies game data for W + 1.
     ///
     /// For the beginning of the level:
     ///     At end of game frame X:

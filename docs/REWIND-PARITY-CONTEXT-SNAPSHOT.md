@@ -6,6 +6,36 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — the tutorial shortcut preserves the native scheduler phase
+
+LevelSession r4c replaces the sashimi popup's native 15-second wait with one
+compatibility yield, not zero.  At capture 60 / fixed 0.02, the shipped
+single-precision timer takes 901 render callbacks; retaining
+`901 mod 6 == 1` callback preserves the six-frame 60/50 physics-schedule
+residue while skipping almost the entire wait.  Native `RunTutorial` still
+performs dismissal, canvas cleanup, pause-owner release, and shutdown in its
+ordinary order, and the policy refuses any other timing setup.
+
+Fresh minimized v82 evidence is
+`artifacts/framework-migration/island-first-replay-audit-story11-v82-r1/` and
+`artifacts/island-first-replay-audit-story11-v82-r1-prefix0-phase-gate-r1/`.
+The intercept/shutdown frames were 8438/8440 and KitchenReady was frame 8674,
+phase 4.  The bounded f1 -> f60 gate emitted `GameSpeed=1001`, released on
+phase 1, and produced its first advancing output on phase 2.  Continuing the
+same session without a reload passed every route prefix through f488.  This
+matches the exact protocol-v1 meaning: saved phase `p` is the still-paused
+release callback; the first advancing output is `(p + 1) mod 6`.
+
+LevelSession SHA-256 is
+`8CB582515EFD4B82B4E7F6749F2BBE2B7BDEB4EF3F94D5D3E2F899F743E97BA8`;
+the tutorial checker passes 20 contracts and the full headless suite passes
+412.  The former one-phase-early lifecycle is closed.  The f488 stop is a
+separate observation-layer problem: PhysX may arm capture on Unity's output
+thread and execute `finishBroadPhase` on a dispatcher worker.  Search remains
+disabled; the next bounded step is a fresh-process validation of the
+worker-safe observer, followed by the already-defined f444 -> f445 replay
+comparison.
+
 ## Latest result — exact resume protocol and bounded pause ownership work live
 
 The persistent frame-1 resume failure was a stale-controller mismatch, not a
