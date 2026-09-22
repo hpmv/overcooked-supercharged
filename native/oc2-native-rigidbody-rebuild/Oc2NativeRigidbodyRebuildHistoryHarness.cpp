@@ -234,6 +234,97 @@ struct FinishBroadPhaseObserverReceipt {
         validationFlags, invalidKind, invalidIndex, detail,
         droppedObservations;
 };
+
+#pragma pack(push, 4)
+struct IslandNodeSlotRecord {
+    uint32_t id, ownerOrArticulationRaw, islandId, rawFlagsWord, freeNext,
+        nextNode, slotFlags, validationFlags;
+};
+struct IslandEdgeSlotRecord {
+    uint32_t id, node0, node1, taggedObjectRaw, freeNext, nextEdge, slotFlags,
+        semanticBindingIndex, validationFlags;
+};
+struct IslandSlotRecord {
+    uint32_t id, startNode, startEdge, endNode, endEdge, freeNext, slotFlags,
+        validationFlags;
+};
+struct IslandArticulationRootSlotRecord {
+    uint32_t id, articulationLinkHandle, articulationOwner, freeNext,
+        slotFlags, validationFlags;
+};
+struct IslandSipEdgeBinding {
+    uint32_t edgeId, edgeType, sip, hookAddress, shapeSim0, shapeSim1,
+        pxsShapeCoreLow, pxsShapeCoreHigh, contactManager, taggedObjectRaw,
+        validationFlags;
+};
+struct IslandEdgeJournalRecord {
+    uint32_t ordinal, eventKind, observerPhase, threadId, edgeType, node0,
+        node1, preEdgeId, postEdgeId, hookAddress, ownerObject,
+        pxsShapeCoreLow, pxsShapeCoreHigh, validationFlags;
+};
+struct IslandSnapshotBuffersV1 {
+    IslandNodeSlotRecord* nodes; uint32_t nodeCapacity;
+    IslandEdgeSlotRecord* edges; uint32_t edgeCapacity;
+    IslandSlotRecord* islands; uint32_t islandCapacity;
+    IslandArticulationRootSlotRecord* roots; uint32_t rootCapacity;
+    uint32_t* kinematicWords; uint32_t kinematicWordCapacity;
+    uint32_t* kinematicChangeWords; uint32_t kinematicChangeWordCapacity;
+    uint32_t* notReadyWords; uint32_t notReadyWordCapacity;
+    uint32_t* notReadyChangeWords; uint32_t notReadyChangeWordCapacity;
+    uint32_t* islandWords; uint32_t islandWordCapacity;
+    uint32_t* nodeCreated; uint32_t nodeCreatedCapacity;
+    uint32_t* nodeDeleted; uint32_t nodeDeletedCapacity;
+    uint32_t* edgeCreated; uint32_t edgeCreatedCapacity;
+    uint32_t* edgeDeleted; uint32_t edgeDeletedCapacity;
+    uint32_t* edgeBroken; uint32_t edgeBrokenCapacity;
+    uint32_t* edgeJoined; uint32_t edgeJoinedCapacity;
+    IslandSipEdgeBinding* bindings; uint32_t bindingCapacity;
+};
+struct IslandElementManagerReceipt {
+    uint32_t vtable, elements, freeNext, nextList, capacity, freeHead,
+        freeCount, required, written, elementHash, freeChainHash, nextHash;
+};
+struct IslandQueueReceipt {
+    uint32_t data, count, capacity, defaultCapacity, required, written, hash;
+};
+struct IslandBitmapReceipt {
+    uint32_t data, wordCount, required, written, hash;
+};
+struct IslandSnapshotReceiptV1 {
+    uint32_t apiVersion, structSize, result, lastError, unityBase, nphaseCore,
+        ownerScene, interactionScene, context, islandManager, phase,
+        observerSequence, observationOrdinal, captureThreadId, epoch;
+    IslandElementManagerReceipt node, edge, island, root;
+    IslandQueueReceipt nodeCreated, nodeDeleted, edgeCreated, edgeDeleted,
+        edgeBroken, edgeJoined;
+    IslandBitmapReceipt kinematic, kinematicChange, notReady, notReadyChange,
+        islandBitmap;
+    uint32_t numAddedRBodies, numAddedArtics, numAddedKinematics,
+        numAddedEdgesContact, numAddedEdgesConstraint,
+        numAddedEdgesArticulation, numEdgeReferencesToKinematic,
+        numRequiredKinematicDuplicates, everythingAsleep, hasAnythingChanged,
+        performIslandUpdate, liveContactEdges, liveConstraintEdges,
+        liveArticulationEdges, bindingsRequired, bindingsWritten, bindingHash,
+        journalBeginOrdinal, journalEndOrdinal, journalOverflowCount,
+        snapshotHash, validationFlags, invalidKind, invalidIndex, detail;
+};
+struct IslandUpdateObserverReceipt {
+    uint32_t apiVersion, structSize, result, lastError, unityBase,
+        expectedManager, expectedContext, expectedNphase, observedManager,
+        observedContext, observedNphase, installed, state, expectedPass,
+        armedThreadId, observerSequence, armedOrdinal, observationOrdinal,
+        slotIndex, pass, threadId, preResult, postResult, preSnapshotHash,
+        postSnapshotHash, journalBeginOrdinal, journalEndOrdinal,
+        validationFlags, invalidKind, invalidIndex, detail, inFlight;
+};
+struct IslandEdgeJournalReceipt {
+    uint32_t apiVersion, structSize, result, lastError, unityBase,
+        expectedManager, installed, state, firstOrdinal, nextOrdinal,
+        requestedBegin, recordsRequired, recordsWritten, overflowCount,
+        addCount, removeCount, recordHash, validationFlags, invalidKind,
+        invalidIndex, detail;
+};
+#pragma pack(pop)
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -272,6 +363,21 @@ static_assert(sizeof(BroadPhaseOverlapRecord) == 40,
     "Unexpected Win32 broadphase overlap ABI");
 static_assert(sizeof(FinishBroadPhaseObserverReceipt) == 152,
     "Unexpected Win32 finishBroadPhase receipt ABI");
+static_assert(sizeof(IslandNodeSlotRecord) == 32, "island node ABI");
+static_assert(sizeof(IslandEdgeSlotRecord) == 36, "island edge ABI");
+static_assert(sizeof(IslandSlotRecord) == 32, "island ABI");
+static_assert(sizeof(IslandArticulationRootSlotRecord) == 24,
+    "island root ABI");
+static_assert(sizeof(IslandSipEdgeBinding) == 44, "island binding ABI");
+static_assert(sizeof(IslandEdgeJournalRecord) == 56, "island journal ABI");
+static_assert(sizeof(IslandSnapshotBuffersV1) == 128,
+    "island buffer ABI");
+static_assert(sizeof(IslandSnapshotReceiptV1) == 620,
+    "island snapshot ABI");
+static_assert(sizeof(IslandUpdateObserverReceipt) == 128,
+    "island observer ABI");
+static_assert(sizeof(IslandEdgeJournalReceipt) == 84,
+    "island journal receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
 typedef int (__cdecl *CaptureSnapshot)(uintptr_t, uintptr_t*, uint32_t,
@@ -328,6 +434,28 @@ typedef int (__cdecl *FinishBroadPhaseCopy)(uintptr_t, uint32_t,
     BroadPhaseOverlapRecord*, uint32_t, BroadPhaseOverlapRecord*, uint32_t,
     FinishBroadPhaseObserverReceipt*);
 typedef void (__thiscall *FakeFinishBroadPhase)(void*, uint32_t);
+typedef int (__cdecl *CaptureIslandSnapshot)(uintptr_t, uintptr_t, uint32_t,
+    const IslandSnapshotBuffersV1*, IslandSnapshotReceiptV1*);
+typedef int (__cdecl *IslandInstall)(uintptr_t, uintptr_t,
+    IslandUpdateObserverReceipt*);
+typedef int (__cdecl *IslandStatus)(uintptr_t,
+    IslandUpdateObserverReceipt*);
+typedef int (__cdecl *IslandArm)(uintptr_t, uintptr_t, uintptr_t, uint32_t,
+    const IslandSnapshotBuffersV1*, IslandSnapshotReceiptV1*,
+    const IslandSnapshotBuffersV1*, IslandSnapshotReceiptV1*,
+    IslandUpdateObserverReceipt*);
+typedef int (__cdecl *IslandCopy)(uintptr_t, uint32_t,
+    const IslandSnapshotBuffersV1*, IslandSnapshotReceiptV1*,
+    const IslandSnapshotBuffersV1*, IslandSnapshotReceiptV1*,
+    IslandUpdateObserverReceipt*);
+typedef int (__cdecl *IslandAction)(uintptr_t,
+    IslandUpdateObserverReceipt*);
+typedef int (__cdecl *IslandJournalCopy)(uintptr_t, uint32_t,
+    IslandEdgeJournalRecord*, uint32_t, IslandEdgeJournalReceipt*);
+typedef void (__thiscall *FakeIslandAddEdge)(void*, uint32_t, uint32_t,
+    uint32_t, uint32_t*);
+typedef void (__thiscall *FakeIslandRemoveEdge)(void*, uint32_t, uint32_t*);
+typedef void (__thiscall *FakeIslandUpdate)(void*, void*, uint32_t);
 typedef int (__cdecl *ContactRecreateStatus)(uintptr_t, uintptr_t,
     ContactRecreateReceipt*);
 typedef int (__cdecl *ContactRecreateCancel)(uintptr_t,
@@ -373,6 +501,22 @@ static DWORD WINAPI RunFinishBroadPhaseWorker(void* value) {
     FinishBroadPhaseWorkerCall* call =
         static_cast<FinishBroadPhaseWorkerCall*>(value);
     call->finish(call->scene, call->pass);
+    return 0;
+}
+
+struct IslandAddWorkerCall {
+    FakeIslandAddEdge add;
+    void* manager;
+    uint32_t edgeType;
+    uint32_t node0;
+    uint32_t node1;
+    uint32_t* hook;
+};
+
+static DWORD WINAPI RunIslandAddWorker(void* value) {
+    IslandAddWorkerCall* call = static_cast<IslandAddWorkerCall*>(value);
+    call->add(call->manager, call->edgeType, call->node0, call->node1,
+        call->hook);
     return 0;
 }
 
@@ -432,6 +576,12 @@ static const uint32_t kInteractionDeactivateRva = 0xA41F40;
 static const uint32_t kInteractionRegisterRva = 0xA420B0;
 static const uint32_t kInteractionUnregisterRva = 0xA42950;
 static const uint32_t kFinishBroadPhaseRva = 0xA31CA0;
+static const uint32_t kIslandAddEdgeRva = 0xA63940;
+static const uint32_t kIslandRemoveEdgeRva = 0xA64490;
+static const uint32_t kIslandPrivateUpdateRva = 0xA65430;
+static const uint32_t kIslandUpdateRva = 0xA65530;
+static const uint32_t kIslandSecondUpdateRva = 0xA655B0;
+static const uint32_t kContextUpdateIslandsRva = 0xA6C910;
 static const uint32_t kCreateManagerTransformCacheLayoutRva = 0xA54530;
 static const uint32_t kShapeSimCreateTransformCacheRva = 0xA473B0;
 static const uint8_t kCreateManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
@@ -576,6 +726,30 @@ static const uint8_t kFinishBroadPhaseLayoutBytes[] = {
     0x8B,0x83,0xB4,0x04,0x00,0x00,0x8B,0x8B,0x50,0x04,0x00,0x00,
     0x8B,0x80,0xE8,0x03,0x00,0x00,0x8B,0x70,0x08
 };
+static const uint8_t kIslandAddEdgeBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0xD9,0x83,0xBB,
+    0x28,0x01,0x00,0x00,0xFF,0x56,0x8D,0xB3
+};
+static const uint8_t kIslandRemoveEdgeBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x0C,0x56,
+    0x57,0x8B,0xF9,0x8B,0x03,0x8D,0xB7
+};
+static const uint8_t kIslandPrivateUpdateBytes[] = {
+    0x53,0x8B,0xD9,0x56,0x57,0xFF,0x73,0x08,
+    0x8D,0x83,0x78,0x02,0x00,0x00,0x50
+};
+static const uint8_t kIslandUpdateBytes[] = {
+    0x53,0x56,0x57,0x8B,0xF1,0xE8,0xE6,0xE4,
+    0xFF,0xFF,0x8B,0xCE,0xE8,0x9F,0xF6,0xFF,0xFF
+};
+static const uint8_t kIslandSecondUpdateBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x53,0x56,
+    0x8B,0xF1,0x57,0x89,0x75,0xF8
+};
+static const uint8_t kContextUpdateIslandsBytes[] = {
+    0x55,0x8B,0xEC,0x6A,0x00,0xFF,0x75,0x0C,
+    0x81,0xC1,0x1C,0x18,0x00,0x00,0xE8
+};
 static const uint8_t kCreateManagerTransformCacheLayoutBytes[] = {
     0x8B,0x86,0xB4,0x04,0x00,0x00,0x8B,0x4D,0xF8,
     0x8B,0xB0,0xE8,0x03,0x00,0x00,0x81,0xC6,0xBC,0x1D,0x00,0x00,
@@ -624,6 +798,9 @@ static const uint8_t kSpherePoolCallsiteBytes[] = {
 static HANDLE g_finishPauseEntered = 0;
 static HANDLE g_finishPauseRelease = 0;
 static volatile LONG g_finishPauseClaimed = 0;
+static HANDLE g_islandAddPauseEntered = 0;
+static HANDLE g_islandAddPauseRelease = 0;
+static volatile LONG g_islandAddPauseClaimed = 0;
 typedef BOOL (WINAPI *VirtualProtectFunction)(LPVOID, SIZE_T, DWORD, PDWORD);
 static VirtualProtectFunction g_realVirtualProtect = 0;
 static volatile LONG g_virtualProtectCallCount = 0;
@@ -690,6 +867,14 @@ static void __cdecl PauseFirstSyntheticFinishBroadPhase() {
         return;
     SetEvent(g_finishPauseEntered);
     WaitForSingleObject(g_finishPauseRelease, 10000);
+}
+
+static void __cdecl PauseFirstSyntheticIslandAdd() {
+    if (!g_islandAddPauseEntered || !g_islandAddPauseRelease ||
+        InterlockedCompareExchange(&g_islandAddPauseClaimed, 1, 0) != 0)
+        return;
+    SetEvent(g_islandAddPauseEntered);
+    WaitForSingleObject(g_islandAddPauseRelease, 10000);
 }
 
 static uint8_t* CreateRevisionImage() {
@@ -867,6 +1052,48 @@ static uint8_t* CreateRevisionImage() {
         &pauseAddress), sizeof(pauseAddress));
     CopyBytes(image + kFinishBroadPhaseRva + 0x21, finishTail,
         sizeof(finishTail));
+
+    CopyBytes(image + kIslandAddEdgeRva, kIslandAddEdgeBytes,
+        sizeof(kIslandAddEdgeBytes));
+    uint8_t addTail[] = {
+        0x00,0x00,0x00,0x00,                   // lea esi,[ebx]
+        0x8B,0x45,0x14,                         // mov eax,[ebp+14h]
+        0xC7,0x00,0x01,0x00,0x00,0x00,          // mov [eax],1
+        0xB8,0x00,0x00,0x00,0x00,               // mov eax,pause helper
+        0xFF,0xD0,                               // call eax
+        0x5E,0x5B,0x8B,0xE5,0x5D,0xC2,0x10,0x00
+    };
+    const uint32_t islandAddPauseAddress = static_cast<uint32_t>(
+        reinterpret_cast<uintptr_t>(PauseFirstSyntheticIslandAdd));
+    CopyBytes(addTail + 14, reinterpret_cast<const uint8_t*>(
+        &islandAddPauseAddress), sizeof(islandAddPauseAddress));
+    CopyBytes(image + kIslandAddEdgeRva + sizeof(kIslandAddEdgeBytes),
+        addTail, sizeof(addTail));
+    CopyBytes(image + kIslandRemoveEdgeRva, kIslandRemoveEdgeBytes,
+        sizeof(kIslandRemoveEdgeBytes));
+    const uint8_t removeTail[] = {
+        0x00,0x00,0x00,0x00,                   // lea esi,[edi]
+        0xC7,0x03,0xFF,0xFF,0xFF,0xFF,          // mov [ebx],ffffffffh
+        0x5F,0x5E,0x5B,0x8B,0xE5,0x5D,0xC2,0x08,0x00
+    };
+    CopyBytes(image + kIslandRemoveEdgeRva + sizeof(kIslandRemoveEdgeBytes),
+        removeTail, sizeof(removeTail));
+    CopyBytes(image + kIslandPrivateUpdateRva, kIslandPrivateUpdateBytes,
+        sizeof(kIslandPrivateUpdateBytes));
+    CopyBytes(image + kIslandUpdateRva, kIslandUpdateBytes,
+        sizeof(kIslandUpdateBytes));
+    image[0xA63A20] = 0xC3;
+    image[0xA64BE0] = 0xC3;
+    const uint8_t updateTail[] = {
+        0xFF,0x86,0xBC,0x01,0x00,0x00,          // inc [esi+1bch]
+        0x5F,0x5E,0x5B,0xC2,0x08,0x00
+    };
+    CopyBytes(image + kIslandUpdateRva + sizeof(kIslandUpdateBytes),
+        updateTail, sizeof(updateTail));
+    CopyBytes(image + kIslandSecondUpdateRva, kIslandSecondUpdateBytes,
+        sizeof(kIslandSecondUpdateBytes));
+    CopyBytes(image + kContextUpdateIslandsRva,
+        kContextUpdateIslandsBytes, sizeof(kContextUpdateIslandsBytes));
     return image;
 }
 
@@ -1369,7 +1596,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1456,7 +1683,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1579,7 +1806,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -1659,7 +1886,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -2630,7 +2857,7 @@ static void RunInteractionGraphTests(uint8_t* image,
             receipt.detail, receipt.lastError);
     Check(firstCapture == 1,
         "interaction graph capture succeeds");
-    Check(receipt.apiVersion == 16 && receipt.structSize == sizeof(receipt) &&
+    Check(receipt.apiVersion == 17 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.validationFlags == 0xFF &&
         receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
         receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
@@ -2879,7 +3106,7 @@ static void RunTransformCacheTests(uint8_t* image,
         printf("transform cache diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
             receipt.result, receipt.invalidKind, receipt.invalidIndex,
             receipt.detail, receipt.lastError);
-    Check(captured == 1 && receipt.apiVersion == 16 &&
+    Check(captured == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt) && receipt.result == 1 &&
         receipt.validationFlags == 0xFF && receipt.currentId == 3 &&
         receipt.entriesWritten == 3 && receipt.freeWritten == 1 &&
@@ -2996,7 +3223,7 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
 
     FinishBroadPhaseObserverReceipt receipt = {};
     Check(installObserver(imagePointer, &receipt) == 1 &&
-        receipt.apiVersion == 16 && receipt.structSize == sizeof(receipt) &&
+        receipt.apiVersion == 17 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.installed == 1 && receipt.state == 1,
         "finishBroadPhase observer reactivates landed dormant detour");
 
@@ -3159,6 +3386,477 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
     image[kFinishBroadPhaseRva + 0x0C] ^= 1;
 }
 
+struct SyntheticIslandFixture {
+    uint8_t nphase[8];
+    uint8_t ownerScene[0x4C0];
+    uint8_t interactionScene[0x400];
+    uint8_t context[0x1B00];
+    uint8_t bodySim[0xC0];
+    uint32_t nodeElements[6];
+    uint32_t nodeFree[2];
+    uint32_t nodeNext[2];
+    uint32_t edgeElements[6];
+    uint32_t edgeFree[2];
+    uint32_t edgeNext[2];
+    uint32_t islandElements[4];
+    uint32_t islandFree[1];
+    uint32_t rootElements[2];
+    uint32_t rootFree[1];
+    uint32_t nodeBitmaps[4];
+    uint32_t islandBitmap[1];
+    uint32_t nodeCreated[2];
+    uint32_t nodeDeleted[2];
+    uint32_t edgeCreated[2];
+    uint32_t edgeDeleted[2];
+    uint32_t edgeBroken[2];
+    uint32_t edgeJoined[2];
+    uint8_t sip[0x40];
+    uint8_t shapeSim0[0x20];
+    uint8_t shapeSim1[0x20];
+    uint8_t shapeCore0[0x24];
+    uint8_t shapeCore1[0x24];
+    uint8_t reusedContactManagerStorage[0x2F];
+    uintptr_t contactInteractions[1];
+};
+
+struct IslandOutputStorage {
+    IslandNodeSlotRecord nodes[4];
+    IslandEdgeSlotRecord edges[4];
+    IslandSlotRecord islands[4];
+    IslandArticulationRootSlotRecord roots[4];
+    uint32_t kinematic[4], kinematicChange[4], notReady[4],
+        notReadyChange[4], islandWords[4];
+    uint32_t nodeCreated[8], nodeDeleted[8], edgeCreated[8], edgeDeleted[8],
+        edgeBroken[8], edgeJoined[8];
+    IslandSipEdgeBinding bindings[8];
+};
+
+static IslandSnapshotBuffersV1 IslandBuffers(IslandOutputStorage& storage,
+    bool full = true) {
+    IslandSnapshotBuffersV1 value = {};
+    if (!full) return value;
+    value.nodes = storage.nodes; value.nodeCapacity = 4;
+    value.edges = storage.edges; value.edgeCapacity = 4;
+    value.islands = storage.islands; value.islandCapacity = 4;
+    value.roots = storage.roots; value.rootCapacity = 4;
+    value.kinematicWords = storage.kinematic;
+    value.kinematicWordCapacity = 4;
+    value.kinematicChangeWords = storage.kinematicChange;
+    value.kinematicChangeWordCapacity = 4;
+    value.notReadyWords = storage.notReady;
+    value.notReadyWordCapacity = 4;
+    value.notReadyChangeWords = storage.notReadyChange;
+    value.notReadyChangeWordCapacity = 4;
+    value.islandWords = storage.islandWords;
+    value.islandWordCapacity = 4;
+    value.nodeCreated = storage.nodeCreated; value.nodeCreatedCapacity = 8;
+    value.nodeDeleted = storage.nodeDeleted; value.nodeDeletedCapacity = 8;
+    value.edgeCreated = storage.edgeCreated; value.edgeCreatedCapacity = 8;
+    value.edgeDeleted = storage.edgeDeleted; value.edgeDeletedCapacity = 8;
+    value.edgeBroken = storage.edgeBroken; value.edgeBrokenCapacity = 8;
+    value.edgeJoined = storage.edgeJoined; value.edgeJoinedCapacity = 8;
+    value.bindings = storage.bindings; value.bindingCapacity = 8;
+    return value;
+}
+
+static uintptr_t InitializeIslandFixture(SyntheticIslandFixture& fixture,
+    uintptr_t unityBase) {
+    ZeroMemory(&fixture, sizeof(fixture));
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(fixture.nphase);
+    const uintptr_t owner = reinterpret_cast<uintptr_t>(fixture.ownerScene);
+    const uintptr_t interaction = reinterpret_cast<uintptr_t>(
+        fixture.interactionScene);
+    const uintptr_t context = reinterpret_cast<uintptr_t>(fixture.context);
+    const uintptr_t manager = context + 0x181Cu;
+    *reinterpret_cast<uintptr_t*>(fixture.nphase) = owner;
+    *reinterpret_cast<uintptr_t*>(fixture.ownerScene + 0x450) = nphase;
+    *reinterpret_cast<uintptr_t*>(fixture.ownerScene + 0x4B4) = interaction;
+    *reinterpret_cast<uintptr_t*>(fixture.interactionScene + 0x3E8) = context;
+    *reinterpret_cast<uintptr_t*>(fixture.interactionScene + 0x3F0) = owner;
+    *reinterpret_cast<uintptr_t*>(fixture.interactionScene + 0x10) =
+        reinterpret_cast<uintptr_t>(fixture.contactInteractions);
+    *reinterpret_cast<uint32_t*>(fixture.interactionScene + 0x14) = 0u;
+    *reinterpret_cast<uint32_t*>(fixture.interactionScene + 0x18) = 1u;
+
+    fixture.nodeElements[0] = static_cast<uint32_t>(
+        reinterpret_cast<uintptr_t>(fixture.bodySim));
+    fixture.nodeElements[1] = 0u;
+    fixture.nodeElements[2] = 0u;
+    fixture.nodeElements[3] = 0u;
+    fixture.nodeElements[4] = 0xFFFFFFFFu;
+    fixture.nodeElements[5] = 0u;
+    fixture.nodeFree[0] = 0xFFFFFFFFu;
+    fixture.nodeFree[1] = 0xFFFFFFFFu;
+    fixture.nodeNext[0] = 0xFFFFFFFFu;
+    fixture.nodeNext[1] = 0xFFFFFFFFu;
+    *reinterpret_cast<uint32_t*>(fixture.bodySim + 0xBC) = 0u;
+    for (uint32_t i = 0; i < 2; ++i) {
+        fixture.edgeElements[i * 3] = 0xFFFFFFFFu;
+        fixture.edgeElements[i * 3 + 1] = 0xFFFFFFFFu;
+        fixture.edgeElements[i * 3 + 2] = 0u;
+        fixture.edgeNext[i] = 0xFFFFFFFFu;
+    }
+    fixture.edgeFree[0] = 0xFFFFFFFFu;
+    fixture.edgeFree[1] = 0u;
+    fixture.islandElements[0] = 0u;
+    fixture.islandElements[1] = 0xFFFFFFFFu;
+    fixture.islandElements[2] = 0u;
+    fixture.islandElements[3] = 0xFFFFFFFFu;
+    fixture.islandFree[0] = 0xFFFFFFFFu;
+    fixture.rootFree[0] = 0xFFFFFFFFu;
+    fixture.islandBitmap[0] = 1u;
+
+    *reinterpret_cast<uintptr_t*>(manager + 0x0C) = unityBase + 0xEFF2C0u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x10) =
+        reinterpret_cast<uintptr_t>(fixture.nodeElements);
+    *reinterpret_cast<uintptr_t*>(manager + 0x14) =
+        reinterpret_cast<uintptr_t>(fixture.nodeFree);
+    *reinterpret_cast<uint32_t*>(manager + 0x18) = 2u;
+    *reinterpret_cast<uint32_t*>(manager + 0x1C) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x20) = 1u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x24) =
+        reinterpret_cast<uintptr_t>(fixture.nodeNext);
+    for (uint32_t i = 0; i < 4; ++i) {
+        *reinterpret_cast<uintptr_t*>(manager + 0x28 + i * 4u) =
+            reinterpret_cast<uintptr_t>(&fixture.nodeBitmaps[i]);
+        *reinterpret_cast<uint32_t*>(manager + 0x38 + i * 4u) = 1u;
+    }
+    *reinterpret_cast<uintptr_t*>(manager + 0x118) = unityBase + 0xEFF2C8u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x11C) =
+        reinterpret_cast<uintptr_t>(fixture.edgeElements);
+    *reinterpret_cast<uintptr_t*>(manager + 0x120) =
+        reinterpret_cast<uintptr_t>(fixture.edgeFree);
+    *reinterpret_cast<uint32_t*>(manager + 0x124) = 2u;
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 2u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x130) =
+        reinterpret_cast<uintptr_t>(fixture.edgeNext);
+    *reinterpret_cast<uintptr_t*>(manager + 0x174) = unityBase + 0xEFF2D8u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x178) =
+        reinterpret_cast<uintptr_t>(fixture.islandElements);
+    *reinterpret_cast<uintptr_t*>(manager + 0x17C) =
+        reinterpret_cast<uintptr_t>(fixture.islandFree);
+    *reinterpret_cast<uint32_t*>(manager + 0x180) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x184) = 0xFFFFFFFFu;
+    *reinterpret_cast<uint32_t*>(manager + 0x188) = 0u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x19C) =
+        reinterpret_cast<uintptr_t>(fixture.islandBitmap);
+    *reinterpret_cast<uint32_t*>(manager + 0x1A0) = 1u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x1A4) = unityBase + 0xEFF2E0u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x1A8) =
+        reinterpret_cast<uintptr_t>(fixture.rootElements);
+    *reinterpret_cast<uintptr_t*>(manager + 0x1AC) =
+        reinterpret_cast<uintptr_t>(fixture.rootFree);
+    *reinterpret_cast<uint32_t*>(manager + 0x1B0) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x1B4) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x1B8) = 1u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x134) =
+        reinterpret_cast<uintptr_t>(fixture.nodeCreated);
+    *reinterpret_cast<uintptr_t*>(manager + 0x13C) =
+        reinterpret_cast<uintptr_t>(fixture.nodeDeleted);
+    *reinterpret_cast<uint32_t*>(manager + 0x144) = 2u;
+    *reinterpret_cast<uint32_t*>(manager + 0x148) = 2u;
+    *reinterpret_cast<uintptr_t*>(manager + 0x14C) =
+        reinterpret_cast<uintptr_t>(fixture.edgeCreated);
+    *reinterpret_cast<uintptr_t*>(manager + 0x154) =
+        reinterpret_cast<uintptr_t>(fixture.edgeDeleted);
+    *reinterpret_cast<uintptr_t*>(manager + 0x15C) =
+        reinterpret_cast<uintptr_t>(fixture.edgeBroken);
+    *reinterpret_cast<uintptr_t*>(manager + 0x164) =
+        reinterpret_cast<uintptr_t>(fixture.edgeJoined);
+    *reinterpret_cast<uint32_t*>(manager + 0x16C) = 2u;
+    *reinterpret_cast<uint32_t*>(manager + 0x170) = 2u;
+    *reinterpret_cast<uintptr_t*>(fixture.sip + 0x20) =
+        reinterpret_cast<uintptr_t>(fixture.shapeSim0);
+    *reinterpret_cast<uintptr_t*>(fixture.sip + 0x24) =
+        reinterpret_cast<uintptr_t>(fixture.shapeSim1);
+    *reinterpret_cast<uintptr_t*>(fixture.shapeSim0 + 0x1C) =
+        reinterpret_cast<uintptr_t>(fixture.shapeCore0);
+    *reinterpret_cast<uintptr_t*>(fixture.shapeSim1 + 0x1C) =
+        reinterpret_cast<uintptr_t>(fixture.shapeCore1);
+    *reinterpret_cast<uint32_t*>(fixture.sip + 0x3C) = 0xFFFFFFFFu;
+    return manager;
+}
+
+static void RunIslandTests(uint8_t* image, CaptureIslandSnapshot capture,
+    IslandInstall install, IslandStatus status, IslandArm arm,
+    IslandCopy copy, IslandAction cancel, IslandAction uninstall,
+    IslandJournalCopy copyJournal) {
+    const uintptr_t unity = reinterpret_cast<uintptr_t>(image);
+    SyntheticIslandFixture fixture = {};
+    const uintptr_t manager = InitializeIslandFixture(fixture, unity);
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(fixture.nphase);
+    IslandOutputStorage storage = {};
+    IslandSnapshotBuffersV1 buffers = IslandBuffers(storage);
+    IslandSnapshotReceiptV1 receipt = {};
+    IslandOutputStorage emptyStorage = {};
+    IslandSnapshotBuffersV1 empty = IslandBuffers(emptyStorage, false);
+    Check(capture(unity, nphase, 1u, &empty, &receipt) == 0 &&
+        receipt.result == 6u && receipt.node.required == 2u &&
+        receipt.edge.required == 2u && receipt.island.required == 1u &&
+        receipt.root.required == 1u,
+        "island sizing call reports every exact required capacity");
+    receipt = {};
+    const int firstCapture = capture(unity, nphase, 1u, &buffers, &receipt);
+    Check(firstCapture == 1 &&
+        receipt.result == 1u && receipt.validationFlags == 0x3FFu &&
+        receipt.structSize == 620u && receipt.bindingsWritten == 0u &&
+        storage.nodes[0].slotFlags == 5u &&
+        (storage.nodes[1].slotFlags & 2u) != 0u &&
+        (storage.edges[0].slotFlags & 2u) != 0u &&
+        (storage.edges[1].slotFlags & 2u) != 0u,
+        "island capture preserves physical slots, allocator order and topology");
+    const uint32_t stableHash = receipt.snapshotHash;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 1 &&
+        receipt.snapshotHash == stableHash,
+        "island capture is deterministic at a settled boundary");
+
+    // A single element may legally be both created and deleted before the
+    // next update.  Preserve C/D order and opposition without inventing a
+    // disjointness rule, while still requiring the source tag bits.
+    fixture.nodeCreated[0] = 1u;
+    fixture.nodeDeleted[0] = 1u;
+    fixture.edgeCreated[0] = 1u;
+    fixture.edgeDeleted[0] = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x138) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x140) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x150) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x158) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x1C) = 0xFFFFFFFFu;
+    *reinterpret_cast<uint32_t*>(manager + 0x20) = 0u;
+    fixture.nodeElements[3] = 0u;
+    fixture.nodeElements[4] = 0xFFFFFFFFu;
+    fixture.nodeElements[5] = 0x60u;
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 1u;
+    fixture.edgeElements[3] = 0xFFFFFFFFu;
+    fixture.edgeElements[4] = 0xFFFFFFFFu;
+    fixture.edgeElements[5] = 0x0Du;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 1 &&
+        receipt.nodeCreated.written == 1u &&
+        receipt.nodeDeleted.written == 1u &&
+        receipt.edgeCreated.written == 1u &&
+        receipt.edgeDeleted.written == 1u &&
+        storage.nodeCreated[0] == 1u && storage.nodeDeleted[0] == 1u &&
+        storage.edgeCreated[0] == 1u && storage.edgeDeleted[0] == 1u,
+        "island capture accepts exact opposing C/D rows with both tags");
+    fixture.nodeElements[5] &= ~0x40u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 9u,
+        "island capture rejects C membership without the created tag");
+    *reinterpret_cast<uint32_t*>(manager + 0x138) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x140) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x150) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x158) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x1C) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x20) = 1u;
+    fixture.nodeElements[3] = 0u;
+    fixture.nodeElements[4] = 0xFFFFFFFFu;
+    fixture.nodeElements[5] = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 2u;
+    fixture.edgeElements[3] = 0xFFFFFFFFu;
+    fixture.edgeElements[4] = 0xFFFFFFFFu;
+    fixture.edgeElements[5] = 0u;
+
+    // A SIP edge can exist before/after its contact manager.  Its shape-core
+    // key still provides exact semantic identity when the manager is null.
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 1u;
+    fixture.edgeElements[3] = 0u;
+    fixture.edgeElements[4] = 0u;
+    fixture.edgeElements[5] = 0u;
+    *reinterpret_cast<uint32_t*>(fixture.sip + 0x3C) = 1u;
+    *reinterpret_cast<uintptr_t*>(fixture.sip + 0x38) = 0u;
+    fixture.contactInteractions[0] = reinterpret_cast<uintptr_t>(
+        fixture.sip + 8u);
+    *reinterpret_cast<uint32_t*>(fixture.interactionScene + 0x14) = 1u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 1 &&
+        receipt.liveContactEdges == 1u && receipt.bindingsWritten == 1u &&
+        storage.bindings[0].sip == reinterpret_cast<uintptr_t>(fixture.sip) &&
+        storage.bindings[0].contactManager == 0u,
+        "island capture binds a managerless active SIP edge");
+    *reinterpret_cast<uint32_t*>(fixture.interactionScene + 0x14) = 0u;
+    *reinterpret_cast<uint32_t*>(fixture.sip + 0x3C) = 0xFFFFFFFFu;
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 2u;
+    fixture.edgeElements[3] = 0xFFFFFFFFu;
+    fixture.edgeElements[4] = 0xFFFFFFFFu;
+    fixture.edgeElements[5] = 0u;
+
+    fixture.nodeFree[1] = 1u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 7u,
+        "island capture rejects a cyclic LIFO free chain");
+    fixture.nodeFree[1] = 0xFFFFFFFFu;
+    fixture.islandBitmap[0] |= 0x80000000u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 8u,
+        "island capture rejects bitmap tail bits above capacity");
+    fixture.islandBitmap[0] = 1u;
+    *reinterpret_cast<uint32_t*>(fixture.bodySim + 0xBC) = 1u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 10u,
+        "island capture cross-validates BodySim ownership hooks");
+    *reinterpret_cast<uint32_t*>(fixture.bodySim + 0xBC) = 0u;
+    image[kIslandPrivateUpdateRva] ^= 1u;
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 3u,
+        "island capture fails closed on shipped revision mismatch");
+    image[kIslandPrivateUpdateRva] ^= 1u;
+
+    IslandUpdateObserverReceipt observer = {};
+    Check(install(unity, manager, &observer) == 1 && observer.installed == 1u &&
+        observer.state == 1u && observer.validationFlags == 1u,
+        "island observer installs all three resident hooks");
+    FakeIslandAddEdge add = reinterpret_cast<FakeIslandAddEdge>(
+        image + kIslandAddEdgeRva);
+    FakeIslandRemoveEdge remove = reinterpret_cast<FakeIslandRemoveEdge>(
+        image + kIslandRemoveEdgeRva);
+    uint32_t edgeHook = 0xFFFFFFFFu;
+    add(reinterpret_cast<void*>(manager), 1u, 0u, 0u, &edgeHook);
+    remove(reinterpret_cast<void*>(manager), 1u, &edgeHook);
+    IslandEdgeJournalRecord journal[4] = {};
+    IslandEdgeJournalReceipt journalReceipt = {};
+    Check(edgeHook == 0xFFFFFFFFu &&
+        copyJournal(unity, 1u, journal, 4u, &journalReceipt) == 1 &&
+        journalReceipt.recordsWritten == 2u &&
+        journalReceipt.addCount == 1u && journalReceipt.removeCount == 1u &&
+        journal[0].eventKind == 1u && journal[0].postEdgeId == 1u &&
+        journal[1].eventKind == 2u && journal[1].preEdgeId == 1u &&
+        journal[1].postEdgeId == 0xFFFFFFFFu,
+        "island edge journal preserves exact oriented add/remove order");
+
+    // Reservation advances the next ordinal before the wrapper commits its
+    // row.  A snapshot must fail, not skip that newest lifetime and consult
+    // older ring history.
+    g_islandAddPauseEntered = CreateEventA(0, TRUE, FALSE, 0);
+    g_islandAddPauseRelease = CreateEventA(0, TRUE, FALSE, 0);
+    InterlockedExchange(&g_islandAddPauseClaimed, 0);
+    uint32_t pausedHook = 0xFFFFFFFFu;
+    IslandAddWorkerCall addCall = {add, reinterpret_cast<void*>(manager),
+        1u, 0u, 0u, &pausedHook};
+    HANDLE addThread = g_islandAddPauseEntered && g_islandAddPauseRelease ?
+        CreateThread(0, 0, RunIslandAddWorker, &addCall, 0, 0) : 0;
+    const DWORD addEntered = addThread ? WaitForSingleObject(
+        g_islandAddPauseEntered, 10000) : WAIT_FAILED;
+    receipt = {};
+    const int uncommittedCapture = addEntered == WAIT_OBJECT_0 ?
+        capture(unity, nphase, 1u, &buffers, &receipt) : 1;
+    Check(addThread && addEntered == WAIT_OBJECT_0 &&
+        uncommittedCapture == 0 && receipt.result == 13u,
+        "island capture rejects a retained uncommitted newest journal row");
+    if (g_islandAddPauseRelease) SetEvent(g_islandAddPauseRelease);
+    const DWORD addDone = addThread ? WaitForSingleObject(addThread, 10000) :
+        WAIT_FAILED;
+    Check(addDone == WAIT_OBJECT_0 && pausedHook == 1u,
+        "island add wrapper commits after the uncommitted snapshot probe");
+    if (addThread) CloseHandle(addThread);
+    if (g_islandAddPauseEntered) CloseHandle(g_islandAddPauseEntered);
+    if (g_islandAddPauseRelease) CloseHandle(g_islandAddPauseRelease);
+    g_islandAddPauseEntered = 0;
+    g_islandAddPauseRelease = 0;
+
+    // A deferred contact edge is keyed by the REMOVE journal record.  Its raw
+    // manager payload is diagnostic only: destroyManager precedes removeEdge,
+    // so the pool slot may already backlink to an unrelated SIP.
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 1u;
+    fixture.edgeElements[3] = 0u;
+    fixture.edgeElements[4] = 0u;
+    const uintptr_t reusedContactManager =
+        (reinterpret_cast<uintptr_t>(fixture.reusedContactManagerStorage) +
+            15u) & ~static_cast<uintptr_t>(15u);
+    fixture.edgeElements[5] = static_cast<uint32_t>(
+        reusedContactManager) | 8u;
+    fixture.edgeDeleted[0] = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x158) = 1u;
+    *reinterpret_cast<uintptr_t*>(reusedContactManager + 0x0C) =
+        reinterpret_cast<uintptr_t>(fixture.sip + 4u);
+    *reinterpret_cast<uint32_t*>(fixture.sip + 0x3C) = 1u;
+    remove(reinterpret_cast<void*>(manager), 0u,
+        reinterpret_cast<uint32_t*>(fixture.sip + 0x3C));
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 1 &&
+        receipt.bindingsWritten == 1u &&
+        storage.bindings[0].sip == reinterpret_cast<uintptr_t>(fixture.sip) &&
+        storage.bindings[0].contactManager ==
+            reusedContactManager,
+        "island deferred-D binding tolerates a reused manager pool slot");
+
+    // The latest reliable event for an edge ID owns that lifetime.  An
+    // incomplete newest REMOVE must fail closed instead of falling through to
+    // the older complete REMOVE above.
+    uint32_t invalidContactHook = 1u;
+    remove(reinterpret_cast<void*>(manager), 0u, &invalidContactHook);
+    receipt = {};
+    Check(capture(unity, nphase, 1u, &buffers, &receipt) == 0 &&
+        receipt.result == 11u,
+        "island capture does not reuse an older binding after invalid newest remove");
+    *reinterpret_cast<uint32_t*>(manager + 0x158) = 0u;
+    *reinterpret_cast<uint32_t*>(manager + 0x128) = 1u;
+    *reinterpret_cast<uint32_t*>(manager + 0x12C) = 2u;
+    fixture.edgeElements[3] = 0xFFFFFFFFu;
+    fixture.edgeElements[4] = 0xFFFFFFFFu;
+    fixture.edgeElements[5] = 0u;
+
+    IslandOutputStorage preSource = {}, postSource = {};
+    IslandSnapshotBuffersV1 preSourceBuffers = IslandBuffers(preSource);
+    IslandSnapshotBuffersV1 postSourceBuffers = IslandBuffers(postSource);
+    IslandSnapshotReceiptV1 preSourceReceipt = {}, postSourceReceipt = {};
+    observer = {};
+    Check(arm(unity, manager, nphase, 0u, &preSourceBuffers,
+            &preSourceReceipt, &postSourceBuffers, &postSourceReceipt,
+            &observer) == 1 && observer.state == 2u &&
+        observer.armedOrdinal == 1u,
+        "island observer arms caller-owned pre/post buffers");
+    FakeIslandUpdate update = reinterpret_cast<FakeIslandUpdate>(
+        image + kIslandUpdateRva);
+    update(reinterpret_cast<void*>(manager), 0, 0u);
+    observer = {};
+    const int observerStatus = status(unity, &observer);
+    Check(observerStatus == 1 && observer.state == 4u &&
+        observer.observationOrdinal == 1u && observer.inFlight == 0u &&
+        observer.validationFlags == 0x7Fu,
+        "island observer passively commits one exact first-pass transition");
+    IslandOutputStorage preCopy = {}, postCopy = {};
+    IslandSnapshotBuffersV1 preCopyBuffers = IslandBuffers(preCopy);
+    IslandSnapshotBuffersV1 postCopyBuffers = IslandBuffers(postCopy);
+    IslandSnapshotReceiptV1 preCopyReceipt = {}, postCopyReceipt = {};
+    observer = {};
+    Check(copy(unity, 1u, &preCopyBuffers, &preCopyReceipt,
+            &postCopyBuffers, &postCopyReceipt, &observer) == 1 &&
+        preCopyReceipt.snapshotHash == observer.preSnapshotHash &&
+        postCopyReceipt.snapshotHash == observer.postSnapshotHash &&
+        preCopyReceipt.numAddedRBodies + 1u ==
+            postCopyReceipt.numAddedRBodies,
+        "island observer copies stable pre/post snapshots by ordinal");
+    observer = {};
+    Check(cancel(unity, &observer) == 1 && observer.state == 1u &&
+        observer.inFlight == 0u,
+        "island cancel supplies an explicit caller-buffer quiescence fence");
+    observer = {};
+    Check(uninstall(unity, &observer) == 1 && observer.installed == 1u &&
+        observer.state == 0u && image[kIslandAddEdgeRva] == 0xE9 &&
+        image[kIslandRemoveEdgeRva] == 0xE9 &&
+        image[kIslandUpdateRva] == 0xE9,
+        "island logical uninstall leaves all pinned detours dormant");
+    observer = {};
+    Check(install(unity, manager, &observer) == 1 && observer.state == 1u,
+        "island observer safely reuses resident detours");
+    observer = {};
+    Check(uninstall(unity, &observer) == 1 && observer.state == 0u,
+        "island observer returns to dormant after reactivation");
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("usage: Oc2NativeRigidbodyRebuildHistoryHarness <dll>\n");
@@ -3217,6 +3915,24 @@ int main(int argc, char** argv) {
     FinishBroadPhaseAction uninstallFinishBroadPhaseObserver =
         reinterpret_cast<FinishBroadPhaseAction>(GetProcAddress(library,
             "oc2_finish_broad_phase_observer_uninstall"));
+    CaptureIslandSnapshot captureIsland =
+        reinterpret_cast<CaptureIslandSnapshot>(GetProcAddress(library,
+            "oc2_island_capture_snapshot_v1"));
+    IslandInstall installIsland = reinterpret_cast<IslandInstall>(
+        GetProcAddress(library, "oc2_island_update_observer_install"));
+    IslandStatus statusIsland = reinterpret_cast<IslandStatus>(
+        GetProcAddress(library, "oc2_island_update_observer_status"));
+    IslandArm armIsland = reinterpret_cast<IslandArm>(GetProcAddress(library,
+        "oc2_island_update_observer_arm"));
+    IslandCopy copyIsland = reinterpret_cast<IslandCopy>(GetProcAddress(
+        library, "oc2_island_update_observer_copy"));
+    IslandAction cancelIsland = reinterpret_cast<IslandAction>(GetProcAddress(
+        library, "oc2_island_update_observer_cancel"));
+    IslandAction uninstallIsland = reinterpret_cast<IslandAction>(
+        GetProcAddress(library, "oc2_island_update_observer_uninstall"));
+    IslandJournalCopy copyIslandJournal =
+        reinterpret_cast<IslandJournalCopy>(GetProcAddress(library,
+            "oc2_island_edge_journal_copy"));
     DirtyAction installDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_install"));
     DirtyAction statusDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
@@ -3252,7 +3968,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 16, "API version");
+    Check(version && version() == 17, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -3271,6 +3987,9 @@ int main(int argc, char** argv) {
         armFinishBroadPhaseObserver && copyFinishBroadPhaseObserver &&
         cancelFinishBroadPhaseObserver && uninstallFinishBroadPhaseObserver,
         "finishBroadPhase observer exports");
+    Check(captureIsland && installIsland && statusIsland && armIsland &&
+        copyIsland && cancelIsland && uninstallIsland && copyIslandJournal,
+        "island snapshot/observer/journal exports");
     Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
@@ -3283,6 +4002,9 @@ int main(int argc, char** argv) {
         !statusFinishBroadPhaseObserver || !armFinishBroadPhaseObserver ||
         !copyFinishBroadPhaseObserver || !cancelFinishBroadPhaseObserver ||
         !uninstallFinishBroadPhaseObserver ||
+        !captureIsland || !installIsland || !statusIsland || !armIsland ||
+        !copyIsland || !cancelIsland || !uninstallIsland ||
+        !copyIslandJournal ||
         !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
         !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
         !uninstallDirty || !installObserver || !uninstallObserver ||
@@ -3309,7 +4031,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -3365,6 +4087,9 @@ int main(int argc, char** argv) {
             armFinishBroadPhaseObserver, copyFinishBroadPhaseObserver,
             cancelFinishBroadPhaseObserver,
             uninstallFinishBroadPhaseObserver);
+        RunIslandTests(revisionImage, captureIsland, installIsland,
+            statusIsland, armIsland, copyIsland, cancelIsland,
+            uninstallIsland, copyIslandJournal);
         RunManifoldPoolTests(revisionImage, 0, captureManifold,
             restoreManifold);
         RunManifoldPoolTests(revisionImage, 1, captureManifold,

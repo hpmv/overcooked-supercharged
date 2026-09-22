@@ -6,6 +6,55 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — complete island state and first update are exact
+
+Managed RigidbodyActorRebuild r18/API 17 and native r35 complete the current
+read-only PhysX planning pass.  The f444 sidecar now contains every physical
+island node, edge, island, and articulation-root slot; exact free chains and
+next links; all five bitmaps; ordered C/D/B/J queues; persistent scalars; and
+semantic SIP/contact-edge bindings.  Passive detours also retain a monotonic
+add/remove journal and double-copy the exact first pass-zero `updateIslands`
+pre/post state without replacing the shipped call.
+
+The clean minimized audit is
+`artifacts/readiness-plan-island-f1048-to-f444-r2/`.  Source readiness is 52
+pass / 0 fail / 41 deferred.  Restored-target readiness is 86 pass / 0 fail /
+37 deferred / 1 not-applicable.  Both have zero blockers; the audit completed
+and stopped at restored f444 before f445, with no search or foreground lease.
+The aggregate remains intentionally incomplete because this milestone adds
+observation and planning, not island mutation.
+
+At uninterrupted f444 the settled hash is `0x39B41B41`: 9 allocated nodes,
+12 allocated contact edges, 9 allocated islands, no constraint/articulation
+edges, and 12 semantic bindings.  Restored f444 is stable but different: two
+captures repeat at `0x4F772361`.  Node, edge and island topology; allocator
+order; node bitmaps; and SIP-edge bindings all require projection.  Queue
+order already agrees.
+
+The first update is fully linked.  Context `0x48CA1620`, NPhaseCore
+`0x48CB4B80`, manager `0x48CA2E3C`, pass 0, thread 58364, and ordinal 1 all
+match.  Pre/post hashes are `0x2433DECA` and `0x74601DDB`.  Journal ordinals
+233 through 236 are four ordered contact removals of edge IDs 8 through 11;
+there are no additions or overflows.  Native snapshot and observer validation
+masks are complete (`0x3FF` and `0x7F`) and native is quiescent after copy.
+
+The activation bug found on the first live attempt is fixed generally rather
+than special-cased: zero context at a paused activation defers island-hook
+installation to the earliest post-output boundary; context changes cancel
+all scene-owned pending work; and same-process reactivation cannot trust a
+stale native observation until its counter advances.  The managed DLL is
+`48F17D9E57F22790C24C28D8B80ED6F476E7873F546B2A2863ADC4E2767BFA87`;
+the native DLL is
+`33741A06BA60F9D7712AEB9A9E02FDD9E09645BC229E875AA07C62F67291AAF1`.
+
+Next, implement one rollback-safe atomic semantic restore across the already
+captured dependencies: Transform cache, broadphase, interaction graph,
+manager/SIP/ActorPair/report objects, island graph, then first-output
+validation.  Full rewind parity is not yet proved and search remains disabled.
+Also harden the rare cleanup ordering in which a completed sidecar is stored
+before island-observer quiescence is fenced, and clear manual-capture pending
+bookkeeping on failure.
+
 ## Latest result — Transform-cache state and the first broadphase transition are exact
 
 Managed RigidbodyActorRebuild r17g and native API 16/r34 extend the same f444

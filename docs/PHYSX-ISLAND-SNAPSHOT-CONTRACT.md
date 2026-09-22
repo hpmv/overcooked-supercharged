@@ -110,6 +110,11 @@ ArticulationRootManager at +1a4
   +14 uint32      freeCount              (absolute +1b8)
 ```
 
+The four EdgeChange member pointers must always be read independently.
+`preallocate` lays out one backing allocation physically as C, D, B, J, while
+`resize` lays its replacement out as C, D, J, B; the member offsets above do
+not change.
+
 The four node bitmaps, in order, are `KINEMATIC`, `KINEMATIC_CHANGE`,
 `NOT_READY_FOR_SLEEPING`, and `NOT_READY_FOR_SLEEPING_CHANGE`.
 
@@ -193,6 +198,10 @@ a6c910  55 8b ec 6a 00 ff 75 0c 81 c1 1c 18 00 00 e8
 
 The shipped CPU path calls the private first-pass body synchronously inside
 `a65530`; it has completed before `a65530` returns.
+
+All three detour targets use callee cleanup: `a63940` returns with `ret 0x10`,
+while `a64490` and `a65530` each return with `ret 0x08`.  A wrapper must leave
+the caller's original arguments in place for its own matching final return.
 
 ## Caller-owned snapshot ABI
 
@@ -363,11 +372,14 @@ A valid capture performs the following steps:
    D IDs refer to allocated deleted/removed elements until the update releases
    them.  B and J may contain repeated and opposing events, so uniqueness is
    not an invariant.
-9. Enumerate type-zero global interactions.  For every contact SIP, validate
-   `SIP + 0x3c` against its used edge when the hook is managed; validate the
-   SIP's contact manager against the edge payload; and form the semantic key
-   from the unordered pair of `PxsShapeCore` addresses.  A `ShapeSim` contains
-   its `Sc::ShapeCore*` at `+0x1c`, and the corresponding `PxsShapeCore*` is
+9. Enumerate type-zero global interactions.  Each global-array entry is the
+   SIP's secondary-subobject pointer, equal to the primary SIP plus `0x08`.
+   Therefore validate the managed island hook at primary `+0x3c` (global entry
+   `+0x34`) against its used edge.  The two ShapeSims are at primary
+   `+0x20/+0x24` (global entry `+0x18/+0x1c`).  Validate the SIP's contact
+   manager against the edge payload and form the semantic key from the
+   unordered pair of `PxsShapeCore` addresses.  A `ShapeSim` contains its
+   `Sc::ShapeCore*` at `+0x1c`, and the corresponding `PxsShapeCore*` is
    `Sc::ShapeCore + 0x20`.
 10. Resolve an already-removed contact edge through the add/remove journal,
     because its SIP hook is no longer managed and its contact-manager payload
@@ -410,7 +422,9 @@ which SIP owned that pending edge.
 Therefore install passive companion journals at:
 
 - `a63940` (`addEdge`): capture inputs on entry and the assigned edge ID after
-  the trampoline.  For a contact edge, `edgeHook - 0x3c` is the primary SIP.
+  the trampoline.  For a contact edge, `edgeHook - 0x3c` is the primary SIP;
+  the corresponding type-zero global-array pointer is that primary SIP plus
+  `0x08`.
 - `a64490` (`removeEdge`): before the trampoline, capture the current edge ID,
   endpoints, hook address, primary SIP, and unordered shape-core key.  After
   the trampoline, confirm that the hook became invalid.
@@ -488,14 +502,24 @@ Interpret the comparison as follows:
 
 ## Explicit limitations and unresolved work
 
-- Actual uninterrupted/restored frame-444/445 records still have to be
-  captured; the contract identifies what must be compared but does not assert
-  their values.
+- The uninterrupted frame-444/445 records are now captured under
+  `artifacts/readiness-plan-island-f1048-to-f444-r2/`.  The settled, pre, and
+  post hashes are `0x39B41B41`, `0x2433DECA`, and `0x74601DDB`; journal
+  interval `[233,237)` contains four ordered contact removals and no overflow.
+  Restored f444 repeats exactly at `0x4F772361`, proving that topology,
+  allocator order, bitmaps, and SIP-edge bindings still require projection.
+  The restore transaction described above is not implemented yet.
 - `ShapeInstancePairLL + 0x3c` and the contact semantic key are resolved.
-  Equivalent owner offsets and stable semantic keys for constraint and
-  articulation edge hooks have not yet been binary-derived.  Story 1-1 may
-  contain only contact edges, but a general restore must either resolve these
-  types or reject a snapshot containing them.
+  The live Story 1-1 oracle proves all 12 settled edges and all four journal
+  events are contacts.  Equivalent owner offsets and stable semantic keys for
+  constraint and articulation edge hooks have not yet been binary-derived;
+  a general restore must either resolve these types or reject a snapshot
+  containing them.
+- Managed code can install the journal only after the first native context
+  observation at a safe post-output boundary.  An edge removed during that
+  first blind interval cannot be reconstructed from history; capture fails
+  closed if such a deferred edge is still relevant rather than publishing a
+  guessed semantic owner.
 - The persistent manager layout is resolved.  Arbitrary mid-update restore is
   not supported.  The pointer-rich region `+1e0..+2d7` owns scratch,
   kinematic-proxy, solver, wake/sleep, and second-pass state whose lifetimes

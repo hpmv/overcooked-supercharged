@@ -21,6 +21,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // chefs during the checkpoint restore's internal main-physics unfreeze.
     public sealed class RigidbodyActorRebuildModule : IAuthoringModule
     {
+        private const uint NativeAbiVersion=17;
         // Four active chef actors plus Unity's one replacement allocation form
         // the observed five-address cycle. Rebuilding five times removes every
         // chef actor/contact set while restoring the incoming chef/address map.
@@ -37,6 +38,16 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int MaximumTransformCacheIds=16384;
         private const int MaximumTransformCacheBindings=MaximumInteractionGraphInteractions*2;
         private const int MaximumBroadPhaseOverlaps=4096;
+        private const int MaximumIslandNodes=16384;
+        private const int MaximumIslandEdges=65536;
+        private const int MaximumIslands=16384;
+        private const int MaximumIslandRoots=16384;
+        private const int MaximumIslandQueueEntries=65536;
+        private const int MaximumIslandBindings=16384;
+        private const int MaximumIslandJournalRecords=65536;
+        private const uint IslandPhaseSettled=1;
+        private const uint IslandPhasePreUpdate=2;
+        private const uint IslandPhasePostUpdate=3;
         private const uint DirtyInteractionRestoreExact=1;
         private const uint DirtyInteractionRestoreProjection=2;
         private const int MaximumCheckpointSidecars=20000;
@@ -332,6 +343,127 @@ namespace SuperchargedPatch.Authoring.Modules
             public uint DroppedObservations;
         }
 
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandNodeSlotRecord
+        {
+            public uint Id,OwnerRaw,IslandId,RawFlagsWord,FreeNext,NextNode,SlotFlags,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandEdgeSlotRecord
+        {
+            public uint Id,Node0,Node1,TaggedRaw,FreeNext,NextEdge,SlotFlags,SemanticBindingIndex,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandSlotRecord
+        {
+            public uint Id,StartNode,StartEdge,EndNode,EndEdge,FreeNext,SlotFlags,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandRootSlotRecord
+        {
+            public uint Id,LinkHandle,Owner,FreeNext,SlotFlags,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandSipBindingRecord
+        {
+            public uint EdgeId,EdgeType,Sip,HookAddress,ShapeSim0,ShapeSim1;
+            public uint PxsLow,PxsHigh,ContactManager,TaggedRaw,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandJournalRecord
+        {
+            public uint Ordinal,EventKind,ObserverPhase,ThreadId,EdgeType,Node0,Node1;
+            public uint PreEdgeId,PostEdgeId,HookAddress,OwnerObject,PxsLow,PxsHigh,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandSnapshotBuffers
+        {
+            public IntPtr Nodes;public uint NodeCapacity;
+            public IntPtr Edges;public uint EdgeCapacity;
+            public IntPtr Islands;public uint IslandCapacity;
+            public IntPtr Roots;public uint RootCapacity;
+            public IntPtr KinematicWords;public uint KinematicWordCapacity;
+            public IntPtr KinematicChangeWords;public uint KinematicChangeWordCapacity;
+            public IntPtr NotReadyWords;public uint NotReadyWordCapacity;
+            public IntPtr NotReadyChangeWords;public uint NotReadyChangeWordCapacity;
+            public IntPtr IslandWords;public uint IslandWordCapacity;
+            public IntPtr NodeCreated;public uint NodeCreatedCapacity;
+            public IntPtr NodeDeleted;public uint NodeDeletedCapacity;
+            public IntPtr EdgeCreated;public uint EdgeCreatedCapacity;
+            public IntPtr EdgeDeleted;public uint EdgeDeletedCapacity;
+            public IntPtr EdgeBroken;public uint EdgeBrokenCapacity;
+            public IntPtr EdgeJoined;public uint EdgeJoinedCapacity;
+            public IntPtr Bindings;public uint BindingCapacity;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandElementManagerReceipt
+        {
+            public UIntPtr Vtable,Elements,FreeNext,NextList;
+            public uint Capacity,FreeHead,FreeCount,Required,Written,ElementHash,FreeChainHash,NextHash;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandQueueReceipt
+        {
+            public UIntPtr Data;
+            public uint Count,Capacity,DefaultCapacity,Required,Written,Hash;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandBitmapReceipt
+        {
+            public UIntPtr Data;
+            public uint WordCount,Required,Written,Hash;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandSnapshotReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,OwnerScene,InteractionScene,Context,IslandManager;
+            public uint Phase,ObserverSequence,ObservationOrdinal,CaptureThreadId,Epoch;
+            public NativeIslandElementManagerReceipt NodeManager,EdgeManager,IslandManagerReceipt,RootManager;
+            public NativeIslandQueueReceipt NodeCreated,NodeDeleted,EdgeCreated,EdgeDeleted,EdgeBroken,EdgeJoined;
+            public NativeIslandBitmapReceipt Kinematic,KinematicChange,NotReady,NotReadyChange,IslandBitmap;
+            public uint NumAddedRBodies,NumAddedArtics,NumAddedKinematics;
+            public uint NumAddedEdgesContact,NumAddedEdgesConstraint,NumAddedEdgesArticulation;
+            public uint NumEdgeRefsToKinematic,NumRequiredKinematicDuplicates;
+            public uint EverythingAsleep,HasAnythingChanged,PerformIslandUpdate;
+            public uint LiveContactEdges,LiveConstraintEdges,LiveArticulationEdges;
+            public uint BindingsRequired,BindingsWritten,BindingHash;
+            public uint JournalBeginOrdinal,JournalEndOrdinal,JournalOverflowCount;
+            public uint SnapshotHash,ValidationFlags,InvalidKind,InvalidIndex,Detail;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandObserverReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,ExpectedManager,ExpectedContext,ExpectedNPhase;
+            public UIntPtr ObservedManager,ObservedContext,ObservedNPhase;
+            public uint Installed,State,ExpectedPass,ArmedThreadId,ObserverSequence,ArmedOrdinal;
+            public uint ObservationOrdinal,SlotIndex,Pass,ThreadId,PreResult,PostResult;
+            public uint PreSnapshotHash,PostSnapshotHash,JournalBeginOrdinal,JournalEndOrdinal;
+            public uint ValidationFlags,InvalidKind,InvalidIndex,Detail,InFlight;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=4)]
+        private struct NativeIslandJournalReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,ExpectedManager;
+            public uint Installed,State,FirstOrdinal,NextOrdinal,RequestedBegin;
+            public uint RecordsRequired,RecordsWritten,OverflowCount,AddCount,RemoveCount,RecordHash;
+            public uint ValidationFlags,InvalidKind,InvalidIndex,Detail;
+        }
+
         [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeDirtyInteractionKey
         {
@@ -393,6 +525,20 @@ namespace SuperchargedPatch.Authoring.Modules
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeFinishBroadPhaseObserverCopy(
             UIntPtr unityBase,uint exactObservationOrdinal,IntPtr created,uint createdCapacity,
             IntPtr deleted,uint deletedCapacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,uint expectedPhase,IntPtr buffers,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverInstall(
+            UIntPtr unityBase,UIntPtr expectedManager,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverAction(
+            UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverArm(
+            UIntPtr unityBase,UIntPtr expectedManager,UIntPtr expectedNphase,uint expectedPass,
+            IntPtr preBuffers,IntPtr preReceipt,IntPtr postBuffers,IntPtr postReceipt,IntPtr observerReceipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverCopy(
+            UIntPtr unityBase,uint exactObservationOrdinal,IntPtr preBuffers,IntPtr preReceipt,
+            IntPtr postBuffers,IntPtr postReceipt,IntPtr observerReceipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandJournalCopy(
+            UIntPtr unityBase,uint beginOrdinal,IntPtr records,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateArm(
@@ -518,6 +664,141 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeBroadPhaseOverlapRecord[] Created,Deleted;
         }
 
+        private sealed class IslandSnapshotState
+        {
+            internal NativeIslandSnapshotReceipt Receipt;
+            internal NativeIslandNodeSlotRecord[] Nodes;
+            internal NativeIslandEdgeSlotRecord[] Edges;
+            internal NativeIslandSlotRecord[] Islands;
+            internal NativeIslandRootSlotRecord[] Roots;
+            internal uint[] KinematicWords,KinematicChangeWords,NotReadyWords,NotReadyChangeWords,IslandWords;
+            internal uint[] NodeCreated,NodeDeleted,EdgeCreated,EdgeDeleted,EdgeBroken,EdgeJoined;
+            internal NativeIslandSipBindingRecord[] Bindings;
+            internal byte[] RawBytes;
+        }
+
+        private sealed class IslandTransitionState
+        {
+            internal NativeIslandObserverReceipt Receipt;
+            internal IslandSnapshotState Pre,Post;
+            internal NativeIslandJournalReceipt JournalReceipt;
+            internal NativeIslandJournalRecord[] Journal;
+            internal byte[] JournalRawBytes;
+        }
+
+        private sealed class IslandSnapshotBufferOwner : IDisposable
+        {
+            internal NativeIslandSnapshotBuffers Buffers;
+            internal IntPtr BuffersPointer,ReceiptPointer;
+            internal IntPtr Nodes,Edges,Islands,Roots;
+            internal IntPtr KinematicWords,KinematicChangeWords,NotReadyWords,NotReadyChangeWords,IslandWords;
+            internal IntPtr NodeCreated,NodeDeleted,EdgeCreated,EdgeDeleted,EdgeBroken,EdgeJoined,Bindings;
+            private bool disposed;
+
+            internal static IslandSnapshotBufferOwner Create()
+            {
+                ValidateIslandManagedAbiSizes();
+                var value=new IslandSnapshotBufferOwner();
+                try
+                {
+                    value.Nodes=Alloc(MaximumIslandNodes,Marshal.SizeOf(typeof(NativeIslandNodeSlotRecord)));
+                    value.Edges=Alloc(MaximumIslandEdges,Marshal.SizeOf(typeof(NativeIslandEdgeSlotRecord)));
+                    value.Islands=Alloc(MaximumIslands,Marshal.SizeOf(typeof(NativeIslandSlotRecord)));
+                    value.Roots=Alloc(MaximumIslandRoots,Marshal.SizeOf(typeof(NativeIslandRootSlotRecord)));
+                    int nodeWords=(MaximumIslandNodes+31)/32,islandWords=(MaximumIslands+31)/32;
+                    value.KinematicWords=Alloc(nodeWords,sizeof(uint));
+                    value.KinematicChangeWords=Alloc(nodeWords,sizeof(uint));
+                    value.NotReadyWords=Alloc(nodeWords,sizeof(uint));
+                    value.NotReadyChangeWords=Alloc(nodeWords,sizeof(uint));
+                    value.IslandWords=Alloc(islandWords,sizeof(uint));
+                    value.NodeCreated=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.NodeDeleted=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.EdgeCreated=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.EdgeDeleted=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.EdgeBroken=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.EdgeJoined=Alloc(MaximumIslandQueueEntries,sizeof(uint));
+                    value.Bindings=Alloc(MaximumIslandBindings,
+                        Marshal.SizeOf(typeof(NativeIslandSipBindingRecord)));
+                    value.Buffers=new NativeIslandSnapshotBuffers {
+                        Nodes=value.Nodes,NodeCapacity=MaximumIslandNodes,
+                        Edges=value.Edges,EdgeCapacity=MaximumIslandEdges,
+                        Islands=value.Islands,IslandCapacity=MaximumIslands,
+                        Roots=value.Roots,RootCapacity=MaximumIslandRoots,
+                        KinematicWords=value.KinematicWords,KinematicWordCapacity=(uint)nodeWords,
+                        KinematicChangeWords=value.KinematicChangeWords,KinematicChangeWordCapacity=(uint)nodeWords,
+                        NotReadyWords=value.NotReadyWords,NotReadyWordCapacity=(uint)nodeWords,
+                        NotReadyChangeWords=value.NotReadyChangeWords,NotReadyChangeWordCapacity=(uint)nodeWords,
+                        IslandWords=value.IslandWords,IslandWordCapacity=(uint)islandWords,
+                        NodeCreated=value.NodeCreated,NodeCreatedCapacity=MaximumIslandQueueEntries,
+                        NodeDeleted=value.NodeDeleted,NodeDeletedCapacity=MaximumIslandQueueEntries,
+                        EdgeCreated=value.EdgeCreated,EdgeCreatedCapacity=MaximumIslandQueueEntries,
+                        EdgeDeleted=value.EdgeDeleted,EdgeDeletedCapacity=MaximumIslandQueueEntries,
+                        EdgeBroken=value.EdgeBroken,EdgeBrokenCapacity=MaximumIslandQueueEntries,
+                        EdgeJoined=value.EdgeJoined,EdgeJoinedCapacity=MaximumIslandQueueEntries,
+                        Bindings=value.Bindings,BindingCapacity=MaximumIslandBindings
+                    };
+                    value.BuffersPointer=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(NativeIslandSnapshotBuffers)));
+                    value.ReceiptPointer=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(NativeIslandSnapshotReceipt)));
+                    Marshal.StructureToPtr(value.Buffers,value.BuffersPointer,false);
+                    Zero(value.ReceiptPointer,Marshal.SizeOf(typeof(NativeIslandSnapshotReceipt)));
+                    return value;
+                }
+                catch{value.Dispose();throw;}
+            }
+
+            private static void ValidateIslandManagedAbiSizes()
+            {
+                if(Marshal.SizeOf(typeof(NativeIslandNodeSlotRecord))!=32||
+                    Marshal.SizeOf(typeof(NativeIslandEdgeSlotRecord))!=36||
+                    Marshal.SizeOf(typeof(NativeIslandSlotRecord))!=32||
+                    Marshal.SizeOf(typeof(NativeIslandRootSlotRecord))!=24||
+                    Marshal.SizeOf(typeof(NativeIslandSipBindingRecord))!=44||
+                    Marshal.SizeOf(typeof(NativeIslandJournalRecord))!=56||
+                    Marshal.SizeOf(typeof(NativeIslandSnapshotBuffers))!=128||
+                    Marshal.SizeOf(typeof(NativeIslandElementManagerReceipt))!=48||
+                    Marshal.SizeOf(typeof(NativeIslandQueueReceipt))!=28||
+                    Marshal.SizeOf(typeof(NativeIslandBitmapReceipt))!=20||
+                    Marshal.SizeOf(typeof(NativeIslandSnapshotReceipt))!=620||
+                    Marshal.SizeOf(typeof(NativeIslandObserverReceipt))!=128||
+                    Marshal.SizeOf(typeof(NativeIslandJournalReceipt))!=84)
+                    throw new InvalidOperationException("Managed island API17 ABI sizes differ.");
+            }
+
+            private static IntPtr Alloc(int count,int size)
+            {
+                return Marshal.AllocHGlobal(checked(count*size));
+            }
+
+            internal static void Zero(IntPtr pointer,int size)
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(pointer,i,0);
+            }
+
+            public void Dispose()
+            {
+                if(disposed)return;disposed=true;
+                Free(ref ReceiptPointer);Free(ref BuffersPointer);Free(ref Bindings);
+                Free(ref EdgeJoined);Free(ref EdgeBroken);Free(ref EdgeDeleted);Free(ref EdgeCreated);
+                Free(ref NodeDeleted);Free(ref NodeCreated);Free(ref IslandWords);
+                Free(ref NotReadyChangeWords);Free(ref NotReadyWords);
+                Free(ref KinematicChangeWords);Free(ref KinematicWords);
+                Free(ref Roots);Free(ref Islands);Free(ref Edges);Free(ref Nodes);
+            }
+
+            private static void Free(ref IntPtr pointer)
+            {
+                if(pointer==IntPtr.Zero)return;Marshal.FreeHGlobal(pointer);pointer=IntPtr.Zero;
+            }
+        }
+
+        private sealed class PendingIslandObservation
+        {
+            internal CheckpointSidecar Sidecar;
+            internal IslandSnapshotBufferOwner Pre,Post;
+            internal IntPtr Library;
+            internal uint ExpectedManager,ExpectedContext,ExpectedNphase,ArmedOrdinal,ObserverSequence,ArmedThreadId;
+        }
+
         private sealed class ActorPairReuseScanState
         {
             internal uint ActorPair,Actor0,Actor1,ScannedActor,OtherActor;
@@ -566,6 +847,8 @@ namespace SuperchargedPatch.Authoring.Modules
             internal InteractionGraphState InteractionGraph;
             internal TransformCacheState TransformCache;
             internal FinishBroadPhaseState FinishBroadPhase;
+            internal IslandSnapshotState IslandSnapshot;
+            internal IslandTransitionState IslandTransition;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -580,6 +863,11 @@ namespace SuperchargedPatch.Authoring.Modules
         // never resume into unmapped code.
         private static readonly HashSet<IntPtr> processPinnedNativeLibraries=
             new HashSet<IntPtr>();
+        // If native cannot prove an armed observer quiescent, retaining its
+        // caller-owned buffers is safer than freeing memory a hook may still
+        // reference.  Successful copy/cancel/uninstall fences dispose normally.
+        private static readonly List<PendingIslandObservation> processRetainedIslandBuffers=
+            new List<PendingIslandObservation>();
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private readonly FieldInfo groundColliderField=typeof(GroundCast).GetField("m_groundCollider",BindingFlags.Instance|BindingFlags.NonPublic);
         private readonly List<object> receipts=new List<object>();
@@ -605,6 +893,12 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeFinishBroadPhaseObserverCopy copyFinishBroadPhaseObserver;
         private NativeFinishBroadPhaseObserverAction cancelFinishBroadPhaseObserver;
         private NativeFinishBroadPhaseObserverAction uninstallFinishBroadPhaseObserver;
+        private NativeIslandCaptureSnapshot captureIslandSnapshot;
+        private NativeIslandObserverInstall installIslandObserver;
+        private NativeIslandObserverAction statusIslandObserver,cancelIslandObserver,uninstallIslandObserver;
+        private NativeIslandObserverArm armIslandObserver;
+        private NativeIslandObserverCopy copyIslandObserver;
+        private NativeIslandJournalCopy copyIslandJournal;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
         private NativeApiVersion contactRecreateApiVersion;
         private NativeApiVersion contactRecreateAuditApiVersion;
@@ -621,12 +915,14 @@ namespace SuperchargedPatch.Authoring.Modules
         private uint dirtyNPhaseObservationFloor;
         private uint dirtyInteractionRestoreMode=DirtyInteractionRestoreExact;
         private uint contactManagerContext,contextObservations;
+        private uint islandObserverManager;
         private string nativePath,nativeSha256,failure;
         private bool automatic,automaticGroundCollider,observeContactManagerContext,contextObserverInstalled;
         private bool automaticContactPoolRestore,automaticTransformDispatchRestore,automaticRestorePending,warpInProgress,warpTargetRestoreEligible,disposed;
-        private bool dirtyInteractionHookInstalled,finishBroadPhaseObserverInstalled;
+        private bool dirtyInteractionHookInstalled,finishBroadPhaseObserverInstalled,islandObserverInstalled;
         private bool finishBroadPhaseObserverWasInstalled,dirtyRestorePendingValidation;
         private bool contactRecreatePendingValidation;
+        private uint contextObservationFloor;
         private int pendingContactPoolAction;
         private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
         private int scheduledContactPoolCaptureFrame=-1,scheduledContactPoolLastObservedFrame=-1;
@@ -641,6 +937,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private CheckpointSidecar warpTargetSidecar;
         private CheckpointSidecar pendingContactRecreateSidecar;
         private CheckpointSidecar pendingDirtyCaptureSidecar;
+        private PendingIslandObservation pendingIslandObservation;
         private DirtyInteractionState pendingDirtyRestoreState;
         private uint pendingDirtyCaptureOrdinal,pendingDirtyRestoreOrdinal;
         private long transformDispatchCaptures,transformDispatchRestores;
@@ -650,7 +947,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> finishBroadPhaseReceipts=new List<object>();
         private readonly List<object> contactRecreateReceipts=new List<object>();
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
-        private long transformCacheCaptures,finishBroadPhaseCaptures;
+        private long transformCacheCaptures,finishBroadPhaseCaptures,islandSnapshotCaptures,islandTransitionCaptures;
         private uint pendingFinishBroadPhaseOrdinal;
         private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
@@ -742,6 +1039,22 @@ namespace SuperchargedPatch.Authoring.Modules
                     "oc2_finish_broad_phase_observer_cancel");
                 uninstallFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverAction>(
                     "oc2_finish_broad_phase_observer_uninstall");
+                captureIslandSnapshot=Export<NativeIslandCaptureSnapshot>(
+                    "oc2_island_capture_snapshot_v1");
+                installIslandObserver=Export<NativeIslandObserverInstall>(
+                    "oc2_island_update_observer_install");
+                statusIslandObserver=Export<NativeIslandObserverAction>(
+                    "oc2_island_update_observer_status");
+                armIslandObserver=Export<NativeIslandObserverArm>(
+                    "oc2_island_update_observer_arm");
+                copyIslandObserver=Export<NativeIslandObserverCopy>(
+                    "oc2_island_update_observer_copy");
+                cancelIslandObserver=Export<NativeIslandObserverAction>(
+                    "oc2_island_update_observer_cancel");
+                uninstallIslandObserver=Export<NativeIslandObserverAction>(
+                    "oc2_island_update_observer_uninstall");
+                copyIslandJournal=Export<NativeIslandJournalCopy>(
+                    "oc2_island_edge_journal_copy");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
@@ -759,7 +1072,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
-                if(apiVersion()!=16)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(apiVersion()!=NativeAbiVersion)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 if(contactRecreateApiVersion()!=2)throw new InvalidOperationException("Native contact-recreate API version mismatch.");
                 if(contactRecreateAuditApiVersion()!=1)throw new InvalidOperationException("Native contact-recreate audit API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
@@ -770,7 +1083,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 contactManagerContext=context;coreRoundIdentity=CoreRoundIdentity();active=this;
                 if(observeContactManagerContext)
                 {
-                    RunContextObserver(installContextObserver,"install");
+                    NativeContextObserverReceipt contextInstall=
+                        RunContextObserver(installContextObserver,"install");
+                    // Native hooks remain resident across managed revisions and
+                    // their last value is diagnostic history, not evidence for
+                    // this activation.  Require a post-install observation.
+                    contextObservationFloor=contextInstall.Observations;
                     contextObserverInstalled=true;
                     RefreshObservedContactManagerContext();
                 }
@@ -782,6 +1100,12 @@ namespace SuperchargedPatch.Authoring.Modules
                     NativeFinishBroadPhaseObserverReceipt broad=InstallFinishBroadPhaseObserver();
                     if(broad.Result!=1||broad.Installed!=1||broad.State!=1)
                         throw new InvalidOperationException("Native finishBroadPhase observer did not install.");
+                    // A freshly installed context observer has legitimately seen no
+                    // updateContactManager call while the authoring fence is paused.
+                    // Install immediately only when an explicit or prior observation
+                    // supplied a context; otherwise the first capture admission will
+                    // install the island observer after a real context is observed.
+                    if(contactManagerContext!=0)EnsureIslandObserverForCurrentContext();
                 }
                 if(auto||autoPoolRestore||autoDispatchRestore)InstallAutomaticHook();
             }
@@ -910,12 +1234,22 @@ namespace SuperchargedPatch.Authoring.Modules
         public static void AfterCaptureFrame(int __0)
         {
             var module=active;
-            if(module==null||!module.automaticContactPoolRestore||
-                (!module.contactRecreatePendingValidation&&module.scheduledContactPoolCaptureFrame<0))return;
+            if(module==null||!module.automaticContactPoolRestore)return;
+            bool pendingLifecycle=module.contactRecreatePendingValidation||
+                module.scheduledContactPoolCaptureFrame>=0;
             try
             {
                 module.ObserveSceneGeneration();
                 module.ObserveCoreRoundIdentity();
+                // The context hook first learns PxsContext during physics.  This
+                // Priority.Last output boundary is the earliest managed point at
+                // which it is safe to install or rebind the island hook.  Keeping
+                // it current from the first observed output also retains the
+                // longest possible removeEdge history for later D-queue capture.
+                module.RefreshObservedContactManagerContext();
+                if(module.contactManagerContext!=0)
+                    module.EnsureIslandObserverForCurrentContext();
+                if(!pendingLifecycle)return;
                 // Either observer may have recognized a new scene/round and
                 // transactionally cancelled scene-owned work.  Contact owners
                 // are an advancing-output property: the recreation hook runs
@@ -998,9 +1332,11 @@ namespace SuperchargedPatch.Authoring.Modules
             RefreshObservedContactManagerContext();
             if(!ReferenceEquals(active,this)||contactManagerContext==0)
                 throw new InvalidOperationException("Scheduled contact-pool capture requires an active observed or explicit context.");
+            EnsureIslandObserverForCurrentContext();
             if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0||
                 pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar!=null||
                 pendingDirtyCaptureOrdinal!=0||pendingFinishBroadPhaseOrdinal!=0||
+                pendingIslandObservation!=null||
                 dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||
                 pendingDirtyRestoreState!=null||contactRecreatePendingValidation||
                 pendingContactRecreateSidecar!=null||automaticRestorePending||warpInProgress)
@@ -1028,6 +1364,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(pendingContactPoolAction!=0||pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||
                 pendingDirtyCaptureSidecar!=null||pendingDirtyCaptureOrdinal!=0||
                 pendingFinishBroadPhaseOrdinal!=0||
+                pendingIslandObservation!=null||
                 dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||pendingDirtyRestoreState!=null||
                 contactRecreatePendingValidation||pendingContactRecreateSidecar!=null||
                 automaticRestorePending||warpInProgress)
@@ -1050,10 +1387,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 RunContactPoolAction(1,false,true);
                 if(pendingContactPoolFrame!=-1||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar==null||
                     pendingDirtyCaptureOrdinal==0||pendingFinishBroadPhaseOrdinal==0||
+                    pendingIslandObservation==null||
                     pendingDirtyCaptureSidecar.Frame!=target||
                     !ReferenceEquals(pendingDirtyCaptureSidecar.CoreSnapshot,core)||
                     pendingDirtyCaptureSidecar.ShapeInstancePairPool==null||
                     pendingDirtyCaptureSidecar.TransformCache==null||
+                    pendingDirtyCaptureSidecar.IslandSnapshot==null||
                     pendingDirtyCaptureSidecar.TransformDispatch==null)
                     throw new InvalidOperationException("Scheduled contact-pool capture did not stage one complete exact-frame sidecar transaction.");
                 // Clear only after all synchronous read-only captures succeeded
@@ -1093,6 +1432,14 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("No current-scene NPhaseCore observation is available for an exact pool checkpoint.");
             }
             RefreshObservedContactManagerContext();
+            if(action==1)
+            {
+                if(!automaticContactPoolRestore||!dirtyInteractionHookInstalled||
+                    !finishBroadPhaseObserverInstalled)
+                    throw new InvalidOperationException(
+                        "Contact-pool capture requires the complete native observation stack.");
+                EnsureIslandObserverForCurrentContext();
+            }
             CheckpointSidecar selected=null;
             if(action==2)
             {
@@ -1171,7 +1518,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
             RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
@@ -1189,6 +1536,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     captureNPhase,actionFrame);
                 TransformCacheState transformCache=CaptureTransformCacheState(
                     captureNPhase,actionFrame);
+                IslandSnapshotState islandSnapshot=CaptureIslandSnapshotState(
+                    captureNPhase,IslandPhaseSettled,actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -1203,6 +1552,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     NPhaseReports=nphaseReports,
                     InteractionGraph=interactionGraph,
                     TransformCache=transformCache,
+                    IslandSnapshot=islandSnapshot,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 uint afterObservation;
@@ -1216,7 +1566,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 // observers prove that they describe this same sealed sidecar.
                 ArmCheckpointObservationCapture(captured);
                 pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
-                contactPoolCaptures++;transformCacheCaptures++;
+                contactPoolCaptures++;transformCacheCaptures++;islandSnapshotCaptures++;
             }
             else
             {
@@ -1248,7 +1598,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=16||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeArray.ToUInt32()!=expected.FreeArray||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
@@ -1293,7 +1643,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=16||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
                     throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
@@ -1538,6 +1888,15 @@ namespace SuperchargedPatch.Authoring.Modules
                     delegate { ValidateFinishBroadPhaseState(selected.FinishBroadPhase,selected); },
                     "TARGET_BROADPHASE_TRANSITION_SIDECAR_VALID",
                     "The exact subsequent pass-zero finishBroadPhase transition is linked to the target Scene transaction.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-island-sidecar",phase,
+                    delegate { ValidateIslandSnapshotState(selected.IslandSnapshot,IslandPhaseSettled);
+                        ValidateIslandSnapshotCoherence(selected,selected.IslandSnapshot); },
+                    "TARGET_ISLAND_SIDECAR_VALID",
+                    "The settled island allocators, topology, bitmaps, queues, and semantic contact edges are coherent.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-island-transition-sidecar",phase,
+                    delegate { ValidateIslandTransitionState(selected); },
+                    "TARGET_ISLAND_TRANSITION_SIDECAR_VALID",
+                    "The exact first island-update pre/post snapshots and add/remove journal are retained.");
                 AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-large-sidecar",phase,
                     delegate { ValidateManifoldPoolState(selected.LargeManifoldPool,
                         LargeManifoldPoolKind,"large"); },
@@ -1676,6 +2035,7 @@ namespace SuperchargedPatch.Authoring.Modules
             AppendInteractionGraphReadiness(checks,blockers,deferred,phase,found?selected:null);
             AppendTransformCacheReadiness(checks,blockers,deferred,phase,found?selected:null);
             AppendFinishBroadPhaseReadiness(checks,blockers,deferred,phase,found?selected:null);
+            AppendIslandReadiness(checks,blockers,deferred,phase,found?selected:null);
 
             if(found&&phase=="target-paused")
             {
@@ -1735,8 +2095,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     "Transform-dispatch live admission requires the restored target-paused state.",null);
             }
 
-            string[] futureFamilies={"island-edge-allocator-and-change-queues",
-                "dirty-interaction-live-projection",
+            string[] futureFamilies={"dirty-interaction-live-projection",
                 "first-output-owner-convergence"};
             foreach(string family in futureFamilies)
                 AddReadinessCheck(checks,blockers,deferred,"rigidbody."+family,phase,
@@ -1778,6 +2137,14 @@ namespace SuperchargedPatch.Authoring.Modules
             "rigidbody.transform-dispatch",
             "rigidbody.interaction-registration-order",
             "rigidbody.island-edge-allocator-and-change-queues",
+            "rigidbody.island.capture-repeatability","rigidbody.island.layout-identity",
+            "rigidbody.island.node-topology","rigidbody.island.edge-topology",
+            "rigidbody.island.island-topology","rigidbody.island.allocator-free-order",
+            "rigidbody.island.node-bitmaps","rigidbody.island.change-queue-order",
+            "rigidbody.island.sip-edge-bindings","rigidbody.island.edge-type-scope",
+            "rigidbody.island.body-owner-coherence","rigidbody.island.transition-capture",
+            "rigidbody.island.transition-identity","rigidbody.island.transition-pre-state",
+            "rigidbody.island.transition-post-state","rigidbody.island.edge-journal",
             "rigidbody.transform-cache-id-pool",
             "rigidbody.broadphase-created-overlap-order",
             "rigidbody.dirty-interaction-live-projection",
@@ -1792,6 +2159,7 @@ namespace SuperchargedPatch.Authoring.Modules
             "rigidbody.target-nphase-report-sidecar","rigidbody.target-interaction-graph-sidecar",
             "rigidbody.target-transform-cache-sidecar",
             "rigidbody.target-broadphase-transition-sidecar",
+            "rigidbody.target-island-sidecar","rigidbody.target-island-transition-sidecar",
             "rigidbody.target-large-sidecar","rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar","rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows","rigidbody.native-audit-repeatability",
@@ -1852,11 +2220,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 duplicates.Length==0&&missing.Length==0?
                     "Every required readiness family is explicitly represented.":
                     "The provider omitted or duplicated required readiness identifiers.",
-                new Dictionary<string,object>{{"contractVersion",5},
+                new Dictionary<string,object>{{"contractVersion",6},
                     {"required",requiredIds.Cast<object>().ToArray()},
                     {"uncovered",missing.Cast<object>().ToArray()},
                     {"duplicates",duplicates.Cast<object>().ToArray()}});
-            return new Dictionary<string,object>{{"contractVersion",5},
+            return new Dictionary<string,object>{{"contractVersion",6},
                 {"required",requiredIds.Cast<object>().ToArray()},
                 {"uncovered",missing.Cast<object>().ToArray()},
                 {"duplicates",duplicates.Cast<object>().ToArray()}};
@@ -2633,6 +3001,187 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
+        private void AppendIslandReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,CheckpointSidecar selected)
+        {
+            string[] ids={"rigidbody.island.capture-repeatability","rigidbody.island.layout-identity",
+                "rigidbody.island.node-topology","rigidbody.island.edge-topology",
+                "rigidbody.island.island-topology","rigidbody.island.allocator-free-order",
+                "rigidbody.island.node-bitmaps","rigidbody.island.change-queue-order",
+                "rigidbody.island.sip-edge-bindings","rigidbody.island.edge-type-scope",
+                "rigidbody.island.body-owner-coherence","rigidbody.island.transition-capture",
+                "rigidbody.island.transition-identity","rigidbody.island.transition-pre-state",
+                "rigidbody.island.transition-post-state","rigidbody.island.edge-journal",
+                "rigidbody.island-edge-allocator-and-change-queues"};
+            if(selected==null)
+            {
+                foreach(string id in ids)AddReadinessCheck(checks,blockers,deferred,id,phase,
+                    phase=="target-paused"?"fail":"deferred","blocker","ISLAND_SIDECAR_REQUIRED",
+                    "The settled island snapshot and first-update transition sidecar are required.",null);
+                return;
+            }
+            try
+            {
+                IslandSnapshotState target=selected.IslandSnapshot;
+                IslandTransitionState transition=selected.IslandTransition;
+                ValidateIslandSnapshotState(target,IslandPhaseSettled);
+                ValidateIslandSnapshotCoherence(selected,target);
+                ValidateIslandTransitionState(selected);
+                NativeIslandSnapshotReceipt targetReceipt=target.Receipt;
+                bool supportedTypes=targetReceipt.LiveConstraintEdges==0&&
+                    targetReceipt.LiveArticulationEdges==0&&
+                    transition.Pre.Receipt.LiveConstraintEdges==0&&
+                    transition.Pre.Receipt.LiveArticulationEdges==0&&
+                    transition.Post.Receipt.LiveConstraintEdges==0&&
+                    transition.Post.Receipt.LiveArticulationEdges==0&&
+                    transition.Journal.All(value=>value.EdgeType==0);
+                uint[] allocatedOwners=target.Nodes.Where(value=>(value.SlotFlags&1u)!=0&&
+                    (value.RawFlagsWord&(0x02u|0x04u|0x20u))==0&&value.OwnerRaw!=0)
+                    .Select(value=>value.OwnerRaw).ToArray();
+                uint[] activeBodies=selected.InteractionGraph.ActiveBodies;
+                uint[] ownerLinks=allocatedOwners.Intersect(activeBodies).ToArray();
+                bool ownerCoherent=allocatedOwners.Distinct().Count()==allocatedOwners.Length;
+
+                IslandSnapshotState live=null,repeated=null;
+                bool repeatable=true,layout=true,nodeExact=true,edgeExact=true,islandExact=true;
+                bool freeExact=true,bitmapsExact=true,queuesExact=true,bindingsExact=true,scalarExact=true;
+                if(phase=="target-paused")
+                {
+                    live=CaptureIslandSnapshotState(targetReceipt.NPhaseCore.ToUInt32(),
+                        IslandPhaseSettled,selected.Frame);
+                    repeated=CaptureIslandSnapshotState(targetReceipt.NPhaseCore.ToUInt32(),
+                        IslandPhaseSettled,selected.Frame);
+                    repeatable=SameIslandSnapshotState(live,repeated);
+                    layout=SameIslandSnapshotLayout(targetReceipt,live.Receipt);
+                    nodeExact=SameStructArray(target.Nodes,live.Nodes);
+                    edgeExact=SameStructArray(target.Edges,live.Edges);
+                    islandExact=SameStructArray(target.Islands,live.Islands)&&
+                        SameStructArray(target.Roots,live.Roots);
+                    freeExact=SameIslandFreeState(target,live);
+                    bitmapsExact=target.KinematicWords.SequenceEqual(live.KinematicWords)&&
+                        target.KinematicChangeWords.SequenceEqual(live.KinematicChangeWords)&&
+                        target.NotReadyWords.SequenceEqual(live.NotReadyWords)&&
+                        target.NotReadyChangeWords.SequenceEqual(live.NotReadyChangeWords)&&
+                        target.IslandWords.SequenceEqual(live.IslandWords);
+                    queuesExact=target.NodeCreated.SequenceEqual(live.NodeCreated)&&
+                        target.NodeDeleted.SequenceEqual(live.NodeDeleted)&&
+                        target.EdgeCreated.SequenceEqual(live.EdgeCreated)&&
+                        target.EdgeDeleted.SequenceEqual(live.EdgeDeleted)&&
+                        target.EdgeBroken.SequenceEqual(live.EdgeBroken)&&
+                        target.EdgeJoined.SequenceEqual(live.EdgeJoined);
+                    bindingsExact=SameStructArray(target.Bindings,live.Bindings)&&
+                        targetReceipt.LiveContactEdges==live.Receipt.LiveContactEdges&&
+                        targetReceipt.LiveConstraintEdges==live.Receipt.LiveConstraintEdges&&
+                        targetReceipt.LiveArticulationEdges==live.Receipt.LiveArticulationEdges;
+                    scalarExact=SameIslandScalarState(targetReceipt,live.Receipt);
+                    supportedTypes=supportedTypes&&live.Receipt.LiveConstraintEdges==0&&
+                        live.Receipt.LiveArticulationEdges==0;
+                }
+
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.capture-repeatability",phase,
+                    repeatable?"pass":"fail","blocker",
+                    repeatable?"ISLAND_CAPTURE_REPEATABLE":"ISLAND_CAPTURE_CHANGED",
+                    repeatable?"The snapshot is native-stable and repeated live captures are byte-identical.":
+                        "Two consecutive settled island captures differed.",
+                    new Dictionary<string,object>{{"targetHash","0x"+targetReceipt.SnapshotHash.ToString("X8")},
+                        {"liveHash",live==null?null:"0x"+live.Receipt.SnapshotHash.ToString("X8")},
+                        {"repeatedHash",repeated==null?null:"0x"+repeated.Receipt.SnapshotHash.ToString("X8")}});
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.layout-identity",phase,
+                    layout,"ISLAND_LAYOUT",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.node-topology",phase,
+                    nodeExact,"ISLAND_NODE_TOPOLOGY",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.edge-topology",phase,
+                    edgeExact,"ISLAND_EDGE_TOPOLOGY",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.island-topology",phase,
+                    islandExact,"ISLAND_LIST_TOPOLOGY",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.allocator-free-order",phase,
+                    freeExact,"ISLAND_FREE_ORDER",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.node-bitmaps",phase,
+                    bitmapsExact,"ISLAND_BITMAPS",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.change-queue-order",phase,
+                    queuesExact,"ISLAND_CHANGE_QUEUES",target,live);
+                AddIslandExactReadiness(checks,blockers,deferred,"rigidbody.island.sip-edge-bindings",phase,
+                    bindingsExact,"ISLAND_SIP_BINDINGS",target,live);
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.edge-type-scope",phase,
+                    supportedTypes?"pass":"fail","blocker",
+                    supportedTypes?"CONTACT_EDGE_SCOPE_PROVEN":"UNRESOLVED_ISLAND_EDGE_OWNER_SEMANTICS",
+                    supportedTypes?"Every retained edge requiring semantic rebinding is a resolved contact SIP edge.":
+                        "Constraint or articulation edge ownership is present; restoration must fail closed until its semantic key is resolved.",
+                    new Dictionary<string,object>{{"settledContact",targetReceipt.LiveContactEdges},
+                        {"settledConstraint",targetReceipt.LiveConstraintEdges},
+                        {"settledArticulation",targetReceipt.LiveArticulationEdges},
+                        {"journalConstraintOrArticulation",transition.Journal.Count(value=>value.EdgeType!=0)}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.body-owner-coherence",phase,
+                    ownerCoherent?"pass":"fail","blocker",
+                    ownerCoherent?"ISLAND_NODE_OWNERS_COHERENT":"DUPLICATE_ISLAND_NODE_OWNER",
+                    ownerCoherent?"Allocated non-null island node owners are unique; graph/body owner cross-links are retained as evidence.":
+                        "Multiple allocated island nodes claim the same non-null owner.",
+                    new Dictionary<string,object>{{"allocatedOwners",allocatedOwners.Length},
+                        {"activeGraphBodies",activeBodies.Length},{"crossLinkedOwners",ownerLinks.Length},
+                        {"deletedNonArticulatedNodes",target.Nodes.Count(value=>(value.SlotFlags&1u)!=0&&
+                            (value.RawFlagsWord&(0x02u|0x04u))==0&&(value.RawFlagsWord&0x20u)!=0)},
+                        {"deletedNodesRemainAllocatedUntilQueueConsumption",true}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.transition-capture",phase,
+                    "pass","blocker","ISLAND_TRANSITION_DOUBLE_COPY_EXACT",
+                    "Two copies of the committed first-update observation were byte-identical before publication.",
+                    new Dictionary<string,object>{{"ordinal",transition.Receipt.ObservationOrdinal},
+                        {"observerSequence",transition.Receipt.ObserverSequence},{"slotIndex",transition.Receipt.SlotIndex}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.transition-identity",phase,
+                    "pass","blocker","ISLAND_TRANSITION_IDENTITY_EXACT",
+                    "The update belongs to the same Scene, Context, NPhaseCore, island manager, thread, pass, and ordinal.",
+                    new Dictionary<string,object>{{"manager",Hex(transition.Receipt.ObservedManager)},
+                        {"threadId",transition.Receipt.ThreadId},{"pass",transition.Receipt.Pass}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.transition-pre-state",phase,
+                    "pass","blocker","ISLAND_PRE_STATE_CAPTURED",
+                    "The complete independently validated pre-update snapshot is retained.",
+                    DescribeIslandSnapshotState(transition.Pre));
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.transition-post-state",phase,
+                    "pass","blocker","ISLAND_POST_STATE_CAPTURED",
+                    "The complete independently re-resolved post-update snapshot is retained.",
+                    DescribeIslandSnapshotState(transition.Post));
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island.edge-journal",phase,
+                    "pass","blocker","ISLAND_EDGE_JOURNAL_INTERVAL_EXACT",
+                    "The arm-to-post half-open add/remove journal interval is contiguous, retained, and byte-repeatable.",
+                    new Dictionary<string,object>{{"begin",transition.Receipt.JournalBeginOrdinal},
+                        {"end",transition.Receipt.JournalEndOrdinal},{"records",transition.Journal.Length},
+                        {"add",transition.Journal.Count(value=>value.EventKind==1)},
+                        {"remove",transition.Journal.Count(value=>value.EventKind==2)},
+                        {"overflowCount",transition.JournalReceipt.OverflowCount}});
+                bool exact=layout&&nodeExact&&edgeExact&&islandExact&&freeExact&&bitmapsExact&&
+                    queuesExact&&bindingsExact&&scalarExact;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.island-edge-allocator-and-change-queues",phase,
+                    !repeatable||!supportedTypes||!ownerCoherent?"fail":
+                        phase=="target-paused"&&exact?"pass":"deferred","blocker",
+                    !repeatable||!supportedTypes||!ownerCoherent?"ISLAND_ADMISSION_FAILED":
+                        phase=="target-paused"&&exact?"ISLAND_STATE_EXACT":"ISLAND_PROJECTION_REQUIRED",
+                    !repeatable||!supportedTypes||!ownerCoherent?
+                        "Island state failed structural or semantic restore admission.":
+                        phase=="target-paused"&&exact?
+                            "The complete canonical settled island state already matches the target.":
+                            "The exact island state and transition are captured; atomic restore mutation is not implemented.",
+                    new Dictionary<string,object>{{"exact",exact},{"scalarExact",scalarExact},
+                        {"mutationImplemented",false}});
+            }
+            catch(Exception error)
+            {
+                foreach(string id in ids)AddReadinessCheck(checks,blockers,deferred,id,phase,
+                    "fail","blocker","ISLAND_AUDIT_FAILED",error.GetType().Name+": "+error.Message,null);
+            }
+        }
+
+        private static void AddIslandExactReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string id,string phase,bool exact,string code,
+            IslandSnapshotState target,IslandSnapshotState live)
+        {
+            string status=phase!="target-paused"?"pass":exact?"pass":"deferred";
+            AddReadinessCheck(checks,blockers,deferred,id,phase,status,"blocker",
+                status=="pass"?code+"_CAPTURED":code+"_PROJECTION_REQUIRED",
+                status=="pass"?"This ordered island family is structurally captured and exact for the audited phase.":
+                    "This ordered island family differs live; its exact target state is captured but mutation is not implemented.",
+                new Dictionary<string,object>{{"targetSnapshotHash","0x"+target.Receipt.SnapshotHash.ToString("X8")},
+                    {"liveSnapshotHash",live==null?null:"0x"+live.Receipt.SnapshotHash.ToString("X8")}});
+        }
+
         private NativeContactRecreateAuditReceipt CallContactRecreateAudit(
             CheckpointSidecar selected,NativeContactRecreatePlanRow[] rows)
         {
@@ -2729,12 +3278,15 @@ namespace SuperchargedPatch.Authoring.Modules
                 manifoldPoolCaptures.ToString(),manifoldPoolRestores.ToString(),
                 transformDispatchCaptures.ToString(),transformDispatchRestores.ToString(),
                 transformCacheCaptures.ToString(),finishBroadPhaseCaptures.ToString(),
+                islandSnapshotCaptures.ToString(),islandTransitionCaptures.ToString(),
                 dirtyInteractionCaptures.ToString(),dirtyInteractionRestores.ToString(),
                 pendingContactPoolAction.ToString(),pendingContactPoolFrame.ToString(),
                 scheduledContactPoolCaptureFrame.ToString(),automaticRestorePending.ToString(),
                 warpInProgress.ToString(),warpTargetFrame.ToString(),warpTargetRestoreEligible.ToString(),
                 contactRecreatePendingValidation.ToString(),dirtyRestorePendingValidation.ToString(),
                 pendingFinishBroadPhaseOrdinal.ToString(),
+                (pendingIslandObservation==null?0:pendingIslandObservation.ArmedOrdinal).ToString(),
+                processRetainedIslandBuffers.Count.ToString(),
                 contactPoolReceipts.Count.ToString(),manifoldPoolReceipts.Count.ToString(),
                 transformDispatchReceipts.Count.ToString(),dirtyInteractionReceipts.Count.ToString(),
                 finishBroadPhaseReceipts.Count.ToString(),
@@ -2962,7 +3514,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native contact-manager owner capture failed: result="+
                         receipt.Result+", Win32/error="+receipt.LastError+", invalidSlot="+
                         receipt.InvalidSlot+", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.Context.ToUInt32()!=contactManagerContext||receipt.TotalSlots<1||
                     receipt.TotalSlots>MaximumContactManagers||receipt.RecordsRequired!=receipt.UsedCount||
@@ -3136,7 +3688,7 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);
             }
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                 receipt.Context.ToUInt32()!=contactManagerContext||receipt.PoolKind!=poolKind||
                 receipt.Pool==UIntPtr.Zero||receipt.FreeHeadBefore.ToUInt32()!=
@@ -3193,7 +3745,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ok==0||receipt.Result!=1)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
                     receipt.Result+", Win32/error="+receipt.LastError+".");
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
                 receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
@@ -3261,7 +3813,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native shape-pair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.TraversedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0x1Fu)
@@ -3308,7 +3860,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -3362,7 +3914,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair report-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -3424,7 +3976,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native NPhase report-state capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.ActorPairCount>MaximumShapeInstancePairs||
@@ -3490,7 +4042,7 @@ namespace SuperchargedPatch.Authoring.Modules
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+
                         ", kind="+receipt.InvalidKind+", index="+receipt.InvalidIndex+
                         ", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.InteractionScene==UIntPtr.Zero||receipt.LlContext==UIntPtr.Zero||
@@ -3566,7 +4118,7 @@ namespace SuperchargedPatch.Authoring.Modules
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+
                         ", kind="+receipt.InvalidKind+", index="+receipt.InvalidIndex+
                         ", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.InteractionScene==UIntPtr.Zero||receipt.Context==UIntPtr.Zero||
@@ -3855,11 +4407,174 @@ namespace SuperchargedPatch.Authoring.Modules
             return receipt;
         }
 
+        private NativeIslandObserverReceipt InstallIslandObserver(uint expectedManager)
+        {
+            if(installIslandObserver==null||expectedManager==0)
+                throw new InvalidOperationException("Native island observer install export or manager is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeIslandObserverReceipt));
+            if(size!=128)throw new InvalidOperationException("Managed island observer ABI size differs.");
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeIslandObserverReceipt receipt;
+            try
+            {
+                IslandSnapshotBufferOwner.Zero(buffer,size);
+                int ok=installIslandObserver(new UIntPtr(unityPlayerBase),new UIntPtr(expectedManager),buffer);
+                if(ok!=0)islandObserverInstalled=true;
+                receipt=(NativeIslandObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeIslandObserverReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native island observer install failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+", state="+receipt.State+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateIslandObserverReceiptContract(receipt);
+            if(receipt.ExpectedManager.ToUInt32()!=expectedManager||receipt.Installed!=1||
+                receipt.State!=1||receipt.ValidationFlags!=1u||receipt.InFlight!=0)
+                throw new InvalidOperationException("Native island observer install receipt differs.");
+            islandObserverManager=expectedManager;
+            ReleaseRetainedIslandBuffers(library);
+            return receipt;
+        }
+
+        private static void ReleaseRetainedIslandBuffers(IntPtr ownerLibrary)
+        {
+            lock(processRetainedIslandBuffers)
+            {
+                for(int i=processRetainedIslandBuffers.Count-1;i>=0;i--)
+                {
+                    PendingIslandObservation value=processRetainedIslandBuffers[i];
+                    if(value.Library!=ownerLibrary)continue;
+                    value.Pre.Dispose();value.Post.Dispose();
+                    processRetainedIslandBuffers.RemoveAt(i);
+                }
+            }
+        }
+
+        private NativeIslandObserverReceipt CallIslandObserverAction(
+            NativeIslandObserverAction callback,string action,params uint[] acceptedResults)
+        {
+            if(callback==null)throw new InvalidOperationException("Native island observer "+action+" export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeIslandObserverReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);NativeIslandObserverReceipt receipt;
+            try
+            {
+                IslandSnapshotBufferOwner.Zero(buffer,size);
+                callback(new UIntPtr(unityPlayerBase),buffer);
+                receipt=(NativeIslandObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeIslandObserverReceipt));
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateIslandObserverReceiptContract(receipt);
+            if(acceptedResults!=null&&acceptedResults.Length!=0&&!acceptedResults.Contains(receipt.Result))
+                throw new InvalidOperationException("Native island observer "+action+
+                    " failed: result="+receipt.Result+", Win32/error="+receipt.LastError+
+                    ", state="+receipt.State+", inFlight="+receipt.InFlight+".");
+            return receipt;
+        }
+
+        private void ValidateIslandObserverReceiptContract(NativeIslandObserverReceipt receipt)
+        {
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=128u||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+                throw new InvalidOperationException("Native island observer receipt contract differs.");
+        }
+
+        private IslandSnapshotState CaptureIslandSnapshotState(uint nphaseCore,uint phase,int frame)
+        {
+            if(captureIslandSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native island snapshot export or NPhaseCore is unavailable.");
+            using(IslandSnapshotBufferOwner owner=IslandSnapshotBufferOwner.Create())
+            {
+                int ok=captureIslandSnapshot(new UIntPtr(unityPlayerBase),new UIntPtr(nphaseCore),
+                    phase,owner.BuffersPointer,owner.ReceiptPointer);
+                NativeIslandSnapshotReceipt receipt=(NativeIslandSnapshotReceipt)Marshal.PtrToStructure(
+                    owner.ReceiptPointer,typeof(NativeIslandSnapshotReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native island snapshot failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+
+                        ", invalidKind="+receipt.InvalidKind+", invalidIndex="+receipt.InvalidIndex+
+                        ", detail="+receipt.Detail+".");
+                if(receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Phase!=phase)
+                    throw new InvalidOperationException("Native island snapshot returned a different Unity/NPhase/phase identity.");
+                IslandSnapshotState state=ReadIslandSnapshotState(owner,receipt);
+                ValidateIslandSnapshotState(state,phase);
+                return state;
+            }
+        }
+
+        private static IslandSnapshotState ReadIslandSnapshotState(
+            IslandSnapshotBufferOwner owner,NativeIslandSnapshotReceipt receipt)
+        {
+            var state=new IslandSnapshotState {Receipt=receipt,
+                Nodes=ReadStructArray<NativeIslandNodeSlotRecord>(owner.Nodes,receipt.NodeManager.Written),
+                Edges=ReadStructArray<NativeIslandEdgeSlotRecord>(owner.Edges,receipt.EdgeManager.Written),
+                Islands=ReadStructArray<NativeIslandSlotRecord>(owner.Islands,receipt.IslandManagerReceipt.Written),
+                Roots=ReadStructArray<NativeIslandRootSlotRecord>(owner.Roots,receipt.RootManager.Written),
+                KinematicWords=ReadUIntArray(owner.KinematicWords,receipt.Kinematic.Written),
+                KinematicChangeWords=ReadUIntArray(owner.KinematicChangeWords,receipt.KinematicChange.Written),
+                NotReadyWords=ReadUIntArray(owner.NotReadyWords,receipt.NotReady.Written),
+                NotReadyChangeWords=ReadUIntArray(owner.NotReadyChangeWords,receipt.NotReadyChange.Written),
+                IslandWords=ReadUIntArray(owner.IslandWords,receipt.IslandBitmap.Written),
+                NodeCreated=ReadUIntArray(owner.NodeCreated,receipt.NodeCreated.Written),
+                NodeDeleted=ReadUIntArray(owner.NodeDeleted,receipt.NodeDeleted.Written),
+                EdgeCreated=ReadUIntArray(owner.EdgeCreated,receipt.EdgeCreated.Written),
+                EdgeDeleted=ReadUIntArray(owner.EdgeDeleted,receipt.EdgeDeleted.Written),
+                EdgeBroken=ReadUIntArray(owner.EdgeBroken,receipt.EdgeBroken.Written),
+                EdgeJoined=ReadUIntArray(owner.EdgeJoined,receipt.EdgeJoined.Written),
+                Bindings=ReadStructArray<NativeIslandSipBindingRecord>(owner.Bindings,receipt.BindingsWritten)};
+            state.RawBytes=IslandSnapshotRawBytes(owner,receipt);
+            return state;
+        }
+
+        private static T[] ReadStructArray<T>(IntPtr pointer,uint count) where T:struct
+        {
+            if(count>int.MaxValue)throw new InvalidOperationException("Native array count exceeds Int32.");
+            int size=Marshal.SizeOf(typeof(T));T[] values=new T[(int)count];
+            for(int i=0;i<values.Length;i++)values[i]=(T)Marshal.PtrToStructure(
+                new IntPtr(pointer.ToInt64()+checked(i*size)),typeof(T));
+            return values;
+        }
+
+        private static uint[] ReadUIntArray(IntPtr pointer,uint count)
+        {
+            if(count>int.MaxValue)throw new InvalidOperationException("Native word count exceeds Int32.");
+            uint[] values=new uint[(int)count];
+            for(int i=0;i<values.Length;i++)values[i]=unchecked((uint)Marshal.ReadInt32(pointer,i*4));
+            return values;
+        }
+
+        private static byte[] IslandSnapshotRawBytes(
+            IslandSnapshotBufferOwner owner,NativeIslandSnapshotReceipt receipt)
+        {
+            IntPtr[] pointers={owner.ReceiptPointer,owner.Nodes,owner.Edges,owner.Islands,owner.Roots,
+                owner.KinematicWords,owner.KinematicChangeWords,owner.NotReadyWords,
+                owner.NotReadyChangeWords,owner.IslandWords,owner.NodeCreated,owner.NodeDeleted,
+                owner.EdgeCreated,owner.EdgeDeleted,owner.EdgeBroken,owner.EdgeJoined,owner.Bindings};
+            int[] lengths={620,
+                checked((int)receipt.NodeManager.Written*32),checked((int)receipt.EdgeManager.Written*36),
+                checked((int)receipt.IslandManagerReceipt.Written*32),checked((int)receipt.RootManager.Written*24),
+                checked((int)receipt.Kinematic.Written*4),checked((int)receipt.KinematicChange.Written*4),
+                checked((int)receipt.NotReady.Written*4),checked((int)receipt.NotReadyChange.Written*4),
+                checked((int)receipt.IslandBitmap.Written*4),checked((int)receipt.NodeCreated.Written*4),
+                checked((int)receipt.NodeDeleted.Written*4),checked((int)receipt.EdgeCreated.Written*4),
+                checked((int)receipt.EdgeDeleted.Written*4),checked((int)receipt.EdgeBroken.Written*4),
+                checked((int)receipt.EdgeJoined.Written*4),checked((int)receipt.BindingsWritten*44)};
+            int total=0;foreach(int length in lengths)total=checked(total+length);
+            byte[] bytes=new byte[total];int offset=0;
+            for(int i=0;i<pointers.Length;i++)
+            {
+                if(lengths[i]!=0)Marshal.Copy(pointers[i],bytes,offset,lengths[i]);
+                offset+=lengths[i];
+            }
+            return bytes;
+        }
+
         private void ArmCheckpointObservationCapture(CheckpointSidecar sidecar)
         {
             ValidateTransformCacheState(sidecar==null?null:sidecar.TransformCache);
-            if(!finishBroadPhaseObserverInstalled||sidecar.InteractionGraph==null)
-                throw new InvalidOperationException("Checkpoint observation requires the installed finishBroadPhase observer.");
+            ValidateIslandSnapshotState(sidecar==null?null:sidecar.IslandSnapshot,IslandPhaseSettled);
+            if(!finishBroadPhaseObserverInstalled||!islandObserverInstalled||sidecar.InteractionGraph==null)
+                throw new InvalidOperationException("Checkpoint observation requires both installed native observers.");
             NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
             int size=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
             IntPtr buffer=Marshal.AllocHGlobal(size);
@@ -3867,6 +4582,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int ok=0;
             try
             {
+                ArmIslandObservationCapture(sidecar);
                 for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
                 ok=armFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),graph.OwnerScene,
                     graph.LlContext,graph.NPhaseCore,0,buffer);
@@ -3875,7 +4591,7 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             catch
             {
-                try{if(ok!=0)CancelCheckpointObservationWork();}
+                try{if(ok!=0||pendingIslandObservation!=null)CancelCheckpointObservationWork();}
                 finally{pendingFinishBroadPhaseOrdinal=0;}
                 throw;
             }
@@ -3896,8 +4612,56 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             catch
             {
-                try{if(ok!=0)CancelCheckpointObservationWork();}
+                try{if(ok!=0||pendingIslandObservation!=null)CancelCheckpointObservationWork();}
                 finally{pendingFinishBroadPhaseOrdinal=0;}
+                throw;
+            }
+        }
+
+        private void ArmIslandObservationCapture(CheckpointSidecar sidecar)
+        {
+            if(pendingIslandObservation!=null||armIslandObserver==null)
+                throw new InvalidOperationException("Another island observation is pending or the arm export is unavailable.");
+            NativeIslandSnapshotReceipt settled=sidecar.IslandSnapshot.Receipt;
+            var pending=new PendingIslandObservation {Sidecar=sidecar,Library=library,
+                ExpectedManager=settled.IslandManager.ToUInt32(),
+                ExpectedContext=settled.Context.ToUInt32(),ExpectedNphase=settled.NPhaseCore.ToUInt32()};
+            try
+            {
+                pending.Pre=IslandSnapshotBufferOwner.Create();
+                pending.Post=IslandSnapshotBufferOwner.Create();
+                pendingIslandObservation=pending;
+                int size=Marshal.SizeOf(typeof(NativeIslandObserverReceipt));
+                IntPtr receiptBuffer=Marshal.AllocHGlobal(size);NativeIslandObserverReceipt receipt;
+                try
+                {
+                    IslandSnapshotBufferOwner.Zero(receiptBuffer,size);
+                    int ok=armIslandObserver(new UIntPtr(unityPlayerBase),settled.IslandManager,
+                        settled.NPhaseCore,0,pending.Pre.BuffersPointer,pending.Pre.ReceiptPointer,
+                        pending.Post.BuffersPointer,pending.Post.ReceiptPointer,receiptBuffer);
+                    receipt=(NativeIslandObserverReceipt)Marshal.PtrToStructure(
+                        receiptBuffer,typeof(NativeIslandObserverReceipt));
+                    if(ok==0||receipt.Result!=1)
+                        throw new InvalidOperationException("Native island observer arm failed: result="+
+                            receipt.Result+", Win32/error="+receipt.LastError+", state="+receipt.State+".");
+                }
+                finally{Marshal.FreeHGlobal(receiptBuffer);}
+                ValidateIslandObserverReceiptContract(receipt);
+                uint expectedSequence=unchecked(settled.ObserverSequence+1u);
+                if(receipt.Installed!=1||receipt.State!=2||receipt.ExpectedPass!=0||
+                    receipt.ExpectedManager!=settled.IslandManager||receipt.ExpectedContext!=settled.Context||
+                    receipt.ExpectedNPhase!=settled.NPhaseCore||receipt.ArmedOrdinal==0||
+                    receipt.ArmedThreadId==0||receipt.ObserverSequence!=expectedSequence||receipt.InFlight!=0)
+                    throw new InvalidOperationException("Native island observer arm differs from the settled checkpoint identities.");
+                pending.ArmedOrdinal=receipt.ArmedOrdinal;
+                pending.ObserverSequence=receipt.ObserverSequence;
+                pending.ArmedThreadId=receipt.ArmedThreadId;
+            }
+            catch
+            {
+                if(ReferenceEquals(pendingIslandObservation,pending))
+                    CancelIslandObservationWork();
+                else{if(pending.Pre!=null)pending.Pre.Dispose();if(pending.Post!=null)pending.Post.Dispose();}
                 throw;
             }
         }
@@ -3928,6 +4692,16 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void FinalizePendingDirtyInteractionCapture()
         {
+            try{FinalizePendingDirtyInteractionCaptureCore();}
+            catch
+            {
+                try{CancelCheckpointObservationWork();}catch{}
+                throw;
+            }
+        }
+
+        private void FinalizePendingDirtyInteractionCaptureCore()
+        {
             if(pendingDirtyCaptureSidecar==null)return;
             if(pendingFinishBroadPhaseOrdinal==0)
                 throw new InvalidOperationException("Pending checkpoint capture lost its finishBroadPhase observation ordinal.");
@@ -3941,6 +4715,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Native dirty-interaction capture count exceeds the supported bound.");
             FinishBroadPhaseState finishBroadPhase=CopyFinishBroadPhaseCapture(
                 pendingDirtyCaptureSidecar,pendingFinishBroadPhaseOrdinal);
+            IslandTransitionState islandTransition=CopyIslandTransitionCapture(
+                pendingDirtyCaptureSidecar);
             int keySize=Marshal.SizeOf(typeof(NativeDirtyInteractionKey));
             int receiptSize=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
             IntPtr keysBuffer=Marshal.AllocHGlobal(Math.Max(1,(int)status.Count)*keySize);
@@ -3973,10 +4749,134 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Dirty-interaction capture completed for a different NPhaseCore than the sealed checkpoint allocator state.");
             pendingDirtyCaptureSidecar.DirtyInteractions=state;
             pendingDirtyCaptureSidecar.FinishBroadPhase=finishBroadPhase;
+            pendingDirtyCaptureSidecar.IslandTransition=islandTransition;
             StoreCheckpointSidecar(pendingDirtyCaptureSidecar);
+            CompleteIslandObservationWork();
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
+            pendingIslandObservation=null;
             pendingFinishBroadPhaseOrdinal=0;
-            dirtyInteractionCaptures++;finishBroadPhaseCaptures++;
+            dirtyInteractionCaptures++;finishBroadPhaseCaptures++;islandTransitionCaptures++;
+        }
+
+        private IslandTransitionState CopyIslandTransitionCapture(CheckpointSidecar sidecar)
+        {
+            PendingIslandObservation pending=pendingIslandObservation;
+            if(pending==null||!ReferenceEquals(pending.Sidecar,sidecar))
+                throw new InvalidOperationException("Pending island observation does not belong to the sealed checkpoint.");
+            NativeIslandObserverReceipt status=CallIslandObserverAction(
+                statusIslandObserver,"capture-status",1);
+            if(status.Installed!=1||status.State!=4||status.ExpectedPass!=0||status.Pass!=0||
+                status.ArmedOrdinal!=pending.ArmedOrdinal||status.ObservationOrdinal!=pending.ArmedOrdinal||
+                status.ObserverSequence!=pending.ObserverSequence||status.ArmedThreadId!=pending.ArmedThreadId||
+                status.ThreadId!=pending.ArmedThreadId||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
+                throw new InvalidOperationException("Native island observation did not complete exactly once: state="+
+                    status.State+", armedOrdinal="+status.ArmedOrdinal+", observationOrdinal="+
+                    status.ObservationOrdinal+", inFlight="+status.InFlight+".");
+            IslandTransitionState first=null,second=null;
+            try
+            {
+                first=CopyIslandTransitionOnce(sidecar,pending,"capture-copy-first");
+                second=CopyIslandTransitionOnce(sidecar,pending,"capture-copy-second");
+                if(!SameIslandTransitionState(first,second))
+                    throw new InvalidOperationException("Two exact-ordinal island copies were not byte-equivalent.");
+                return first;
+            }
+            catch
+            {
+                CancelIslandObservationWork();
+                throw;
+            }
+        }
+
+        private IslandTransitionState CopyIslandTransitionOnce(CheckpointSidecar sidecar,
+            PendingIslandObservation pending,string action)
+        {
+            using(IslandSnapshotBufferOwner pre=IslandSnapshotBufferOwner.Create())
+            using(IslandSnapshotBufferOwner post=IslandSnapshotBufferOwner.Create())
+            {
+                int size=Marshal.SizeOf(typeof(NativeIslandObserverReceipt));
+                IntPtr receiptBuffer=Marshal.AllocHGlobal(size);NativeIslandObserverReceipt receipt;
+                try
+                {
+                    IslandSnapshotBufferOwner.Zero(receiptBuffer,size);
+                    int ok=copyIslandObserver(new UIntPtr(unityPlayerBase),pending.ArmedOrdinal,
+                        pre.BuffersPointer,pre.ReceiptPointer,post.BuffersPointer,post.ReceiptPointer,
+                        receiptBuffer);
+                    receipt=(NativeIslandObserverReceipt)Marshal.PtrToStructure(
+                        receiptBuffer,typeof(NativeIslandObserverReceipt));
+                    if(ok==0||receipt.Result!=1)
+                        throw new InvalidOperationException("Native island observation "+action+
+                            " failed: result="+receipt.Result+", Win32/error="+receipt.LastError+
+                            ", state="+receipt.State+".");
+                }
+                finally{Marshal.FreeHGlobal(receiptBuffer);}
+                ValidateIslandObserverReceiptContract(receipt);
+                NativeIslandSnapshotReceipt preReceipt=(NativeIslandSnapshotReceipt)Marshal.PtrToStructure(
+                    pre.ReceiptPointer,typeof(NativeIslandSnapshotReceipt));
+                NativeIslandSnapshotReceipt postReceipt=(NativeIslandSnapshotReceipt)Marshal.PtrToStructure(
+                    post.ReceiptPointer,typeof(NativeIslandSnapshotReceipt));
+                IslandSnapshotState preState=ReadIslandSnapshotState(pre,preReceipt);
+                IslandSnapshotState postState=ReadIslandSnapshotState(post,postReceipt);
+                ValidateIslandTransitionReceipts(sidecar,pending,receipt,preState,postState);
+                NativeIslandJournalReceipt journalReceipt;
+                byte[] journalRaw;
+                NativeIslandJournalRecord[] journal=CopyIslandJournalOnce(
+                    receipt.JournalBeginOrdinal,receipt.JournalEndOrdinal,pending.ExpectedManager,
+                    out journalReceipt,out journalRaw);
+                ValidateIslandJournalBindingCoherence(sidecar,preState,postState,journal);
+                return new IslandTransitionState {Receipt=receipt,Pre=preState,Post=postState,
+                    JournalReceipt=journalReceipt,Journal=journal,JournalRawBytes=journalRaw};
+            }
+        }
+
+        private NativeIslandJournalRecord[] CopyIslandJournalOnce(uint begin,uint end,
+            uint expectedManager,out NativeIslandJournalReceipt receipt,out byte[] raw)
+        {
+            if(copyIslandJournal==null||end<begin||end-begin>MaximumIslandJournalRecords)
+                throw new InvalidOperationException("Island journal interval is unavailable or outside the supported bound.");
+            int recordSize=Marshal.SizeOf(typeof(NativeIslandJournalRecord));
+            int receiptSize=Marshal.SizeOf(typeof(NativeIslandJournalReceipt));
+            IntPtr records=Marshal.AllocHGlobal(MaximumIslandJournalRecords*recordSize);
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            try
+            {
+                IslandSnapshotBufferOwner.Zero(receiptBuffer,receiptSize);
+                int ok=copyIslandJournal(new UIntPtr(unityPlayerBase),begin,records,
+                    MaximumIslandJournalRecords,receiptBuffer);
+                receipt=(NativeIslandJournalReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeIslandJournalReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native island journal copy failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=84u||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.ExpectedManager.ToUInt32()!=expectedManager||receipt.Installed!=1||
+                    receipt.FirstOrdinal>begin||receipt.RequestedBegin!=begin||
+                    receipt.NextOrdinal<end||receipt.RecordsRequired!=receipt.RecordsWritten||
+                    receipt.RecordsWritten>MaximumIslandJournalRecords||
+                    receipt.ValidationFlags!=0x1Fu||receipt.InvalidKind!=0||receipt.Detail!=0)
+                    throw new InvalidOperationException("Native island journal receipt is incomplete or incoherent.");
+                NativeIslandJournalRecord[] all=ReadStructArray<NativeIslandJournalRecord>(
+                    records,receipt.RecordsWritten);
+                int desired=checked((int)(end-begin));
+                NativeIslandJournalRecord[] selected=all.Where(value=>value.Ordinal>=begin&&value.Ordinal<end).ToArray();
+                if(selected.Length!=desired)
+                    throw new InvalidOperationException("Island journal does not cover the exact observer interval.");
+                for(int i=0;i<selected.Length;i++)
+                {
+                    NativeIslandJournalRecord value=selected[i];
+                    if(value.Ordinal!=begin+(uint)i||value.ValidationFlags!=0x1Fu||
+                        (value.EventKind!=1&&value.EventKind!=2)||value.ThreadId==0||value.EdgeType>2)
+                        throw new InvalidOperationException("Island journal record ordering or validation differs.");
+                    if(value.EdgeType==0&&(value.HookAddress==0||value.OwnerObject==0||
+                        value.PxsLow==0||value.PxsHigh==0||value.PxsLow>=value.PxsHigh))
+                        throw new InvalidOperationException("Contact island journal record lacks its semantic SIP binding.");
+                }
+                raw=new byte[checked(selected.Length*recordSize)];
+                if(raw.Length!=0)Marshal.Copy(records,raw,0,raw.Length);
+                return selected;
+            }
+            finally{Marshal.FreeHGlobal(receiptBuffer);Marshal.FreeHGlobal(records);}
         }
 
         private FinishBroadPhaseState CopyFinishBroadPhaseCapture(
@@ -4103,7 +5003,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ValidateDirtyInteractionReceiptContract(NativeDirtyInteractionReceipt receipt,int size)
         {
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native dirty-interaction receipt contract differs.");
         }
 
@@ -4136,7 +5036,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -4148,17 +5048,55 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(!contextObserverInstalled)return;
             var receipt=RunContextObserver(statusContextObserver,"status");
+            if(receipt.Observations==contextObservationFloor)return;
+            contextObservationFloor=receipt.Observations;
             uint observed=receipt.ObservedContext.ToUInt32();
             if(observed==0)return;
             if(observed!=contactManagerContext)
             {
+                uint previous=contactManagerContext;
                 contactManagerContext=observed;
-                if(checkpointSidecars.Count!=0&&checkpointSidecars.Values.Any(value=>value.Context!=observed))
+                // A nonzero context replacement invalidates every scene-owned
+                // transaction, including scheduled or armed work that has not
+                // published a sidecar yet.  The initial 0 -> observed discovery
+                // is not a replacement and must preserve setup state.
+                if(previous!=0)
                 {
                     contextSnapshotInvalidations++;
                     ResetSceneOwnedCheckpointState("contact-manager-context-changed",false);
                 }
             }
+            if(islandObserverInstalled&&islandObserverManager!=checked(observed+0x181Cu))
+                RebindIslandObserver(checked(observed+0x181Cu));
+        }
+
+        private void EnsureIslandObserverForCurrentContext()
+        {
+            if(contactManagerContext==0)
+                throw new InvalidOperationException("Island observer installation requires an observed or explicit PxsContext.");
+            uint expectedManager=checked(contactManagerContext+0x181Cu);
+            if(islandObserverInstalled)
+            {
+                if(islandObserverManager!=expectedManager)RebindIslandObserver(expectedManager);
+                return;
+            }
+            NativeIslandObserverReceipt installed=InstallIslandObserver(expectedManager);
+            if(installed.Result!=1||installed.Installed!=1||installed.State!=1||installed.InFlight!=0)
+                throw new InvalidOperationException("Native island observer did not install idle and quiescent.");
+        }
+
+        private void RebindIslandObserver(uint expectedManager)
+        {
+            if(!islandObserverInstalled||islandObserverManager==expectedManager)return;
+            CancelCheckpointObservationWork();
+            NativeIslandObserverReceipt receipt=CallIslandObserverAction(
+                uninstallIslandObserver,"context-rebind-uninstall",1,9);
+            if(receipt.Result!=1||receipt.Installed!=1||receipt.State!=0||receipt.InFlight!=0)
+                throw new InvalidOperationException("Island observer context rebind is waiting for dormant quiescence.");
+            islandObserverInstalled=false;islandObserverManager=0;
+            NativeIslandObserverReceipt installed=InstallIslandObserver(expectedManager);
+            if(installed.Result!=1||installed.State!=1||installed.InFlight!=0)
+                throw new InvalidOperationException("Island observer did not reactivate for the new PxsContext.");
         }
 
         private void ObserveSceneGeneration()
@@ -4205,6 +5143,41 @@ namespace SuperchargedPatch.Authoring.Modules
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
         }
 
+        private void CompleteIslandObservationWork()
+        {
+            // Copy proves the committed bytes stable, but native deliberately
+            // retains the armed pointers until a lifecycle fence clears them.
+            // Reuse the cancellation fence so HGlobal memory is released only
+            // after Idle/inFlight=0 is proven.
+            CancelIslandObservationWork();
+        }
+
+        private void CancelIslandObservationWork()
+        {
+            PendingIslandObservation pending=pendingIslandObservation;
+            if(pending==null)return;
+            NativeIslandObserverReceipt receipt=new NativeIslandObserverReceipt();
+            bool safe=false;
+            try
+            {
+                // BUSY means a wrapper still owns the caller buffers.  Retry a
+                // bounded number of nonblocking lifecycle fences; if native
+                // cannot prove quiescence, retain the allocations process-wide.
+                for(int attempt=0;attempt<3;attempt++)
+                {
+                    receipt=CallIslandObserverAction(cancelIslandObserver,"cancel",1,9);
+                    if(receipt.Result==1&&receipt.State==1&&receipt.InFlight==0){safe=true;break;}
+                    if(receipt.Result!=9)break;
+                }
+            }
+            finally
+            {
+                pendingIslandObservation=null;
+                if(safe){pending.Pre.Dispose();pending.Post.Dispose();}
+                else lock(processRetainedIslandBuffers)processRetainedIslandBuffers.Add(pending);
+            }
+        }
+
         private void CancelCheckpointObservationWork()
         {
             try
@@ -4214,8 +5187,12 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             finally
             {
-                pendingFinishBroadPhaseOrdinal=0;
-                CancelDirtyInteractionWork();
+                try{CancelIslandObservationWork();}
+                finally
+                {
+                    pendingFinishBroadPhaseOrdinal=0;
+                    CancelDirtyInteractionWork();
+                }
             }
         }
 
@@ -4349,7 +5326,7 @@ namespace SuperchargedPatch.Authoring.Modules
             uint actorCapacity=receipt.ActorPairCapacityRaw&0x7FFFFFFFu;
             uint persistentCapacity=receipt.PersistentCapacityRaw&0x7FFFFFFFu;
             uint forceCapacity=receipt.ForceThresholdCapacityRaw&0x7FFFFFFFu;
-            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=116u||
+            if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=116u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.ReportBuffer==UIntPtr.Zero||
                 receipt.ValidationFlags!=0x7Fu||
@@ -4393,7 +5370,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.PoolSlabs==null||value.PoolFree==null)
                 throw new InvalidOperationException("The interaction-graph checkpoint sidecar is incomplete.");
             NativeInteractionGraphReceipt receipt=value.Receipt;
-            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=500u||
+            if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=500u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
                 receipt.LlContext==UIntPtr.Zero||receipt.ActiveBodiesData==UIntPtr.Zero||
@@ -4495,7 +5472,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(value==null||value.Entries==null||value.FreeIds==null||value.Bindings==null)
                 throw new InvalidOperationException("The transform-cache checkpoint sidecar is incomplete.");
             NativeTransformCacheReceipt receipt=value.Receipt;
-            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=144u||
+            if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=144u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
                 receipt.Context==UIntPtr.Zero||receipt.TransformCache==UIntPtr.Zero||
@@ -4557,6 +5534,238 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Transform-cache binding multiplicity differs from its entry metadata.");
         }
 
+        private static void ValidateIslandSnapshotState(IslandSnapshotState value,uint expectedPhase)
+        {
+            if(value==null||value.Nodes==null||value.Edges==null||value.Islands==null||
+                value.Roots==null||value.KinematicWords==null||value.KinematicChangeWords==null||
+                value.NotReadyWords==null||value.NotReadyChangeWords==null||value.IslandWords==null||
+                value.NodeCreated==null||value.NodeDeleted==null||value.EdgeCreated==null||
+                value.EdgeDeleted==null||value.EdgeBroken==null||value.EdgeJoined==null||
+                value.Bindings==null||value.RawBytes==null)
+                throw new InvalidOperationException("Island snapshot sidecar is missing an ordered family.");
+            NativeIslandSnapshotReceipt receipt=value.Receipt;
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=620u||receipt.Result!=1||
+                receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
+                receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
+                receipt.Context==UIntPtr.Zero||receipt.IslandManager==UIntPtr.Zero||
+                receipt.IslandManager.ToUInt32()!=checked(receipt.Context.ToUInt32()+0x181Cu)||
+                receipt.Phase!=expectedPhase||receipt.CaptureThreadId==0||
+                receipt.ValidationFlags!=0x3FFu||receipt.InvalidKind!=0||receipt.Detail!=0||
+                receipt.JournalEndOrdinal<receipt.JournalBeginOrdinal)
+                throw new InvalidOperationException("Island snapshot receipt contract differs.");
+            ValidateIslandManagerReceipt(receipt.NodeManager,value.Nodes.Length,MaximumIslandNodes,"node");
+            ValidateIslandManagerReceipt(receipt.EdgeManager,value.Edges.Length,MaximumIslandEdges,"edge");
+            ValidateIslandManagerReceipt(receipt.IslandManagerReceipt,value.Islands.Length,MaximumIslands,"island");
+            ValidateIslandManagerReceipt(receipt.RootManager,value.Roots.Length,MaximumIslandRoots,"root");
+            ValidateIslandQueueReceipt(receipt.NodeCreated,value.NodeCreated.Length,"node-created");
+            ValidateIslandQueueReceipt(receipt.NodeDeleted,value.NodeDeleted.Length,"node-deleted");
+            ValidateIslandQueueReceipt(receipt.EdgeCreated,value.EdgeCreated.Length,"edge-created");
+            ValidateIslandQueueReceipt(receipt.EdgeDeleted,value.EdgeDeleted.Length,"edge-deleted");
+            ValidateIslandQueueReceipt(receipt.EdgeBroken,value.EdgeBroken.Length,"edge-broken");
+            ValidateIslandQueueReceipt(receipt.EdgeJoined,value.EdgeJoined.Length,"edge-joined");
+            ValidateIslandBitmapReceipt(receipt.Kinematic,value.KinematicWords.Length,"kinematic");
+            ValidateIslandBitmapReceipt(receipt.KinematicChange,value.KinematicChangeWords.Length,"kinematic-change");
+            ValidateIslandBitmapReceipt(receipt.NotReady,value.NotReadyWords.Length,"not-ready");
+            ValidateIslandBitmapReceipt(receipt.NotReadyChange,value.NotReadyChangeWords.Length,"not-ready-change");
+            ValidateIslandBitmapReceipt(receipt.IslandBitmap,value.IslandWords.Length,"island");
+            if(receipt.BindingsRequired!=receipt.BindingsWritten||
+                receipt.BindingsWritten!=(uint)value.Bindings.Length||
+                value.Bindings.Length>MaximumIslandBindings||
+                receipt.LiveContactEdges!=(uint)value.Bindings.Length||
+                receipt.LiveContactEdges+receipt.LiveConstraintEdges+receipt.LiveArticulationEdges>
+                    receipt.EdgeManager.Capacity||value.RawBytes.Length<620)
+                throw new InvalidOperationException("Island edge-type counts or semantic bindings are incomplete.");
+            for(int i=0;i<value.Nodes.Length;i++)
+            {
+                NativeIslandNodeSlotRecord item=value.Nodes[i];
+                if(item.Id!=(uint)i||item.ValidationFlags!=0x1Fu)
+                    throw new InvalidOperationException("Island node slot validation differs at "+i+".");
+            }
+            for(int i=0;i<value.Edges.Length;i++)
+            {
+                NativeIslandEdgeSlotRecord item=value.Edges[i];
+                if(item.Id!=(uint)i||item.ValidationFlags!=0x1Fu||
+                    (item.SemanticBindingIndex!=0xFFFFFFFFu&&item.SemanticBindingIndex>=value.Bindings.Length))
+                    throw new InvalidOperationException("Island edge slot validation differs at "+i+".");
+            }
+            for(int i=0;i<value.Islands.Length;i++)
+                if(value.Islands[i].Id!=(uint)i||value.Islands[i].ValidationFlags!=0x0Fu)
+                    throw new InvalidOperationException("Island slot validation differs at "+i+".");
+            for(int i=0;i<value.Roots.Length;i++)
+                if(value.Roots[i].Id!=(uint)i||value.Roots[i].ValidationFlags!=0x07u)
+                    throw new InvalidOperationException("Island articulation-root slot validation differs at "+i+".");
+            var boundEdges=new HashSet<uint>();
+            for(int i=0;i<value.Bindings.Length;i++)
+            {
+                NativeIslandSipBindingRecord binding=value.Bindings[i];
+                if(binding.ValidationFlags!=0x1Fu||binding.EdgeType!=0||
+                    binding.EdgeId>=(uint)value.Edges.Length||!boundEdges.Add(binding.EdgeId)||
+                    binding.Sip==0||binding.HookAddress!=checked(binding.Sip+0x3Cu)||
+                    ((binding.ShapeSim0==0)!=(binding.ShapeSim1==0))||
+                    ((binding.TaggedRaw&8u)==0&&(binding.ShapeSim0==0||binding.ShapeSim1==0))||
+                    binding.PxsLow==0||binding.PxsHigh==0||
+                    binding.PxsLow>=binding.PxsHigh||
+                    (value.Edges[binding.EdgeId].SlotFlags&1u)==0||
+                    (binding.TaggedRaw&1u)!=0||
+                    (binding.TaggedRaw&~0xFu)!=binding.ContactManager||
+                    value.Edges[binding.EdgeId].SemanticBindingIndex!=(uint)i||
+                    value.Edges[binding.EdgeId].TaggedRaw!=binding.TaggedRaw)
+                    throw new InvalidOperationException("Island SIP edge binding validation differs at "+i+".");
+            }
+        }
+
+        private static void ValidateIslandManagerReceipt(NativeIslandElementManagerReceipt receipt,
+            int length,int maximum,string name)
+        {
+            if(receipt.Vtable==UIntPtr.Zero||
+                (receipt.Capacity!=0&&(receipt.Elements==UIntPtr.Zero||receipt.FreeNext==UIntPtr.Zero))||
+                receipt.Capacity>(uint)maximum||receipt.Required!=receipt.Written||
+                receipt.Written!=(uint)length||receipt.Required!=receipt.Capacity||
+                receipt.FreeCount>receipt.Capacity||
+                (receipt.FreeCount==0&&receipt.FreeHead!=0xFFFFFFFFu)||
+                (receipt.FreeCount!=0&&receipt.FreeHead>=receipt.Capacity))
+                throw new InvalidOperationException("Island "+name+" manager receipt differs.");
+        }
+
+        private static void ValidateIslandQueueReceipt(NativeIslandQueueReceipt receipt,
+            int length,string name)
+        {
+            if(receipt.Count>MaximumIslandQueueEntries||receipt.Required!=receipt.Written||
+                receipt.Written!=(uint)length||receipt.Required!=receipt.Count||
+                receipt.Count>receipt.Capacity||(receipt.Count!=0&&receipt.Data==UIntPtr.Zero))
+                throw new InvalidOperationException("Island "+name+" queue receipt differs.");
+        }
+
+        private static void ValidateIslandBitmapReceipt(NativeIslandBitmapReceipt receipt,
+            int length,string name)
+        {
+            if(receipt.Required!=receipt.Written||receipt.Written!=(uint)length||
+                receipt.Required!=receipt.WordCount||(receipt.WordCount!=0&&receipt.Data==UIntPtr.Zero))
+                throw new InvalidOperationException("Island "+name+" bitmap receipt differs.");
+        }
+
+        private void ValidateIslandTransitionReceipts(CheckpointSidecar sidecar,
+            PendingIslandObservation pending,NativeIslandObserverReceipt receipt,
+            IslandSnapshotState pre,IslandSnapshotState post)
+        {
+            ValidateIslandSnapshotState(pre,IslandPhasePreUpdate);
+            ValidateIslandSnapshotState(post,IslandPhasePostUpdate);
+            NativeIslandSnapshotReceipt settled=sidecar.IslandSnapshot.Receipt;
+            NativeIslandSnapshotReceipt a=pre.Receipt,b=post.Receipt;
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=128u||receipt.Result!=1||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Installed!=1||receipt.State!=4||
+                receipt.ExpectedManager.ToUInt32()!=pending.ExpectedManager||
+                receipt.ExpectedContext.ToUInt32()!=pending.ExpectedContext||
+                receipt.ExpectedNPhase.ToUInt32()!=pending.ExpectedNphase||
+                receipt.ObservedManager!=receipt.ExpectedManager||
+                receipt.ObservedContext!=receipt.ExpectedContext||receipt.ObservedNPhase!=receipt.ExpectedNPhase||
+                receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedThreadId!=pending.ArmedThreadId||
+                receipt.ThreadId!=pending.ArmedThreadId||receipt.ObserverSequence!=pending.ObserverSequence||
+                receipt.ArmedOrdinal!=pending.ArmedOrdinal||receipt.ObservationOrdinal!=pending.ArmedOrdinal||
+                receipt.SlotIndex!=0||receipt.PreResult!=1||receipt.PostResult!=1||
+                receipt.PreSnapshotHash!=a.SnapshotHash||receipt.PostSnapshotHash!=b.SnapshotHash||
+                receipt.JournalBeginOrdinal!=settled.JournalEndOrdinal||
+                receipt.JournalEndOrdinal!=b.JournalEndOrdinal||
+                receipt.JournalEndOrdinal<receipt.JournalBeginOrdinal||
+                receipt.ValidationFlags!=0x7Fu||receipt.InvalidKind!=0||receipt.Detail!=0||receipt.InFlight!=0)
+                throw new InvalidOperationException("Island observer receipt does not identify one exact first-pass transition.");
+            foreach(NativeIslandSnapshotReceipt item in new[]{a,b})
+                if(item.UnityBase!=settled.UnityBase||item.NPhaseCore!=settled.NPhaseCore||
+                    item.OwnerScene!=settled.OwnerScene||item.InteractionScene!=settled.InteractionScene||
+                    item.Context!=settled.Context||item.IslandManager!=settled.IslandManager||
+                    item.ObserverSequence!=receipt.ObserverSequence||
+                    item.ObservationOrdinal!=receipt.ObservationOrdinal||
+                    item.CaptureThreadId!=receipt.ThreadId)
+                    throw new InvalidOperationException("Island pre/post snapshot identity differs from the settled sidecar transaction.");
+            ValidateIslandSnapshotCoherence(sidecar,pre);
+            ValidateIslandSnapshotCoherence(sidecar,post);
+        }
+
+        private void ValidateIslandTransitionState(CheckpointSidecar sidecar)
+        {
+            if(sidecar==null||sidecar.IslandTransition==null||sidecar.IslandSnapshot==null)
+                throw new InvalidOperationException("Island transition sidecar is missing.");
+            IslandTransitionState value=sidecar.IslandTransition;
+            NativeIslandObserverReceipt receipt=value.Receipt;
+            var pending=new PendingIslandObservation {Sidecar=sidecar,
+                ExpectedManager=receipt.ExpectedManager.ToUInt32(),
+                ExpectedContext=receipt.ExpectedContext.ToUInt32(),
+                ExpectedNphase=receipt.ExpectedNPhase.ToUInt32(),
+                ArmedOrdinal=receipt.ArmedOrdinal,ObserverSequence=receipt.ObserverSequence,
+                ArmedThreadId=receipt.ArmedThreadId};
+            ValidateIslandTransitionReceipts(sidecar,pending,receipt,value.Pre,value.Post);
+            if(value.Journal==null||value.JournalRawBytes==null||
+                value.JournalRawBytes.Length!=value.Journal.Length*56||
+                value.Journal.Length!=checked((int)(receipt.JournalEndOrdinal-receipt.JournalBeginOrdinal)))
+                throw new InvalidOperationException("Island transition journal interval is incomplete.");
+            NativeIslandJournalReceipt journal=value.JournalReceipt;
+            if(journal.ApiVersion!=NativeAbiVersion||journal.StructSize!=84u||journal.Result!=1||
+                journal.UnityBase.ToUInt32()!=unityPlayerBase||journal.ExpectedManager!=receipt.ExpectedManager||
+                journal.Installed!=1||journal.FirstOrdinal>receipt.JournalBeginOrdinal||
+                journal.RequestedBegin!=receipt.JournalBeginOrdinal||journal.NextOrdinal<receipt.JournalEndOrdinal||
+                journal.RecordsRequired!=journal.RecordsWritten||journal.ValidationFlags!=0x1Fu||
+                journal.InvalidKind!=0||journal.Detail!=0)
+                throw new InvalidOperationException("Island transition journal receipt differs.");
+            for(int i=0;i<value.Journal.Length;i++)
+            {
+                NativeIslandJournalRecord item=value.Journal[i];
+                if(item.Ordinal!=receipt.JournalBeginOrdinal+(uint)i||item.ThreadId==0||
+                    item.ValidationFlags!=0x1Fu||(item.EventKind!=1&&item.EventKind!=2)||item.EdgeType>2)
+                    throw new InvalidOperationException("Island transition journal record differs at "+i+".");
+            }
+            ValidateIslandJournalBindingCoherence(sidecar,value.Pre,value.Post,value.Journal);
+        }
+
+        private static void ValidateIslandJournalBindingCoherence(CheckpointSidecar sidecar,
+            IslandSnapshotState pre,IslandSnapshotState post,NativeIslandJournalRecord[] journal)
+        {
+            NativeIslandSipBindingRecord[] settled=sidecar.IslandSnapshot.Bindings;
+            foreach(NativeIslandSipBindingRecord binding in pre.Bindings.Concat(post.Bindings))
+            {
+                bool alreadyKnown=settled.Any(value=>value.EdgeId==binding.EdgeId&&
+                    value.Sip==binding.Sip&&value.PxsLow==binding.PxsLow&&value.PxsHigh==binding.PxsHigh);
+                if(alreadyKnown)continue;
+                bool journaled=journal.Any(value=>value.EdgeType==0&&
+                    value.OwnerObject==binding.Sip&&value.PxsLow==binding.PxsLow&&
+                    value.PxsHigh==binding.PxsHigh&&
+                    (value.EventKind==1?value.PostEdgeId:value.PreEdgeId)==binding.EdgeId);
+                if(!journaled)
+                    throw new InvalidOperationException("A transition-only contact edge lacks matching add/remove journal evidence.");
+            }
+        }
+
+        private static void ValidateIslandSnapshotCoherence(CheckpointSidecar sidecar,
+            IslandSnapshotState state)
+        {
+            NativeIslandSnapshotReceipt island=state.Receipt;
+            NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
+            if(island.NPhaseCore!=graph.NPhaseCore||island.OwnerScene!=graph.OwnerScene||
+                island.InteractionScene!=graph.InteractionScene||island.Context!=graph.LlContext)
+                throw new InvalidOperationException("Island snapshot Scene/Context differs from the interaction graph.");
+            var owners=sidecar.ContactManagerOwners.Records.ToDictionary(value=>value.Sip.ToUInt32());
+            foreach(NativeIslandSipBindingRecord binding in state.Bindings)
+            {
+                NativeContactManagerOwnerRecord owner;
+                bool known=owners.TryGetValue(binding.Sip,out owner)&&
+                    binding.PxsLow==Math.Min(owner.PxsShapeCore0.ToUInt32(),owner.PxsShapeCore1.ToUInt32())&&
+                    binding.PxsHigh==Math.Max(owner.PxsShapeCore0.ToUInt32(),owner.PxsShapeCore1.ToUInt32());
+                bool ownerCoherent=known&&
+                    (binding.ShapeSim0==0||
+                        (binding.ShapeSim0==owner.ShapeSim0.ToUInt32()&&
+                         binding.ShapeSim1==owner.ShapeSim1.ToUInt32()))&&
+                    binding.ContactManager!=0&&binding.ContactManager==owner.Manager.ToUInt32();
+                NativeInteractionGraphInteractionRecord graphItem=sidecar.InteractionGraph.Interactions
+                    .FirstOrDefault(item=>item.Interaction.ToUInt32()==unchecked(binding.Sip+8u)&&
+                        item.InteractionType==0&&item.SemanticLow.ToUInt32()==binding.PxsLow&&
+                        item.SemanticHigh.ToUInt32()==binding.PxsHigh);
+                bool graphKnown=graphItem.Interaction!=UIntPtr.Zero;
+                if(state.Receipt.Phase==IslandPhaseSettled&&!ownerCoherent&&!graphKnown&&
+                    (binding.TaggedRaw&8u)==0)
+                    throw new InvalidOperationException(
+                        "Settled island binding has no matching contact-owner or interaction-graph semantic identity.");
+            }
+        }
+
         private static uint TransformCacheEntryHash(NativeTransformCacheEntryRecord[] values)
         {
             uint hash=2166136261u;
@@ -4593,7 +5802,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private void ValidateFinishBroadPhaseReceiptContract(
             NativeFinishBroadPhaseObserverReceipt receipt,int size)
         {
-            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native finishBroadPhase observer receipt contract differs.");
         }
@@ -4607,7 +5816,7 @@ namespace SuperchargedPatch.Authoring.Modules
             NativeFinishBroadPhaseObserverReceipt receipt=value.Receipt;
             NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
             NativeTransformCacheReceipt cache=sidecar.TransformCache.Receipt;
-            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=152u||
+            if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=152u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.Installed!=1||receipt.State!=4||
                 receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedOrdinal==0||
                 receipt.ArmedOrdinal!=receipt.ObservationOrdinal||
@@ -4932,6 +6141,81 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"droppedObservations",receipt.DroppedObservations}};
         }
 
+        private static object DescribeIslandSnapshotState(IslandSnapshotState value)
+        {
+            if(value==null)return null;
+            NativeIslandSnapshotReceipt receipt=value.Receipt;
+            object[] bindings=value.Bindings.Select(binding=>(object)new Dictionary<string,object>{
+                {"edgeId",binding.EdgeId},{"edgeType",binding.EdgeType},
+                {"sip","0x"+binding.Sip.ToString("X8")},{"hookAddress","0x"+binding.HookAddress.ToString("X8")},
+                {"shapeSim0","0x"+binding.ShapeSim0.ToString("X8")},
+                {"shapeSim1","0x"+binding.ShapeSim1.ToString("X8")},
+                {"pxsLow","0x"+binding.PxsLow.ToString("X8")},
+                {"pxsHigh","0x"+binding.PxsHigh.ToString("X8")},
+                {"contactManager","0x"+binding.ContactManager.ToString("X8")},
+                {"taggedRaw","0x"+binding.TaggedRaw.ToString("X8")}}).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore",Hex(receipt.NPhaseCore)},
+                {"ownerScene",Hex(receipt.OwnerScene)},{"interactionScene",Hex(receipt.InteractionScene)},
+                {"context",Hex(receipt.Context)},{"islandManager",Hex(receipt.IslandManager)},
+                {"phase",receipt.Phase},{"observerSequence",receipt.ObserverSequence},
+                {"observationOrdinal",receipt.ObservationOrdinal},{"captureThreadId",receipt.CaptureThreadId},
+                {"epoch",receipt.Epoch},{"snapshotHash","0x"+receipt.SnapshotHash.ToString("X8")},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")},
+                {"nodeCapacity",receipt.NodeManager.Capacity},{"nodeFreeHead",receipt.NodeManager.FreeHead},
+                {"nodeFreeCount",receipt.NodeManager.FreeCount},{"nodeHash","0x"+receipt.NodeManager.ElementHash.ToString("X8")},
+                {"edgeCapacity",receipt.EdgeManager.Capacity},{"edgeFreeHead",receipt.EdgeManager.FreeHead},
+                {"edgeFreeCount",receipt.EdgeManager.FreeCount},{"edgeHash","0x"+receipt.EdgeManager.ElementHash.ToString("X8")},
+                {"islandCapacity",receipt.IslandManagerReceipt.Capacity},
+                {"islandFreeHead",receipt.IslandManagerReceipt.FreeHead},
+                {"islandFreeCount",receipt.IslandManagerReceipt.FreeCount},
+                {"rootCapacity",receipt.RootManager.Capacity},{"rootFreeHead",receipt.RootManager.FreeHead},
+                {"rootFreeCount",receipt.RootManager.FreeCount},
+                {"liveContactEdges",receipt.LiveContactEdges},
+                {"liveConstraintEdges",receipt.LiveConstraintEdges},
+                {"liveArticulationEdges",receipt.LiveArticulationEdges},
+                {"journalBeginOrdinal",receipt.JournalBeginOrdinal},
+                {"journalEndOrdinal",receipt.JournalEndOrdinal},
+                {"journalOverflowCount",receipt.JournalOverflowCount},
+                {"nodeCreated",value.NodeCreated.Cast<object>().ToArray()},
+                {"nodeDeleted",value.NodeDeleted.Cast<object>().ToArray()},
+                {"edgeCreated",value.EdgeCreated.Cast<object>().ToArray()},
+                {"edgeDeleted",value.EdgeDeleted.Cast<object>().ToArray()},
+                {"edgeBroken",value.EdgeBroken.Cast<object>().ToArray()},
+                {"edgeJoined",value.EdgeJoined.Cast<object>().ToArray()},
+                {"bindings",bindings}};
+        }
+
+        private static object DescribeIslandTransitionState(IslandTransitionState value)
+        {
+            if(value==null)return null;
+            NativeIslandObserverReceipt receipt=value.Receipt;
+            object[] journal=value.Journal.Select(item=>(object)new Dictionary<string,object>{
+                {"ordinal",item.Ordinal},{"eventKind",item.EventKind},{"observerPhase",item.ObserverPhase},
+                {"threadId",item.ThreadId},{"edgeType",item.EdgeType},{"node0",item.Node0},{"node1",item.Node1},
+                {"preEdgeId",item.PreEdgeId},{"postEdgeId",item.PostEdgeId},
+                {"hookAddress","0x"+item.HookAddress.ToString("X8")},
+                {"ownerObject","0x"+item.OwnerObject.ToString("X8")},
+                {"pxsLow","0x"+item.PxsLow.ToString("X8")},
+                {"pxsHigh","0x"+item.PxsHigh.ToString("X8")}}).ToArray();
+            return new Dictionary<string,object>{{"expectedManager",Hex(receipt.ExpectedManager)},
+                {"expectedContext",Hex(receipt.ExpectedContext)},{"expectedNPhase",Hex(receipt.ExpectedNPhase)},
+                {"observedManager",Hex(receipt.ObservedManager)},{"observedContext",Hex(receipt.ObservedContext)},
+                {"observedNPhase",Hex(receipt.ObservedNPhase)},{"expectedPass",receipt.ExpectedPass},
+                {"pass",receipt.Pass},{"armedThreadId",receipt.ArmedThreadId},{"threadId",receipt.ThreadId},
+                {"observerSequence",receipt.ObserverSequence},{"armedOrdinal",receipt.ArmedOrdinal},
+                {"observationOrdinal",receipt.ObservationOrdinal},{"slotIndex",receipt.SlotIndex},
+                {"preResult",receipt.PreResult},{"postResult",receipt.PostResult},
+                {"preSnapshotHash","0x"+receipt.PreSnapshotHash.ToString("X8")},
+                {"postSnapshotHash","0x"+receipt.PostSnapshotHash.ToString("X8")},
+                {"journalBeginOrdinal",receipt.JournalBeginOrdinal},
+                {"journalEndOrdinal",receipt.JournalEndOrdinal},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")},
+                {"inFlight",receipt.InFlight},{"pre",DescribeIslandSnapshotState(value.Pre)},
+                {"post",DescribeIslandSnapshotState(value.Post)},{"journal",journal},
+                {"journalRecordHash","0x"+value.JournalReceipt.RecordHash.ToString("X8")},
+                {"journalOverflowCount",value.JournalReceipt.OverflowCount}};
+        }
+
         private static uint DirtyInteractionOrderHash(NativeDirtyInteractionKey[] values)
         {
             if(values==null)throw new ArgumentNullException("values");
@@ -4993,15 +6277,19 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateNPhaseReportState(value.NPhaseReports);
             ValidateInteractionGraphState(value.InteractionGraph);
             ValidateTransformCacheState(value.TransformCache);
+            ValidateIslandSnapshotState(value.IslandSnapshot,IslandPhaseSettled);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
             ValidateFinishBroadPhaseState(value.FinishBroadPhase,value);
+            ValidateIslandTransitionState(value);
             if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.NPhaseReports.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
                 value.InteractionGraph.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
                 value.TransformCache.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
+                value.IslandSnapshot.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
+                value.IslandTransition.Receipt.ExpectedNPhase.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
                 value.FinishBroadPhase.Receipt.ExpectedNPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore)
                 throw new InvalidOperationException("Checkpoint SIP and dirty-interaction state belong to different NPhaseCore instances.");
             ValidateCheckpointPoolCoherence(value);
@@ -5022,6 +6310,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameInteractionGraphState(previous.InteractionGraph,value.InteractionGraph)&&
                     SameTransformCacheState(previous.TransformCache,value.TransformCache)&&
                     SameFinishBroadPhaseState(previous.FinishBroadPhase,value.FinishBroadPhase)&&
+                    SameIslandSnapshotState(previous.IslandSnapshot,value.IslandSnapshot)&&
+                    SameIslandTransitionState(previous.IslandTransition,value.IslandTransition)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -5047,6 +6337,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.InteractionGraph==null||value.InteractionGraph.Interactions==null||
                 value.TransformCache==null||value.TransformCache.Entries==null||
                 value.TransformCache.FreeIds==null||value.TransformCache.Bindings==null||
+                value.IslandSnapshot==null||
                 value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
                 value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
                 throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
@@ -5113,6 +6404,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     .All(owner=>owner.ReportPairIndex==0xFFFFFFFFu);
             ValidateInteractionGraphState(value.InteractionGraph);
             ValidateTransformCacheState(value.TransformCache);
+            ValidateIslandSnapshotState(value.IslandSnapshot,IslandPhaseSettled);
+            ValidateIslandSnapshotCoherence(value,value.IslandSnapshot);
             NativeInteractionGraphReceipt graphReceipt=value.InteractionGraph.Receipt;
             var graphByPointer=value.InteractionGraph.Interactions.ToDictionary(
                 item=>item.Interaction.ToUInt32());
@@ -5425,6 +6718,108 @@ namespace SuperchargedPatch.Authoring.Modules
             return true;
         }
 
+        private static bool SameIslandSnapshotState(IslandSnapshotState left,
+            IslandSnapshotState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.RawBytes!=null&&right.RawBytes!=null&&
+                left.RawBytes.SequenceEqual(right.RawBytes);
+        }
+
+        private static bool SameIslandTransitionState(IslandTransitionState left,
+            IslandTransitionState right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.Receipt.Equals(right.Receipt)&&
+                SameIslandSnapshotState(left.Pre,right.Pre)&&
+                SameIslandSnapshotState(left.Post,right.Post)&&
+                left.JournalReceipt.Equals(right.JournalReceipt)&&
+                left.JournalRawBytes!=null&&right.JournalRawBytes!=null&&
+                left.JournalRawBytes.SequenceEqual(right.JournalRawBytes);
+        }
+
+        private static bool SameStructArray<T>(T[] left,T[] right) where T:struct
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            var comparer=EqualityComparer<T>.Default;
+            for(int i=0;i<left.Length;i++)if(!comparer.Equals(left[i],right[i]))return false;
+            return true;
+        }
+
+        private static bool SameIslandSnapshotLayout(NativeIslandSnapshotReceipt a,
+            NativeIslandSnapshotReceipt b)
+        {
+            return a.NPhaseCore==b.NPhaseCore&&a.OwnerScene==b.OwnerScene&&
+                a.InteractionScene==b.InteractionScene&&a.Context==b.Context&&
+                a.IslandManager==b.IslandManager&&
+                SameIslandManagerLayout(a.NodeManager,b.NodeManager)&&
+                SameIslandManagerLayout(a.EdgeManager,b.EdgeManager)&&
+                SameIslandManagerLayout(a.IslandManagerReceipt,b.IslandManagerReceipt)&&
+                SameIslandManagerLayout(a.RootManager,b.RootManager)&&
+                SameIslandQueueLayout(a.NodeCreated,b.NodeCreated)&&
+                SameIslandQueueLayout(a.NodeDeleted,b.NodeDeleted)&&
+                SameIslandQueueLayout(a.EdgeCreated,b.EdgeCreated)&&
+                SameIslandQueueLayout(a.EdgeDeleted,b.EdgeDeleted)&&
+                SameIslandQueueLayout(a.EdgeBroken,b.EdgeBroken)&&
+                SameIslandQueueLayout(a.EdgeJoined,b.EdgeJoined)&&
+                SameIslandBitmapLayout(a.Kinematic,b.Kinematic)&&
+                SameIslandBitmapLayout(a.KinematicChange,b.KinematicChange)&&
+                SameIslandBitmapLayout(a.NotReady,b.NotReady)&&
+                SameIslandBitmapLayout(a.NotReadyChange,b.NotReadyChange)&&
+                SameIslandBitmapLayout(a.IslandBitmap,b.IslandBitmap);
+        }
+
+        private static bool SameIslandManagerLayout(NativeIslandElementManagerReceipt a,
+            NativeIslandElementManagerReceipt b)
+        {
+            return a.Vtable==b.Vtable&&a.Capacity==b.Capacity;
+        }
+
+        private static bool SameIslandQueueLayout(NativeIslandQueueReceipt a,
+            NativeIslandQueueReceipt b)
+        {
+            return a.Capacity==b.Capacity&&a.DefaultCapacity==b.DefaultCapacity;
+        }
+
+        private static bool SameIslandBitmapLayout(NativeIslandBitmapReceipt a,
+            NativeIslandBitmapReceipt b)
+        {
+            return a.WordCount==b.WordCount;
+        }
+
+        private static bool SameIslandFreeState(IslandSnapshotState left,IslandSnapshotState right)
+        {
+            NativeIslandSnapshotReceipt a=left.Receipt,b=right.Receipt;
+            if(a.NodeManager.FreeHead!=b.NodeManager.FreeHead||a.NodeManager.FreeCount!=b.NodeManager.FreeCount||
+                a.EdgeManager.FreeHead!=b.EdgeManager.FreeHead||a.EdgeManager.FreeCount!=b.EdgeManager.FreeCount||
+                a.IslandManagerReceipt.FreeHead!=b.IslandManagerReceipt.FreeHead||
+                a.IslandManagerReceipt.FreeCount!=b.IslandManagerReceipt.FreeCount||
+                a.RootManager.FreeHead!=b.RootManager.FreeHead||a.RootManager.FreeCount!=b.RootManager.FreeCount||
+                left.Nodes.Length!=right.Nodes.Length||left.Edges.Length!=right.Edges.Length||
+                left.Islands.Length!=right.Islands.Length||left.Roots.Length!=right.Roots.Length)return false;
+            for(int i=0;i<left.Nodes.Length;i++)if(left.Nodes[i].FreeNext!=right.Nodes[i].FreeNext)return false;
+            for(int i=0;i<left.Edges.Length;i++)if(left.Edges[i].FreeNext!=right.Edges[i].FreeNext)return false;
+            for(int i=0;i<left.Islands.Length;i++)if(left.Islands[i].FreeNext!=right.Islands[i].FreeNext)return false;
+            for(int i=0;i<left.Roots.Length;i++)if(left.Roots[i].FreeNext!=right.Roots[i].FreeNext)return false;
+            return true;
+        }
+
+        private static bool SameIslandScalarState(NativeIslandSnapshotReceipt a,
+            NativeIslandSnapshotReceipt b)
+        {
+            return a.NumAddedRBodies==b.NumAddedRBodies&&a.NumAddedArtics==b.NumAddedArtics&&
+                a.NumAddedKinematics==b.NumAddedKinematics&&
+                a.NumAddedEdgesContact==b.NumAddedEdgesContact&&
+                a.NumAddedEdgesConstraint==b.NumAddedEdgesConstraint&&
+                a.NumAddedEdgesArticulation==b.NumAddedEdgesArticulation&&
+                a.NumEdgeRefsToKinematic==b.NumEdgeRefsToKinematic&&
+                a.NumRequiredKinematicDuplicates==b.NumRequiredKinematicDuplicates&&
+                a.EverythingAsleep==b.EverythingAsleep&&a.HasAnythingChanged==b.HasAnythingChanged&&
+                a.PerformIslandUpdate==b.PerformIslandUpdate&&a.LiveContactEdges==b.LiveContactEdges&&
+                a.LiveConstraintEdges==b.LiveConstraintEdges&&
+                a.LiveArticulationEdges==b.LiveArticulationEdges;
+        }
+
         private static bool SameBroadPhaseOverlap(NativeBroadPhaseOverlapRecord a,
             NativeBroadPhaseOverlapRecord b)
         {
@@ -5517,6 +6912,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"interactionGraph",found?DescribeInteractionGraphState(value.InteractionGraph):null},
                 {"transformCache",found?DescribeTransformCacheState(value.TransformCache):null},
                 {"finishBroadPhase",found?DescribeFinishBroadPhaseState(value.FinishBroadPhase):null},
+                {"islandSnapshot",found?DescribeIslandSnapshotState(value.IslandSnapshot):null},
+                {"islandTransition",found?DescribeIslandTransitionState(value.IslandTransition):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -5675,12 +7072,13 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:16},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:NativeAbiVersion},
                 {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
                 {"observeContactManagerContext",observeContactManagerContext},{"contextObserverInstalled",contextObserverInstalled},
-                {"contextObservations",contextObservations},{"lastContextObserverReceipt",lastContextObserverReceipt},
+                {"contextObservations",contextObservations},{"contextObservationFloor",contextObservationFloor},
+                {"lastContextObserverReceipt",lastContextObserverReceipt},
                 {"sceneMetadataGeneration",sceneMetadataGeneration},{"sceneOwnedResets",sceneOwnedResets},
                 {"contextSnapshotInvalidations",contextSnapshotInvalidations},{"lastSceneOwnedReset",lastSceneOwnedReset},
                 {"contactPoolSnapshotCaptured",latest!=null},
@@ -5713,6 +7111,16 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"pendingFinishBroadPhaseOrdinal",pendingFinishBroadPhaseOrdinal},
                 {"finishBroadPhaseCaptures",finishBroadPhaseCaptures},
                 {"finishBroadPhaseReceipts",finishBroadPhaseReceipts.ToArray()},
+                {"islandObserverInstalled",islandObserverInstalled},
+                {"islandSnapshotCaptured",latest!=null&&latest.IslandSnapshot!=null},
+                {"islandSnapshot",latest==null?null:DescribeIslandSnapshotState(latest.IslandSnapshot)},
+                {"islandTransitionCaptured",latest!=null&&latest.IslandTransition!=null},
+                {"islandTransition",latest==null?null:DescribeIslandTransitionState(latest.IslandTransition)},
+                {"islandCapturePending",pendingIslandObservation!=null},
+                {"pendingIslandObservationOrdinal",pendingIslandObservation==null?0:pendingIslandObservation.ArmedOrdinal},
+                {"islandSnapshotCaptures",islandSnapshotCaptures},
+                {"islandTransitionCaptures",islandTransitionCaptures},
+                {"retainedIslandBufferTransactions",processRetainedIslandBuffers.Count},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -5751,23 +7159,50 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void Deactivate()
         {
-            CancelContactRecreateWork();
-            CancelCheckpointObservationWork();
+            Exception teardownError=null;
+            try{CancelContactRecreateWork();}catch(Exception error){teardownError=error;}
+            try{CancelCheckpointObservationWork();}
+            catch(Exception error){if(teardownError==null)teardownError=error;}
+            if(islandObserverInstalled)
+            {
+                try
+                {
+                    NativeIslandObserverReceipt island=new NativeIslandObserverReceipt();
+                    bool dormant=false;
+                    for(int attempt=0;attempt<3;attempt++)
+                    {
+                        island=CallIslandObserverAction(uninstallIslandObserver,"uninstall",1,9);
+                        if(island.Result==1&&island.Installed==1&&island.State==0&&island.InFlight==0)
+                        {dormant=true;break;}
+                        if(island.Result!=9)break;
+                    }
+                    if(!dormant)throw new InvalidOperationException(
+                        "Native island observer could not prove dormant quiescence; native resources were retained.");
+                }
+                catch(Exception error){if(teardownError==null)teardownError=error;}
+                islandObserverInstalled=false;
+            }
             if(finishBroadPhaseObserverInstalled)
             {
-                CallFinishBroadPhaseObserverAction(uninstallFinishBroadPhaseObserver,"uninstall");
+                try{CallFinishBroadPhaseObserverAction(uninstallFinishBroadPhaseObserver,"uninstall");}
+                catch(Exception error){if(teardownError==null)teardownError=error;}
                 finishBroadPhaseObserverInstalled=false;
             }
             if(dirtyInteractionHookInstalled)
             {
-                CallDirtyInteractionAction(uninstallDirtyInteractionOrder,"uninstall",1);
+                try{CallDirtyInteractionAction(uninstallDirtyInteractionOrder,"uninstall",1);}
+                catch(Exception error){if(teardownError==null)teardownError=error;}
                 dirtyInteractionHookInstalled=false;
             }
             if(contextObserverInstalled)
             {
-                RunContextObserver(uninstallContextObserver,"uninstall");contextObserverInstalled=false;
+                try{RunContextObserver(uninstallContextObserver,"uninstall");}
+                catch(Exception error){if(teardownError==null)teardownError=error;}
+                contextObserverInstalled=false;
             }
-            if(harmony!=null)harmony.UnpatchSelf();harmony=null;automatic=false;automaticGroundCollider=false;
+            if(harmony!=null)try{harmony.UnpatchSelf();}
+                catch(Exception error){if(teardownError==null)teardownError=error;}
+            harmony=null;automatic=false;automaticGroundCollider=false;
             observeContactManagerContext=false;automaticContactPoolRestore=false;automaticTransformDispatchRestore=false;automaticRestorePending=false;
             dirtyInteractionRestoreMode=DirtyInteractionRestoreExact;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
@@ -5777,6 +7212,8 @@ namespace SuperchargedPatch.Authoring.Modules
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
             contactRecreatePendingValidation=false;pendingContactRecreateSidecar=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
+            contextObservationFloor=0;
+            islandObserverManager=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;
             apiVersion=null;rebuildBatch=null;actorShapes=null;captureContactPoolSnapshot=null;restoreContactPoolSnapshot=null;
             captureContactManagerActiveOwners=null;
@@ -5786,6 +7223,9 @@ namespace SuperchargedPatch.Authoring.Modules
             captureNPhaseReportStateSnapshot=null;
             captureInteractionGraphSnapshot=null;
             captureTransformCacheSnapshot=null;
+            captureIslandSnapshot=null;installIslandObserver=null;statusIslandObserver=null;
+            armIslandObserver=null;copyIslandObserver=null;copyIslandJournal=null;
+            cancelIslandObserver=null;uninstallIslandObserver=null;
             installFinishBroadPhaseObserver=null;statusFinishBroadPhaseObserver=null;
             armFinishBroadPhaseObserver=null;copyFinishBroadPhaseObserver=null;
             cancelFinishBroadPhaseObserver=null;uninstallFinishBroadPhaseObserver=null;
@@ -5809,6 +7249,9 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             finishBroadPhaseObserverWasInstalled=false;
             if(ReferenceEquals(active,this))active=null;
+            if(teardownError!=null&&string.IsNullOrEmpty(failure))
+                failure="Best-effort native teardown retained safe resources: "+
+                    teardownError.GetType().Name+": "+teardownError.Message;
         }
 
         private T Export<T>(string name) where T:class

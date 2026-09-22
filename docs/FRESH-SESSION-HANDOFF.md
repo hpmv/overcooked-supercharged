@@ -1,5 +1,61 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Complete PhysX island capture milestone (2026-09-22, managed
+> r18/API 17/native r35):** the comprehensive read-only planning pass now
+> captures the complete settled `PxsIslandManager` state at f444 and the exact
+> first pass-zero `updateIslands` transition on uninterrupted f444 -> f445.
+> Fresh evidence is
+> `artifacts/readiness-plan-island-f1048-to-f444-r2/`: source readiness is
+> 52 pass / 0 fail / 41 deferred; restored-target readiness is 86 pass / 0
+> fail / 37 deferred / 1 not-applicable.  Both reports have zero blockers and
+> `auditCompleted=true`.  The top-level `passed=false` is intentional because
+> island mutation and the other deferred restore families are not implemented.
+> The run stopped at restored f444 before f445; `search=false`, and every
+> advancing lease stayed minimized and non-foreground.
+>
+> The uninterrupted settled f444 island image has 256 node slots (247 free),
+> 256 edge slots (244 free), 256 island slots (247 free), 12 live contact
+> edges, no constraint/articulation edges, and 12 exact semantic SIP bindings.
+> Its aggregate hash is `0x39B41B41`.  Two caller-owned captures at restored
+> f444 repeat byte-for-byte at `0x4F772361`, but node/edge/island topology,
+> free order, node bitmaps, and SIP-edge bindings all differ.  Change queues
+> are already equal.  This turns the island gap into one explicit atomic
+> projection requirement rather than another hidden downstream blocker.
+>
+> The observed transition is identity-exact for Scene, Context
+> `0x48CA1620`, NPhaseCore `0x48CB4B80`, island manager `0x48CA2E3C`, pass 0,
+> thread 58364, observer sequence/ordinal 1, with `inFlight=0`.  The settled,
+> pre, and post hashes are respectively `0x39B41B41`, `0x2433DECA`, and
+> `0x74601DDB`.  Journal interval `[233,237)` contains four ordered contact
+> removals for edge IDs 8, 9, 10, and 11, no adds and no overflow.  The
+> transition validates at `0x7F`; each embedded snapshot validates at
+> `0x3FF`; double-copy publication is exact.
+>
+> API 17 is passive and caller-owned.  It snapshots every physical slot,
+> free chain, bitmap, C/D/B/J queue and semantic binding, and journals
+> add/remove calls without allocation or gameplay mutation.  Managed
+> activation now installs/rebinds the island observer at the earliest safe
+> post-physics output boundary, invalidates all pending work on PxsContext
+> replacement, and refuses stale same-process context observations until the
+> native observation counter advances.  Managed DLL SHA-256 is
+> `48F17D9E57F22790C24C28D8B80ED6F476E7873F546B2A2863ADC4E2767BFA87`;
+> native DLL SHA-256 is
+> `33741A06BA60F9D7712AEB9A9E02FDD9E09645BC229E875AA07C62F67291AAF1`.
+> Target-readiness SHA-256 is
+> `D4071EABC68D520CAC8DC4D5C8CBB192A4270886267A9705BD0240C35B89DDDD`;
+> summary SHA-256 is
+> `BFB1777AAF4F956DB5050AFF3AFF8981EAF63843266C736AB28ED327CC6B9A75`.
+>
+> The major read-only native planning families are now captured.  The next
+> implementation unit is one preflighted, rollback-safe semantic restore in
+> dependency order: Transform-cache IDs/poses, broadphase history,
+> interaction graph, manager/SIP/ActorPair/report pools, island topology and
+> queues, then first-output convergence.  Do not search or claim full rewind
+> parity yet.  Before or with mutation, tighten final sidecar publication so
+> observer-quiescence cleanup cannot report failure after publication, and
+> clear manual-capture bookkeeping on every failure path.  Preserve ordinary
+> forward and plate-throw physics.
+
 > **Transform-cache and broadphase-transition capture milestone (2026-09-21,
 > managed r17g/native r34/API 16):** the bounded Story 1-1 f1048 -> f444
 > audit now seals the exact settled `PxsTransformCache` beside the existing

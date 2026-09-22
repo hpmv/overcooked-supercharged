@@ -744,6 +744,254 @@ struct FinishBroadPhaseObserverReceipt {
     uint32_t droppedObservations;
 };
 
+// PxsIslandManager is a shipped-build-only ABI.  Keep these records at
+// explicit four-byte packing even though the older exported records above
+// live under the translation unit's historical pack(8) block.
+#pragma pack(push, 4)
+struct IslandNodeSlotRecord {
+    uint32_t id;
+    uint32_t ownerOrArticulationRaw;
+    uint32_t islandId;
+    uint32_t rawFlagsWord;
+    uint32_t freeNext;
+    uint32_t nextNode;
+    uint32_t slotFlags;
+    uint32_t validationFlags;
+};
+
+struct IslandEdgeSlotRecord {
+    uint32_t id;
+    uint32_t node0;
+    uint32_t node1;
+    uint32_t taggedObjectRaw;
+    uint32_t freeNext;
+    uint32_t nextEdge;
+    uint32_t slotFlags;
+    uint32_t semanticBindingIndex;
+    uint32_t validationFlags;
+};
+
+struct IslandSlotRecord {
+    uint32_t id;
+    uint32_t startNode;
+    uint32_t startEdge;
+    uint32_t endNode;
+    uint32_t endEdge;
+    uint32_t freeNext;
+    uint32_t slotFlags;
+    uint32_t validationFlags;
+};
+
+struct IslandArticulationRootSlotRecord {
+    uint32_t id;
+    uint32_t articulationLinkHandle;
+    uint32_t articulationOwner;
+    uint32_t freeNext;
+    uint32_t slotFlags;
+    uint32_t validationFlags;
+};
+
+struct IslandSipEdgeBinding {
+    uint32_t edgeId;
+    uint32_t edgeType;
+    uint32_t sip;
+    uint32_t hookAddress;
+    uint32_t shapeSim0;
+    uint32_t shapeSim1;
+    uint32_t pxsShapeCoreLow;
+    uint32_t pxsShapeCoreHigh;
+    uint32_t contactManager;
+    uint32_t taggedObjectRaw;
+    uint32_t validationFlags;
+};
+
+struct IslandEdgeJournalRecord {
+    uint32_t ordinal;
+    uint32_t eventKind;
+    uint32_t observerPhase;
+    uint32_t threadId;
+    uint32_t edgeType;
+    uint32_t node0;
+    uint32_t node1;
+    uint32_t preEdgeId;
+    uint32_t postEdgeId;
+    uint32_t hookAddress;
+    uint32_t ownerObject;
+    uint32_t pxsShapeCoreLow;
+    uint32_t pxsShapeCoreHigh;
+    uint32_t validationFlags;
+};
+
+struct IslandSnapshotBuffersV1 {
+    IslandNodeSlotRecord* nodes; uint32_t nodeCapacity;
+    IslandEdgeSlotRecord* edges; uint32_t edgeCapacity;
+    IslandSlotRecord* islands; uint32_t islandCapacity;
+    IslandArticulationRootSlotRecord* roots; uint32_t rootCapacity;
+    uint32_t* kinematicWords; uint32_t kinematicWordCapacity;
+    uint32_t* kinematicChangeWords; uint32_t kinematicChangeWordCapacity;
+    uint32_t* notReadyWords; uint32_t notReadyWordCapacity;
+    uint32_t* notReadyChangeWords; uint32_t notReadyChangeWordCapacity;
+    uint32_t* islandWords; uint32_t islandWordCapacity;
+    uint32_t* nodeCreated; uint32_t nodeCreatedCapacity;
+    uint32_t* nodeDeleted; uint32_t nodeDeletedCapacity;
+    uint32_t* edgeCreated; uint32_t edgeCreatedCapacity;
+    uint32_t* edgeDeleted; uint32_t edgeDeletedCapacity;
+    uint32_t* edgeBroken; uint32_t edgeBrokenCapacity;
+    uint32_t* edgeJoined; uint32_t edgeJoinedCapacity;
+    IslandSipEdgeBinding* bindings; uint32_t bindingCapacity;
+};
+
+struct IslandElementManagerReceipt {
+    uint32_t vtable;
+    uint32_t elements;
+    uint32_t freeNext;
+    uint32_t nextList;
+    uint32_t capacity;
+    uint32_t freeHead;
+    uint32_t freeCount;
+    uint32_t required;
+    uint32_t written;
+    uint32_t elementHash;
+    uint32_t freeChainHash;
+    uint32_t nextHash;
+};
+
+struct IslandQueueReceipt {
+    uint32_t data;
+    uint32_t count;
+    uint32_t capacity;
+    uint32_t defaultCapacity;
+    uint32_t required;
+    uint32_t written;
+    uint32_t hash;
+};
+
+struct IslandBitmapReceipt {
+    uint32_t data;
+    uint32_t wordCount;
+    uint32_t required;
+    uint32_t written;
+    uint32_t hash;
+};
+
+struct IslandSnapshotReceiptV1 {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uint32_t unityBase;
+    uint32_t nphaseCore;
+    uint32_t ownerScene;
+    uint32_t interactionScene;
+    uint32_t context;
+    uint32_t islandManager;
+    uint32_t phase;
+    uint32_t observerSequence;
+    uint32_t observationOrdinal;
+    uint32_t captureThreadId;
+    uint32_t epoch;
+    IslandElementManagerReceipt node;
+    IslandElementManagerReceipt edge;
+    IslandElementManagerReceipt island;
+    IslandElementManagerReceipt root;
+    IslandQueueReceipt nodeCreated;
+    IslandQueueReceipt nodeDeleted;
+    IslandQueueReceipt edgeCreated;
+    IslandQueueReceipt edgeDeleted;
+    IslandQueueReceipt edgeBroken;
+    IslandQueueReceipt edgeJoined;
+    IslandBitmapReceipt kinematic;
+    IslandBitmapReceipt kinematicChange;
+    IslandBitmapReceipt notReady;
+    IslandBitmapReceipt notReadyChange;
+    IslandBitmapReceipt islandBitmap;
+    uint32_t numAddedRBodies;
+    uint32_t numAddedArtics;
+    uint32_t numAddedKinematics;
+    uint32_t numAddedEdgesContact;
+    uint32_t numAddedEdgesConstraint;
+    uint32_t numAddedEdgesArticulation;
+    uint32_t numEdgeReferencesToKinematic;
+    uint32_t numRequiredKinematicDuplicates;
+    uint32_t everythingAsleep;
+    uint32_t hasAnythingChanged;
+    uint32_t performIslandUpdate;
+    uint32_t liveContactEdges;
+    uint32_t liveConstraintEdges;
+    uint32_t liveArticulationEdges;
+    uint32_t bindingsRequired;
+    uint32_t bindingsWritten;
+    uint32_t bindingHash;
+    uint32_t journalBeginOrdinal;
+    uint32_t journalEndOrdinal;
+    uint32_t journalOverflowCount;
+    uint32_t snapshotHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
+
+struct IslandUpdateObserverReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uint32_t unityBase;
+    uint32_t expectedManager;
+    uint32_t expectedContext;
+    uint32_t expectedNphase;
+    uint32_t observedManager;
+    uint32_t observedContext;
+    uint32_t observedNphase;
+    uint32_t installed;
+    uint32_t state;
+    uint32_t expectedPass;
+    uint32_t armedThreadId;
+    uint32_t observerSequence;
+    uint32_t armedOrdinal;
+    uint32_t observationOrdinal;
+    uint32_t slotIndex;
+    uint32_t pass;
+    uint32_t threadId;
+    uint32_t preResult;
+    uint32_t postResult;
+    uint32_t preSnapshotHash;
+    uint32_t postSnapshotHash;
+    uint32_t journalBeginOrdinal;
+    uint32_t journalEndOrdinal;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+    uint32_t inFlight;
+};
+
+struct IslandEdgeJournalReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uint32_t unityBase;
+    uint32_t expectedManager;
+    uint32_t installed;
+    uint32_t state;
+    uint32_t firstOrdinal;
+    uint32_t nextOrdinal;
+    uint32_t requestedBegin;
+    uint32_t recordsRequired;
+    uint32_t recordsWritten;
+    uint32_t overflowCount;
+    uint32_t addCount;
+    uint32_t removeCount;
+    uint32_t recordHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
+#pragma pack(pop)
+
 struct ManifoldPoolReceipt {
     uint32_t apiVersion;
     uint32_t structSize;
@@ -1112,6 +1360,32 @@ static_assert(sizeof(BroadPhaseOverlapRecord) == 40,
     "Unexpected Win32 broadphase overlap ABI");
 static_assert(sizeof(FinishBroadPhaseObserverReceipt) == 152,
     "Unexpected Win32 finishBroadPhase observer ABI");
+static_assert(sizeof(IslandNodeSlotRecord) == 32,
+    "Unexpected Win32 island node record ABI");
+static_assert(sizeof(IslandEdgeSlotRecord) == 36,
+    "Unexpected Win32 island edge record ABI");
+static_assert(sizeof(IslandSlotRecord) == 32,
+    "Unexpected Win32 island record ABI");
+static_assert(sizeof(IslandArticulationRootSlotRecord) == 24,
+    "Unexpected Win32 island articulation-root record ABI");
+static_assert(sizeof(IslandSipEdgeBinding) == 44,
+    "Unexpected Win32 island SIP binding ABI");
+static_assert(sizeof(IslandEdgeJournalRecord) == 56,
+    "Unexpected Win32 island edge journal ABI");
+static_assert(sizeof(IslandSnapshotBuffersV1) == 128,
+    "Unexpected Win32 island snapshot buffer ABI");
+static_assert(sizeof(IslandElementManagerReceipt) == 48,
+    "Unexpected Win32 island element-manager receipt ABI");
+static_assert(sizeof(IslandQueueReceipt) == 28,
+    "Unexpected Win32 island queue receipt ABI");
+static_assert(sizeof(IslandBitmapReceipt) == 20,
+    "Unexpected Win32 island bitmap receipt ABI");
+static_assert(sizeof(IslandSnapshotReceiptV1) == 620,
+    "Unexpected Win32 island snapshot receipt ABI");
+static_assert(sizeof(IslandUpdateObserverReceipt) == 128,
+    "Unexpected Win32 island update-observer receipt ABI");
+static_assert(sizeof(IslandEdgeJournalReceipt) == 84,
+    "Unexpected Win32 island edge-journal receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1350,6 +1624,68 @@ enum FinishBroadPhaseObserverState : uint32_t {
     FinishBroadPhaseObserverFailed = 5
 };
 
+enum IslandSnapshotResult : uint32_t {
+    IslandSnapshotOk = 1,
+    IslandSnapshotBadArgument = 2,
+    IslandSnapshotRevisionMismatch = 3,
+    IslandSnapshotInvalidIdentity = 4,
+    IslandSnapshotInvalidMetadata = 5,
+    IslandSnapshotCapacityTooSmall = 6,
+    IslandSnapshotInvalidFreeChain = 7,
+    IslandSnapshotInvalidBitmap = 8,
+    IslandSnapshotInvalidQueue = 9,
+    IslandSnapshotInvalidTopology = 10,
+    IslandSnapshotInvalidBinding = 11,
+    IslandSnapshotInvalidPhase = 12,
+    IslandSnapshotUnstable = 13,
+    IslandSnapshotJournalOverflow = 14
+};
+
+enum IslandObserverResult : uint32_t {
+    IslandObserverOk = 1,
+    IslandObserverBadArgument = 2,
+    IslandObserverRevisionMismatch = 3,
+    IslandObserverAlreadyInstalled = 4,
+    IslandObserverNotInstalled = 5,
+    IslandObserverAllocationFailed = 6,
+    IslandObserverProtectFailed = 7,
+    IslandObserverPatchChanged = 8,
+    IslandObserverBusy = 9,
+    IslandObserverNotReady = 10,
+    IslandObserverStale = 11,
+    IslandObserverCapacityTooSmall = 12,
+    IslandObserverInvalidIdentity = 13,
+    IslandObserverInvalidMetadata = 14,
+    IslandObserverUnstable = 15,
+    IslandObserverCaptureFailed = 16
+};
+
+enum IslandObserverState : uint32_t {
+    IslandObserverDormant = 0,
+    IslandObserverIdle = 1,
+    IslandObserverArmed = 2,
+    IslandObserverCapturing = 3,
+    IslandObserverCaptured = 4,
+    IslandObserverFailed = 5
+};
+
+enum IslandJournalResult : uint32_t {
+    IslandJournalOk = 1,
+    IslandJournalBadArgument = 2,
+    IslandJournalNotInstalled = 3,
+    IslandJournalNotReady = 4,
+    IslandJournalStale = 5,
+    IslandJournalCapacityTooSmall = 6,
+    IslandJournalUnstable = 7,
+    IslandJournalOverflow = 8
+};
+
+enum IslandSnapshotPhase : uint32_t {
+    IslandSnapshotSettled = 1,
+    IslandSnapshotPreUpdate = 2,
+    IslandSnapshotPostUpdate = 3
+};
+
 enum DirtyInteractionRestoreMode : uint32_t {
     DirtyInteractionRestoreNone = 0,
     DirtyInteractionRestoreExact = 1,
@@ -1452,7 +1788,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 16;
+static const uint32_t kApiVersion = 17;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1469,6 +1805,13 @@ static const uint32_t kMaximumTransformCacheBindings =
     kMaximumInteractionGraphInteractions * 2u;
 static const uint32_t kMaximumBroadPhaseOverlaps = 4096;
 static const uint32_t kFinishBroadPhaseRingCapacity = 4;
+static const uint32_t kMaximumIslandNodes = 16384;
+static const uint32_t kMaximumIslandEdges = 65536;
+static const uint32_t kMaximumIslands = 16384;
+static const uint32_t kMaximumIslandRoots = 16384;
+static const uint32_t kMaximumIslandQueueEntries = 65536;
+static const uint32_t kMaximumIslandBindings = 16384;
+static const uint32_t kIslandJournalCapacity = 65536;
 static const uint32_t kCleanupRva = 0x481ED0;
 static const uint32_t kCreateRva = 0x482510;
 static const uint32_t kGetShapesRva = 0xA10740;
@@ -1500,6 +1843,16 @@ static const uint32_t kInteractionRegisterRva = 0xA420B0;
 static const uint32_t kInteractionUnregisterRva = 0xA42950;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kFinishBroadPhaseRva = 0xA31CA0;
+static const uint32_t kIslandAddEdgeRva = 0xA63940;
+static const uint32_t kIslandRemoveEdgeRva = 0xA64490;
+static const uint32_t kIslandPrivateUpdateRva = 0xA65430;
+static const uint32_t kIslandUpdateRva = 0xA65530;
+static const uint32_t kIslandSecondUpdateRva = 0xA655B0;
+static const uint32_t kPxsContextUpdateIslandsRva = 0xA6C910;
+static const uint32_t kIslandNodeVtableRva = 0xEFF2C0;
+static const uint32_t kIslandEdgeVtableRva = 0xEFF2C8;
+static const uint32_t kIslandManagerVtableRva = 0xEFF2D8;
+static const uint32_t kIslandRootVtableRva = 0xEFF2E0;
 static const uint32_t kCreateManagerTransformCacheLayoutRva = 0xA54530;
 static const uint32_t kShapeSimCreateTransformCacheRva = 0xA473B0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
@@ -1677,6 +2030,30 @@ static const uint8_t kFinishBroadPhaseBytes[] = {
 static const uint8_t kFinishBroadPhaseLayoutBytes[] = {
     0x8B,0x83,0xB4,0x04,0x00,0x00,0x8B,0x8B,0x50,0x04,0x00,0x00,
     0x8B,0x80,0xE8,0x03,0x00,0x00,0x8B,0x70,0x08
+};
+static const uint8_t kIslandAddEdgeBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0xD9,0x83,0xBB,
+    0x28,0x01,0x00,0x00,0xFF,0x56,0x8D,0xB3
+};
+static const uint8_t kIslandRemoveEdgeBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x0C,0x56,
+    0x57,0x8B,0xF9,0x8B,0x03,0x8D,0xB7
+};
+static const uint8_t kIslandPrivateUpdateBytes[] = {
+    0x53,0x8B,0xD9,0x56,0x57,0xFF,0x73,0x08,
+    0x8D,0x83,0x78,0x02,0x00,0x00,0x50
+};
+static const uint8_t kIslandUpdateBytes[] = {
+    0x53,0x56,0x57,0x8B,0xF1,0xE8,0xE6,0xE4,
+    0xFF,0xFF,0x8B,0xCE,0xE8,0x9F,0xF6,0xFF,0xFF
+};
+static const uint8_t kIslandSecondUpdateBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x53,0x56,
+    0x8B,0xF1,0x57,0x89,0x75,0xF8
+};
+static const uint8_t kPxsContextUpdateIslandsBytes[] = {
+    0x55,0x8B,0xEC,0x6A,0x00,0xFF,0x75,0x0C,
+    0x81,0xC1,0x1C,0x18,0x00,0x00,0xE8
 };
 static const uint8_t kCreateManagerTransformCacheLayoutBytes[] = {
     0x8B,0x86,0xB4,0x04,0x00,0x00,0x8B,0x4D,0xF8,
@@ -1967,6 +2344,46 @@ static uint32_t g_finishBroadPhaseArmedThreadId = 0;
 static uint32_t g_finishBroadPhaseArmedOrdinal = 0;
 static FinishBroadPhaseCaptureSlot
     g_finishBroadPhaseSlots[kFinishBroadPhaseRingCapacity] = {};
+
+struct IslandJournalSlot {
+    volatile LONG committedOrdinal;
+    IslandEdgeJournalRecord record;
+};
+
+static uintptr_t g_islandUnityBase = 0;
+static uintptr_t g_islandExpectedManager = 0;
+static uintptr_t g_islandExpectedContext = 0;
+static uintptr_t g_islandExpectedNphase = 0;
+static void* g_islandAddEdgeTrampoline = 0;
+static void* g_islandRemoveEdgeTrampoline = 0;
+static void* g_islandUpdateTrampoline = 0;
+static uint8_t g_islandAddEdgeOriginal[6] = {};
+static uint8_t g_islandRemoveEdgeOriginal[7] = {};
+static uint8_t g_islandUpdateOriginal[5] = {};
+static const uint8_t g_islandModuleMarker = 0;
+static volatile LONG g_islandModulePinned = 0;
+// 0 means no resident detour, -1 lifecycle transition, 1 resident detours.
+static volatile LONG g_islandInstalled = 0;
+static volatile LONG g_islandState = IslandObserverDormant;
+static volatile LONG g_islandInFlight = 0;
+static volatile LONG g_islandEpoch = 0;
+static volatile LONG g_islandCapturePhase = IslandSnapshotSettled;
+static volatile LONG g_islandObserverSequence = 0;
+static volatile LONG g_islandNextObservationOrdinal = 0;
+static volatile LONG g_islandCommittedObservationOrdinal = 0;
+static volatile LONG g_islandDeferredDormant = 0;
+static volatile LONG g_islandJournalNextOrdinal = 0;
+static volatile LONG g_islandJournalOverflow = 0;
+static uint32_t g_islandExpectedPass = 0;
+static uint32_t g_islandArmedThreadId = 0;
+static uint32_t g_islandArmedOrdinal = 0;
+static uint32_t g_islandArmJournalBegin = 1;
+static IslandSnapshotBuffersV1 g_islandArmedPreBuffers = {};
+static IslandSnapshotBuffersV1 g_islandArmedPostBuffers = {};
+static IslandSnapshotReceiptV1* g_islandArmedPreReceipt = 0;
+static IslandSnapshotReceiptV1* g_islandArmedPostReceipt = 0;
+static IslandUpdateObserverReceipt g_islandCommittedReceipt = {};
+static IslandJournalSlot g_islandJournal[kIslandJournalCapacity] = {};
 
 static int Fail(RebuildReceipt* receipt, RebuildResult result, uint32_t error) {
     receipt->result = result;
@@ -7371,6 +7788,2070 @@ static int CaptureTransformCache(uintptr_t unityBase, uintptr_t nphaseCore,
     return 1;
 }
 
+struct IslandElementHeader {
+    uintptr_t vtable;
+    uintptr_t elements;
+    uintptr_t freeNext;
+    uintptr_t nextList;
+    uint32_t capacity;
+    uint32_t freeHead;
+    uint32_t freeCount;
+};
+
+struct IslandQueueHeader {
+    uintptr_t data;
+    uint32_t count;
+    uint32_t capacity;
+    uint32_t defaultCapacity;
+};
+
+struct IslandBitmapHeader {
+    uintptr_t data;
+    uint32_t wordCount;
+};
+
+struct IslandHeaderState {
+    uintptr_t ownerScene;
+    uintptr_t interactionScene;
+    uintptr_t context;
+    uintptr_t manager;
+    IslandElementHeader node;
+    IslandElementHeader edge;
+    IslandElementHeader island;
+    IslandElementHeader root;
+    IslandQueueHeader nodeCreated;
+    IslandQueueHeader nodeDeleted;
+    IslandQueueHeader edgeCreated;
+    IslandQueueHeader edgeDeleted;
+    IslandQueueHeader edgeBroken;
+    IslandQueueHeader edgeJoined;
+    IslandBitmapHeader bitmaps[5];
+    uint32_t scalars[11];
+};
+
+static void HookIslandAddEdge();
+static void HookIslandRemoveEdge();
+static void HookIslandUpdate();
+
+static bool HasIslandJump(const void* source, const void* destination,
+    uint32_t patchSize) {
+    if (!source || patchSize < 5u) return false;
+    const uint8_t* bytes = static_cast<const uint8_t*>(source);
+    if (!Readable(source, patchSize) || bytes[0] != 0xE9) return false;
+    for (uint32_t i = 5u; i < patchSize; ++i)
+        if (bytes[i] != 0x90) return false;
+    const int32_t displacement = *reinterpret_cast<const int32_t*>(bytes + 1u);
+    return reinterpret_cast<uintptr_t>(source) + 5u + displacement ==
+        reinterpret_cast<uintptr_t>(destination);
+}
+
+static bool IslandRevisionMatches(uintptr_t unityBase) {
+    const struct Guard { uint32_t rva; const uint8_t* bytes; uint32_t count; }
+        guards[] = {
+            {kIslandAddEdgeRva, kIslandAddEdgeBytes,
+                sizeof(kIslandAddEdgeBytes)},
+            {kIslandRemoveEdgeRva, kIslandRemoveEdgeBytes,
+                sizeof(kIslandRemoveEdgeBytes)},
+            {kIslandPrivateUpdateRva, kIslandPrivateUpdateBytes,
+                sizeof(kIslandPrivateUpdateBytes)},
+            {kIslandUpdateRva, kIslandUpdateBytes,
+                sizeof(kIslandUpdateBytes)},
+            {kIslandSecondUpdateRva, kIslandSecondUpdateBytes,
+                sizeof(kIslandSecondUpdateBytes)},
+            {kPxsContextUpdateIslandsRva, kPxsContextUpdateIslandsBytes,
+                sizeof(kPxsContextUpdateIslandsBytes)}
+        };
+    if (!unityBase) return false;
+    for (uint32_t i = 0; i < sizeof(guards) / sizeof(guards[0]); ++i) {
+        const void* address = reinterpret_cast<const void*>(unityBase +
+            guards[i].rva);
+        if (!Readable(address, guards[i].count)) return false;
+        if (EqualBytes(address, guards[i].bytes, guards[i].count)) continue;
+        if (i == 0u && HasIslandJump(address, HookIslandAddEdge, 6u)) continue;
+        if (i == 1u && HasIslandJump(address, HookIslandRemoveEdge, 7u))
+            continue;
+        if (i == 3u && HasIslandJump(address, HookIslandUpdate, 5u)) continue;
+        return false;
+    }
+    return true;
+}
+
+static bool ReadIslandElementHeader(uintptr_t address, uint32_t stride,
+    uint32_t hardLimit, bool hasNext, IslandElementHeader& header) {
+    ZeroMemory(&header, sizeof(header));
+    if (!Readable(reinterpret_cast<const void*>(address),
+            hasNext ? 0x1Cu : 0x18u)) return false;
+    header.vtable = *reinterpret_cast<const uintptr_t*>(address);
+    header.elements = *reinterpret_cast<const uintptr_t*>(address + 4u);
+    header.freeNext = *reinterpret_cast<const uintptr_t*>(address + 8u);
+    header.capacity = *reinterpret_cast<const uint32_t*>(address + 0x0Cu);
+    header.freeHead = *reinterpret_cast<const uint32_t*>(address + 0x10u);
+    header.freeCount = *reinterpret_cast<const uint32_t*>(address + 0x14u);
+    header.nextList = hasNext ?
+        *reinterpret_cast<const uintptr_t*>(address + 0x18u) : 0u;
+    if (header.capacity > hardLimit || header.freeCount > header.capacity ||
+        (header.freeHead != 0xFFFFFFFFu &&
+            header.freeHead >= header.capacity) ||
+        (header.capacity && (!header.elements || !header.freeNext ||
+            !Readable(reinterpret_cast<const void*>(header.elements),
+                header.capacity * stride) ||
+            !Readable(reinterpret_cast<const void*>(header.freeNext),
+                header.capacity * sizeof(uint32_t)) ||
+            (hasNext && (!header.nextList || !Readable(
+                reinterpret_cast<const void*>(header.nextList),
+                header.capacity * sizeof(uint32_t))))))) return false;
+    return true;
+}
+
+static bool ReadIslandQueueHeader(uintptr_t pointerAddress,
+    uintptr_t countAddress, uint32_t capacity, uint32_t defaultCapacity,
+    IslandQueueHeader& header) {
+    ZeroMemory(&header, sizeof(header));
+    if (!Readable(reinterpret_cast<const void*>(pointerAddress), 4u) ||
+        !Readable(reinterpret_cast<const void*>(countAddress), 4u))
+        return false;
+    header.data = *reinterpret_cast<const uintptr_t*>(pointerAddress);
+    header.count = *reinterpret_cast<const uint32_t*>(countAddress);
+    header.capacity = capacity;
+    header.defaultCapacity = defaultCapacity;
+    if (header.capacity > kMaximumIslandQueueEntries ||
+        header.count > header.capacity ||
+        (header.count && (!header.data || !Readable(
+            reinterpret_cast<const void*>(header.data),
+            header.count * sizeof(uint32_t))))) return false;
+    return true;
+}
+
+static bool ReadIslandHeader(uintptr_t unityBase, uintptr_t nphaseCore,
+    uintptr_t expectedManager, IslandHeaderState& header) {
+    ZeroMemory(&header, sizeof(header));
+    if (!nphaseCore || !Readable(reinterpret_cast<const void*>(nphaseCore), 4u))
+        return false;
+    header.ownerScene = *reinterpret_cast<const uintptr_t*>(nphaseCore);
+    if (!header.ownerScene || !Readable(reinterpret_cast<const void*>(
+            header.ownerScene + 0x450u), 0x68u) ||
+        *reinterpret_cast<const uintptr_t*>(header.ownerScene + 0x450u) !=
+            nphaseCore) return false;
+    header.interactionScene = *reinterpret_cast<const uintptr_t*>(
+        header.ownerScene + 0x4B4u);
+    if (!header.interactionScene || !Readable(reinterpret_cast<const void*>(
+            header.interactionScene), 0x3F4u) ||
+        *reinterpret_cast<const uintptr_t*>(header.interactionScene + 0x3F0u) !=
+            header.ownerScene) return false;
+    header.context = *reinterpret_cast<const uintptr_t*>(
+        header.interactionScene + 0x3E8u);
+    header.manager = header.context + 0x181Cu;
+    if (!header.context || !Readable(reinterpret_cast<const void*>(
+            header.manager), 0x2D8u) ||
+        (expectedManager && header.manager != expectedManager)) return false;
+    if (!ReadIslandElementHeader(header.manager + 0x0Cu, 12u,
+            kMaximumIslandNodes, true, header.node) ||
+        !ReadIslandElementHeader(header.manager + 0x118u, 12u,
+            kMaximumIslandEdges, true, header.edge) ||
+        !ReadIslandElementHeader(header.manager + 0x174u, 16u,
+            kMaximumIslands, false, header.island) ||
+        !ReadIslandElementHeader(header.manager + 0x1A4u, 8u,
+            kMaximumIslandRoots, false, header.root)) return false;
+    if (header.node.vtable != unityBase + kIslandNodeVtableRva ||
+        header.edge.vtable != unityBase + kIslandEdgeVtableRva ||
+        header.island.vtable != unityBase + kIslandManagerVtableRva ||
+        header.root.vtable != unityBase + kIslandRootVtableRva) return false;
+    const uint32_t nodeQueueCapacity = *reinterpret_cast<const uint32_t*>(
+        header.manager + 0x144u);
+    const uint32_t nodeQueueDefault = *reinterpret_cast<const uint32_t*>(
+        header.manager + 0x148u);
+    const uint32_t edgeQueueCapacity = *reinterpret_cast<const uint32_t*>(
+        header.manager + 0x16Cu);
+    const uint32_t edgeQueueDefault = *reinterpret_cast<const uint32_t*>(
+        header.manager + 0x170u);
+    if (!ReadIslandQueueHeader(header.manager + 0x134u,
+            header.manager + 0x138u, nodeQueueCapacity, nodeQueueDefault,
+            header.nodeCreated) ||
+        !ReadIslandQueueHeader(header.manager + 0x13Cu,
+            header.manager + 0x140u, nodeQueueCapacity, nodeQueueDefault,
+            header.nodeDeleted) ||
+        !ReadIslandQueueHeader(header.manager + 0x14Cu,
+            header.manager + 0x150u, edgeQueueCapacity, edgeQueueDefault,
+            header.edgeCreated) ||
+        !ReadIslandQueueHeader(header.manager + 0x154u,
+            header.manager + 0x158u, edgeQueueCapacity, edgeQueueDefault,
+            header.edgeDeleted) ||
+        !ReadIslandQueueHeader(header.manager + 0x15Cu,
+            header.manager + 0x160u, edgeQueueCapacity, edgeQueueDefault,
+            header.edgeBroken) ||
+        !ReadIslandQueueHeader(header.manager + 0x164u,
+            header.manager + 0x168u, edgeQueueCapacity, edgeQueueDefault,
+            header.edgeJoined)) return false;
+    for (uint32_t i = 0; i < 4u; ++i) {
+        header.bitmaps[i].data = *reinterpret_cast<const uintptr_t*>(
+            header.manager + 0x28u + i * 4u);
+        header.bitmaps[i].wordCount = *reinterpret_cast<const uint32_t*>(
+            header.manager + 0x38u + i * 4u);
+        if (header.bitmaps[i].wordCount >
+                (kMaximumIslandNodes + 31u) / 32u ||
+            (header.bitmaps[i].wordCount && (!header.bitmaps[i].data ||
+                !Readable(reinterpret_cast<const void*>(
+                    header.bitmaps[i].data),
+                    header.bitmaps[i].wordCount * sizeof(uint32_t)))))
+            return false;
+    }
+    header.bitmaps[4].data = *reinterpret_cast<const uintptr_t*>(
+        header.manager + 0x19Cu);
+    header.bitmaps[4].wordCount = *reinterpret_cast<const uint32_t*>(
+        header.manager + 0x1A0u);
+    if (header.bitmaps[4].wordCount >
+            (kMaximumIslands + 31u) / 32u ||
+        (header.bitmaps[4].wordCount && (!header.bitmaps[4].data ||
+            !Readable(reinterpret_cast<const void*>(header.bitmaps[4].data),
+                header.bitmaps[4].wordCount * sizeof(uint32_t)))))
+        return false;
+    for (uint32_t i = 0; i < 8u; ++i)
+        header.scalars[i] = *reinterpret_cast<const uint32_t*>(
+            header.manager + 0x1BCu + i * 4u);
+    header.scalars[8] = *reinterpret_cast<const uint8_t*>(
+        header.manager + 0x1DCu);
+    header.scalars[9] = *reinterpret_cast<const uint8_t*>(
+        header.manager + 0x1DDu);
+    header.scalars[10] = *reinterpret_cast<const uint8_t*>(
+        header.manager + 0x1DEu);
+    return true;
+}
+
+static void FillIslandElementReceipt(const IslandElementHeader& header,
+    IslandElementManagerReceipt& receipt, uint32_t required) {
+    receipt.vtable = static_cast<uint32_t>(header.vtable);
+    receipt.elements = static_cast<uint32_t>(header.elements);
+    receipt.freeNext = static_cast<uint32_t>(header.freeNext);
+    receipt.nextList = static_cast<uint32_t>(header.nextList);
+    receipt.capacity = header.capacity;
+    receipt.freeHead = header.freeHead;
+    receipt.freeCount = header.freeCount;
+    receipt.required = required;
+}
+
+static void FillIslandQueueReceipt(const IslandQueueHeader& header,
+    IslandQueueReceipt& receipt) {
+    receipt.data = static_cast<uint32_t>(header.data);
+    receipt.count = header.count;
+    receipt.capacity = header.capacity;
+    receipt.defaultCapacity = header.defaultCapacity;
+    receipt.required = header.count;
+}
+
+static void FillIslandBitmapReceipt(const IslandBitmapHeader& header,
+    IslandBitmapReceipt& receipt) {
+    receipt.data = static_cast<uint32_t>(header.data);
+    receipt.wordCount = header.wordCount;
+    receipt.required = header.wordCount;
+}
+
+static int FailIslandSnapshot(IslandSnapshotReceiptV1* receipt,
+    IslandSnapshotResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidKind = kind;
+        receipt->invalidIndex = index;
+        receipt->detail = detail;
+    }
+    return 0;
+}
+
+static bool SameIslandHeader(const IslandHeaderState& left,
+    const IslandHeaderState& right) {
+    return EqualBytes(&left, reinterpret_cast<const uint8_t*>(&right),
+        sizeof(left));
+}
+
+static bool IslandBufferWritable(const void* pointer, uint32_t capacity,
+    uint32_t required, uint32_t stride) {
+    if (capacity < required) return false;
+    return required == 0u || (pointer && Writable(const_cast<void*>(pointer),
+        required * stride));
+}
+
+static uint32_t HashIslandNodeRaw(const IslandNodeSlotRecord* records,
+    uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash = AppendByteHash(hash, &records[i].ownerOrArticulationRaw, 4u);
+        hash = AppendByteHash(hash, &records[i].islandId, 4u);
+        hash = AppendByteHash(hash, &records[i].rawFlagsWord, 4u);
+    }
+    return hash;
+}
+
+static uint32_t HashIslandEdgeRaw(const IslandEdgeSlotRecord* records,
+    uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash = AppendByteHash(hash, &records[i].node0, 4u);
+        hash = AppendByteHash(hash, &records[i].node1, 4u);
+        hash = AppendByteHash(hash, &records[i].taggedObjectRaw, 4u);
+    }
+    return hash;
+}
+
+static uint32_t HashIslandRaw(const IslandSlotRecord* records,
+    uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash = AppendByteHash(hash, &records[i].startNode, 4u);
+        hash = AppendByteHash(hash, &records[i].startEdge, 4u);
+        hash = AppendByteHash(hash, &records[i].endNode, 4u);
+        hash = AppendByteHash(hash, &records[i].endEdge, 4u);
+    }
+    return hash;
+}
+
+static uint32_t HashIslandRootRaw(
+    const IslandArticulationRootSlotRecord* records, uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash = AppendByteHash(hash, &records[i].articulationLinkHandle, 4u);
+        hash = AppendByteHash(hash, &records[i].articulationOwner, 4u);
+    }
+    return hash;
+}
+
+static uint32_t HashIslandRecordWord(const void* records, uint32_t count,
+    uint32_t stride, uint32_t offset) {
+    uint32_t hash = 2166136261u;
+    const uint8_t* bytes = static_cast<const uint8_t*>(records);
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= *reinterpret_cast<const uint32_t*>(
+            bytes + i * stride + offset);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static uint32_t IslandJournalCurrentNext() {
+    return static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandJournalNextOrdinal, 0, 0)) + 1u;
+}
+
+static uint32_t IslandJournalCurrentFirst(uint32_t next) {
+    return next > kIslandJournalCapacity ?
+        next - kIslandJournalCapacity : 1u;
+}
+
+static int CaptureIslandSnapshot(uintptr_t unityBase, uintptr_t nphaseCore,
+    uint32_t expectedPhase, const IslandSnapshotBuffersV1* buffers,
+    IslandSnapshotReceiptV1* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = static_cast<uint32_t>(unityBase);
+    receipt->nphaseCore = static_cast<uint32_t>(nphaseCore);
+    receipt->phase = expectedPhase;
+    receipt->captureThreadId = GetCurrentThreadId();
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    if (!unityBase || !nphaseCore || !buffers ||
+        !Readable(buffers, sizeof(*buffers)))
+        return FailIslandSnapshot(receipt, IslandSnapshotBadArgument,
+            ERROR_INVALID_PARAMETER, 0u, 0xFFFFFFFFu, 1u);
+    if (!IslandRevisionMatches(unityBase))
+        return FailIslandSnapshot(receipt, IslandSnapshotRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 1u, 0xFFFFFFFFu, 2u);
+    const LONG epoch = InterlockedCompareExchange(&g_islandEpoch, 0, 0);
+    const LONG capturePhase = InterlockedCompareExchange(
+        &g_islandCapturePhase, 0, 0);
+    if ((expectedPhase == IslandSnapshotSettled && ((epoch & 1) != 0 ||
+            capturePhase != IslandSnapshotSettled)) ||
+        ((expectedPhase == IslandSnapshotPreUpdate ||
+            expectedPhase == IslandSnapshotPostUpdate) &&
+            (InterlockedCompareExchange(&g_islandState, 0, 0) !=
+                IslandObserverCapturing || capturePhase !=
+                    static_cast<LONG>(expectedPhase) || (epoch & 1) == 0)) ||
+        (expectedPhase < IslandSnapshotSettled ||
+            expectedPhase > IslandSnapshotPostUpdate))
+        return FailIslandSnapshot(receipt, IslandSnapshotInvalidPhase,
+            ERROR_INVALID_STATE, 9u, 0xFFFFFFFFu, 3u);
+
+    IslandHeaderState header = {};
+    if (!ReadIslandHeader(unityBase, nphaseCore,
+            expectedPhase == IslandSnapshotSettled ? 0u :
+                g_islandExpectedManager, header))
+        return FailIslandSnapshot(receipt, IslandSnapshotInvalidIdentity,
+            ERROR_INVALID_DATA, 1u, 0xFFFFFFFFu, 4u);
+    receipt->ownerScene = static_cast<uint32_t>(header.ownerScene);
+    receipt->interactionScene = static_cast<uint32_t>(header.interactionScene);
+    receipt->context = static_cast<uint32_t>(header.context);
+    receipt->islandManager = static_cast<uint32_t>(header.manager);
+    receipt->observerSequence = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandObserverSequence, 0, 0));
+    receipt->observationOrdinal = expectedPhase == IslandSnapshotSettled ? 0u :
+        g_islandArmedOrdinal;
+    receipt->epoch = static_cast<uint32_t>(epoch);
+    FillIslandElementReceipt(header.node, receipt->node, header.node.capacity);
+    FillIslandElementReceipt(header.edge, receipt->edge, header.edge.capacity);
+    FillIslandElementReceipt(header.island, receipt->island,
+        header.island.capacity);
+    FillIslandElementReceipt(header.root, receipt->root, header.root.capacity);
+    FillIslandQueueReceipt(header.nodeCreated, receipt->nodeCreated);
+    FillIslandQueueReceipt(header.nodeDeleted, receipt->nodeDeleted);
+    FillIslandQueueReceipt(header.edgeCreated, receipt->edgeCreated);
+    FillIslandQueueReceipt(header.edgeDeleted, receipt->edgeDeleted);
+    FillIslandQueueReceipt(header.edgeBroken, receipt->edgeBroken);
+    FillIslandQueueReceipt(header.edgeJoined, receipt->edgeJoined);
+    for (uint32_t i = 0; i < 5u; ++i) {
+        IslandBitmapReceipt* bitmap = i == 0u ? &receipt->kinematic :
+            i == 1u ? &receipt->kinematicChange :
+            i == 2u ? &receipt->notReady :
+            i == 3u ? &receipt->notReadyChange : &receipt->islandBitmap;
+        FillIslandBitmapReceipt(header.bitmaps[i], *bitmap);
+    }
+    receipt->numAddedRBodies = header.scalars[0];
+    receipt->numAddedArtics = header.scalars[1];
+    receipt->numAddedKinematics = header.scalars[2];
+    receipt->numAddedEdgesContact = header.scalars[3];
+    receipt->numAddedEdgesConstraint = header.scalars[4];
+    receipt->numAddedEdgesArticulation = header.scalars[5];
+    receipt->numEdgeReferencesToKinematic = header.scalars[6];
+    receipt->numRequiredKinematicDuplicates = header.scalars[7];
+    receipt->everythingAsleep = header.scalars[8];
+    receipt->hasAnythingChanged = header.scalars[9];
+    receipt->performIslandUpdate = header.scalars[10];
+    receipt->journalEndOrdinal = IslandJournalCurrentNext();
+    receipt->journalBeginOrdinal = IslandJournalCurrentFirst(
+        receipt->journalEndOrdinal);
+    receipt->journalOverflowCount = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandJournalOverflow, 0, 0));
+
+    InteractionGraphArrayHeader contactInteractions = {};
+    if (!ReadInteractionGraphArray(header.interactionScene + 0x10u,
+            contactInteractions, kMaximumIslandBindings))
+        return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+            ERROR_INVALID_DATA, 8u, 0xFFFFFFFFu, 5u);
+    uint32_t bindingRequired = 0;
+    uint32_t bindingEdgeSeen[(kMaximumIslandEdges + 31u) / 32u] = {};
+    uint32_t journalEdgeDecided[(kMaximumIslandEdges + 31u) / 32u] = {};
+    uint32_t edgeFreeSeen[(kMaximumIslandEdges + 31u) / 32u] = {};
+    uint32_t edgeDeletedSeen[(kMaximumIslandEdges + 31u) / 32u] = {};
+    uint32_t freeEdge = header.edge.freeHead;
+    for (uint32_t i = 0; i < header.edge.freeCount; ++i) {
+        if (freeEdge >= header.edge.capacity ||
+            (edgeFreeSeen[freeEdge >> 5] &
+                (1u << (freeEdge & 31u))) != 0u)
+            return FailIslandSnapshot(receipt,
+                IslandSnapshotInvalidFreeChain, ERROR_INVALID_DATA,
+                3u, freeEdge, 4u);
+        edgeFreeSeen[freeEdge >> 5] |= 1u << (freeEdge & 31u);
+        freeEdge = *reinterpret_cast<const uint32_t*>(
+            header.edge.freeNext + freeEdge * 4u);
+    }
+    if (freeEdge != 0xFFFFFFFFu)
+        return FailIslandSnapshot(receipt, IslandSnapshotInvalidFreeChain,
+            ERROR_INVALID_DATA, 3u, freeEdge, 5u);
+    const uint32_t* deletedEdges = reinterpret_cast<const uint32_t*>(
+        header.edgeDeleted.data);
+    for (uint32_t i = 0; i < header.edgeDeleted.count; ++i) {
+        const uint32_t edgeId = deletedEdges[i];
+        if (edgeId >= header.edge.capacity)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidQueue,
+                ERROR_INVALID_DATA, 5u, i, 3u);
+        edgeDeletedSeen[edgeId >> 5] |= 1u << (edgeId & 31u);
+    }
+    const uintptr_t* interactionValues = reinterpret_cast<const uintptr_t*>(
+        contactInteractions.data);
+    const uint32_t contactOrderHash = OrderHash(interactionValues,
+        contactInteractions.count);
+    for (uint32_t i = 0; i < contactInteractions.count; ++i) {
+        const uintptr_t secondary = interactionValues[i];
+        if (!secondary || secondary < 8u || !Readable(
+                reinterpret_cast<const void*>(secondary - 8u), 0x40u))
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_NOACCESS, 8u, i, 6u);
+        uint32_t edgeId = *reinterpret_cast<const uint32_t*>(
+            secondary + 0x34u);
+        if (edgeId == 0xFFFFFFFFu) continue;
+        if (edgeId >= header.edge.capacity ||
+            (edgeFreeSeen[edgeId >> 5] & (1u << (edgeId & 31u))) != 0u ||
+            (bindingEdgeSeen[edgeId >> 5] &
+                (1u << (edgeId & 31u))) != 0u)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, i, 7u);
+        bindingEdgeSeen[edgeId >> 5] |= 1u << (edgeId & 31u);
+        ++bindingRequired;
+    }
+    // Binding recovery uses the complete retained journal.  The observer's
+    // exported transition interval still begins at arm time, but a D edge can
+    // already be pending at that settled boundary.
+    const uint32_t journalScanBegin = receipt->journalBeginOrdinal;
+    for (uint32_t ordinal = receipt->journalEndOrdinal;
+            ordinal-- > journalScanBegin;) {
+        IslandJournalSlot& slot = g_islandJournal[
+            (ordinal - 1u) % kIslandJournalCapacity];
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+                ERROR_IO_PENDING, 8u, ordinal, 45u);
+        const IslandEdgeJournalRecord record = slot.record;
+        if (record.ordinal != ordinal ||
+            (record.eventKind != 1u && record.eventKind != 2u) ||
+            static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+                ERROR_RETRY, 8u, ordinal, 46u);
+        const uint32_t edgeId = record.eventKind == 1u ?
+            record.postEdgeId : record.preEdgeId;
+        if (edgeId == 0xFFFFFFFFu) {
+            if (record.eventKind == 2u)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidBinding, ERROR_INVALID_DATA,
+                    8u, ordinal, 47u);
+            continue;
+        }
+        if (edgeId >= header.edge.capacity)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, ordinal, 48u);
+        if ((edgeFreeSeen[edgeId >> 5] & (1u << (edgeId & 31u))) != 0u ||
+            (bindingEdgeSeen[edgeId >> 5] &
+                (1u << (edgeId & 31u))) != 0u ||
+            (journalEdgeDecided[edgeId >> 5] &
+                (1u << (edgeId & 31u))) != 0u)
+            continue;
+        journalEdgeDecided[edgeId >> 5] |= 1u << (edgeId & 31u);
+        if (record.eventKind == 1u || record.edgeType != 0u) continue;
+        const uint32_t tagged = *reinterpret_cast<const uint32_t*>(
+            header.edge.elements + edgeId * 12u + 8u);
+        if ((tagged & 8u) == 0u ||
+            (edgeDeletedSeen[edgeId >> 5] &
+                (1u << (edgeId & 31u))) == 0u) continue;
+        if (record.validationFlags != 0x1Fu || !record.ownerObject ||
+            record.hookAddress != record.ownerObject + 0x3Cu ||
+            !record.pxsShapeCoreLow ||
+            record.pxsShapeCoreLow >= record.pxsShapeCoreHigh)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, ordinal, 49u);
+        bindingEdgeSeen[edgeId >> 5] |= 1u << (edgeId & 31u);
+        ++bindingRequired;
+    }
+    receipt->bindingsRequired = bindingRequired;
+
+    const bool capacityOk =
+        IslandBufferWritable(buffers->nodes, buffers->nodeCapacity,
+            header.node.capacity, sizeof(IslandNodeSlotRecord)) &&
+        IslandBufferWritable(buffers->edges, buffers->edgeCapacity,
+            header.edge.capacity, sizeof(IslandEdgeSlotRecord)) &&
+        IslandBufferWritable(buffers->islands, buffers->islandCapacity,
+            header.island.capacity, sizeof(IslandSlotRecord)) &&
+        IslandBufferWritable(buffers->roots, buffers->rootCapacity,
+            header.root.capacity, sizeof(IslandArticulationRootSlotRecord)) &&
+        IslandBufferWritable(buffers->kinematicWords,
+            buffers->kinematicWordCapacity, header.bitmaps[0].wordCount, 4u) &&
+        IslandBufferWritable(buffers->kinematicChangeWords,
+            buffers->kinematicChangeWordCapacity,
+            header.bitmaps[1].wordCount, 4u) &&
+        IslandBufferWritable(buffers->notReadyWords,
+            buffers->notReadyWordCapacity, header.bitmaps[2].wordCount, 4u) &&
+        IslandBufferWritable(buffers->notReadyChangeWords,
+            buffers->notReadyChangeWordCapacity,
+            header.bitmaps[3].wordCount, 4u) &&
+        IslandBufferWritable(buffers->islandWords,
+            buffers->islandWordCapacity, header.bitmaps[4].wordCount, 4u) &&
+        IslandBufferWritable(buffers->nodeCreated,
+            buffers->nodeCreatedCapacity, header.nodeCreated.count, 4u) &&
+        IslandBufferWritable(buffers->nodeDeleted,
+            buffers->nodeDeletedCapacity, header.nodeDeleted.count, 4u) &&
+        IslandBufferWritable(buffers->edgeCreated,
+            buffers->edgeCreatedCapacity, header.edgeCreated.count, 4u) &&
+        IslandBufferWritable(buffers->edgeDeleted,
+            buffers->edgeDeletedCapacity, header.edgeDeleted.count, 4u) &&
+        IslandBufferWritable(buffers->edgeBroken,
+            buffers->edgeBrokenCapacity, header.edgeBroken.count, 4u) &&
+        IslandBufferWritable(buffers->edgeJoined,
+            buffers->edgeJoinedCapacity, header.edgeJoined.count, 4u) &&
+        IslandBufferWritable(buffers->bindings, buffers->bindingCapacity,
+            bindingRequired, sizeof(IslandSipEdgeBinding));
+    if (!capacityOk)
+        return FailIslandSnapshot(receipt, IslandSnapshotCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 2u, 0xFFFFFFFFu, 7u);
+
+    for (uint32_t i = 0; i < header.node.capacity; ++i) {
+        IslandNodeSlotRecord& record = buffers->nodes[i];
+        ZeroMemory(&record, sizeof(record));
+        const uintptr_t source = header.node.elements + i * 12u;
+        record.id = i;
+        record.ownerOrArticulationRaw = *reinterpret_cast<const uint32_t*>(source);
+        record.islandId = *reinterpret_cast<const uint32_t*>(source + 4u);
+        record.rawFlagsWord = *reinterpret_cast<const uint32_t*>(source + 8u);
+        record.freeNext = *reinterpret_cast<const uint32_t*>(
+            header.node.freeNext + i * 4u);
+        record.nextNode = *reinterpret_cast<const uint32_t*>(
+            header.node.nextList + i * 4u);
+    }
+    receipt->node.written = header.node.capacity;
+    for (uint32_t i = 0; i < header.edge.capacity; ++i) {
+        IslandEdgeSlotRecord& record = buffers->edges[i];
+        ZeroMemory(&record, sizeof(record));
+        const uintptr_t source = header.edge.elements + i * 12u;
+        record.id = i;
+        record.node0 = *reinterpret_cast<const uint32_t*>(source);
+        record.node1 = *reinterpret_cast<const uint32_t*>(source + 4u);
+        record.taggedObjectRaw = *reinterpret_cast<const uint32_t*>(source + 8u);
+        record.freeNext = *reinterpret_cast<const uint32_t*>(
+            header.edge.freeNext + i * 4u);
+        record.nextEdge = *reinterpret_cast<const uint32_t*>(
+            header.edge.nextList + i * 4u);
+        record.semanticBindingIndex = 0xFFFFFFFFu;
+    }
+    receipt->edge.written = header.edge.capacity;
+    for (uint32_t i = 0; i < header.island.capacity; ++i) {
+        IslandSlotRecord& record = buffers->islands[i];
+        ZeroMemory(&record, sizeof(record));
+        const uintptr_t source = header.island.elements + i * 16u;
+        record.id = i;
+        record.startNode = *reinterpret_cast<const uint32_t*>(source);
+        record.startEdge = *reinterpret_cast<const uint32_t*>(source + 4u);
+        record.endNode = *reinterpret_cast<const uint32_t*>(source + 8u);
+        record.endEdge = *reinterpret_cast<const uint32_t*>(source + 12u);
+        record.freeNext = *reinterpret_cast<const uint32_t*>(
+            header.island.freeNext + i * 4u);
+    }
+    receipt->island.written = header.island.capacity;
+    for (uint32_t i = 0; i < header.root.capacity; ++i) {
+        IslandArticulationRootSlotRecord& record = buffers->roots[i];
+        ZeroMemory(&record, sizeof(record));
+        const uintptr_t source = header.root.elements + i * 8u;
+        record.id = i;
+        record.articulationLinkHandle = *reinterpret_cast<const uint32_t*>(source);
+        record.articulationOwner = *reinterpret_cast<const uint32_t*>(source + 4u);
+        record.freeNext = *reinterpret_cast<const uint32_t*>(
+            header.root.freeNext + i * 4u);
+    }
+    receipt->root.written = header.root.capacity;
+
+    struct FreeWalk { IslandElementHeader* source; uint32_t count;
+        uint32_t kind; } freeWalks[] = {
+        {&header.node, header.node.capacity, 0u},
+        {&header.edge, header.edge.capacity, 1u},
+        {&header.island, header.island.capacity, 2u},
+        {&header.root, header.root.capacity, 3u}
+    };
+    for (uint32_t kind = 0; kind < 4u; ++kind) {
+        IslandElementHeader& source = *freeWalks[kind].source;
+        uint32_t id = source.freeHead;
+        uint32_t hash = 2166136261u;
+        for (uint32_t visited = 0; visited < source.freeCount; ++visited) {
+            if (id >= source.capacity)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidFreeChain, ERROR_INVALID_DATA,
+                    3u, id, kind);
+            uint32_t* flags = kind == 0u ? &buffers->nodes[id].slotFlags :
+                kind == 1u ? &buffers->edges[id].slotFlags :
+                kind == 2u ? &buffers->islands[id].slotFlags :
+                    &buffers->roots[id].slotFlags;
+            if ((*flags & 2u) != 0u)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidFreeChain, ERROR_DUP_NAME,
+                    3u, id, kind);
+            *flags |= 2u;
+            hash = AppendByteHash(hash, &id, sizeof(id));
+            id = *reinterpret_cast<const uint32_t*>(source.freeNext + id * 4u);
+        }
+        if (id != 0xFFFFFFFFu)
+            return FailIslandSnapshot(receipt,
+                IslandSnapshotInvalidFreeChain, ERROR_INVALID_DATA,
+                3u, id, 10u + kind);
+        IslandElementManagerReceipt* output = kind == 0u ? &receipt->node :
+            kind == 1u ? &receipt->edge : kind == 2u ? &receipt->island :
+                &receipt->root;
+        output->freeChainHash = hash;
+    }
+    for (uint32_t i = 0; i < header.node.capacity; ++i)
+        if ((buffers->nodes[i].slotFlags & 2u) == 0u)
+            buffers->nodes[i].slotFlags |= 1u;
+    for (uint32_t i = 0; i < header.edge.capacity; ++i)
+        if ((buffers->edges[i].slotFlags & 2u) == 0u) {
+            buffers->edges[i].slotFlags |= 1u;
+            if ((buffers->edges[i].taggedObjectRaw & 1u) == 0u)
+                ++receipt->liveContactEdges;
+            else if ((buffers->edges[i].taggedObjectRaw & ~0xFu) != 0u)
+                ++receipt->liveConstraintEdges;
+            else
+                ++receipt->liveArticulationEdges;
+        }
+    for (uint32_t i = 0; i < header.island.capacity; ++i)
+        if ((buffers->islands[i].slotFlags & 2u) == 0u)
+            buffers->islands[i].slotFlags |= 1u;
+    for (uint32_t i = 0; i < header.root.capacity; ++i)
+        if ((buffers->roots[i].slotFlags & 2u) == 0u)
+            buffers->roots[i].slotFlags |= 1u;
+
+    uint32_t* bitmapOutputs[] = {buffers->kinematicWords,
+        buffers->kinematicChangeWords, buffers->notReadyWords,
+        buffers->notReadyChangeWords, buffers->islandWords};
+    IslandBitmapReceipt* bitmapReceipts[] = {&receipt->kinematic,
+        &receipt->kinematicChange, &receipt->notReady,
+        &receipt->notReadyChange, &receipt->islandBitmap};
+    for (uint32_t b = 0; b < 5u; ++b) {
+        const uint32_t words = header.bitmaps[b].wordCount;
+        if (words) CopyBytes(bitmapOutputs[b],
+            reinterpret_cast<const void*>(header.bitmaps[b].data), words * 4u);
+        bitmapReceipts[b]->written = words;
+        bitmapReceipts[b]->hash = WordHash(bitmapOutputs[b], words);
+        const uint32_t capacity = b < 4u ? header.node.capacity :
+            header.island.capacity;
+        const uint32_t requiredWords = (capacity + 31u) / 32u;
+        if (words != requiredWords || (words && (capacity & 31u) != 0u &&
+            (bitmapOutputs[b][requiredWords - 1u] &
+                ~((1u << (capacity & 31u)) - 1u)) != 0u))
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBitmap,
+                ERROR_INVALID_DATA, 4u, b, 20u);
+        for (uint32_t id = 0; id < capacity; ++id) {
+            if ((bitmapOutputs[b][id >> 5] & (1u << (id & 31u))) == 0u)
+                continue;
+            if (b < 4u) buffers->nodes[id].slotFlags |= 1u << (4u + b);
+            else buffers->islands[id].slotFlags |= 4u;
+        }
+    }
+
+    struct QueueCopy { const IslandQueueHeader* source; uint32_t* output;
+        IslandQueueReceipt* receipt; uint32_t bit; bool node; } queues[] = {
+        {&header.nodeCreated,buffers->nodeCreated,&receipt->nodeCreated,8u,true},
+        {&header.nodeDeleted,buffers->nodeDeleted,&receipt->nodeDeleted,9u,true},
+        {&header.edgeCreated,buffers->edgeCreated,&receipt->edgeCreated,4u,false},
+        {&header.edgeDeleted,buffers->edgeDeleted,&receipt->edgeDeleted,5u,false},
+        {&header.edgeBroken,buffers->edgeBroken,&receipt->edgeBroken,6u,false},
+        {&header.edgeJoined,buffers->edgeJoined,&receipt->edgeJoined,7u,false}
+    };
+    for (uint32_t q = 0; q < 6u; ++q) {
+        const IslandQueueHeader& source = *queues[q].source;
+        if (source.count) CopyBytes(queues[q].output,
+            reinterpret_cast<const void*>(source.data), source.count * 4u);
+        queues[q].receipt->written = source.count;
+        queues[q].receipt->hash = WordHash(queues[q].output, source.count);
+        const uint32_t limit = queues[q].node ? header.node.capacity :
+            header.edge.capacity;
+        for (uint32_t j = 0; j < source.count; ++j) {
+            const uint32_t id = queues[q].output[j];
+            if (id >= limit || (queues[q].node ?
+                    (buffers->nodes[id].slotFlags & 2u) :
+                    (buffers->edges[id].slotFlags & 2u)))
+                return FailIslandSnapshot(receipt, IslandSnapshotInvalidQueue,
+                    ERROR_INVALID_DATA, 5u, j, q);
+            // C and D retain their elements until updateIslands consumes the
+            // queue.  Require the matching source tag while preserving the
+            // exact queue order and multiplicity.  B/J are event streams and
+            // deliberately have no uniqueness or tag-bit invariant.
+            if ((q == 0u &&
+                    (buffers->nodes[id].rawFlagsWord & 0x40u) == 0u) ||
+                (q == 1u &&
+                    (buffers->nodes[id].rawFlagsWord & 0x20u) == 0u) ||
+                (q == 2u &&
+                    (buffers->edges[id].taggedObjectRaw & 4u) == 0u) ||
+                (q == 3u &&
+                    (buffers->edges[id].taggedObjectRaw & 8u) == 0u))
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidQueue, ERROR_INVALID_DATA,
+                    5u, j, 10u + q);
+            if (queues[q].node)
+                buffers->nodes[id].slotFlags |= 1u << queues[q].bit;
+            else buffers->edges[id].slotFlags |= 1u << queues[q].bit;
+        }
+    }
+
+    for (uint32_t islandId = 0; islandId < header.island.capacity; ++islandId) {
+        IslandSlotRecord& island = buffers->islands[islandId];
+        if ((island.slotFlags & 4u) == 0u) continue;
+        if ((island.slotFlags & 2u) != 0u)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidTopology,
+                ERROR_INVALID_DATA, 6u, islandId, 30u);
+        uint32_t id = island.startNode;
+        uint32_t last = 0xFFFFFFFFu;
+        uint32_t walked = 0;
+        while (id != 0xFFFFFFFFu && walked++ < header.node.capacity) {
+            if (id >= header.node.capacity ||
+                (buffers->nodes[id].slotFlags & (2u | 4u)) != 0u ||
+                buffers->nodes[id].islandId != islandId)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidTopology, ERROR_INVALID_DATA,
+                    6u, islandId, 31u);
+            buffers->nodes[id].slotFlags |= 4u;
+            last = id;
+            id = buffers->nodes[id].nextNode;
+        }
+        if (id != 0xFFFFFFFFu || last != island.endNode)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidTopology,
+                ERROR_INVALID_DATA, 6u, islandId, 32u);
+        id = island.startEdge;
+        last = 0xFFFFFFFFu;
+        walked = 0;
+        while (id != 0xFFFFFFFFu && walked++ < header.edge.capacity) {
+            if (id >= header.edge.capacity ||
+                (buffers->edges[id].slotFlags & (2u | 4u)) != 0u ||
+                (buffers->edges[id].node0 != 0xFFFFFFFFu &&
+                    buffers->edges[id].node0 >= header.node.capacity) ||
+                (buffers->edges[id].node1 != 0xFFFFFFFFu &&
+                    buffers->edges[id].node1 >= header.node.capacity))
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidTopology, ERROR_INVALID_DATA,
+                    6u, islandId, 33u);
+            buffers->edges[id].slotFlags |= 4u;
+            last = id;
+            id = buffers->edges[id].nextEdge;
+        }
+        if (id != 0xFFFFFFFFu || last != island.endEdge)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidTopology,
+                ERROR_INVALID_DATA, 6u, islandId, 34u);
+    }
+
+    ZeroMemory(bindingEdgeSeen, sizeof(bindingEdgeSeen));
+    ZeroMemory(journalEdgeDecided, sizeof(journalEdgeDecided));
+    uint32_t bindingOutput = 0;
+    for (uint32_t i = 0; i < contactInteractions.count; ++i) {
+        const uintptr_t secondary = interactionValues[i];
+        const uintptr_t primary = secondary - 8u;
+        const uintptr_t shape0 = *reinterpret_cast<const uintptr_t*>(
+            primary + 0x20u);
+        const uintptr_t shape1 = *reinterpret_cast<const uintptr_t*>(
+            primary + 0x24u);
+        const uintptr_t manager = *reinterpret_cast<const uintptr_t*>(
+            primary + 0x38u);
+        const uint32_t edgeId = *reinterpret_cast<const uint32_t*>(
+            primary + 0x3Cu);
+        if (edgeId == 0xFFFFFFFFu) continue;
+        uintptr_t pxs0Value = 0, pxs1Value = 0;
+        if (!ReadShapeSimPxsShapeCore(shape0, pxs0Value) ||
+            !ReadShapeSimPxsShapeCore(shape1, pxs1Value))
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, i, 40u);
+        const uint32_t pxs0 = static_cast<uint32_t>(pxs0Value);
+        const uint32_t pxs1 = static_cast<uint32_t>(pxs1Value);
+        uint32_t low = pxs0 < pxs1 ? pxs0 : pxs1;
+        uint32_t high = pxs0 < pxs1 ? pxs1 : pxs0;
+        if (edgeId >= header.edge.capacity ||
+            (buffers->edges[edgeId].slotFlags & 2u) != 0u ||
+            buffers->edges[edgeId].semanticBindingIndex != 0xFFFFFFFFu ||
+            (buffers->edges[edgeId].taggedObjectRaw & ~0xFu) != manager ||
+            (manager && (!Readable(reinterpret_cast<const void*>(manager),
+                0x10u) || *reinterpret_cast<const uintptr_t*>(
+                    manager + 0x0Cu) != primary)))
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, i, 41u);
+        IslandSipEdgeBinding& binding = buffers->bindings[bindingOutput];
+        ZeroMemory(&binding, sizeof(binding));
+        binding.edgeId = edgeId;
+        binding.edgeType = 0u;
+        binding.sip = static_cast<uint32_t>(primary);
+        binding.hookAddress = static_cast<uint32_t>(primary + 0x3Cu);
+        binding.shapeSim0 = static_cast<uint32_t>(shape0);
+        binding.shapeSim1 = static_cast<uint32_t>(shape1);
+        binding.pxsShapeCoreLow = low;
+        binding.pxsShapeCoreHigh = high;
+        binding.contactManager = static_cast<uint32_t>(manager);
+        binding.taggedObjectRaw = buffers->edges[edgeId].taggedObjectRaw;
+        binding.validationFlags = 0x1Fu;
+        buffers->edges[edgeId].semanticBindingIndex = bindingOutput;
+        bindingEdgeSeen[edgeId >> 5] |= 1u << (edgeId & 31u);
+        ++bindingOutput;
+    }
+    for (uint32_t ordinal = receipt->journalEndOrdinal;
+            ordinal-- > journalScanBegin;) {
+        IslandJournalSlot& slot = g_islandJournal[
+            (ordinal - 1u) % kIslandJournalCapacity];
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+                ERROR_IO_PENDING, 8u, ordinal, 45u);
+        const IslandEdgeJournalRecord record = slot.record;
+        if (record.ordinal != ordinal ||
+            (record.eventKind != 1u && record.eventKind != 2u) ||
+            static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+                ERROR_RETRY, 8u, ordinal, 46u);
+        const uint32_t edgeId = record.eventKind == 1u ?
+            record.postEdgeId : record.preEdgeId;
+        if (edgeId == 0xFFFFFFFFu) {
+            if (record.eventKind == 2u)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidBinding, ERROR_INVALID_DATA,
+                    8u, ordinal, 47u);
+            continue;
+        }
+        if (edgeId >= header.edge.capacity)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, ordinal, 48u);
+        if ((buffers->edges[edgeId].slotFlags & 2u) != 0u ||
+            (bindingEdgeSeen[edgeId >> 5] &
+                (1u << (edgeId & 31u))) != 0u ||
+            (journalEdgeDecided[edgeId >> 5] &
+                (1u << (edgeId & 31u))) != 0u)
+            continue;
+        journalEdgeDecided[edgeId >> 5] |= 1u << (edgeId & 31u);
+        if (record.eventKind == 1u || record.edgeType != 0u) continue;
+        if ((buffers->edges[edgeId].taggedObjectRaw & 8u) == 0u ||
+            (edgeDeletedSeen[edgeId >> 5] &
+                (1u << (edgeId & 31u))) == 0u) continue;
+        if (record.validationFlags != 0x1Fu || !record.ownerObject ||
+            record.hookAddress != record.ownerObject + 0x3Cu ||
+            !record.pxsShapeCoreLow ||
+            record.pxsShapeCoreLow >= record.pxsShapeCoreHigh)
+            return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+                ERROR_INVALID_DATA, 8u, ordinal, 49u);
+        const uintptr_t currentManager =
+            buffers->edges[edgeId].taggedObjectRaw & ~0xFu;
+        IslandSipEdgeBinding& binding = buffers->bindings[bindingOutput];
+        ZeroMemory(&binding, sizeof(binding));
+        binding.edgeId = edgeId;
+        binding.edgeType = 0u;
+        binding.sip = record.ownerObject;
+        binding.hookAddress = record.hookAddress;
+        // The SIP can already have returned to its pool.  Its captured owner,
+        // hook and shape-core key remain diagnostic identity, but never
+        // dereference that stale address here.
+        binding.shapeSim0 = 0u;
+        binding.shapeSim1 = 0u;
+        binding.pxsShapeCoreLow = record.pxsShapeCoreLow;
+        binding.pxsShapeCoreHigh = record.pxsShapeCoreHigh;
+        // destroyManager() precedes removeEdge().  The raw payload can
+        // therefore name a freed or already-reused manager pool slot while D
+        // is still pending.  Preserve it diagnostically, but never dereference
+        // it or require a backlink to the journal's retired SIP owner.
+        binding.contactManager = static_cast<uint32_t>(currentManager);
+        binding.taggedObjectRaw = buffers->edges[edgeId].taggedObjectRaw;
+        binding.validationFlags = 0x1Fu;
+        buffers->edges[edgeId].semanticBindingIndex = bindingOutput;
+        bindingEdgeSeen[edgeId >> 5] |= 1u << (edgeId & 31u);
+        ++bindingOutput;
+    }
+    receipt->bindingsWritten = bindingOutput;
+    if (bindingOutput != bindingRequired ||
+        bindingOutput != receipt->liveContactEdges)
+        return FailIslandSnapshot(receipt, IslandSnapshotInvalidBinding,
+            ERROR_INVALID_DATA, 8u, bindingOutput, 42u);
+
+    for (uint32_t i = 0; i < header.node.capacity; ++i) {
+        IslandNodeSlotRecord& node = buffers->nodes[i];
+        if ((node.slotFlags & 1u) != 0u &&
+            (node.rawFlagsWord & (2u | 0x20u)) == 0u) {
+            const uintptr_t owner = node.ownerOrArticulationRaw;
+            if (!owner || !Readable(reinterpret_cast<const void*>(owner),
+                    0xC0u) || *reinterpret_cast<const uint32_t*>(
+                        owner + 0xBCu) != i)
+                return FailIslandSnapshot(receipt,
+                    IslandSnapshotInvalidTopology, ERROR_INVALID_DATA,
+                    6u, i, 43u);
+        }
+        node.validationFlags = 0x1Fu;
+    }
+    for (uint32_t i = 0; i < header.edge.capacity; ++i)
+        buffers->edges[i].validationFlags = 0x1Fu;
+    for (uint32_t i = 0; i < header.island.capacity; ++i)
+        buffers->islands[i].validationFlags = 0x0Fu;
+    for (uint32_t i = 0; i < header.root.capacity; ++i)
+        buffers->roots[i].validationFlags = 0x07u;
+
+    receipt->node.elementHash = HashIslandNodeRaw(buffers->nodes,
+        header.node.capacity);
+    receipt->node.nextHash = HashIslandRecordWord(buffers->nodes,
+        header.node.capacity, sizeof(IslandNodeSlotRecord), 20u);
+    receipt->edge.elementHash = HashIslandEdgeRaw(buffers->edges,
+        header.edge.capacity);
+    receipt->edge.nextHash = HashIslandRecordWord(buffers->edges,
+        header.edge.capacity, sizeof(IslandEdgeSlotRecord), 20u);
+    receipt->island.elementHash = HashIslandRaw(buffers->islands,
+        header.island.capacity);
+    receipt->root.elementHash = HashIslandRootRaw(buffers->roots,
+        header.root.capacity);
+    const uint32_t nodeFreePhysicalHash = HashIslandRecordWord(
+        buffers->nodes, header.node.capacity,
+        sizeof(IslandNodeSlotRecord), 16u);
+    const uint32_t edgeFreePhysicalHash = HashIslandRecordWord(
+        buffers->edges, header.edge.capacity,
+        sizeof(IslandEdgeSlotRecord), 16u);
+    const uint32_t islandFreePhysicalHash = HashIslandRecordWord(
+        buffers->islands, header.island.capacity,
+        sizeof(IslandSlotRecord), 20u);
+    const uint32_t rootFreePhysicalHash = HashIslandRecordWord(
+        buffers->roots, header.root.capacity,
+        sizeof(IslandArticulationRootSlotRecord), 12u);
+    receipt->bindingHash = ByteHash(buffers->bindings,
+        bindingOutput * sizeof(IslandSipEdgeBinding));
+    uint32_t hash = 2166136261u;
+    hash = AppendByteHash(hash, buffers->nodes,
+        header.node.capacity * sizeof(IslandNodeSlotRecord));
+    hash = AppendByteHash(hash, buffers->edges,
+        header.edge.capacity * sizeof(IslandEdgeSlotRecord));
+    hash = AppendByteHash(hash, buffers->islands,
+        header.island.capacity * sizeof(IslandSlotRecord));
+    hash = AppendByteHash(hash, buffers->roots,
+        header.root.capacity * sizeof(IslandArticulationRootSlotRecord));
+    for (uint32_t i = 0; i < 5u; ++i)
+        hash = AppendByteHash(hash, bitmapOutputs[i],
+            header.bitmaps[i].wordCount * 4u);
+    for (uint32_t i = 0; i < 6u; ++i)
+        hash = AppendByteHash(hash, queues[i].output,
+            queues[i].source->count * 4u);
+    hash = AppendByteHash(hash, buffers->bindings,
+        bindingOutput * sizeof(IslandSipEdgeBinding));
+    hash = AppendByteHash(hash, header.scalars, sizeof(header.scalars));
+    receipt->snapshotHash = hash;
+
+    IslandHeaderState check = {};
+    InteractionGraphArrayHeader contactCheck = {};
+    const bool contactStable = ReadInteractionGraphArray(
+        header.interactionScene + 0x10u, contactCheck,
+        kMaximumIslandBindings) &&
+        contactCheck.data == contactInteractions.data &&
+        contactCheck.count == contactInteractions.count &&
+        contactCheck.capacityRaw == contactInteractions.capacityRaw &&
+        OrderHash(reinterpret_cast<const uintptr_t*>(contactCheck.data),
+            contactCheck.count) == contactOrderHash;
+    bool bindingsStable = true;
+    for (uint32_t i = 0; i < bindingOutput && bindingsStable; ++i) {
+        const IslandSipEdgeBinding& binding = buffers->bindings[i];
+        if (!binding.shapeSim0 && !binding.shapeSim1) continue;
+        if (!binding.sip || binding.hookAddress != binding.sip + 0x3Cu ||
+            !Readable(reinterpret_cast<const void*>(binding.sip), 0x40u) ||
+            *reinterpret_cast<const uint32_t*>(binding.hookAddress) !=
+                binding.edgeId ||
+            *reinterpret_cast<const uintptr_t*>(binding.sip + 0x20u) !=
+                binding.shapeSim0 ||
+            *reinterpret_cast<const uintptr_t*>(binding.sip + 0x24u) !=
+                binding.shapeSim1 ||
+            *reinterpret_cast<const uintptr_t*>(binding.sip + 0x38u) !=
+                binding.contactManager ||
+            (buffers->edges[binding.edgeId].taggedObjectRaw & ~0xFu) !=
+                binding.contactManager ||
+            (binding.contactManager &&
+                (!Readable(reinterpret_cast<const void*>(
+                    binding.contactManager), 0x10u) ||
+                 *reinterpret_cast<const uintptr_t*>(
+                    binding.contactManager + 0x0Cu) != binding.sip))) {
+            bindingsStable = false;
+            break;
+        }
+        uintptr_t pxs0 = 0, pxs1 = 0;
+        if (!ReadShapeSimPxsShapeCore(binding.shapeSim0, pxs0) ||
+            !ReadShapeSimPxsShapeCore(binding.shapeSim1, pxs1)) {
+            bindingsStable = false;
+            break;
+        }
+        const uint32_t low = static_cast<uint32_t>(pxs0 < pxs1 ? pxs0 : pxs1);
+        const uint32_t high = static_cast<uint32_t>(pxs0 < pxs1 ? pxs1 : pxs0);
+        bindingsStable = low == binding.pxsShapeCoreLow &&
+            high == binding.pxsShapeCoreHigh;
+    }
+    if (!ReadIslandHeader(unityBase, nphaseCore, header.manager, check))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 51u);
+    if (!SameIslandHeader(header, check))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 52u);
+    if (!contactStable || !bindingsStable)
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 53u);
+    if (receipt->node.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.node.elements), check.node.capacity * 12u) ||
+        receipt->edge.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.edge.elements), check.edge.capacity * 12u) ||
+        receipt->island.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.island.elements), check.island.capacity * 16u) ||
+        receipt->root.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.root.elements), check.root.capacity * 8u))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 54u);
+    if (nodeFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.node.freeNext), check.node.capacity))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 55u);
+    if (edgeFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edge.freeNext), check.edge.capacity))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 551u);
+    if (islandFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.island.freeNext), check.island.capacity))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 552u);
+    if (rootFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.root.freeNext), check.root.capacity))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 553u);
+    if (receipt->node.nextHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.node.nextList), check.node.capacity) ||
+        receipt->edge.nextHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edge.nextList), check.edge.capacity))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 56u);
+    if (receipt->kinematic.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.bitmaps[0].data), check.bitmaps[0].wordCount) ||
+        receipt->kinematicChange.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[1].data),
+            check.bitmaps[1].wordCount) ||
+        receipt->notReady.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.bitmaps[2].data), check.bitmaps[2].wordCount) ||
+        receipt->notReadyChange.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[3].data),
+            check.bitmaps[3].wordCount) ||
+        receipt->islandBitmap.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[4].data),
+            check.bitmaps[4].wordCount))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 57u);
+    if (receipt->nodeCreated.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.nodeCreated.data), check.nodeCreated.count) ||
+        receipt->nodeDeleted.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.nodeDeleted.data), check.nodeDeleted.count) ||
+        receipt->edgeCreated.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeCreated.data), check.edgeCreated.count) ||
+        receipt->edgeDeleted.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeDeleted.data), check.edgeDeleted.count) ||
+        receipt->edgeBroken.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeBroken.data), check.edgeBroken.count) ||
+        receipt->edgeJoined.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeJoined.data), check.edgeJoined.count))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 58u);
+    if (receipt->journalEndOrdinal != IslandJournalCurrentNext() ||
+        epoch != InterlockedCompareExchange(&g_islandEpoch, 0, 0) ||
+        capturePhase != InterlockedCompareExchange(
+            &g_islandCapturePhase, 0, 0))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 59u);
+    if (
+        receipt->node.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.node.elements), check.node.capacity * 12u) ||
+        receipt->edge.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.edge.elements), check.edge.capacity * 12u) ||
+        receipt->island.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.island.elements), check.island.capacity * 16u) ||
+        receipt->root.elementHash != ByteHash(reinterpret_cast<const void*>(
+            check.root.elements), check.root.capacity * 8u) ||
+        nodeFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.node.freeNext), check.node.capacity) ||
+        edgeFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edge.freeNext), check.edge.capacity) ||
+        islandFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.island.freeNext), check.island.capacity) ||
+        rootFreePhysicalHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.root.freeNext), check.root.capacity) ||
+        receipt->node.nextHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.node.nextList), check.node.capacity) ||
+        receipt->edge.nextHash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edge.nextList), check.edge.capacity) ||
+        receipt->kinematic.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.bitmaps[0].data), check.bitmaps[0].wordCount) ||
+        receipt->kinematicChange.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[1].data),
+            check.bitmaps[1].wordCount) ||
+        receipt->notReady.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.bitmaps[2].data), check.bitmaps[2].wordCount) ||
+        receipt->notReadyChange.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[3].data),
+            check.bitmaps[3].wordCount) ||
+        receipt->islandBitmap.hash != WordHash(
+            reinterpret_cast<const uint32_t*>(check.bitmaps[4].data),
+            check.bitmaps[4].wordCount) ||
+        receipt->nodeCreated.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.nodeCreated.data), check.nodeCreated.count) ||
+        receipt->nodeDeleted.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.nodeDeleted.data), check.nodeDeleted.count) ||
+        receipt->edgeCreated.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeCreated.data), check.edgeCreated.count) ||
+        receipt->edgeDeleted.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeDeleted.data), check.edgeDeleted.count) ||
+        receipt->edgeBroken.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeBroken.data), check.edgeBroken.count) ||
+        receipt->edgeJoined.hash != WordHash(reinterpret_cast<const uint32_t*>(
+            check.edgeJoined.data), check.edgeJoined.count) ||
+        receipt->journalEndOrdinal != IslandJournalCurrentNext() ||
+        epoch != InterlockedCompareExchange(&g_islandEpoch, 0, 0) ||
+        capturePhase != InterlockedCompareExchange(
+            &g_islandCapturePhase, 0, 0) ||
+        (expectedPhase == IslandSnapshotSettled ?
+            InterlockedCompareExchange(&g_islandState, 0, 0) ==
+                IslandObserverCapturing :
+            InterlockedCompareExchange(&g_islandState, 0, 0) !=
+                IslandObserverCapturing) ||
+        (expectedPhase != IslandSnapshotSettled &&
+            (receipt->observerSequence != static_cast<uint32_t>(
+                InterlockedCompareExchange(&g_islandObserverSequence, 0, 0)) ||
+             receipt->observationOrdinal != g_islandArmedOrdinal)))
+        return FailIslandSnapshot(receipt, IslandSnapshotUnstable,
+            ERROR_RETRY, 10u, 0xFFFFFFFFu, 50u);
+    receipt->validationFlags = 0x3FFu;
+    receipt->result = IslandSnapshotOk;
+    receipt->lastError = ERROR_SUCCESS;
+    return 1;
+}
+
+static uint32_t ReserveIslandJournal(uintptr_t self, uint32_t eventKind,
+    uint32_t edgeType, uint32_t node0, uint32_t node1,
+    uintptr_t hookAddress) {
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        InterlockedCompareExchange(&g_islandState, 0, 0) ==
+            IslandObserverDormant || self != g_islandExpectedManager ||
+        !hookAddress || !Readable(reinterpret_cast<const void*>(hookAddress),
+            sizeof(uint32_t))) return 0u;
+    const uint32_t ordinal = static_cast<uint32_t>(InterlockedIncrement(
+        &g_islandJournalNextOrdinal));
+    if (ordinal > kIslandJournalCapacity)
+        InterlockedIncrement(&g_islandJournalOverflow);
+    IslandJournalSlot& slot = g_islandJournal[
+        (ordinal - 1u) % kIslandJournalCapacity];
+    InterlockedExchange(&slot.committedOrdinal, 0);
+    ZeroMemory(&slot.record, sizeof(slot.record));
+    slot.record.ordinal = ordinal;
+    slot.record.eventKind = eventKind;
+    slot.record.observerPhase = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandCapturePhase, 0, 0));
+    slot.record.threadId = GetCurrentThreadId();
+    slot.record.edgeType = edgeType;
+    slot.record.node0 = node0;
+    slot.record.node1 = node1;
+    slot.record.preEdgeId = 0xFFFFFFFFu;
+    slot.record.postEdgeId = 0xFFFFFFFFu;
+    slot.record.hookAddress = static_cast<uint32_t>(hookAddress);
+    slot.record.validationFlags = 0x03u;
+    if (eventKind == 2u) {
+        const uint32_t edgeId = *reinterpret_cast<const uint32_t*>(hookAddress);
+        slot.record.preEdgeId = edgeId;
+        if (edgeId != 0xFFFFFFFFu &&
+            Readable(reinterpret_cast<const void*>(self + 0x118u), 0x1Cu)) {
+            const uintptr_t elements = *reinterpret_cast<const uintptr_t*>(
+                self + 0x11Cu);
+            const uint32_t capacity = *reinterpret_cast<const uint32_t*>(
+                self + 0x124u);
+            if (edgeId < capacity && elements && Readable(
+                    reinterpret_cast<const void*>(elements + edgeId * 12u),
+                    12u)) {
+                slot.record.node0 = *reinterpret_cast<const uint32_t*>(
+                    elements + edgeId * 12u);
+                slot.record.node1 = *reinterpret_cast<const uint32_t*>(
+                    elements + edgeId * 12u + 4u);
+                slot.record.validationFlags |= 0x04u;
+            }
+        }
+    }
+    if (edgeType == 0u && hookAddress >= 0x3Cu) {
+        const uintptr_t owner = hookAddress - 0x3Cu;
+        if (Readable(reinterpret_cast<const void*>(owner), 0x28u)) {
+            const uintptr_t shape0 = *reinterpret_cast<const uintptr_t*>(
+                owner + 0x20u);
+            const uintptr_t shape1 = *reinterpret_cast<const uintptr_t*>(
+                owner + 0x24u);
+            uintptr_t pxs0 = 0, pxs1 = 0;
+            if (ReadShapeSimPxsShapeCore(shape0, pxs0) &&
+                ReadShapeSimPxsShapeCore(shape1, pxs1) && pxs0 != pxs1) {
+                slot.record.ownerObject = static_cast<uint32_t>(owner);
+                slot.record.pxsShapeCoreLow = static_cast<uint32_t>(
+                    pxs0 < pxs1 ? pxs0 : pxs1);
+                slot.record.pxsShapeCoreHigh = static_cast<uint32_t>(
+                    pxs0 < pxs1 ? pxs1 : pxs0);
+                slot.record.validationFlags |= 0x18u;
+            }
+        }
+    } else {
+        // Constraint/articulation ownership remains deliberately unresolved;
+        // the exact raw hook event is still complete journal evidence.
+        slot.record.validationFlags |= 0x18u;
+    }
+    return ordinal;
+}
+
+static uint32_t __cdecl ObserveIslandAddEntry(uintptr_t self,
+    uint32_t edgeType, uint32_t node0, uint32_t node1,
+    uintptr_t hookAddress) {
+    return ReserveIslandJournal(self, 1u, edgeType, node0, node1,
+        hookAddress);
+}
+
+static void __cdecl ObserveIslandAddExit(uint32_t ordinal,
+    uintptr_t hookAddress) {
+    if (!ordinal) return;
+    IslandJournalSlot& slot = g_islandJournal[
+        (ordinal - 1u) % kIslandJournalCapacity];
+    if (slot.record.ordinal != ordinal || !Readable(
+            reinterpret_cast<const void*>(hookAddress), 4u)) return;
+    slot.record.postEdgeId = *reinterpret_cast<const uint32_t*>(hookAddress);
+    if (slot.record.postEdgeId != 0xFFFFFFFFu)
+        slot.record.validationFlags |= 0x04u;
+    MemoryBarrier();
+    InterlockedExchange(&slot.committedOrdinal, static_cast<LONG>(ordinal));
+}
+
+static uint32_t __cdecl ObserveIslandRemoveEntry(uintptr_t self,
+    uint32_t edgeType, uintptr_t hookAddress) {
+    return ReserveIslandJournal(self, 2u, edgeType, 0xFFFFFFFFu,
+        0xFFFFFFFFu, hookAddress);
+}
+
+static void __cdecl ObserveIslandRemoveExit(uint32_t ordinal,
+    uintptr_t hookAddress) {
+    if (!ordinal) return;
+    IslandJournalSlot& slot = g_islandJournal[
+        (ordinal - 1u) % kIslandJournalCapacity];
+    if (slot.record.ordinal != ordinal || !Readable(
+            reinterpret_cast<const void*>(hookAddress), 4u)) return;
+    slot.record.postEdgeId = *reinterpret_cast<const uint32_t*>(hookAddress);
+    if (slot.record.postEdgeId == 0xFFFFFFFFu)
+        slot.record.validationFlags |= 0x04u;
+    MemoryBarrier();
+    InterlockedExchange(&slot.committedOrdinal, static_cast<LONG>(ordinal));
+}
+
+static void InitializeIslandObserverReceipt(uintptr_t unityBase,
+    IslandUpdateObserverReceipt* receipt) {
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->result = IslandObserverOk;
+    receipt->unityBase = static_cast<uint32_t>(unityBase);
+    receipt->expectedManager = static_cast<uint32_t>(g_islandExpectedManager);
+    receipt->expectedContext = static_cast<uint32_t>(g_islandExpectedContext);
+    receipt->expectedNphase = static_cast<uint32_t>(g_islandExpectedNphase);
+    receipt->installed = InterlockedCompareExchange(&g_islandInstalled,
+        0, 0) == 1 ? 1u : 0u;
+    receipt->state = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandState, 0, 0));
+    receipt->expectedPass = g_islandExpectedPass;
+    receipt->armedThreadId = g_islandArmedThreadId;
+    receipt->observerSequence = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandObserverSequence, 0, 0));
+    receipt->armedOrdinal = g_islandArmedOrdinal;
+    receipt->observationOrdinal = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandCommittedObservationOrdinal,
+            0, 0));
+    receipt->slotIndex = 0u;
+    receipt->journalBeginOrdinal = g_islandArmJournalBegin;
+    receipt->journalEndOrdinal = IslandJournalCurrentNext();
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    receipt->inFlight = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandInFlight, 0, 0));
+}
+
+static int FailIslandObserver(IslandUpdateObserverReceipt* receipt,
+    IslandObserverResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidKind = kind;
+        receipt->invalidIndex = index;
+        receipt->detail = detail;
+        receipt->inFlight = static_cast<uint32_t>(InterlockedCompareExchange(
+            &g_islandInFlight, 0, 0));
+    }
+    return 0;
+}
+
+static uint32_t __cdecl ObserveIslandUpdateEntry(uintptr_t self,
+    uintptr_t /*task*/, uint32_t pass) {
+    const uintptr_t expectedManager = g_islandExpectedManager;
+    const uintptr_t expectedNphase = g_islandExpectedNphase;
+    const uint32_t expectedPass = g_islandExpectedPass;
+    const uint32_t armedThreadId = g_islandArmedThreadId;
+    const uint32_t armedOrdinal = g_islandArmedOrdinal;
+    const LONG observerSequence = InterlockedCompareExchange(
+        &g_islandObserverSequence, 0, 0);
+    if (self != expectedManager || !expectedNphase ||
+        pass != expectedPass || GetCurrentThreadId() != armedThreadId)
+        return 0u;
+    if (InterlockedCompareExchange(&g_islandState,
+            IslandObserverCapturing, IslandObserverArmed) !=
+        IslandObserverArmed) return 0u;
+    MemoryBarrier();
+    if (expectedManager != g_islandExpectedManager ||
+        expectedNphase != g_islandExpectedNphase ||
+        expectedPass != g_islandExpectedPass ||
+        armedThreadId != g_islandArmedThreadId ||
+        armedOrdinal != g_islandArmedOrdinal ||
+        observerSequence != InterlockedCompareExchange(
+            &g_islandObserverSequence, 0, 0)) {
+        const LONG target = InterlockedExchange(&g_islandDeferredDormant, 0) ?
+            IslandObserverDormant : IslandObserverArmed;
+        InterlockedCompareExchange(&g_islandState, target,
+            IslandObserverCapturing);
+        return 0u;
+    }
+    const uint32_t ordinal = static_cast<uint32_t>(InterlockedIncrement(
+        &g_islandNextObservationOrdinal));
+    ZeroMemory(&g_islandCommittedReceipt, sizeof(g_islandCommittedReceipt));
+    InitializeIslandObserverReceipt(g_islandUnityBase,
+        &g_islandCommittedReceipt);
+    g_islandCommittedReceipt.state = IslandObserverCapturing;
+    g_islandCommittedReceipt.observationOrdinal = ordinal;
+    g_islandCommittedReceipt.pass = pass;
+    g_islandCommittedReceipt.threadId = GetCurrentThreadId();
+    g_islandCommittedReceipt.observedManager = static_cast<uint32_t>(self);
+    g_islandCommittedReceipt.observedContext = static_cast<uint32_t>(
+        self >= 0x181Cu ? self - 0x181Cu : 0u);
+    g_islandCommittedReceipt.observedNphase = static_cast<uint32_t>(
+        g_islandExpectedNphase);
+    g_islandCommittedReceipt.journalBeginOrdinal = g_islandArmJournalBegin;
+    if (ordinal != g_islandArmedOrdinal) {
+        g_islandCommittedReceipt.result = IslandObserverInvalidIdentity;
+        g_islandCommittedReceipt.lastError = ERROR_INVALID_DATA;
+        g_islandCommittedReceipt.invalidKind = 1u;
+        g_islandCommittedReceipt.detail = 1u;
+    } else {
+        g_islandCommittedReceipt.validationFlags |= 0x03u;
+    }
+    const LONG priorEpoch = InterlockedIncrement(&g_islandEpoch) - 1;
+    InterlockedExchange(&g_islandCapturePhase, IslandSnapshotPreUpdate);
+    if ((priorEpoch & 1) != 0) {
+        g_islandCommittedReceipt.result = IslandObserverUnstable;
+        g_islandCommittedReceipt.lastError = ERROR_INVALID_STATE;
+        g_islandCommittedReceipt.detail = 2u;
+    }
+    const int preOk = CaptureIslandSnapshot(g_islandUnityBase,
+        g_islandExpectedNphase, IslandSnapshotPreUpdate,
+        &g_islandArmedPreBuffers, g_islandArmedPreReceipt);
+    g_islandCommittedReceipt.preResult = g_islandArmedPreReceipt ?
+        g_islandArmedPreReceipt->result : IslandSnapshotBadArgument;
+    g_islandCommittedReceipt.preSnapshotHash = preOk &&
+        g_islandArmedPreReceipt ? g_islandArmedPreReceipt->snapshotHash : 0u;
+    if (preOk) g_islandCommittedReceipt.validationFlags |= 0x04u;
+    else if (g_islandCommittedReceipt.result == IslandObserverOk) {
+        g_islandCommittedReceipt.result = IslandObserverCaptureFailed;
+        g_islandCommittedReceipt.lastError = g_islandArmedPreReceipt ?
+            g_islandArmedPreReceipt->lastError : ERROR_NOACCESS;
+        g_islandCommittedReceipt.invalidKind = 2u;
+    }
+    return ordinal;
+}
+
+static void __cdecl ObserveIslandUpdateExit(uintptr_t self, uint32_t pass,
+    uint32_t ordinal) {
+    if (!ordinal ||
+        InterlockedCompareExchange(&g_islandState, 0, 0) !=
+            IslandObserverCapturing) return;
+    if (ordinal != g_islandArmedOrdinal &&
+        g_islandCommittedReceipt.result == IslandObserverOk) {
+        g_islandCommittedReceipt.result = IslandObserverUnstable;
+        g_islandCommittedReceipt.lastError = ERROR_INVALID_DATA;
+        g_islandCommittedReceipt.detail = 4u;
+    }
+    g_islandCommittedReceipt.validationFlags |= 0x08u;
+    InterlockedExchange(&g_islandCapturePhase, IslandSnapshotPostUpdate);
+    const int postOk = CaptureIslandSnapshot(g_islandUnityBase,
+        g_islandExpectedNphase, IslandSnapshotPostUpdate,
+        &g_islandArmedPostBuffers, g_islandArmedPostReceipt);
+    g_islandCommittedReceipt.postResult = g_islandArmedPostReceipt ?
+        g_islandArmedPostReceipt->result : IslandSnapshotBadArgument;
+    g_islandCommittedReceipt.postSnapshotHash = postOk &&
+        g_islandArmedPostReceipt ? g_islandArmedPostReceipt->snapshotHash : 0u;
+    g_islandCommittedReceipt.observedManager = static_cast<uint32_t>(self);
+    g_islandCommittedReceipt.pass = pass;
+    g_islandCommittedReceipt.journalEndOrdinal = IslandJournalCurrentNext();
+    if (postOk) g_islandCommittedReceipt.validationFlags |= 0x10u;
+    else if (g_islandCommittedReceipt.result == IslandObserverOk) {
+        g_islandCommittedReceipt.result = IslandObserverCaptureFailed;
+        g_islandCommittedReceipt.lastError = g_islandArmedPostReceipt ?
+            g_islandArmedPostReceipt->lastError : ERROR_NOACCESS;
+        g_islandCommittedReceipt.invalidKind = 3u;
+    }
+    if (g_islandCommittedReceipt.journalEndOrdinal >=
+            g_islandCommittedReceipt.journalBeginOrdinal)
+        g_islandCommittedReceipt.validationFlags |= 0x20u;
+    const LONG afterEpoch = InterlockedIncrement(&g_islandEpoch);
+    InterlockedExchange(&g_islandCapturePhase, IslandSnapshotSettled);
+    if ((afterEpoch & 1) != 0 &&
+        g_islandCommittedReceipt.result == IslandObserverOk) {
+        g_islandCommittedReceipt.result = IslandObserverUnstable;
+        g_islandCommittedReceipt.lastError = ERROR_INVALID_STATE;
+        g_islandCommittedReceipt.detail = 3u;
+    }
+    const LONG finalState = g_islandCommittedReceipt.result ==
+        IslandObserverOk ? IslandObserverCaptured : IslandObserverFailed;
+    if (finalState == IslandObserverCaptured)
+        g_islandCommittedReceipt.validationFlags |= 0x40u;
+    g_islandCommittedReceipt.state = static_cast<uint32_t>(finalState);
+    g_islandCommittedReceipt.inFlight = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0));
+    MemoryBarrier();
+    InterlockedExchange(&g_islandCommittedObservationOrdinal,
+        static_cast<LONG>(ordinal));
+    InterlockedExchange(&g_islandState,
+        InterlockedExchange(&g_islandDeferredDormant, 0) != 0 ?
+            IslandObserverDormant : finalState);
+}
+
+__declspec(naked) static void HookIslandAddEdge() {
+    __asm push 0
+    __asm pushfd
+    __asm pushad
+    __asm lock inc dword ptr [g_islandInFlight]
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x38]
+    __asm push dword ptr [esp + 0x38]
+    __asm push dword ptr [esp + 0x38]
+    __asm push dword ptr [esp + 0x38]
+    __asm push eax
+    __asm call ObserveIslandAddEntry
+    __asm add esp, 20
+    __asm mov dword ptr [esp + 0x24], eax
+    __asm popad
+    __asm popfd
+    __asm push ecx
+    __asm push dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x18]
+    __asm call dword ptr [g_islandAddEdgeTrampoline]
+    __asm pop ecx
+    __asm pushfd
+    __asm pushad
+    __asm push dword ptr [esp + 0x38]
+    __asm push dword ptr [esp + 0x28]
+    __asm call ObserveIslandAddExit
+    __asm add esp, 8
+    __asm lock dec dword ptr [g_islandInFlight]
+    __asm popad
+    __asm popfd
+    __asm add esp, 4
+    __asm ret 16
+}
+
+__declspec(naked) static void HookIslandRemoveEdge() {
+    __asm push 0
+    __asm pushfd
+    __asm pushad
+    __asm lock inc dword ptr [g_islandInFlight]
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x30]
+    __asm push dword ptr [esp + 0x30]
+    __asm push eax
+    __asm call ObserveIslandRemoveEntry
+    __asm add esp, 12
+    __asm mov dword ptr [esp + 0x24], eax
+    __asm popad
+    __asm popfd
+    __asm push ecx
+    __asm push dword ptr [esp + 0x10]
+    __asm push dword ptr [esp + 0x10]
+    __asm call dword ptr [g_islandRemoveEdgeTrampoline]
+    __asm pop ecx
+    __asm pushfd
+    __asm pushad
+    __asm push dword ptr [esp + 0x30]
+    __asm push dword ptr [esp + 0x28]
+    __asm call ObserveIslandRemoveExit
+    __asm add esp, 8
+    __asm lock dec dword ptr [g_islandInFlight]
+    __asm popad
+    __asm popfd
+    __asm add esp, 4
+    __asm ret 8
+}
+
+__declspec(naked) static void HookIslandUpdate() {
+    __asm push 0
+    __asm pushfd
+    __asm pushad
+    __asm lock inc dword ptr [g_islandInFlight]
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x30]
+    __asm push dword ptr [esp + 0x30]
+    __asm push eax
+    __asm call ObserveIslandUpdateEntry
+    __asm add esp, 12
+    __asm mov dword ptr [esp + 0x24], eax
+    __asm popad
+    __asm popfd
+    __asm push ecx
+    __asm push dword ptr [esp + 0x10]
+    __asm push dword ptr [esp + 0x10]
+    __asm call dword ptr [g_islandUpdateTrampoline]
+    __asm pop ecx
+    __asm pushfd
+    __asm pushad
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm push dword ptr [esp + 0x24]
+    __asm push dword ptr [esp + 0x34]
+    __asm push eax
+    __asm call ObserveIslandUpdateExit
+    __asm add esp, 12
+    __asm lock dec dword ptr [g_islandInFlight]
+    __asm popad
+    __asm popfd
+    __asm add esp, 4
+    __asm ret 8
+}
+
+static bool PrepareIslandTrampoline(uint8_t* source, uint32_t patchSize,
+    void*& trampolineValue, uint8_t* original) {
+    if (trampolineValue) return true;
+    if (!Readable(source, patchSize)) return false;
+    uint8_t* trampoline = static_cast<uint8_t*>(VirtualAlloc(0,
+        patchSize + 5u, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    if (!trampoline) return false;
+    CopyBytes(original, source, patchSize);
+    CopyBytes(trampoline, source, patchSize);
+    trampoline[patchSize] = 0xE9;
+    *reinterpret_cast<int32_t*>(trampoline + patchSize + 1u) =
+        static_cast<int32_t>(reinterpret_cast<uintptr_t>(source + patchSize) -
+            reinterpret_cast<uintptr_t>(trampoline + patchSize) - 5);
+    FlushInstructionCache(GetCurrentProcess(), trampoline, patchSize + 5u);
+    trampolineValue = trampoline;
+    return true;
+}
+
+static bool ValidateIslandManagerIdentity(uintptr_t unityBase,
+    uintptr_t manager) {
+    return manager >= 0x181Cu && Readable(reinterpret_cast<const void*>(
+        manager), 0x1BCu) &&
+        *reinterpret_cast<const uintptr_t*>(manager + 0x0Cu) ==
+            unityBase + kIslandNodeVtableRva &&
+        *reinterpret_cast<const uintptr_t*>(manager + 0x118u) ==
+            unityBase + kIslandEdgeVtableRva &&
+        *reinterpret_cast<const uintptr_t*>(manager + 0x174u) ==
+            unityBase + kIslandManagerVtableRva &&
+        *reinterpret_cast<const uintptr_t*>(manager + 0x1A4u) ==
+            unityBase + kIslandRootVtableRva;
+}
+
+static bool AllIslandHooksLanded(uintptr_t unityBase) {
+    return HasIslandJump(reinterpret_cast<const void*>(unityBase +
+            kIslandAddEdgeRva), HookIslandAddEdge, 6u) &&
+        HasIslandJump(reinterpret_cast<const void*>(unityBase +
+            kIslandRemoveEdgeRva), HookIslandRemoveEdge, 7u) &&
+        HasIslandJump(reinterpret_cast<const void*>(unityBase +
+            kIslandUpdateRva), HookIslandUpdate, 5u);
+}
+
+static void ResetIslandObserver(uintptr_t manager) {
+    g_islandExpectedManager = manager;
+    g_islandExpectedContext = manager - 0x181Cu;
+    g_islandExpectedNphase = 0u;
+    g_islandExpectedPass = 0u;
+    g_islandArmedThreadId = 0u;
+    g_islandArmedOrdinal = 0u;
+    g_islandArmJournalBegin = 1u;
+    ZeroMemory(&g_islandArmedPreBuffers, sizeof(g_islandArmedPreBuffers));
+    ZeroMemory(&g_islandArmedPostBuffers, sizeof(g_islandArmedPostBuffers));
+    g_islandArmedPreReceipt = 0;
+    g_islandArmedPostReceipt = 0;
+    ZeroMemory(&g_islandCommittedReceipt, sizeof(g_islandCommittedReceipt));
+    InterlockedExchange(&g_islandEpoch, 0);
+    InterlockedExchange(&g_islandCapturePhase, IslandSnapshotSettled);
+    InterlockedExchange(&g_islandObserverSequence, 0);
+    InterlockedExchange(&g_islandNextObservationOrdinal, 0);
+    InterlockedExchange(&g_islandCommittedObservationOrdinal, 0);
+    InterlockedExchange(&g_islandJournalNextOrdinal, 0);
+    InterlockedExchange(&g_islandJournalOverflow, 0);
+    InterlockedExchange(&g_islandDeferredDormant, 0);
+    for (uint32_t i = 0; i < kIslandJournalCapacity; ++i)
+        InterlockedExchange(&g_islandJournal[i].committedOrdinal, 0);
+}
+
+static int InstallIslandObserver(uintptr_t unityBase,
+    uintptr_t expectedManager, IslandUpdateObserverReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    if (!unityBase || !expectedManager)
+        return FailIslandObserver(receipt, IslandObserverBadArgument,
+            ERROR_INVALID_PARAMETER, 0u, 0xFFFFFFFFu, 1u);
+    const LONG lifecycle = InterlockedCompareExchange(&g_islandInstalled,
+        -1, 0);
+    if (lifecycle == 1) {
+        if (InterlockedCompareExchange(&g_islandState, 0, 0) !=
+                IslandObserverDormant ||
+            InterlockedCompareExchange(&g_islandInstalled, -1, 1) != 1)
+            return FailIslandObserver(receipt,
+                InterlockedCompareExchange(&g_islandState, 0, 0) ==
+                    IslandObserverDormant ? IslandObserverBusy :
+                    IslandObserverAlreadyInstalled,
+                ERROR_BUSY, 0u, 0xFFFFFFFFu, 2u);
+    } else if (lifecycle != 0) {
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 2u);
+    }
+    if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0) {
+        InterlockedExchange(&g_islandInstalled, lifecycle == 1 ? 1 : 0);
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 3u);
+    }
+    if ((g_islandUnityBase && g_islandUnityBase != unityBase) ||
+        !ValidateIslandManagerIdentity(unityBase, expectedManager) ||
+        !IslandRevisionMatches(unityBase)) {
+        InterlockedExchange(&g_islandInstalled, lifecycle == 1 ? 1 : 0);
+        return FailIslandObserver(receipt,
+            !ValidateIslandManagerIdentity(unityBase, expectedManager) ?
+                IslandObserverInvalidIdentity :
+                IslandObserverRevisionMismatch,
+            !ValidateIslandManagerIdentity(unityBase, expectedManager) ?
+                ERROR_INVALID_DATA : ERROR_REVISION_MISMATCH,
+            1u, 0xFFFFFFFFu, 4u);
+    }
+    uint8_t* addSource = reinterpret_cast<uint8_t*>(unityBase +
+        kIslandAddEdgeRva);
+    uint8_t* removeSource = reinterpret_cast<uint8_t*>(unityBase +
+        kIslandRemoveEdgeRva);
+    uint8_t* updateSource = reinterpret_cast<uint8_t*>(unityBase +
+        kIslandUpdateRva);
+    if ((!HasIslandJump(addSource, HookIslandAddEdge, 6u) &&
+            !EqualBytes(addSource, kIslandAddEdgeBytes,
+                sizeof(kIslandAddEdgeBytes))) ||
+        (!HasIslandJump(removeSource, HookIslandRemoveEdge, 7u) &&
+            !EqualBytes(removeSource, kIslandRemoveEdgeBytes,
+                sizeof(kIslandRemoveEdgeBytes))) ||
+        (!HasIslandJump(updateSource, HookIslandUpdate, 5u) &&
+            !EqualBytes(updateSource, kIslandUpdateBytes,
+                sizeof(kIslandUpdateBytes)))) {
+        InterlockedExchange(&g_islandInstalled, lifecycle == 1 ? 1 : 0);
+        return FailIslandObserver(receipt, IslandObserverPatchChanged,
+            ERROR_INVALID_STATE, 1u, 0xFFFFFFFFu, 5u);
+    }
+    g_islandUnityBase = unityBase;
+    if ((!g_islandAddEdgeTrampoline && !PrepareIslandTrampoline(addSource,
+            6u, g_islandAddEdgeTrampoline, g_islandAddEdgeOriginal)) ||
+        (!g_islandRemoveEdgeTrampoline && !PrepareIslandTrampoline(removeSource,
+            7u, g_islandRemoveEdgeTrampoline, g_islandRemoveEdgeOriginal)) ||
+        (!g_islandUpdateTrampoline && !PrepareIslandTrampoline(updateSource,
+            5u, g_islandUpdateTrampoline, g_islandUpdateOriginal))) {
+        InterlockedExchange(&g_islandInstalled, 0);
+        return FailIslandObserver(receipt, IslandObserverAllocationFailed,
+            GetLastError(), 0u, 0xFFFFFFFFu, 6u);
+    }
+    if (InterlockedCompareExchange(&g_islandModulePinned, 0, 0) == 0) {
+        HMODULE module = 0;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_PIN,
+                reinterpret_cast<LPCSTR>(&g_islandModuleMarker), &module)) {
+            InterlockedExchange(&g_islandInstalled, 0);
+            return FailIslandObserver(receipt, IslandObserverAllocationFailed,
+                GetLastError(), 0u, 0xFFFFFFFFu, 7u);
+        }
+        InterlockedExchange(&g_islandModulePinned, 1);
+    }
+    ResetIslandObserver(expectedManager);
+    InterlockedExchange(&g_islandState, IslandObserverDormant);
+    bool patchOk = true;
+    if (!HasIslandJump(addSource, HookIslandAddEdge, 6u))
+        patchOk = WriteJump(addSource, HookIslandAddEdge, 6u) && patchOk;
+    if (patchOk && !HasIslandJump(removeSource, HookIslandRemoveEdge, 7u))
+        patchOk = WriteJump(removeSource, HookIslandRemoveEdge, 7u) && patchOk;
+    if (patchOk && !HasIslandJump(updateSource, HookIslandUpdate, 5u))
+        patchOk = WriteJump(updateSource, HookIslandUpdate, 5u) && patchOk;
+    const bool allLanded = AllIslandHooksLanded(unityBase);
+    if (!patchOk || !allLanded) {
+        const uint32_t error = GetLastError();
+        const bool anyLanded = HasIslandJump(addSource, HookIslandAddEdge, 6u) ||
+            HasIslandJump(removeSource, HookIslandRemoveEdge, 7u) ||
+            HasIslandJump(updateSource, HookIslandUpdate, 5u);
+        InterlockedExchange(&g_islandInstalled, anyLanded ? 1 : 0);
+        InitializeIslandObserverReceipt(unityBase, receipt);
+        return FailIslandObserver(receipt,
+            patchOk ? IslandObserverPatchChanged :
+                IslandObserverProtectFailed,
+            error ? error : ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 8u);
+    }
+    InterlockedExchange(&g_islandState, IslandObserverIdle);
+    InterlockedExchange(&g_islandInstalled, 1);
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    receipt->validationFlags = 0x01u;
+    return 1;
+}
+
+static int StatusIslandObserver(uintptr_t unityBase,
+    IslandUpdateObserverReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase || !AllIslandHooksLanded(unityBase))
+        return FailIslandObserver(receipt, IslandObserverNotInstalled,
+            ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    const uint32_t ordinal = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandCommittedObservationOrdinal,
+            0, 0));
+    if (ordinal) {
+        CopyBytes(receipt, &g_islandCommittedReceipt, sizeof(*receipt));
+        MemoryBarrier();
+        if (ordinal != static_cast<uint32_t>(InterlockedCompareExchange(
+                &g_islandCommittedObservationOrdinal, 0, 0)))
+            return FailIslandObserver(receipt, IslandObserverStale,
+                ERROR_RETRY, 0u, ordinal, 2u);
+        receipt->state = static_cast<uint32_t>(InterlockedCompareExchange(
+            &g_islandState, 0, 0));
+        receipt->installed = 1u;
+        receipt->inFlight = static_cast<uint32_t>(InterlockedCompareExchange(
+            &g_islandInFlight, 0, 0));
+        return receipt->result == IslandObserverOk ? 1 : 0;
+    }
+    return 1;
+}
+
+static int ArmIslandObserver(uintptr_t unityBase, uintptr_t expectedManager,
+    uintptr_t expectedNphase, uint32_t expectedPass,
+    const IslandSnapshotBuffersV1* preBuffers,
+    IslandSnapshotReceiptV1* preReceipt,
+    const IslandSnapshotBuffersV1* postBuffers,
+    IslandSnapshotReceiptV1* postReceipt,
+    IslandUpdateObserverReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase || !AllIslandHooksLanded(unityBase))
+        return FailIslandObserver(receipt, IslandObserverNotInstalled,
+            ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    if (expectedManager != g_islandExpectedManager || !expectedNphase ||
+        expectedPass != 0u || !preBuffers || !postBuffers ||
+        !Readable(preBuffers, sizeof(*preBuffers)) ||
+        !Readable(postBuffers, sizeof(*postBuffers)) ||
+        !preReceipt || !postReceipt ||
+        !Writable(preReceipt, sizeof(*preReceipt)) ||
+        !Writable(postReceipt, sizeof(*postReceipt)))
+        return FailIslandObserver(receipt, IslandObserverBadArgument,
+            ERROR_INVALID_PARAMETER, 0u, 0xFFFFFFFFu, 2u);
+    IslandHeaderState identity = {};
+    if (!ReadIslandHeader(unityBase, expectedNphase, expectedManager,
+            identity) || identity.context != g_islandExpectedContext)
+        return FailIslandObserver(receipt, IslandObserverInvalidIdentity,
+            ERROR_INVALID_DATA, 1u, 0xFFFFFFFFu, 3u);
+    if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 4u);
+    LONG state = InterlockedCompareExchange(&g_islandState, 0, 0);
+    if (state == IslandObserverArmed || state == IslandObserverCapturing ||
+        state == IslandObserverDormant ||
+        InterlockedCompareExchange(&g_islandState,
+            IslandObserverCapturing, state) != state)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 5u);
+    g_islandExpectedNphase = expectedNphase;
+    g_islandExpectedPass = expectedPass;
+    g_islandArmedThreadId = GetCurrentThreadId();
+    g_islandArmedPreBuffers = *preBuffers;
+    g_islandArmedPostBuffers = *postBuffers;
+    g_islandArmedPreReceipt = preReceipt;
+    g_islandArmedPostReceipt = postReceipt;
+    g_islandArmJournalBegin = IslandJournalCurrentNext();
+    const uint32_t sequence = static_cast<uint32_t>(InterlockedIncrement(
+        &g_islandObserverSequence));
+    (void)sequence;
+    g_islandArmedOrdinal = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandNextObservationOrdinal, 0, 0)) + 1u;
+    MemoryBarrier();
+    InterlockedExchange(&g_islandState, IslandObserverArmed);
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    receipt->validationFlags = 0x03u;
+    return 1;
+}
+
+static bool CopyIslandSnapshotBuffers(const IslandSnapshotBuffersV1& source,
+    const IslandSnapshotReceiptV1& sourceReceipt,
+    const IslandSnapshotBuffersV1* destination,
+    IslandSnapshotReceiptV1* destinationReceipt) {
+    if (!destination || !Readable(destination, sizeof(*destination)) ||
+        !destinationReceipt || !Writable(destinationReceipt,
+            sizeof(*destinationReceipt))) return false;
+#define OC2_COPY_ISLAND(field, cap, required, type) \
+    if (!IslandBufferWritable(destination->field, destination->cap, \
+            required, sizeof(type))) return false; \
+    if (required) CopyBytes(destination->field, source.field, \
+        required * sizeof(type))
+    OC2_COPY_ISLAND(nodes, nodeCapacity, sourceReceipt.node.required,
+        IslandNodeSlotRecord);
+    OC2_COPY_ISLAND(edges, edgeCapacity, sourceReceipt.edge.required,
+        IslandEdgeSlotRecord);
+    OC2_COPY_ISLAND(islands, islandCapacity, sourceReceipt.island.required,
+        IslandSlotRecord);
+    OC2_COPY_ISLAND(roots, rootCapacity, sourceReceipt.root.required,
+        IslandArticulationRootSlotRecord);
+    OC2_COPY_ISLAND(kinematicWords, kinematicWordCapacity,
+        sourceReceipt.kinematic.required, uint32_t);
+    OC2_COPY_ISLAND(kinematicChangeWords, kinematicChangeWordCapacity,
+        sourceReceipt.kinematicChange.required, uint32_t);
+    OC2_COPY_ISLAND(notReadyWords, notReadyWordCapacity,
+        sourceReceipt.notReady.required, uint32_t);
+    OC2_COPY_ISLAND(notReadyChangeWords, notReadyChangeWordCapacity,
+        sourceReceipt.notReadyChange.required, uint32_t);
+    OC2_COPY_ISLAND(islandWords, islandWordCapacity,
+        sourceReceipt.islandBitmap.required, uint32_t);
+    OC2_COPY_ISLAND(nodeCreated, nodeCreatedCapacity,
+        sourceReceipt.nodeCreated.required, uint32_t);
+    OC2_COPY_ISLAND(nodeDeleted, nodeDeletedCapacity,
+        sourceReceipt.nodeDeleted.required, uint32_t);
+    OC2_COPY_ISLAND(edgeCreated, edgeCreatedCapacity,
+        sourceReceipt.edgeCreated.required, uint32_t);
+    OC2_COPY_ISLAND(edgeDeleted, edgeDeletedCapacity,
+        sourceReceipt.edgeDeleted.required, uint32_t);
+    OC2_COPY_ISLAND(edgeBroken, edgeBrokenCapacity,
+        sourceReceipt.edgeBroken.required, uint32_t);
+    OC2_COPY_ISLAND(edgeJoined, edgeJoinedCapacity,
+        sourceReceipt.edgeJoined.required, uint32_t);
+    OC2_COPY_ISLAND(bindings, bindingCapacity,
+        sourceReceipt.bindingsRequired, IslandSipEdgeBinding);
+#undef OC2_COPY_ISLAND
+    CopyBytes(destinationReceipt, &sourceReceipt, sizeof(*destinationReceipt));
+    return true;
+}
+
+static int CopyIslandObservation(uintptr_t unityBase,
+    uint32_t observationOrdinal, const IslandSnapshotBuffersV1* preBuffers,
+    IslandSnapshotReceiptV1* preReceipt,
+    const IslandSnapshotBuffersV1* postBuffers,
+    IslandSnapshotReceiptV1* postReceipt,
+    IslandUpdateObserverReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase)
+        return FailIslandObserver(receipt, IslandObserverNotInstalled,
+            ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    if (!observationOrdinal || observationOrdinal != static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_islandCommittedObservationOrdinal,
+                0, 0)))
+        return FailIslandObserver(receipt, IslandObserverNotReady,
+            ERROR_IO_PENDING, 0u, observationOrdinal, 2u);
+    if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, observationOrdinal, 3u);
+    const IslandUpdateObserverReceipt committed = g_islandCommittedReceipt;
+    if (committed.observationOrdinal != observationOrdinal)
+        return FailIslandObserver(receipt, IslandObserverStale, ERROR_RETRY,
+            0u, observationOrdinal, 4u);
+    if (committed.result != IslandObserverOk) {
+        CopyBytes(receipt, &committed, sizeof(*receipt));
+        return 0;
+    }
+    if (!g_islandArmedPreReceipt || !g_islandArmedPostReceipt ||
+        !CopyIslandSnapshotBuffers(g_islandArmedPreBuffers,
+            *g_islandArmedPreReceipt, preBuffers, preReceipt) ||
+        !CopyIslandSnapshotBuffers(g_islandArmedPostBuffers,
+            *g_islandArmedPostReceipt, postBuffers, postReceipt))
+        return FailIslandObserver(receipt, IslandObserverCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 2u, observationOrdinal, 5u);
+    MemoryBarrier();
+    if (observationOrdinal != static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_islandCommittedObservationOrdinal,
+                0, 0)))
+        return FailIslandObserver(receipt, IslandObserverStale, ERROR_RETRY,
+            0u, observationOrdinal, 6u);
+    CopyBytes(receipt, &committed, sizeof(*receipt));
+    receipt->inFlight = 0u;
+    return 1;
+}
+
+static int CancelIslandObserver(uintptr_t unityBase,
+    bool dormant, IslandUpdateObserverReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase)
+        return FailIslandObserver(receipt, IslandObserverNotInstalled,
+            ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    for (;;) {
+        const LONG state = InterlockedCompareExchange(&g_islandState, 0, 0);
+        if (state == IslandObserverCapturing) {
+            if (dormant) InterlockedExchange(&g_islandDeferredDormant, 1);
+            return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+                0u, 0xFFFFFFFFu, 2u);
+        }
+        const LONG target = dormant ? IslandObserverDormant :
+            IslandObserverIdle;
+        if (InterlockedCompareExchange(&g_islandState, target, state) == state)
+            break;
+    }
+    if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 3u);
+    g_islandArmedPreReceipt = 0;
+    g_islandArmedPostReceipt = 0;
+    g_islandArmedOrdinal = 0u;
+    g_islandArmedThreadId = 0u;
+    if (dormant) {
+        g_islandExpectedNphase = 0u;
+        g_islandExpectedPass = 0u;
+    }
+    InitializeIslandObserverReceipt(unityBase, receipt);
+    return 1;
+}
+
+static int CopyIslandJournal(uintptr_t unityBase, uint32_t beginOrdinal,
+    IslandEdgeJournalRecord* records, uint32_t capacity,
+    IslandEdgeJournalReceipt* receipt) {
+    if (!receipt || !Writable(receipt, sizeof(*receipt))) return 0;
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = static_cast<uint32_t>(unityBase);
+    receipt->expectedManager = static_cast<uint32_t>(g_islandExpectedManager);
+    receipt->installed = InterlockedCompareExchange(&g_islandInstalled,
+        0, 0) == 1 ? 1u : 0u;
+    receipt->state = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandState, 0, 0));
+    receipt->requestedBegin = beginOrdinal;
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    if (!receipt->installed || unityBase != g_islandUnityBase) {
+        receipt->result = IslandJournalNotInstalled;
+        receipt->lastError = ERROR_INVALID_STATE;
+        return 0;
+    }
+    const uint32_t next = IslandJournalCurrentNext();
+    const uint32_t first = IslandJournalCurrentFirst(next);
+    receipt->firstOrdinal = first;
+    receipt->nextOrdinal = next;
+    receipt->overflowCount = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandJournalOverflow, 0, 0));
+    if (!beginOrdinal || beginOrdinal < first || beginOrdinal > next) {
+        receipt->result = beginOrdinal < first ? IslandJournalStale :
+            IslandJournalBadArgument;
+        receipt->lastError = ERROR_INVALID_DATA;
+        return 0;
+    }
+    receipt->recordsRequired = next - beginOrdinal;
+    if (capacity < receipt->recordsRequired) {
+        receipt->result = IslandJournalCapacityTooSmall;
+        receipt->lastError = ERROR_INSUFFICIENT_BUFFER;
+        return 0;
+    }
+    if (receipt->recordsRequired && (!records || !Writable(records,
+            receipt->recordsRequired * sizeof(*records)))) {
+        receipt->result = IslandJournalBadArgument;
+        receipt->lastError = ERROR_NOACCESS;
+        return 0;
+    }
+    for (uint32_t i = 0; i < receipt->recordsRequired; ++i) {
+        const uint32_t ordinal = beginOrdinal + i;
+        IslandJournalSlot& slot = g_islandJournal[
+            (ordinal - 1u) % kIslandJournalCapacity];
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal) {
+            receipt->result = IslandJournalNotReady;
+            receipt->lastError = ERROR_IO_PENDING;
+            receipt->invalidIndex = i;
+            return 0;
+        }
+        records[i] = slot.record;
+        MemoryBarrier();
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal ||
+            records[i].ordinal != ordinal) {
+            receipt->result = IslandJournalUnstable;
+            receipt->lastError = ERROR_RETRY;
+            receipt->invalidIndex = i;
+            return 0;
+        }
+        if (records[i].eventKind == 1u) ++receipt->addCount;
+        else if (records[i].eventKind == 2u) ++receipt->removeCount;
+        else {
+            receipt->result = IslandJournalUnstable;
+            receipt->lastError = ERROR_INVALID_DATA;
+            receipt->invalidIndex = i;
+            return 0;
+        }
+    }
+    if (next != IslandJournalCurrentNext()) {
+        receipt->result = IslandJournalUnstable;
+        receipt->lastError = ERROR_RETRY;
+        return 0;
+    }
+    receipt->recordsWritten = receipt->recordsRequired;
+    receipt->recordHash = ByteHash(records,
+        receipt->recordsWritten * sizeof(*records));
+    receipt->validationFlags = 0x1Fu;
+    receipt->result = IslandJournalOk;
+    return 1;
+}
+
 static bool FinishBroadPhaseLayoutRevisionMatches(uintptr_t unityBase) {
     if (!unityBase || !TransformCacheRevisionMatches(unityBase)) return false;
     const void* layout = reinterpret_cast<const void*>(unityBase +
@@ -10212,6 +12693,71 @@ static int RestoreExistingActorShapePoses(uintptr_t unityBase, uintptr_t rigidbo
 
 extern "C" __declspec(dllexport) uint32_t __cdecl oc2_rigidbody_rebuild_api_version() {
     return kApiVersion;
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_island_capture_snapshot_v1(
+    uintptr_t unityBase, uintptr_t nphaseCore, uint32_t expectedPhase,
+    const IslandSnapshotBuffersV1* buffers,
+    IslandSnapshotReceiptV1* receipt) {
+    return CaptureIslandSnapshot(unityBase, nphaseCore, expectedPhase,
+        buffers, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_install(uintptr_t unityBase,
+    uintptr_t expectedManager, IslandUpdateObserverReceipt* receipt) {
+    return InstallIslandObserver(unityBase, expectedManager, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_status(uintptr_t unityBase,
+    IslandUpdateObserverReceipt* receipt) {
+    return StatusIslandObserver(unityBase, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_arm(uintptr_t unityBase,
+    uintptr_t expectedManager, uintptr_t expectedNphase,
+    uint32_t expectedPass, const IslandSnapshotBuffersV1* preBuffers,
+    IslandSnapshotReceiptV1* preReceipt,
+    const IslandSnapshotBuffersV1* postBuffers,
+    IslandSnapshotReceiptV1* postReceipt,
+    IslandUpdateObserverReceipt* receipt) {
+    return ArmIslandObserver(unityBase, expectedManager, expectedNphase,
+        expectedPass, preBuffers, preReceipt, postBuffers, postReceipt,
+        receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_copy(uintptr_t unityBase,
+    uint32_t observationOrdinal,
+    const IslandSnapshotBuffersV1* preBuffers,
+    IslandSnapshotReceiptV1* preReceipt,
+    const IslandSnapshotBuffersV1* postBuffers,
+    IslandSnapshotReceiptV1* postReceipt,
+    IslandUpdateObserverReceipt* receipt) {
+    return CopyIslandObservation(unityBase, observationOrdinal, preBuffers,
+        preReceipt, postBuffers, postReceipt, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_cancel(uintptr_t unityBase,
+    IslandUpdateObserverReceipt* receipt) {
+    return CancelIslandObserver(unityBase, false, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_island_update_observer_uninstall(uintptr_t unityBase,
+    IslandUpdateObserverReceipt* receipt) {
+    return CancelIslandObserver(unityBase, true, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_island_edge_journal_copy(
+    uintptr_t unityBase, uint32_t beginOrdinal,
+    IslandEdgeJournalRecord* records, uint32_t capacity,
+    IslandEdgeJournalReceipt* receipt) {
+    return CopyIslandJournal(unityBase, beginOrdinal, records, capacity,
+        receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_rigidbody_rebuild(

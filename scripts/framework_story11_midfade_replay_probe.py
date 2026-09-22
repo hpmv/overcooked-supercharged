@@ -349,6 +349,22 @@ def main():
             "rigidbody.transform-dispatch",
             "rigidbody.interaction-registration-order",
             "rigidbody.island-edge-allocator-and-change-queues",
+            "rigidbody.island.capture-repeatability",
+            "rigidbody.island.layout-identity",
+            "rigidbody.island.node-topology",
+            "rigidbody.island.edge-topology",
+            "rigidbody.island.island-topology",
+            "rigidbody.island.allocator-free-order",
+            "rigidbody.island.node-bitmaps",
+            "rigidbody.island.change-queue-order",
+            "rigidbody.island.sip-edge-bindings",
+            "rigidbody.island.edge-type-scope",
+            "rigidbody.island.body-owner-coherence",
+            "rigidbody.island.transition-capture",
+            "rigidbody.island.transition-identity",
+            "rigidbody.island.transition-pre-state",
+            "rigidbody.island.transition-post-state",
+            "rigidbody.island.edge-journal",
             "rigidbody.transform-cache-id-pool",
             "rigidbody.broadphase-created-overlap-order",
             "rigidbody.dirty-interaction-live-projection",
@@ -364,6 +380,8 @@ def main():
             "rigidbody.target-interaction-graph-sidecar",
             "rigidbody.target-transform-cache-sidecar",
             "rigidbody.target-broadphase-transition-sidecar",
+            "rigidbody.target-island-sidecar",
+            "rigidbody.target-island-transition-sidecar",
             "rigidbody.target-large-sidecar", "rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar", "rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows", "rigidbody.native-audit-repeatability",
@@ -426,7 +444,7 @@ def main():
             actor.get("provider") == "authoring-rigidbody-actor-rebuild-v1" and
             actor.get("phase") == phase and actor.get("sourceFrame") == 1048 and
             actor.get("targetFrame") == args.target_frame and
-            provider_coverage.get("contractVersion") == 5 and
+            provider_coverage.get("contractVersion") == 6 and
             set(provider_coverage.get("required", [])) == set(rigidbody_required) and
             provider_coverage.get("uncovered") == [] and
             provider_coverage.get("duplicates") == [] and
@@ -580,7 +598,7 @@ def main():
                         "The aggregate omitted required readiness check identifiers."
                         if missing_ids else
                         "Every required aggregate readiness check is explicitly represented."),
-            "evidence": {"contractVersion": 5, "required": required_ids,
+            "evidence": {"contractVersion": 6, "required": required_ids,
                          "uncovered": missing_ids, "duplicates": duplicate_ids},
             "mutation": {"gameState": False, "moduleState": False,
                          "nativeState": False},
@@ -604,7 +622,7 @@ def main():
             "blockers": blockers,
             "deferred": deferred,
             "coverage": {
-                "contractVersion": 5,
+                "contractVersion": 6,
                 "required": required_ids,
                 "uncovered": missing_ids,
                 "duplicates": duplicate_ids,
@@ -724,6 +742,12 @@ def main():
                     target_checkpoint = target_actor_observation_f488.get("result", {})
                     transform_cache = target_checkpoint.get("transformCache", {})
                     broadphase = target_checkpoint.get("finishBroadPhase", {})
+                    island_snapshot = target_checkpoint.get("islandSnapshot", {})
+                    island_transition = target_checkpoint.get("islandTransition", {})
+                    island_pre = island_transition.get("pre", {}) \
+                        if isinstance(island_transition, dict) else {}
+                    island_post = island_transition.get("post", {}) \
+                        if isinstance(island_transition, dict) else {}
                     require(state.get("frame") == 488 and
                             target_actor_observation_f488.get("active") is True and
                             target_actor_observation_f488.get("finishBroadPhaseObserverInstalled") is True and
@@ -750,7 +774,60 @@ def main():
                             broadphase.get("interactionScene") == transform_cache.get("interactionScene") and
                             broadphase.get("transformCache") == transform_cache.get("transformCache") and
                             isinstance(broadphase.get("created"), list) and
-                            isinstance(broadphase.get("deleted"), list),
+                            isinstance(broadphase.get("deleted"), list) and
+                            target_actor_observation_f488.get("islandObserverInstalled") is True and
+                            target_actor_observation_f488.get("islandCapturePending") is False and
+                            target_actor_observation_f488.get("islandSnapshotCaptures") == 1 and
+                            target_actor_observation_f488.get("islandTransitionCaptures") == 1 and
+                            isinstance(island_snapshot, dict) and
+                            isinstance(island_transition, dict) and
+                            isinstance(island_pre, dict) and isinstance(island_post, dict) and
+                            island_snapshot.get("phase") == 1 and island_pre.get("phase") == 2 and
+                            island_post.get("phase") == 3 and
+                            island_snapshot.get("nphaseCore") == transform_cache.get("nphaseCore") and
+                            island_snapshot.get("ownerScene") == transform_cache.get("ownerScene") and
+                            island_snapshot.get("interactionScene") ==
+                            transform_cache.get("interactionScene") and
+                            island_snapshot.get("context") == transform_cache.get("context") and
+                            island_transition.get("expectedManager") ==
+                            island_transition.get("observedManager") ==
+                            island_snapshot.get("islandManager") and
+                            island_transition.get("expectedContext") ==
+                            island_transition.get("observedContext") ==
+                            island_snapshot.get("context") and
+                            island_transition.get("expectedNPhase") ==
+                            island_transition.get("observedNPhase") ==
+                            island_snapshot.get("nphaseCore") and
+                            island_transition.get("expectedPass") ==
+                            island_transition.get("pass") == 0 and
+                            island_transition.get("armedOrdinal") ==
+                            island_transition.get("observationOrdinal") and
+                            isinstance(island_transition.get("observationOrdinal"), int) and
+                            island_transition.get("observationOrdinal") > 0 and
+                            isinstance(island_snapshot.get("observerSequence"), int) and
+                            isinstance(island_transition.get("observerSequence"), int) and
+                            island_transition.get("observerSequence") ==
+                            island_snapshot.get("observerSequence") + 1 and
+                            island_transition.get("armedThreadId") ==
+                            island_transition.get("threadId") ==
+                            island_pre.get("captureThreadId") ==
+                            island_post.get("captureThreadId") and
+                            island_transition.get("preSnapshotHash") ==
+                            island_pre.get("snapshotHash") and
+                            island_transition.get("postSnapshotHash") ==
+                            island_post.get("snapshotHash") and
+                            island_transition.get("journalBeginOrdinal") ==
+                            island_snapshot.get("journalEndOrdinal") and
+                            island_transition.get("journalEndOrdinal") ==
+                            island_post.get("journalEndOrdinal") and
+                            island_transition.get("validationFlags") == "0x0000007F" and
+                            island_transition.get("inFlight") == 0 and
+                            isinstance(island_transition.get("journal"), list) and
+                            isinstance(island_transition.get("journalBeginOrdinal"), int) and
+                            isinstance(island_transition.get("journalEndOrdinal"), int) and
+                            len(island_transition.get("journal", [])) ==
+                            island_transition.get("journalEndOrdinal") -
+                            island_transition.get("journalBeginOrdinal"),
                             "The f444 snapshot and exact subsequent f445 pass-zero observation were not "
                             "published as one coherent transaction by f488.")
                     summary["capturedPhysicsObservationF488"] = {
@@ -758,6 +835,11 @@ def main():
                         "broadphaseObservationOrdinal": broadphase.get("observationOrdinal"),
                         "createdCount": len(broadphase.get("created", [])),
                         "deletedCount": len(broadphase.get("deleted", [])),
+                        "islandSettledSnapshotHash": island_snapshot.get("snapshotHash"),
+                        "islandPreSnapshotHash": island_transition.get("preSnapshotHash"),
+                        "islandPostSnapshotHash": island_transition.get("postSnapshotHash"),
+                        "islandObservationOrdinal": island_transition.get("observationOrdinal"),
+                        "islandJournalRecords": len(island_transition.get("journal", [])),
                     }
                     save("target-physics-observation-f488.json", target_actor_observation_f488)
             if registry_evidence is not None:
@@ -829,7 +911,14 @@ def main():
                     actor.get("finishBroadPhaseSnapshot") ==
                     target_actor_observation_f488.get("finishBroadPhaseSnapshot") and
                     actor.get("transformCacheSnapshot") ==
-                    target_actor_observation_f488.get("transformCacheSnapshot"),
+                    target_actor_observation_f488.get("transformCacheSnapshot") and
+                    actor.get("islandCapturePending") is False and
+                    actor.get("islandSnapshotCaptures") == 1 and
+                    actor.get("islandTransitionCaptures") == 1 and
+                    actor.get("islandSnapshot") ==
+                    target_actor_observation_f488.get("islandSnapshot") and
+                    actor.get("islandTransition") ==
+                    target_actor_observation_f488.get("islandTransition"),
                     "The exact f445 observation changed or was replaced between f488 and f1048.")
             checkpoint = call("bridge", {"command": "hot-call", "slot": args.actor_rebuild_slot,
                                "operation": "checkpoint-status", "args": {"frame": args.target_frame}},
