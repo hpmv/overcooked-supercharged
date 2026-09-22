@@ -46,7 +46,7 @@ if (-not $simulationText.Contains($compileEntry)) {
 
 $physxProject = Join-Path $mirror 'Source\compiler\vc12win32\PhysX.vcxproj'
 $physxText = [System.IO.File]::ReadAllText($physxProject)
-$force = '/INCLUDE:_oc2_physx333_trigger_recreate_v1'
+$force = '/INCLUDE:_oc2_physx333_trigger_recreate_mixed_v2'
 if (-not $physxText.Contains($force)) {
     $anchor = '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO'
     if (-not $physxText.Contains($anchor)) { throw "PhysX linker anchor absent" }
