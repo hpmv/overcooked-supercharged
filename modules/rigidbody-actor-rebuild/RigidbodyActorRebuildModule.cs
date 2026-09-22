@@ -21,7 +21,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // chefs during the checkpoint restore's internal main-physics unfreeze.
     public sealed class RigidbodyActorRebuildModule : IAuthoringModule
     {
-        private const uint NativeAbiVersion=20;
+        private const uint NativeAbiVersion=21;
         // Four active chef actors plus Unity's one replacement allocation form
         // the observed five-address cycle. Rebuilding five times removes every
         // chef actor/contact set while restoring the incoming chef/address map.
@@ -241,21 +241,43 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
-        private struct NativeNPhaseReportStateReceipt
+        private struct NativeNPhaseReportSnapshotBuffersV1
+        {
+            public IntPtr ActorPairBacking;
+            public uint ActorPairCapacity;
+            public IntPtr PersistentBacking;
+            public uint PersistentCapacity;
+            public IntPtr ForceThresholdBacking;
+            public uint ForceThresholdCapacity;
+            public IntPtr ReportBufferBytes;
+            public uint ReportBufferByteCapacity;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeNPhaseReportArrayReceiptV1
+        {
+            public UIntPtr Data;
+            public uint Count,CapacityRaw,BackingRequired,BackingWritten;
+            public uint LogicalOrderHash,BackingHash;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeNPhaseReportSnapshotReceiptV1
         {
             public uint ApiVersion,StructSize,Result,LastError;
-            public UIntPtr UnityBase,NPhaseCore,OwnerScene,ActorPairData;
-            public uint ActorPairCount,ActorPairCapacityRaw;
-            public UIntPtr PersistentData;
-            public uint PersistentCount,PersistentCapacityRaw,NextFramePersistentIndex;
-            public UIntPtr ForceThresholdData;
-            public uint ForceThresholdCount,ForceThresholdCapacityRaw;
+            public UIntPtr UnityBase,NPhaseCore,OwnerScene;
+            public uint SceneTimeStamp,SceneReportShapePairTimeStamp;
+            public NativeNPhaseReportArrayReceiptV1 ActorPairs,Persistent;
+            public uint NextFramePersistentIndex;
+            public NativeNPhaseReportArrayReceiptV1 ForceThreshold;
             public UIntPtr ReportBuffer;
             public uint ReportBufferCurrentIndex,ReportBufferCurrentSize;
             public uint ReportBufferDefaultSize,ReportBufferLastIndex;
             public uint ReportBufferAllocationLocked;
-            public uint ActorPairOrderHash,PersistentOrderHash,ForceThresholdOrderHash;
-            public uint ReportBufferActiveHash,ReportBufferAllocationHash,ValidationFlags;
+            public uint ReportBufferRequired,ReportBufferWritten;
+            public uint ReportBufferActiveHash,ReportBufferAllocationHash;
+            public uint MetadataHash,SnapshotHash,ValidationFlags;
+            public uint InvalidKind,InvalidIndex,Detail;
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
@@ -534,11 +556,8 @@ namespace SuperchargedPatch.Authoring.Modules
             IntPtr allocatedSnapshot,uint allocatedCapacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeNPhasePoolCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,uint poolKind,IntPtr buffers,IntPtr receipt);
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeNPhaseReportStateCaptureSnapshot(
-            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr actorPairs,uint actorPairCapacity,
-            IntPtr persistentSips,uint persistentCapacity,IntPtr forceThresholdSips,
-            uint forceThresholdCapacity,IntPtr reportBufferBytes,uint reportBufferCapacity,
-            IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeNPhaseReportStateCaptureSnapshotV1(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr buffers,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeInteractionGraphCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,IntPtr activeBodies,uint activeBodyCapacity,
             IntPtr actors,uint actorCapacity,IntPtr interactions,uint interactionCapacity,
@@ -678,8 +697,9 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private sealed class NPhaseReportState
         {
-            internal NativeNPhaseReportStateReceipt Receipt;
+            internal NativeNPhaseReportSnapshotReceiptV1 Receipt;
             internal uint[] ActorPairs,PersistentSips,ForceThresholdSips;
+            internal uint[] ActorPairBacking,PersistentBacking,ForceThresholdBacking;
             internal byte[] ReportBufferBytes;
         }
 
@@ -962,7 +982,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeActorPairPoolCaptureSnapshot captureActorPairPoolSnapshot;
         private NativeActorPairReportPoolCaptureSnapshot captureActorPairReportPoolSnapshot;
         private NativeNPhasePoolCaptureSnapshot captureNPhasePoolSnapshot;
-        private NativeNPhaseReportStateCaptureSnapshot captureNPhaseReportStateSnapshot;
+        private NativeNPhaseReportStateCaptureSnapshotV1 captureNPhaseReportStateSnapshotV1;
         private NativeInteractionGraphCaptureSnapshot captureInteractionGraphSnapshot;
         private NativeTransformCacheCaptureSnapshot captureTransformCacheSnapshot;
         private NativeFinishBroadPhaseObserverAction installFinishBroadPhaseObserver;
@@ -1115,8 +1135,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     "oc2_actor_pair_report_pool_capture_snapshot");
                 captureNPhasePoolSnapshot=Export<NativeNPhasePoolCaptureSnapshot>(
                     "oc2_nphase_pool_capture_snapshot_v1");
-                captureNPhaseReportStateSnapshot=Export<NativeNPhaseReportStateCaptureSnapshot>(
-                    "oc2_nphase_report_state_capture_snapshot");
+                captureNPhaseReportStateSnapshotV1=Export<NativeNPhaseReportStateCaptureSnapshotV1>(
+                    "oc2_nphase_report_state_capture_snapshot_v1");
                 captureInteractionGraphSnapshot=Export<NativeInteractionGraphCaptureSnapshot>(
                     "oc2_interaction_graph_capture_snapshot");
                 captureTransformCacheSnapshot=Export<NativeTransformCacheCaptureSnapshot>(
@@ -1720,7 +1740,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 captureContactManagerActiveOwners==null||captureManifoldPoolSnapshot==null||
                 restoreManifoldPoolSnapshot==null||captureSipPoolSnapshot==null||
                 captureActorPairPoolSnapshot==null||captureActorPairReportPoolSnapshot==null||
-                captureNPhasePoolSnapshot==null)
+                captureNPhasePoolSnapshot==null||captureNPhaseReportStateSnapshotV1==null)
                 throw new InvalidOperationException("Native caller-owned physics-pool helper is not active.");
             int actionFrame=action==1?pendingContactPoolFrame:selected.Frame;
             object actionCoreSnapshot=action==1?pendingCoreSnapshot:selected.CoreSnapshot;
@@ -2966,17 +2986,17 @@ namespace SuperchargedPatch.Authoring.Modules
                 uint nphase=target.Receipt.NPhaseCore.ToUInt32();
                 NPhaseReportState first=CaptureNPhaseReportState(nphase,selected.Frame);
                 NPhaseReportState second=CaptureNPhaseReportState(nphase,selected.Frame);
-                bool repeatable=SameNPhaseReportState(first,second);
-                NativeNPhaseReportStateReceipt targetReceipt=target.Receipt;
-                NativeNPhaseReportStateReceipt liveReceipt=first.Receipt;
+                bool repeatable=SameRawNPhaseReportState(first,second);
+                NativeNPhaseReportSnapshotReceiptV1 targetReceipt=target.Receipt;
+                NativeNPhaseReportSnapshotReceiptV1 liveReceipt=first.Receipt;
                 bool layout=targetReceipt.NPhaseCore==liveReceipt.NPhaseCore&&
                     targetReceipt.OwnerScene==liveReceipt.OwnerScene&&
-                    targetReceipt.ActorPairData==liveReceipt.ActorPairData&&
-                    targetReceipt.ActorPairCapacityRaw==liveReceipt.ActorPairCapacityRaw&&
-                    targetReceipt.PersistentData==liveReceipt.PersistentData&&
-                    targetReceipt.PersistentCapacityRaw==liveReceipt.PersistentCapacityRaw&&
-                    targetReceipt.ForceThresholdData==liveReceipt.ForceThresholdData&&
-                    targetReceipt.ForceThresholdCapacityRaw==liveReceipt.ForceThresholdCapacityRaw&&
+                    targetReceipt.ActorPairs.Data==liveReceipt.ActorPairs.Data&&
+                    targetReceipt.ActorPairs.CapacityRaw==liveReceipt.ActorPairs.CapacityRaw&&
+                    targetReceipt.Persistent.Data==liveReceipt.Persistent.Data&&
+                    targetReceipt.Persistent.CapacityRaw==liveReceipt.Persistent.CapacityRaw&&
+                    targetReceipt.ForceThreshold.Data==liveReceipt.ForceThreshold.Data&&
+                    targetReceipt.ForceThreshold.CapacityRaw==liveReceipt.ForceThreshold.CapacityRaw&&
                     targetReceipt.ReportBuffer==liveReceipt.ReportBuffer&&
                     targetReceipt.ReportBufferCurrentSize==liveReceipt.ReportBufferCurrentSize&&
                     targetReceipt.ReportBufferDefaultSize==liveReceipt.ReportBufferDefaultSize;
@@ -3009,7 +3029,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     new HashSet<uint>(target.PersistentSips).SetEquals(expectedPersistent)&&
                     new HashSet<uint>(target.ForceThresholdSips).SetEquals(expectedForce)&&
                     reportIndices&&unlistedIndices;
-                bool exact=SameNPhaseReportState(first,target);
+                bool exact=SameRawNPhaseReportState(first,target);
 
                 AddReadinessCheck(checks,blockers,deferred,
                     "rigidbody.nphase-report.repeatability",phase,
@@ -3051,10 +3071,13 @@ namespace SuperchargedPatch.Authoring.Modules
                         {"live",DescribeNPhaseReportState(first)}});
                 AddReadinessCheck(checks,blockers,deferred,
                     "rigidbody.nphase-report.scene-timestamps",phase,
-                    "deferred","blocker","NPHASE_SCENE_TIMESTAMPS_UNMAPPED",
-                    "Per-SIP report stamps are captured, but the shipped Scene-level report timestamp offsets remain intentionally unmapped.",
+                    "pass","blocker","NPHASE_SCENE_TIMESTAMPS_CAPTURED",
+                    "Both revision-guarded Scene report timestamps are captured exactly without assuming that they equal each other or any per-SIP stamp.",
                     new Dictionary<string,object>{{"capturedSipStamps",owners.Length},
-                        {"sceneOffsetsGuessed",false}});
+                        {"sceneTimeStamp",targetReceipt.SceneTimeStamp},
+                        {"sceneReportShapePairTimeStamp",targetReceipt.SceneReportShapePairTimeStamp},
+                        {"sceneTimestampsEqual",targetReceipt.SceneTimeStamp==
+                            targetReceipt.SceneReportShapePairTimeStamp}});
                 AddReadinessCheck(checks,blockers,deferred,
                     "rigidbody.contact-report-lists-and-buffer",phase,
                     !repeatable||!layout||!membership?"fail":exact?"pass":"deferred","blocker",
@@ -4034,6 +4057,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 return BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-","");
         }
 
+        private static string ContentSha256(uint[] words)
+        {
+            if(words==null)throw new ArgumentNullException("words");
+            var bytes=new byte[checked(words.Length*sizeof(uint))];
+            Buffer.BlockCopy(words,0,bytes,0,bytes.Length);
+            return ContentSha256(bytes);
+        }
+
         private static object DescribeContactManagerOwnerRecord(
             NativeContactManagerOwnerRecord value,string owner0,string owner1)
         {
@@ -4475,57 +4506,83 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private NPhaseReportState CaptureNPhaseReportState(uint nphaseCore,int frame)
         {
-            if(captureNPhaseReportStateSnapshot==null||nphaseCore==0)
+            if(captureNPhaseReportStateSnapshotV1==null||nphaseCore==0)
                 throw new InvalidOperationException("Native NPhase report-state capture is unavailable.");
             uint bufferSize=ReadWord(checked(nphaseCore+0x34u));
             if(bufferSize==0||bufferSize>MaximumContactReportBufferSize)
                 throw new InvalidOperationException("NPhase contact-report buffer size is outside the supported range.");
-            int size=Marshal.SizeOf(typeof(NativeNPhaseReportStateReceipt));
-            if(size!=116)throw new InvalidOperationException("Managed NPhase report-state ABI size differs.");
-            IntPtr receiptBuffer=Marshal.AllocHGlobal(size);
-            IntPtr actorPairBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
-            IntPtr persistentBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
-            IntPtr forceBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
-            IntPtr bytesBuffer=Marshal.AllocHGlobal(checked((int)bufferSize));
-            NativeNPhaseReportStateReceipt receipt;
+            int buffersSize=Marshal.SizeOf(typeof(NativeNPhaseReportSnapshotBuffersV1));
+            int arrayReceiptSize=Marshal.SizeOf(typeof(NativeNPhaseReportArrayReceiptV1));
+            int receiptSize=Marshal.SizeOf(typeof(NativeNPhaseReportSnapshotReceiptV1));
+            if(buffersSize!=32||arrayReceiptSize!=28||receiptSize!=188)
+                throw new InvalidOperationException("Managed complete NPhase report-state ABI size differs.");
+            IntPtr descriptorBuffer=IntPtr.Zero,receiptBuffer=IntPtr.Zero;
+            IntPtr actorPairBuffer=IntPtr.Zero,persistentBuffer=IntPtr.Zero;
+            IntPtr forceBuffer=IntPtr.Zero,bytesBuffer=IntPtr.Zero;
+            NativeNPhaseReportSnapshotReceiptV1 receipt=default(NativeNPhaseReportSnapshotReceiptV1);
+            uint[] actorBacking=null,persistentBacking=null,forceBacking=null;
             uint[] actorPairs=null,persistent=null,force=null;
             byte[] bytes=null;
             try
             {
-                for(int i=0;i<size;i++)Marshal.WriteByte(receiptBuffer,i,0);
-                int ok=captureNPhaseReportStateSnapshot(new UIntPtr(unityPlayerBase),
-                    new UIntPtr(nphaseCore),actorPairBuffer,MaximumShapeInstancePairs,
-                    persistentBuffer,MaximumShapeInstancePairs,forceBuffer,
-                    MaximumShapeInstancePairs,bytesBuffer,bufferSize,receiptBuffer);
-                receipt=(NativeNPhaseReportStateReceipt)Marshal.PtrToStructure(
-                    receiptBuffer,typeof(NativeNPhaseReportStateReceipt));
+                descriptorBuffer=Marshal.AllocHGlobal(buffersSize);
+                receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+                actorPairBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+                persistentBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+                forceBuffer=Marshal.AllocHGlobal(MaximumShapeInstancePairs*IntPtr.Size);
+                bytesBuffer=Marshal.AllocHGlobal(checked((int)bufferSize));
+                var buffers=new NativeNPhaseReportSnapshotBuffersV1 {
+                    ActorPairBacking=actorPairBuffer,
+                    ActorPairCapacity=MaximumShapeInstancePairs,
+                    PersistentBacking=persistentBuffer,
+                    PersistentCapacity=MaximumShapeInstancePairs,
+                    ForceThresholdBacking=forceBuffer,
+                    ForceThresholdCapacity=MaximumShapeInstancePairs,
+                    ReportBufferBytes=bytesBuffer,
+                    ReportBufferByteCapacity=bufferSize
+                };
+                Marshal.StructureToPtr(buffers,descriptorBuffer,false);
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureNPhaseReportStateSnapshotV1(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),descriptorBuffer,receiptBuffer);
+                receipt=(NativeNPhaseReportSnapshotReceiptV1)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeNPhaseReportSnapshotReceiptV1));
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native NPhase report-state capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
-                    receipt.ActorPairCount>MaximumShapeInstancePairs||
-                    receipt.PersistentCount>MaximumShapeInstancePairs||
-                    receipt.ForceThresholdCount>MaximumShapeInstancePairs||
+                    receipt.ActorPairs.BackingWritten>MaximumShapeInstancePairs||
+                    receipt.Persistent.BackingWritten>MaximumShapeInstancePairs||
+                    receipt.ForceThreshold.BackingWritten>MaximumShapeInstancePairs||
                     receipt.ReportBufferCurrentSize!=bufferSize||
+                    receipt.ReportBufferWritten!=bufferSize||
                     receipt.ReportBufferCurrentSize>MaximumContactReportBufferSize||
-                    receipt.ValidationFlags!=0x7Fu)
-                    throw new InvalidOperationException("Native NPhase report-state receipt contract differs.");
-                actorPairs=ReadPointerBuffer(actorPairBuffer,receipt.ActorPairCount);
-                persistent=ReadPointerBuffer(persistentBuffer,receipt.PersistentCount);
-                force=ReadPointerBuffer(forceBuffer,receipt.ForceThresholdCount);
-                bytes=new byte[checked((int)receipt.ReportBufferCurrentSize)];
+                    receipt.ValidationFlags!=0xFFu)
+                    throw new InvalidOperationException("Native complete NPhase report-state receipt contract differs.");
+                actorBacking=ReadPointerBuffer(actorPairBuffer,receipt.ActorPairs.BackingWritten);
+                persistentBacking=ReadPointerBuffer(persistentBuffer,receipt.Persistent.BackingWritten);
+                forceBacking=ReadPointerBuffer(forceBuffer,receipt.ForceThreshold.BackingWritten);
+                actorPairs=NPhaseReportLogicalPrefix(actorBacking,receipt.ActorPairs.Count);
+                persistent=NPhaseReportLogicalPrefix(persistentBacking,receipt.Persistent.Count);
+                force=NPhaseReportLogicalPrefix(forceBacking,receipt.ForceThreshold.Count);
+                bytes=new byte[checked((int)receipt.ReportBufferWritten)];
                 Marshal.Copy(bytesBuffer,bytes,0,bytes.Length);
             }
             finally
             {
-                Marshal.FreeHGlobal(bytesBuffer);Marshal.FreeHGlobal(forceBuffer);
-                Marshal.FreeHGlobal(persistentBuffer);Marshal.FreeHGlobal(actorPairBuffer);
-                Marshal.FreeHGlobal(receiptBuffer);
+                if(bytesBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(bytesBuffer);
+                if(forceBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(forceBuffer);
+                if(persistentBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(persistentBuffer);
+                if(actorPairBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(actorPairBuffer);
+                if(receiptBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(receiptBuffer);
+                if(descriptorBuffer!=IntPtr.Zero)Marshal.FreeHGlobal(descriptorBuffer);
             }
             var state=new NPhaseReportState {Receipt=receipt,ActorPairs=actorPairs,
-                PersistentSips=persistent,ForceThresholdSips=force,ReportBufferBytes=bytes};
+                PersistentSips=persistent,ForceThresholdSips=force,
+                ActorPairBacking=actorBacking,PersistentBacking=persistentBacking,
+                ForceThresholdBacking=forceBacking,ReportBufferBytes=bytes};
             ValidateNPhaseReportState(state);
             return state;
         }
@@ -4705,6 +4762,16 @@ namespace SuperchargedPatch.Authoring.Modules
             var values=new uint[checked((int)count)];
             for(int i=0;i<values.Length;i++)values[i]=unchecked((uint)
                 Marshal.ReadInt32(buffer,i*sizeof(uint)));
+            return values;
+        }
+
+        private static uint[] NPhaseReportLogicalPrefix(uint[] backing,uint count)
+        {
+            if(backing==null||count>(uint)backing.Length)
+                throw new InvalidOperationException(
+                    "NPhase report logical count exceeds its complete backing array.");
+            var values=new uint[checked((int)count)];
+            Array.Copy(backing,values,values.Length);
             return values;
         }
 
@@ -6239,50 +6306,115 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("The ActorPair report-pool checkpoint contains a null, duplicate, or overlapping element.");
         }
 
+        private static uint NPhaseReportBackingHash(uint[] values)
+        {
+            return AppendUInt32ArrayByteHash(2166136261u,values);
+        }
+
+        private static void ValidateNPhaseReportArray(
+            NativeNPhaseReportArrayReceiptV1 receipt,uint[] backing,uint[] logical,
+            string name)
+        {
+            if(backing==null||logical==null)
+                throw new InvalidOperationException("The "+name+
+                    " NPhase report array is incomplete.");
+            uint capacity=receipt.CapacityRaw&0x7FFFFFFFu;
+            if(capacity>MaximumShapeInstancePairs||receipt.Count>capacity||
+                receipt.BackingRequired!=capacity||receipt.BackingWritten!=capacity||
+                backing.Length!=checked((int)capacity)||
+                logical.Length!=checked((int)receipt.Count)||
+                (capacity==0u)!=(receipt.Data==UIntPtr.Zero)||
+                (capacity!=0u&&(receipt.Data.ToUInt32()&3u)!=0u)||
+                receipt.LogicalOrderHash!=ContactPoolOrderHash(logical)||
+                receipt.BackingHash!=NPhaseReportBackingHash(backing))
+                throw new InvalidOperationException("The "+name+
+                    " NPhase report array receipt or complete backing differs.");
+            for(int i=0;i<logical.Length;i++)
+                if(logical[i]!=backing[i])throw new InvalidOperationException(
+                    "The "+name+" NPhase report logical order differs from its backing prefix.");
+            if(logical.Any(pointer=>pointer==0u)||
+                logical.Distinct().Count()!=logical.Length)
+                throw new InvalidOperationException("The "+name+
+                    " NPhase report logical order contains a null or duplicate member.");
+        }
+
+        private static uint NPhaseReportMetadataHash(
+            NativeNPhaseReportSnapshotReceiptV1 receipt)
+        {
+            uint hash=2166136261u;
+            uint[] words={receipt.UnityBase.ToUInt32(),receipt.NPhaseCore.ToUInt32(),
+                receipt.OwnerScene.ToUInt32(),receipt.SceneTimeStamp,
+                receipt.SceneReportShapePairTimeStamp,
+                receipt.ActorPairs.Data.ToUInt32(),receipt.ActorPairs.Count,
+                receipt.ActorPairs.CapacityRaw,receipt.Persistent.Data.ToUInt32(),
+                receipt.Persistent.Count,receipt.Persistent.CapacityRaw,
+                receipt.NextFramePersistentIndex,receipt.ForceThreshold.Data.ToUInt32(),
+                receipt.ForceThreshold.Count,receipt.ForceThreshold.CapacityRaw,
+                receipt.ReportBuffer.ToUInt32(),receipt.ReportBufferCurrentIndex,
+                receipt.ReportBufferCurrentSize,receipt.ReportBufferDefaultSize,
+                receipt.ReportBufferLastIndex,receipt.ReportBufferAllocationLocked};
+            foreach(uint word in words)hash=AppendUInt32ByteHash(hash,word);
+            return hash;
+        }
+
+        private static bool ValidNPhaseReportLastIndex(uint currentIndex,uint lastIndex)
+        {
+            return lastIndex==0xFFFFFFFFu||lastIndex<currentIndex||
+                (currentIndex==0u&&lastIndex==0u);
+        }
+
         private static void ValidateNPhaseReportState(NPhaseReportState value)
         {
             if(value==null||value.ActorPairs==null||value.PersistentSips==null||
-                value.ForceThresholdSips==null||value.ReportBufferBytes==null)
-                throw new InvalidOperationException("The NPhase report-state checkpoint sidecar is incomplete.");
-            NativeNPhaseReportStateReceipt receipt=value.Receipt;
-            uint actorCapacity=receipt.ActorPairCapacityRaw&0x7FFFFFFFu;
-            uint persistentCapacity=receipt.PersistentCapacityRaw&0x7FFFFFFFu;
-            uint forceCapacity=receipt.ForceThresholdCapacityRaw&0x7FFFFFFFu;
-            if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=116u||
+                value.ForceThresholdSips==null||value.ActorPairBacking==null||
+                value.PersistentBacking==null||value.ForceThresholdBacking==null||
+                value.ReportBufferBytes==null)
+                throw new InvalidOperationException(
+                    "The complete NPhase report-state checkpoint sidecar is incomplete.");
+            NativeNPhaseReportSnapshotReceiptV1 receipt=value.Receipt;
+            if(receipt.Result!=1u||receipt.LastError!=0u||
+                receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=188u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.ReportBuffer==UIntPtr.Zero||
-                receipt.ValidationFlags!=0x7Fu||
-                receipt.ActorPairCount!=(uint)value.ActorPairs.Length||
-                receipt.PersistentCount!=(uint)value.PersistentSips.Length||
-                receipt.ForceThresholdCount!=(uint)value.ForceThresholdSips.Length||
-                receipt.ActorPairCount>actorCapacity||receipt.PersistentCount>persistentCapacity||
-                receipt.ForceThresholdCount>forceCapacity||
-                receipt.NextFramePersistentIndex>receipt.PersistentCount||
-                receipt.ReportBufferCurrentSize!=(uint)value.ReportBufferBytes.Length||
-                receipt.ReportBufferCurrentSize==0||
+                (receipt.ReportBuffer.ToUInt32()&15u)!=0u||
+                receipt.ValidationFlags!=0xFFu||receipt.InvalidKind!=0xFFFFFFFFu||
+                receipt.InvalidIndex!=0xFFFFFFFFu||receipt.Detail!=0u||
+                receipt.NextFramePersistentIndex>receipt.Persistent.Count||
+                receipt.ReportBufferCurrentSize==0u||
                 receipt.ReportBufferCurrentSize>MaximumContactReportBufferSize||
-                receipt.ReportBufferDefaultSize==0||
+                receipt.ReportBufferRequired!=receipt.ReportBufferCurrentSize||
+                receipt.ReportBufferWritten!=receipt.ReportBufferRequired||
+                receipt.ReportBufferWritten!=(uint)value.ReportBufferBytes.Length||
+                receipt.ReportBufferDefaultSize==0u||
                 receipt.ReportBufferDefaultSize>receipt.ReportBufferCurrentSize||
                 receipt.ReportBufferCurrentIndex>receipt.ReportBufferCurrentSize||
                 receipt.ReportBufferAllocationLocked>1u||
-                (receipt.ReportBufferLastIndex!=0xFFFFFFFFu&&
-                    receipt.ReportBufferLastIndex>=receipt.ReportBufferCurrentIndex)||
-                receipt.ActorPairOrderHash!=ContactPoolOrderHash(value.ActorPairs)||
-                receipt.PersistentOrderHash!=ContactPoolOrderHash(value.PersistentSips)||
-                receipt.ForceThresholdOrderHash!=ContactPoolOrderHash(value.ForceThresholdSips)||
+                !ValidNPhaseReportLastIndex(receipt.ReportBufferCurrentIndex,
+                    receipt.ReportBufferLastIndex)||
                 receipt.ReportBufferActiveHash!=ByteHash(value.ReportBufferBytes,
                     checked((int)receipt.ReportBufferCurrentIndex))||
                 receipt.ReportBufferAllocationHash!=ByteHash(value.ReportBufferBytes,
                     value.ReportBufferBytes.Length))
-                throw new InvalidOperationException("The NPhase report-state checkpoint sidecar is incomplete.");
-            uint[] pointers=value.ActorPairs.Concat(value.PersistentSips).Concat(
-                value.ForceThresholdSips).ToArray();
-            if(pointers.Any(pointer=>pointer==0)||
-                value.ActorPairs.Distinct().Count()!=value.ActorPairs.Length||
-                value.PersistentSips.Distinct().Count()!=value.PersistentSips.Length||
-                value.ForceThresholdSips.Distinct().Count()!=value.ForceThresholdSips.Length||
-                value.PersistentSips.Intersect(value.ForceThresholdSips).Any())
-                throw new InvalidOperationException("The NPhase report-state checkpoint contains null, duplicate, or conflicting list members.");
+                throw new InvalidOperationException(
+                    "The complete NPhase report-state receipt or report allocation differs.");
+            ValidateNPhaseReportArray(receipt.ActorPairs,value.ActorPairBacking,
+                value.ActorPairs,"ActorPair");
+            ValidateNPhaseReportArray(receipt.Persistent,value.PersistentBacking,
+                value.PersistentSips,"persistent SIP");
+            ValidateNPhaseReportArray(receipt.ForceThreshold,value.ForceThresholdBacking,
+                value.ForceThresholdSips,"force-threshold SIP");
+            if(value.PersistentSips.Intersect(value.ForceThresholdSips).Any())
+                throw new InvalidOperationException(
+                    "The complete NPhase report state contains conflicting SIP list members.");
+            uint metadata=NPhaseReportMetadataHash(receipt);
+            uint snapshot=metadata;
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.ActorPairBacking);
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.PersistentBacking);
+            snapshot=AppendUInt32ArrayByteHash(snapshot,value.ForceThresholdBacking);
+            snapshot=AppendByteArrayHash(snapshot,value.ReportBufferBytes);
+            if(receipt.MetadataHash!=metadata||receipt.SnapshotHash!=snapshot)
+                throw new InvalidOperationException(
+                    "Managed complete NPhase report-state hashes differ from the native receipt.");
         }
 
         private static void ValidateInteractionGraphState(InteractionGraphState value)
@@ -6984,7 +7116,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 target.ActorPairReportPool,restored.ActorPairReportPool);
             bool nphasePoolsRaw=SameRawNPhasePoolImages(target.NPhasePoolImages,
                 restored.NPhasePoolImages);
-            bool nphaseReports=SameNPhaseReportState(target.NPhaseReports,
+            bool nphaseReportsRaw=SameRawNPhaseReportState(target.NPhaseReports,
                 restored.NPhaseReports);
             bool graph=SameInteractionGraphState(target.InteractionGraph,
                 restored.InteractionGraph);
@@ -7008,13 +7140,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"shapeInstancePairPoolEqual",sip},{"actorPairPoolEqual",actorPair},
                 {"actorPairReportPoolEqual",actorPairReport},
                 {"nphasePoolImagesRawEqual",nphasePoolsRaw},
-                {"nphaseReportsEqual",nphaseReports},{"interactionGraphEqual",graph},
+                {"nphaseReportsRawEqual",nphaseReportsRaw},{"interactionGraphEqual",graph},
                 {"transformCacheEqual",transformCache},{"islandSnapshotEqual",island},
                 {"islandSnapshotRawEqual",islandRaw},
                 {"largeManifoldPoolEqual",large},{"sphereManifoldPoolEqual",sphere},
                 {"transformDispatchEqual",dispatch},{"dirtyInteractionsEqual",dirty},
                 {"allRawFamiliesEqual",frame&&contactFree&&contactOwners&&sip&&actorPair&&
-                    actorPairReport&&nphasePoolsRaw&&nphaseReports&&graph&&transformCache&&island&&large&&
+                    actorPairReport&&nphasePoolsRaw&&nphaseReportsRaw&&graph&&transformCache&&island&&large&&
                     sphere&&dispatch&&dirty}};
         }
 
@@ -7102,24 +7234,44 @@ namespace SuperchargedPatch.Authoring.Modules
         private static object DescribeNPhaseReportState(NPhaseReportState value)
         {
             if(value==null)return null;
-            NativeNPhaseReportStateReceipt receipt=value.Receipt;
+            NativeNPhaseReportSnapshotReceiptV1 receipt=value.Receipt;
             return new Dictionary<string,object>{
                 {"nphaseCore",Hex(receipt.NPhaseCore)},{"ownerScene",Hex(receipt.OwnerScene)},
-                {"actorPairData",Hex(receipt.ActorPairData)},
-                {"actorPairCount",receipt.ActorPairCount},
-                {"actorPairCapacityRaw","0x"+receipt.ActorPairCapacityRaw.ToString("X8")},
-                {"actorPairOrderHash","0x"+receipt.ActorPairOrderHash.ToString("X8")},
+                {"sceneTimeStamp",receipt.SceneTimeStamp},
+                {"sceneReportShapePairTimeStamp",receipt.SceneReportShapePairTimeStamp},
+                {"sceneTimestampsEqual",receipt.SceneTimeStamp==
+                    receipt.SceneReportShapePairTimeStamp},
+                {"actorPairData",Hex(receipt.ActorPairs.Data)},
+                {"actorPairCount",receipt.ActorPairs.Count},
+                {"actorPairCapacityRaw","0x"+receipt.ActorPairs.CapacityRaw.ToString("X8")},
+                {"actorPairUserMemory",(receipt.ActorPairs.CapacityRaw&0x80000000u)!=0u},
+                {"actorPairBackingRequired",receipt.ActorPairs.BackingRequired},
+                {"actorPairBackingWritten",receipt.ActorPairs.BackingWritten},
+                {"actorPairOrderHash","0x"+receipt.ActorPairs.LogicalOrderHash.ToString("X8")},
+                {"actorPairBackingHash","0x"+receipt.ActorPairs.BackingHash.ToString("X8")},
+                {"actorPairBackingSha256",ContentSha256(value.ActorPairBacking)},
                 {"actorPairs",HexArray(value.ActorPairs)},
-                {"persistentData",Hex(receipt.PersistentData)},
-                {"persistentCount",receipt.PersistentCount},
-                {"persistentCapacityRaw","0x"+receipt.PersistentCapacityRaw.ToString("X8")},
+                {"persistentData",Hex(receipt.Persistent.Data)},
+                {"persistentCount",receipt.Persistent.Count},
+                {"persistentCapacityRaw","0x"+receipt.Persistent.CapacityRaw.ToString("X8")},
+                {"persistentUserMemory",(receipt.Persistent.CapacityRaw&0x80000000u)!=0u},
+                {"persistentBackingRequired",receipt.Persistent.BackingRequired},
+                {"persistentBackingWritten",receipt.Persistent.BackingWritten},
                 {"nextFramePersistentIndex",receipt.NextFramePersistentIndex},
-                {"persistentOrderHash","0x"+receipt.PersistentOrderHash.ToString("X8")},
+                {"persistentOrderHash","0x"+receipt.Persistent.LogicalOrderHash.ToString("X8")},
+                {"persistentBackingHash","0x"+receipt.Persistent.BackingHash.ToString("X8")},
+                {"persistentBackingSha256",ContentSha256(value.PersistentBacking)},
                 {"persistentSips",HexArray(value.PersistentSips)},
-                {"forceThresholdData",Hex(receipt.ForceThresholdData)},
-                {"forceThresholdCount",receipt.ForceThresholdCount},
-                {"forceThresholdCapacityRaw","0x"+receipt.ForceThresholdCapacityRaw.ToString("X8")},
-                {"forceThresholdOrderHash","0x"+receipt.ForceThresholdOrderHash.ToString("X8")},
+                {"forceThresholdData",Hex(receipt.ForceThreshold.Data)},
+                {"forceThresholdCount",receipt.ForceThreshold.Count},
+                {"forceThresholdCapacityRaw","0x"+receipt.ForceThreshold.CapacityRaw.ToString("X8")},
+                {"forceThresholdUserMemory",(receipt.ForceThreshold.CapacityRaw&0x80000000u)!=0u},
+                {"forceThresholdBackingRequired",receipt.ForceThreshold.BackingRequired},
+                {"forceThresholdBackingWritten",receipt.ForceThreshold.BackingWritten},
+                {"forceThresholdOrderHash","0x"+
+                    receipt.ForceThreshold.LogicalOrderHash.ToString("X8")},
+                {"forceThresholdBackingHash","0x"+receipt.ForceThreshold.BackingHash.ToString("X8")},
+                {"forceThresholdBackingSha256",ContentSha256(value.ForceThresholdBacking)},
                 {"forceThresholdSips",HexArray(value.ForceThresholdSips)},
                 {"reportBuffer",Hex(receipt.ReportBuffer)},
                 {"reportBufferCurrentIndex",receipt.ReportBufferCurrentIndex},
@@ -7127,8 +7279,13 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"reportBufferDefaultSize",receipt.ReportBufferDefaultSize},
                 {"reportBufferLastIndex","0x"+receipt.ReportBufferLastIndex.ToString("X8")},
                 {"reportBufferAllocationLocked",receipt.ReportBufferAllocationLocked!=0},
+                {"reportBufferRequired",receipt.ReportBufferRequired},
+                {"reportBufferWritten",receipt.ReportBufferWritten},
                 {"reportBufferActiveHash","0x"+receipt.ReportBufferActiveHash.ToString("X8")},
                 {"reportBufferAllocationHash","0x"+receipt.ReportBufferAllocationHash.ToString("X8")},
+                {"reportBufferAllocationSha256",ContentSha256(value.ReportBufferBytes)},
+                {"metadataHash","0x"+receipt.MetadataHash.ToString("X8")},
+                {"snapshotHash","0x"+receipt.SnapshotHash.ToString("X8")},
                 {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")}};
         }
 
@@ -7442,7 +7599,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameActorPairPoolSnapshot(previous.ActorPairPool,value.ActorPairPool)&&
                     SameActorPairReportPoolSnapshot(previous.ActorPairReportPool,value.ActorPairReportPool)&&
                     SameRawNPhasePoolImages(previous.NPhasePoolImages,value.NPhasePoolImages)&&
-                    SameNPhaseReportState(previous.NPhaseReports,value.NPhaseReports)&&
+                    SameRawNPhaseReportState(previous.NPhaseReports,value.NPhaseReports)&&
                     SameInteractionGraphState(previous.InteractionGraph,value.InteractionGraph)&&
                     SameTransformCacheState(previous.TransformCache,value.TransformCache)&&
                     SameFinishBroadPhaseState(previous.FinishBroadPhase,value.FinishBroadPhase)&&
@@ -7713,16 +7870,23 @@ namespace SuperchargedPatch.Authoring.Modules
                 left.SlabBytes.SequenceEqual(right.SlabBytes);
         }
 
-        private static bool SameNPhaseReportState(NPhaseReportState left,NPhaseReportState right)
+        private static bool SameRawNPhaseReportState(NPhaseReportState left,
+            NPhaseReportState right)
         {
             if(left==null||right==null)return left==right;
             return left.Receipt.Equals(right.Receipt)&&left.ActorPairs!=null&&right.ActorPairs!=null&&
                 left.PersistentSips!=null&&right.PersistentSips!=null&&
                 left.ForceThresholdSips!=null&&right.ForceThresholdSips!=null&&
+                left.ActorPairBacking!=null&&right.ActorPairBacking!=null&&
+                left.PersistentBacking!=null&&right.PersistentBacking!=null&&
+                left.ForceThresholdBacking!=null&&right.ForceThresholdBacking!=null&&
                 left.ReportBufferBytes!=null&&right.ReportBufferBytes!=null&&
                 left.ActorPairs.SequenceEqual(right.ActorPairs)&&
                 left.PersistentSips.SequenceEqual(right.PersistentSips)&&
                 left.ForceThresholdSips.SequenceEqual(right.ForceThresholdSips)&&
+                left.ActorPairBacking.SequenceEqual(right.ActorPairBacking)&&
+                left.PersistentBacking.SequenceEqual(right.PersistentBacking)&&
+                left.ForceThresholdBacking.SequenceEqual(right.ForceThresholdBacking)&&
                 left.ReportBufferBytes.SequenceEqual(right.ReportBufferBytes);
         }
 
@@ -7950,7 +8114,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 SameActorPairReportPoolSnapshot(left.ActorPairReportPool,
                     right.ActorPairReportPool)&&
                 SameRawNPhasePoolImages(left.NPhasePoolImages,right.NPhasePoolImages)&&
-                SameNPhaseReportState(left.NPhaseReports,right.NPhaseReports)&&
+                SameRawNPhaseReportState(left.NPhaseReports,right.NPhaseReports)&&
                 SameInteractionGraphState(left.InteractionGraph,right.InteractionGraph)&&
                 SameTransformCacheState(left.TransformCache,right.TransformCache)&&
                 SameIslandSnapshotState(left.IslandSnapshot,right.IslandSnapshot)&&
@@ -8484,7 +8648,7 @@ namespace SuperchargedPatch.Authoring.Modules
             captureActorPairPoolSnapshot=null;
             captureActorPairReportPoolSnapshot=null;
             captureNPhasePoolSnapshot=null;
-            captureNPhaseReportStateSnapshot=null;
+            captureNPhaseReportStateSnapshotV1=null;
             captureInteractionGraphSnapshot=null;
             captureTransformCacheSnapshot=null;
             captureIslandSnapshot=null;restoreIslandSnapshot=null;

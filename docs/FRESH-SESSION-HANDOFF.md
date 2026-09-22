@@ -1,5 +1,36 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Complete NPhase report-history image milestone (2026-09-22, managed
+> r24 / native API 21):** settled checkpoints and post-transition oracles now
+> retain both revision-guarded `Sc::Scene` clocks, the raw header and every
+> capacity word of all three `Sc::NPhaseCore` report arrays, their logical
+> prefixes, the persistent-list split, and every byte of the complete
+> `ContactReportBuffer` allocation.  Capacity tails and inactive report bytes
+> remain opaque; only logical ActorPair/SIP prefixes are dereferenced or
+> semantically validated.
+>
+> The new V1 native capture is caller-owned, read-only, and fail-closed.  Its
+> shipped-code guard proves `Scene+0x4c` and `Scene+0x50`; output buffers,
+> descriptors, receipts, complete source allocations, and active objects must
+> be disjoint.  It copies raw tails as bytes, rereads code, headers, timestamps,
+> every backing allocation, and live-node invariants, then publishes separate
+> logical, raw-backing, active-buffer, allocation, metadata, and aggregate
+> hashes.  The harness covers nonzero sentinel tails, tail-only divergence,
+> pristine and reset report-buffer states, every short output, source/output
+> aliases, overlapping ownership, corrupt membership, and revision rejection.
+>
+> This still adds no restore write and therefore cannot change gameplay.
+> Diagnostics explicitly call the address-sensitive comparison
+> `nphaseReportsRawEqual`; the future parity gate must project checkpoint
+> pointers before comparing semantic state.  Win32 `/W4 /WX` and the full
+> native history harness pass, and the managed checker passes 102 contracts.
+> Managed DLL SHA-256 is
+> `EFBA9AA6966598F8D37B0B725B20271927F77D578567053FDA98285E8C85AD2F`;
+> native DLL SHA-256 is
+> `2F3991D96D079FC663B899C9878EC687DF0591A076133DAF064FAAB6DC8209F8`.
+> Next implement complete finishBroadPhase-entry SAP/BPElem capture, then run
+> the planned fresh no-search target/replay audit.  Search remains disabled.
+
 > **Complete five-pool history capture milestone (2026-09-22, managed r23 /
 > native API 20):** every settled checkpoint and post-transition oracle now
 > owns a stable caller-owned image of all five `Sc::NPhaseCore` `Ps::Pool`

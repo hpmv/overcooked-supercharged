@@ -139,9 +139,12 @@ Important special cases:
 
 ## Report-history completion
 
-Capture and restore both Scene timestamps at `ownerScene + 0x4c` and
-`ownerScene + 0x50`.  Preserve their exact values and equality relation; do
-not assume either must equal an object stamp in every phase.
+Native API 21 and managed r24 now implement the complete read-only capture in
+this section.  A shipped instruction guard at RVA `0xA551DC` proves
+`ownerScene + 0x4c` as `mTimeStamp` and `ownerScene + 0x50` as
+`mReportShapePairTimeStamp`.  Preserve their exact values and equality
+relation during the future restore; do not assume either must equal an object
+stamp in every phase.
 
 For each of the three NPhase report arrays capture its raw capacity ownership
 bit, logical order, and the complete `capacity * 4` backing bytes.  Capture
@@ -149,6 +152,14 @@ the entire retained report-buffer allocation, its active bounds, and typed
 relocations for any active records.  Target f444 has an 8192-byte allocation
 with active index zero, so its bytes are opaque allocation history and no
 active record relocation is presently needed.
+
+The V1 capture now owns those exact byte ranges and rereads them before
+publication.  It treats only each `[0,count)` prefix as typed pointers; stale
+capacity-tail words are never scanned.  It also distinguishes logical-order,
+raw-backing, active-buffer, full-allocation, metadata, and aggregate hashes.
+The address-sensitive repeated-capture comparator is explicitly named
+`nphaseReportsRawEqual`; projected restore parity still requires the semantic
+relocations below rather than historical-address equality.
 
 Target f444 has twelve ActorPairs: ten touched/report-owning and two
 untouched/null-report.  The transient ActorPair report set is empty; the
@@ -228,7 +239,8 @@ diagnostics.
 
 1. **Complete:** add the generic five-pool caller-owned read-only snapshot and
    tests (API 20 / managed r23).
-2. Extend report capture with timestamps and complete backing arrays.
+2. **Complete:** extend report capture with both Scene timestamps and complete
+   backing arrays/allocation bytes (API 21 / managed r24).
 3. Add complete read-only SAP/BPElem capture at the existing hook.
 4. Run one fresh no-search target/replay audit and choose the admitted
    broadphase path from evidence.

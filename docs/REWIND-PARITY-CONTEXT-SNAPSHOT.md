@@ -6,6 +6,36 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest implementation — complete NPhase report-history image
+
+Managed RigidbodyActorRebuild r24 and native API 21 now replace the bounded
+logical-only report capture with a complete read-only image.  Each settled
+checkpoint and exact post-output snapshot owns both `Sc::Scene` timestamps,
+all three NPhase report-array headers and their complete masked-capacity
+backings, the persistent next-frame split, the full ContactReportBuffer
+header, and every allocated buffer byte.  Logical prefixes remain available
+for the existing ActorPair/SIP coherence checks; unused array words and
+inactive report bytes are deliberately opaque raw history.
+
+The shipped Win32 guard at RVA `0xA551DC` proves that `Scene+0x4c` is
+`mTimeStamp` and `Scene+0x50` is `mReportShapePairTimeStamp`.  The native V1
+surface rejects output/output, output/source, descriptor/source, and
+receipt/source aliases, validates source ownership and active list members,
+copies unconstructed capacity tails bytewise, and rereads the revision,
+metadata, timestamps, complete allocations, and active-node semantics before
+publishing hashes.  The harness distinguishes logical versus tail-only and
+active versus allocation-only changes and exercises both legal empty-buffer
+last-index encodings.
+
+No restore invokes this capture and no live game field is written.  Raw
+repeatability is reported as `nphaseReportsRawEqual`; it is not the future
+rebased semantic comparator.  Win32 `/W4 /WX`, the full native harness, and
+all 102 managed checks pass.  Managed/native SHA-256 values are respectively
+`EFBA9AA6966598F8D37B0B725B20271927F77D578567053FDA98285E8C85AD2F` and
+`2F3991D96D079FC663B899C9878EC687DF0591A076133DAF064FAAB6DC8209F8`.
+The remaining read-only dependency before the next no-search audit is the
+complete finishBroadPhase-entry SAP/BPElem image.  Search remains disabled.
+
 ## Latest implementation — complete five-pool history image
 
 Managed RigidbodyActorRebuild r23 and native API 20 now capture all five
@@ -31,9 +61,9 @@ pass.  Managed/native SHA-256 values are respectively
 No live restore calls this API.  The present phase comparison reports
 `nphasePoolImagesRawEqual` only; semantic parity must compare a target image
 after declared pointer/ID projection, not historical address-bearing bytes.
-The next read-only dependency is full report history (Scene timestamps and
-complete backing arrays), followed by complete SAP/BPElem capture at the
-finishBroadPhase hook.  Search remains disabled.
+The report-history dependency is now complete in API 21/r24.  The next
+read-only dependency is complete SAP/BPElem capture at the finishBroadPhase
+hook.  Search remains disabled.
 
 ## Latest implementation — atomic rebased island restore primitive
 

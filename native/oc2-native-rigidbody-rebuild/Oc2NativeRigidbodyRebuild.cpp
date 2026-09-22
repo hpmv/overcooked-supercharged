@@ -563,6 +563,63 @@ struct NPhaseReportStateReceipt {
     uint32_t validationFlags;
 };
 
+// API 21's complete, caller-owned report-history image.  Unlike the legacy
+// receipt above, each array output covers its entire allocation rather than
+// only its logical prefix.  Capacities for the three pointer outputs are in
+// elements; the report-buffer capacity is in bytes.
+struct NPhaseReportSnapshotBuffersV1 {
+    uintptr_t* actorPairBacking;
+    uint32_t actorPairCapacity;
+    uintptr_t* persistentBacking;
+    uint32_t persistentCapacity;
+    uintptr_t* forceThresholdBacking;
+    uint32_t forceThresholdCapacity;
+    uint8_t* reportBufferBytes;
+    uint32_t reportBufferByteCapacity;
+};
+
+struct NPhaseReportArrayReceiptV1 {
+    uintptr_t data;
+    uint32_t count;
+    uint32_t capacityRaw;
+    uint32_t backingRequired;
+    uint32_t backingWritten;
+    uint32_t logicalOrderHash;
+    uint32_t backingHash;
+};
+
+struct NPhaseReportSnapshotReceiptV1 {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t ownerScene;
+    uint32_t sceneTimeStamp;
+    uint32_t sceneReportShapePairTimeStamp;
+    NPhaseReportArrayReceiptV1 actorPairs;
+    NPhaseReportArrayReceiptV1 persistent;
+    uint32_t nextFramePersistentIndex;
+    NPhaseReportArrayReceiptV1 forceThreshold;
+    uintptr_t reportBuffer;
+    uint32_t reportBufferCurrentIndex;
+    uint32_t reportBufferCurrentSize;
+    uint32_t reportBufferDefaultSize;
+    uint32_t reportBufferLastIndex;
+    uint32_t reportBufferAllocationLocked;
+    uint32_t reportBufferRequired;
+    uint32_t reportBufferWritten;
+    uint32_t reportBufferActiveHash;
+    uint32_t reportBufferAllocationHash;
+    uint32_t metadataHash;
+    uint32_t snapshotHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
+
 // Caller-owned, read-only projection of Sc::InteractionScene and every
 // registration/index relation that can affect the next simulation step.
 struct InteractionGraphActorRecord {
@@ -1502,6 +1559,12 @@ static_assert(sizeof(NPhasePoolSnapshotReceiptV1) == 152,
     "Unexpected Win32 NPhase-pool snapshot receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
+static_assert(sizeof(NPhaseReportSnapshotBuffersV1) == 32,
+    "Unexpected Win32 complete NPhase report buffer ABI");
+static_assert(sizeof(NPhaseReportArrayReceiptV1) == 28,
+    "Unexpected Win32 complete NPhase report array ABI");
+static_assert(sizeof(NPhaseReportSnapshotReceiptV1) == 188,
+    "Unexpected Win32 complete NPhase report receipt ABI");
 static_assert(sizeof(InteractionGraphActorRecord) == 72,
     "Unexpected Win32 interaction-graph actor ABI");
 static_assert(sizeof(InteractionGraphInteractionRecord) == 72,
@@ -1675,6 +1738,21 @@ enum NPhasePoolSnapshotResult : uint32_t {
     NPhasePoolSnapshotUnwritableOutput = 11,
     NPhasePoolSnapshotOverlappingOutput = 12,
     NPhasePoolSnapshotUnstable = 13
+};
+
+enum NPhaseReportSnapshotResult : uint32_t {
+    NPhaseReportSnapshotOk = 1,
+    NPhaseReportSnapshotBadArgument = 2,
+    NPhaseReportSnapshotRevisionMismatch = 3,
+    NPhaseReportSnapshotUnreadableState = 4,
+    NPhaseReportSnapshotInvalidMetadata = 5,
+    NPhaseReportSnapshotInvalidNode = 6,
+    NPhaseReportSnapshotDuplicateNode = 7,
+    NPhaseReportSnapshotCapacityTooSmall = 8,
+    NPhaseReportSnapshotUnwritableOutput = 9,
+    NPhaseReportSnapshotOverlappingOutput = 10,
+    NPhaseReportSnapshotInvalidSourceLayout = 11,
+    NPhaseReportSnapshotUnstable = 12
 };
 
 enum ContactRecreateState : uint32_t {
@@ -2022,7 +2100,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 20;
+static const uint32_t kApiVersion = 21;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -2062,6 +2140,7 @@ static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
 static const uint32_t kAddPersistentContactEventPairRva = 0xA4CD90;
 static const uint32_t kRemovePersistentContactEventPairRva = 0xA53840;
 static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
+static const uint32_t kReportSceneTimestampLayoutRva = 0xA551DC;
 static const uint32_t kInteractionSceneCtorRva = 0xA40570;
 static const uint32_t kInteractionSceneCtorPool16Rva = 0xA40623;
 static const uint32_t kInteractionSceneCtorPool32Rva = 0xA40639;
@@ -2176,6 +2255,10 @@ static const uint8_t kContactReportBufferAllocateBytes[] = {
 static const uint8_t kContactReportBufferLayoutBytes[] = {
     0x8B,0x47,0x30,0x8B,0x55,0x10,0xC1,0xE3,0x04,
     0x8D,0x48,0x0F,0x83,0xE1,0xF0
+};
+static const uint8_t kReportSceneTimestampLayoutBytes[] = {
+    0x8B,0x4D,0xBC,0x8B,0x7F,0x30,0x8B,0x41,0x4C,0x83,0x7F,
+    0x14,0x00,0x89,0x45,0xE0,0x8B,0x41,0x50,0x89,0x45,0x8C
 };
 static const uint8_t kInteractionSceneCtorBytes[] = {
     0x55,0x8B,0xEC,0x51,0x56,0x8B,0xF1,0x8D,0x45,0xFF,
@@ -2736,6 +2819,20 @@ static int FinishNPhasePoolSnapshot(
     receipt.detail = detail;
     CopyBytes(destination, &receipt, sizeof(receipt));
     return result == NPhasePoolSnapshotOk ? 1 : 0;
+}
+
+static int FinishNPhaseReportSnapshot(
+    NPhaseReportSnapshotReceiptV1* destination,
+    NPhaseReportSnapshotReceiptV1& receipt,
+    NPhaseReportSnapshotResult result, uint32_t error,
+    uint32_t invalidKind, uint32_t invalidIndex, uint32_t detail) {
+    receipt.result = result;
+    receipt.lastError = error;
+    receipt.invalidKind = invalidKind;
+    receipt.invalidIndex = invalidIndex;
+    receipt.detail = detail;
+    CopyBytes(destination, &receipt, sizeof(receipt));
+    return result == NPhaseReportSnapshotOk ? 1 : 0;
 }
 
 static int FailNPhaseReportState(NPhaseReportStateReceipt* receipt,
@@ -3681,6 +3778,18 @@ static void InitializeNPhaseReportStateReceipt(
     receipt->structSize = sizeof(NPhaseReportStateReceipt);
     receipt->unityBase = unityBase;
     receipt->nphaseCore = nphaseCore;
+}
+
+static void InitializeNPhaseReportSnapshotReceipt(
+    NPhaseReportSnapshotReceiptV1& receipt, uintptr_t unityBase,
+    uintptr_t nphaseCore) {
+    receipt = {};
+    receipt.apiVersion = kApiVersion;
+    receipt.structSize = sizeof(receipt);
+    receipt.unityBase = unityBase;
+    receipt.nphaseCore = nphaseCore;
+    receipt.invalidKind = 0xFFFFFFFFu;
+    receipt.invalidIndex = 0xFFFFFFFFu;
 }
 
 static void InitializeManifoldPoolReceipt(ManifoldPoolReceipt* receipt,
@@ -7222,6 +7331,8 @@ static bool NPhaseReportStateRevisionMatches(uintptr_t unityBase) {
         unityBase + kContactReportBufferAllocateRva);
     const void* bufferLayout = reinterpret_cast<const void*>(
         unityBase + kContactReportBufferAllocateRva + 0x1F);
+    const void* sceneTimestamps = reinterpret_cast<const void*>(
+        unityBase + kReportSceneTimestampLayoutRva);
     return Readable(addPersistent,
             sizeof(kAddPersistentContactEventPairBytes)) &&
         EqualBytes(addPersistent, kAddPersistentContactEventPairBytes,
@@ -7238,7 +7349,11 @@ static bool NPhaseReportStateRevisionMatches(uintptr_t unityBase) {
         Readable(bufferLayout,
             sizeof(kContactReportBufferLayoutBytes)) &&
         EqualBytes(bufferLayout, kContactReportBufferLayoutBytes,
-            sizeof(kContactReportBufferLayoutBytes));
+            sizeof(kContactReportBufferLayoutBytes)) &&
+        Readable(sceneTimestamps,
+            sizeof(kReportSceneTimestampLayoutBytes)) &&
+        EqualBytes(sceneTimestamps, kReportSceneTimestampLayoutBytes,
+            sizeof(kReportSceneTimestampLayoutBytes));
 }
 
 static bool UniquePointers(const uintptr_t* values, uint32_t count) {
@@ -7475,6 +7590,597 @@ static int CaptureNPhaseReportState(uintptr_t unityBase,
     receipt->validationFlags = 0x7Fu;
     receipt->result = SipPoolOk;
     return 1;
+}
+
+static void ReadNPhaseReportSnapshotHeader(uintptr_t nphaseCore,
+    NPhaseReportSnapshotReceiptV1& receipt) {
+    receipt.ownerScene = *reinterpret_cast<const uintptr_t*>(nphaseCore);
+    receipt.actorPairs.data = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x04u);
+    receipt.actorPairs.count = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x08u);
+    receipt.actorPairs.capacityRaw = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x0Cu);
+    receipt.persistent.data = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x10u);
+    receipt.persistent.count = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x14u);
+    receipt.persistent.capacityRaw = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x18u);
+    receipt.nextFramePersistentIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x1Cu);
+    receipt.forceThreshold.data = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x20u);
+    receipt.forceThreshold.count = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x24u);
+    receipt.forceThreshold.capacityRaw =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x28u);
+    receipt.reportBuffer = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x2Cu);
+    receipt.reportBufferCurrentIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x30u);
+    receipt.reportBufferCurrentSize =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x34u);
+    receipt.reportBufferDefaultSize =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x38u);
+    receipt.reportBufferLastIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x3Cu);
+    receipt.reportBufferAllocationLocked =
+        *reinterpret_cast<const uint8_t*>(nphaseCore + 0x40u);
+}
+
+static bool SameNPhaseReportSnapshotHeader(
+    const NPhaseReportSnapshotReceiptV1& left,
+    const NPhaseReportSnapshotReceiptV1& right) {
+    return left.unityBase == right.unityBase &&
+        left.nphaseCore == right.nphaseCore &&
+        left.ownerScene == right.ownerScene &&
+        left.sceneTimeStamp == right.sceneTimeStamp &&
+        left.sceneReportShapePairTimeStamp ==
+            right.sceneReportShapePairTimeStamp &&
+        left.actorPairs.data == right.actorPairs.data &&
+        left.actorPairs.count == right.actorPairs.count &&
+        left.actorPairs.capacityRaw == right.actorPairs.capacityRaw &&
+        left.persistent.data == right.persistent.data &&
+        left.persistent.count == right.persistent.count &&
+        left.persistent.capacityRaw == right.persistent.capacityRaw &&
+        left.nextFramePersistentIndex == right.nextFramePersistentIndex &&
+        left.forceThreshold.data == right.forceThreshold.data &&
+        left.forceThreshold.count == right.forceThreshold.count &&
+        left.forceThreshold.capacityRaw ==
+            right.forceThreshold.capacityRaw &&
+        left.reportBuffer == right.reportBuffer &&
+        left.reportBufferCurrentIndex == right.reportBufferCurrentIndex &&
+        left.reportBufferCurrentSize == right.reportBufferCurrentSize &&
+        left.reportBufferDefaultSize == right.reportBufferDefaultSize &&
+        left.reportBufferLastIndex == right.reportBufferLastIndex &&
+        left.reportBufferAllocationLocked ==
+            right.reportBufferAllocationLocked;
+}
+
+static uint32_t NPhaseReportSnapshotMetadataHash(
+    const NPhaseReportSnapshotReceiptV1& receipt) {
+    const uint32_t words[21] = {
+        static_cast<uint32_t>(receipt.unityBase),
+        static_cast<uint32_t>(receipt.nphaseCore),
+        static_cast<uint32_t>(receipt.ownerScene),
+        receipt.sceneTimeStamp,
+        receipt.sceneReportShapePairTimeStamp,
+        static_cast<uint32_t>(receipt.actorPairs.data),
+        receipt.actorPairs.count,
+        receipt.actorPairs.capacityRaw,
+        static_cast<uint32_t>(receipt.persistent.data),
+        receipt.persistent.count,
+        receipt.persistent.capacityRaw,
+        receipt.nextFramePersistentIndex,
+        static_cast<uint32_t>(receipt.forceThreshold.data),
+        receipt.forceThreshold.count,
+        receipt.forceThreshold.capacityRaw,
+        static_cast<uint32_t>(receipt.reportBuffer),
+        receipt.reportBufferCurrentIndex,
+        receipt.reportBufferCurrentSize,
+        receipt.reportBufferDefaultSize,
+        receipt.reportBufferLastIndex,
+        receipt.reportBufferAllocationLocked
+    };
+    return AppendByteHash(2166136261u, words, sizeof(words));
+}
+
+static bool NPhaseReportExtentOverlaps(const void* pointer,
+    uint32_t bytes, uintptr_t source, unsigned __int64 sourceBytes) {
+    if (!pointer || !bytes || !source || !sourceBytes) return false;
+    const unsigned __int64 maximum =
+        static_cast<unsigned __int64>(~static_cast<uintptr_t>(0));
+    if (sourceBytes > maximum ||
+        static_cast<unsigned __int64>(source) > maximum - sourceBytes)
+        return true;
+    const uintptr_t begin = reinterpret_cast<uintptr_t>(pointer);
+    if (begin > ~static_cast<uintptr_t>(0) - bytes) return true;
+    const uintptr_t end = begin + bytes;
+    const uintptr_t sourceEnd = source + static_cast<uintptr_t>(sourceBytes);
+    return begin < sourceEnd && source < end;
+}
+
+static NPhaseReportSnapshotResult ValidateNPhaseReportActiveNodes(
+    const NPhaseReportSnapshotReceiptV1& receipt, uint32_t& invalidKind,
+    uint32_t& invalidIndex, uint32_t& detail) {
+    const uintptr_t* actorPairs = reinterpret_cast<const uintptr_t*>(
+        receipt.actorPairs.data);
+    const uintptr_t* persistent = reinterpret_cast<const uintptr_t*>(
+        receipt.persistent.data);
+    const uintptr_t* forceThreshold = reinterpret_cast<const uintptr_t*>(
+        receipt.forceThreshold.data);
+    for (uint32_t i = 0; i < receipt.actorPairs.count; ++i) {
+        const uintptr_t pair = actorPairs[i];
+        invalidKind = 1u;
+        invalidIndex = i;
+        if (!pair || (pair & 3u) != 0u ||
+            !Readable(reinterpret_cast<const void*>(pair), 0x18u) ||
+            ((*reinterpret_cast<const uint16_t*>(pair + 0x0Cu)) & 1u) == 0u) {
+            detail = 1u;
+            return NPhaseReportSnapshotInvalidNode;
+        }
+        for (uint32_t j = 0; j < i; ++j)
+            if (actorPairs[j] == pair) {
+                detail = j;
+                return NPhaseReportSnapshotDuplicateNode;
+            }
+    }
+    for (uint32_t i = 0; i < receipt.persistent.count; ++i) {
+        const uintptr_t sip = persistent[i];
+        invalidKind = 2u;
+        invalidIndex = i;
+        if (!sip || (sip & 3u) != 0u ||
+            !Readable(reinterpret_cast<const void*>(sip), 0x44u) ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2Cu)) &
+                0x00200000u) == 0u ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2Cu)) &
+                0x00800000u) != 0u ||
+            *reinterpret_cast<const uint32_t*>(sip + 0x34u) != i) {
+            detail = 1u;
+            return NPhaseReportSnapshotInvalidNode;
+        }
+        for (uint32_t j = 0; j < i; ++j)
+            if (persistent[j] == sip) {
+                detail = j;
+                return NPhaseReportSnapshotDuplicateNode;
+            }
+    }
+    for (uint32_t i = 0; i < receipt.forceThreshold.count; ++i) {
+        const uintptr_t sip = forceThreshold[i];
+        invalidKind = 3u;
+        invalidIndex = i;
+        if (!sip || (sip & 3u) != 0u ||
+            !Readable(reinterpret_cast<const void*>(sip), 0x44u) ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2Cu)) &
+                0x00800000u) == 0u ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2Cu)) &
+                0x00200000u) != 0u ||
+            *reinterpret_cast<const uint32_t*>(sip + 0x34u) != i) {
+            detail = 1u;
+            return NPhaseReportSnapshotInvalidNode;
+        }
+        for (uint32_t j = 0; j < i; ++j)
+            if (forceThreshold[j] == sip) {
+                detail = j;
+                return NPhaseReportSnapshotDuplicateNode;
+            }
+        for (uint32_t j = 0; j < receipt.persistent.count; ++j)
+            if (persistent[j] == sip) {
+                detail = j;
+                return NPhaseReportSnapshotDuplicateNode;
+            }
+    }
+    invalidKind = 0xFFFFFFFFu;
+    invalidIndex = 0xFFFFFFFFu;
+    detail = 0u;
+    return NPhaseReportSnapshotOk;
+}
+
+static int CaptureNPhaseReportSnapshotV1(uintptr_t unityBase,
+    uintptr_t nphaseCore,
+    const NPhaseReportSnapshotBuffersV1* callerBuffers,
+    NPhaseReportSnapshotReceiptV1* destination) {
+    if (!destination || !Writable(destination, sizeof(*destination)))
+        return 0;
+    NPhaseReportSnapshotReceiptV1 receipt = {};
+    InitializeNPhaseReportSnapshotReceipt(receipt, unityBase, nphaseCore);
+    if (!callerBuffers || !Readable(callerBuffers, sizeof(*callerBuffers)))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotBadArgument, ERROR_INVALID_PARAMETER,
+            5u, 0xFFFFFFFFu, 0u);
+    if (NPhasePoolRangeOverlaps(destination, sizeof(*destination),
+            callerBuffers, sizeof(*callerBuffers))) return 0;
+    const NPhaseReportSnapshotBuffersV1 buffers = *callerBuffers;
+    if (!unityBase || !nphaseCore ||
+        nphaseCore > ~static_cast<uintptr_t>(0) - 0x44u)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotBadArgument, ERROR_INVALID_PARAMETER,
+            0u, 0xFFFFFFFFu, 0u);
+    if (NPhasePoolRangeOverlaps(destination, sizeof(*destination),
+            reinterpret_cast<const void*>(nphaseCore), 0x44u) ||
+        NPhasePoolRangeOverlaps(callerBuffers, sizeof(*callerBuffers),
+            reinterpret_cast<const void*>(nphaseCore), 0x44u)) return 0;
+    if (!NPhaseReportStateRevisionMatches(unityBase))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotRevisionMismatch, ERROR_REVISION_MISMATCH,
+            0u, 0xFFFFFFFFu, 0u);
+    receipt.validationFlags = 0x01u;
+    if (!Readable(reinterpret_cast<const void*>(nphaseCore), 0x44u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnreadableState, ERROR_NOACCESS,
+            0u, 0xFFFFFFFFu, 0u);
+    ReadNPhaseReportSnapshotHeader(nphaseCore, receipt);
+
+    if (!receipt.ownerScene ||
+        receipt.ownerScene > ~static_cast<uintptr_t>(0) - 0x54u)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            0u, 0xFFFFFFFFu, 1u);
+    const uintptr_t timestampAddress = receipt.ownerScene + 0x4Cu;
+    if (NPhasePoolRangeOverlaps(destination, sizeof(*destination),
+            reinterpret_cast<const void*>(timestampAddress), 8u) ||
+        NPhasePoolRangeOverlaps(callerBuffers, sizeof(*callerBuffers),
+            reinterpret_cast<const void*>(timestampAddress), 8u)) return 0;
+    if (!Readable(reinterpret_cast<const void*>(timestampAddress), 8u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnreadableState, ERROR_NOACCESS,
+            0u, 0xFFFFFFFFu, 2u);
+    receipt.sceneTimeStamp = *reinterpret_cast<const uint32_t*>(
+        timestampAddress);
+    receipt.sceneReportShapePairTimeStamp =
+        *reinterpret_cast<const uint32_t*>(timestampAddress + 4u);
+
+    NPhaseReportArrayReceiptV1* arrays[3] = {
+        &receipt.actorPairs, &receipt.persistent, &receipt.forceThreshold
+    };
+    const uint32_t sourceKinds[3] = {1u, 2u, 3u};
+    for (uint32_t array = 0; array < 3u; ++array) {
+        NPhaseReportArrayReceiptV1& item = *arrays[array];
+        const uint32_t capacity = item.capacityRaw & 0x7FFFFFFFu;
+        item.backingRequired = capacity;
+        const unsigned __int64 bytes =
+            static_cast<unsigned __int64>(capacity) * sizeof(uintptr_t);
+        if (NPhaseReportExtentOverlaps(destination, sizeof(*destination),
+                item.data, bytes) ||
+            NPhaseReportExtentOverlaps(callerBuffers,
+                sizeof(*callerBuffers), item.data, bytes)) return 0;
+        if (capacity > kMaximumShapeInstancePairs || item.count > capacity ||
+            ((capacity == 0u) != (item.data == 0u)) ||
+            (item.data && (item.data & 3u) != 0u))
+            return FinishNPhaseReportSnapshot(destination, receipt,
+                NPhaseReportSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+                sourceKinds[array], 0xFFFFFFFFu, capacity);
+        if (capacity && !Readable(reinterpret_cast<const void*>(item.data),
+                capacity * sizeof(uintptr_t)))
+            return FinishNPhaseReportSnapshot(destination, receipt,
+                NPhaseReportSnapshotUnreadableState, ERROR_NOACCESS,
+                sourceKinds[array], 0xFFFFFFFFu, capacity);
+    }
+    receipt.reportBufferRequired = receipt.reportBufferCurrentSize;
+    if (NPhaseReportExtentOverlaps(destination, sizeof(*destination),
+            receipt.reportBuffer, receipt.reportBufferCurrentSize) ||
+        NPhaseReportExtentOverlaps(callerBuffers, sizeof(*callerBuffers),
+            receipt.reportBuffer, receipt.reportBufferCurrentSize)) return 0;
+    const bool validLastIndex =
+        receipt.reportBufferLastIndex == 0xFFFFFFFFu ||
+        receipt.reportBufferLastIndex < receipt.reportBufferCurrentIndex ||
+        (receipt.reportBufferCurrentIndex == 0u &&
+            receipt.reportBufferLastIndex == 0u);
+    if (!receipt.reportBuffer || (receipt.reportBuffer & 0x0Fu) != 0u ||
+        !receipt.reportBufferCurrentSize ||
+        receipt.reportBufferCurrentSize > 0x04000000u ||
+        !receipt.reportBufferDefaultSize ||
+        receipt.reportBufferDefaultSize > receipt.reportBufferCurrentSize ||
+        receipt.reportBufferCurrentIndex > receipt.reportBufferCurrentSize ||
+        receipt.reportBufferAllocationLocked > 1u || !validLastIndex)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            4u, 0xFFFFFFFFu, 1u);
+    if (!Readable(reinterpret_cast<const void*>(receipt.reportBuffer),
+            receipt.reportBufferCurrentSize))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnreadableState, ERROR_NOACCESS,
+            4u, 0xFFFFFFFFu, receipt.reportBufferCurrentSize);
+    if (receipt.nextFramePersistentIndex > receipt.persistent.count)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            2u, receipt.nextFramePersistentIndex,
+            receipt.persistent.count);
+    receipt.validationFlags |= 0x02u;
+
+    NPhasePoolMemoryRange sourceRanges[6] = {};
+    uint32_t sourceRangeCount = 0;
+    if (!AppendNPhasePoolRange(reinterpret_cast<const void*>(nphaseCore),
+            0x44u, sourceRanges, sourceRangeCount, 6u) ||
+        !AppendNPhasePoolRange(reinterpret_cast<const void*>(timestampAddress),
+            8u, sourceRanges, sourceRangeCount, 6u) ||
+        !AppendNPhasePoolRange(reinterpret_cast<const void*>(
+            receipt.actorPairs.data), receipt.actorPairs.backingRequired *
+                sizeof(uintptr_t), sourceRanges, sourceRangeCount, 6u) ||
+        !AppendNPhasePoolRange(reinterpret_cast<const void*>(
+            receipt.persistent.data), receipt.persistent.backingRequired *
+                sizeof(uintptr_t), sourceRanges, sourceRangeCount, 6u) ||
+        !AppendNPhasePoolRange(reinterpret_cast<const void*>(
+            receipt.forceThreshold.data),
+                receipt.forceThreshold.backingRequired * sizeof(uintptr_t),
+                sourceRanges, sourceRangeCount, 6u) ||
+        !AppendNPhasePoolRange(reinterpret_cast<const void*>(
+            receipt.reportBuffer), receipt.reportBufferCurrentSize,
+                sourceRanges, sourceRangeCount, 6u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotInvalidSourceLayout,
+            ERROR_ARITHMETIC_OVERFLOW, 0u, 0xFFFFFFFFu, 0u);
+    for (uint32_t i = 0; i < sourceRangeCount; ++i)
+        for (uint32_t j = 0; j < i; ++j)
+            if (NPhasePoolRangesOverlap(sourceRanges[i], sourceRanges[j]))
+                return FinishNPhaseReportSnapshot(destination, receipt,
+                    NPhaseReportSnapshotInvalidSourceLayout,
+                    ERROR_INVALID_ADDRESS, 0u, i, j);
+    receipt.validationFlags |= 0x04u;
+
+    const uintptr_t* activeArrays[3] = {
+        reinterpret_cast<const uintptr_t*>(receipt.actorPairs.data),
+        reinterpret_cast<const uintptr_t*>(receipt.persistent.data),
+        reinterpret_cast<const uintptr_t*>(receipt.forceThreshold.data)
+    };
+    const uint32_t activeCounts[3] = {receipt.actorPairs.count,
+        receipt.persistent.count, receipt.forceThreshold.count};
+    const uint32_t activeSizes[3] = {0x18u, 0x44u, 0x44u};
+    for (uint32_t family = 0; family < 3u; ++family)
+        for (uint32_t index = 0; index < activeCounts[family]; ++index) {
+            const uintptr_t object = activeArrays[family][index];
+            if (object && (NPhaseReportExtentOverlaps(destination,
+                    sizeof(*destination), object, activeSizes[family]) ||
+                NPhaseReportExtentOverlaps(callerBuffers,
+                    sizeof(*callerBuffers), object,
+                    activeSizes[family]))) return 0;
+        }
+
+    uint32_t invalidKind = 0xFFFFFFFFu;
+    uint32_t invalidIndex = 0xFFFFFFFFu;
+    uint32_t detail = 0u;
+    const NPhaseReportSnapshotResult activeResult =
+        ValidateNPhaseReportActiveNodes(receipt, invalidKind,
+            invalidIndex, detail);
+    if (activeResult != NPhaseReportSnapshotOk)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            activeResult, activeResult == NPhaseReportSnapshotDuplicateNode ?
+                ERROR_DUP_NAME : ERROR_INVALID_DATA,
+            invalidKind, invalidIndex, detail);
+
+    const uint32_t totalActive = receipt.actorPairs.count +
+        receipt.persistent.count + receipt.forceThreshold.count;
+    NPhasePoolMemoryRange activeRanges[
+        kMaximumShapeInstancePairs * 3u] = {};
+    uint32_t activeRangeCount = 0;
+    if (totalActive > kMaximumShapeInstancePairs * 3u)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotInvalidMetadata, ERROR_INVALID_DATA,
+            0u, totalActive, kMaximumShapeInstancePairs * 3u);
+    for (uint32_t family = 0; family < 3u; ++family) {
+        for (uint32_t index = 0; index < activeCounts[family]; ++index) {
+            const uintptr_t object = activeArrays[family][index];
+            if (NPhaseReportExtentOverlaps(destination, sizeof(*destination),
+                    object, activeSizes[family]) ||
+                NPhaseReportExtentOverlaps(callerBuffers,
+                    sizeof(*callerBuffers), object,
+                    activeSizes[family])) return 0;
+            if (!AppendNPhasePoolRange(reinterpret_cast<const void*>(object),
+                    activeSizes[family], activeRanges, activeRangeCount,
+                    kMaximumShapeInstancePairs * 3u))
+                return FinishNPhaseReportSnapshot(destination, receipt,
+                    NPhaseReportSnapshotInvalidSourceLayout,
+                    ERROR_ARITHMETIC_OVERFLOW, family + 1u, index, 0u);
+            const NPhasePoolMemoryRange& range =
+                activeRanges[activeRangeCount - 1u];
+            for (uint32_t source = 0; source < sourceRangeCount; ++source)
+                if (NPhasePoolRangesOverlap(range, sourceRanges[source]))
+                    return FinishNPhaseReportSnapshot(destination, receipt,
+                        NPhaseReportSnapshotInvalidSourceLayout,
+                        ERROR_INVALID_ADDRESS, family + 1u, index, source);
+            for (uint32_t prior = 0; prior + 1u < activeRangeCount; ++prior)
+                if (NPhasePoolRangesOverlap(range, activeRanges[prior]))
+                    return FinishNPhaseReportSnapshot(destination, receipt,
+                        NPhaseReportSnapshotInvalidSourceLayout,
+                        ERROR_INVALID_ADDRESS, family + 1u, index, prior);
+        }
+    }
+    receipt.validationFlags |= 0x08u;
+
+    if (buffers.actorPairCapacity < receipt.actorPairs.backingRequired ||
+        buffers.persistentCapacity < receipt.persistent.backingRequired ||
+        buffers.forceThresholdCapacity <
+            receipt.forceThreshold.backingRequired ||
+        buffers.reportBufferByteCapacity < receipt.reportBufferRequired)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotCapacityTooSmall, ERROR_INSUFFICIENT_BUFFER,
+            5u, 0xFFFFFFFFu, 0u);
+    if ((receipt.actorPairs.backingRequired &&
+            (!buffers.actorPairBacking || !Writable(
+                buffers.actorPairBacking,
+                receipt.actorPairs.backingRequired * sizeof(uintptr_t)))) ||
+        (receipt.persistent.backingRequired &&
+            (!buffers.persistentBacking || !Writable(
+                buffers.persistentBacking,
+                receipt.persistent.backingRequired * sizeof(uintptr_t)))) ||
+        (receipt.forceThreshold.backingRequired &&
+            (!buffers.forceThresholdBacking || !Writable(
+                buffers.forceThresholdBacking,
+                receipt.forceThreshold.backingRequired *
+                    sizeof(uintptr_t)))) ||
+        (receipt.reportBufferRequired &&
+            (!buffers.reportBufferBytes || !Writable(
+                buffers.reportBufferBytes, receipt.reportBufferRequired))))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnwritableOutput, ERROR_NOACCESS,
+            5u, 0xFFFFFFFFu, 1u);
+
+    NPhasePoolMemoryRange outputRanges[6] = {};
+    uint32_t outputRangeCount = 0;
+    if (!AppendNPhasePoolRange(destination, sizeof(*destination),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(callerBuffers, sizeof(*callerBuffers),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.actorPairBacking,
+            receipt.actorPairs.backingRequired * sizeof(uintptr_t),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.persistentBacking,
+            receipt.persistent.backingRequired * sizeof(uintptr_t),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.forceThresholdBacking,
+            receipt.forceThreshold.backingRequired * sizeof(uintptr_t),
+            outputRanges, outputRangeCount, 6u) ||
+        !AppendNPhasePoolRange(buffers.reportBufferBytes,
+            receipt.reportBufferRequired, outputRanges,
+            outputRangeCount, 6u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotBadArgument, ERROR_ARITHMETIC_OVERFLOW,
+            5u, 0xFFFFFFFFu, 2u);
+    for (uint32_t i = 0; i < outputRangeCount; ++i)
+        for (uint32_t j = 0; j < i; ++j)
+            if (NPhasePoolRangesOverlap(outputRanges[i], outputRanges[j]))
+                return FinishNPhaseReportSnapshot(destination, receipt,
+                    NPhaseReportSnapshotOverlappingOutput,
+                    ERROR_INVALID_ADDRESS, 5u, i, j);
+    for (uint32_t output = 0; output < outputRangeCount; ++output) {
+        for (uint32_t source = 0; source < sourceRangeCount; ++source)
+            if (NPhasePoolRangesOverlap(outputRanges[output],
+                    sourceRanges[source])) {
+                if (output < 2u) return 0;
+                return FinishNPhaseReportSnapshot(destination, receipt,
+                    NPhaseReportSnapshotOverlappingOutput,
+                    ERROR_INVALID_ADDRESS, 5u, output, source);
+            }
+        for (uint32_t source = 0; source < activeRangeCount; ++source)
+            if (NPhasePoolRangesOverlap(outputRanges[output],
+                    activeRanges[source])) {
+                if (output < 2u) return 0;
+                return FinishNPhaseReportSnapshot(destination, receipt,
+                    NPhaseReportSnapshotOverlappingOutput,
+                    ERROR_INVALID_ADDRESS, 5u, output,
+                    sourceRangeCount + source);
+            }
+    }
+    receipt.validationFlags |= 0x10u;
+
+    if (receipt.actorPairs.backingRequired)
+        CopyBytes(buffers.actorPairBacking,
+            reinterpret_cast<const uintptr_t*>(receipt.actorPairs.data),
+            receipt.actorPairs.backingRequired * sizeof(uintptr_t));
+    if (receipt.persistent.backingRequired)
+        CopyBytes(buffers.persistentBacking,
+            reinterpret_cast<const uintptr_t*>(receipt.persistent.data),
+            receipt.persistent.backingRequired * sizeof(uintptr_t));
+    if (receipt.forceThreshold.backingRequired)
+        CopyBytes(buffers.forceThresholdBacking,
+            reinterpret_cast<const uintptr_t*>(receipt.forceThreshold.data),
+            receipt.forceThreshold.backingRequired * sizeof(uintptr_t));
+    CopyBytes(buffers.reportBufferBytes,
+        reinterpret_cast<const void*>(receipt.reportBuffer),
+        receipt.reportBufferRequired);
+    receipt.actorPairs.backingWritten = receipt.actorPairs.backingRequired;
+    receipt.persistent.backingWritten = receipt.persistent.backingRequired;
+    receipt.forceThreshold.backingWritten =
+        receipt.forceThreshold.backingRequired;
+    receipt.reportBufferWritten = receipt.reportBufferRequired;
+    receipt.validationFlags |= 0x20u;
+
+    NPhaseReportSnapshotReceiptV1 second = {};
+    InitializeNPhaseReportSnapshotReceipt(second, unityBase, nphaseCore);
+    if (!NPhaseReportStateRevisionMatches(unityBase) ||
+        !Readable(reinterpret_cast<const void*>(nphaseCore), 0x44u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnstable, ERROR_RETRY,
+            6u, 0xFFFFFFFFu, 1u);
+    ReadNPhaseReportSnapshotHeader(nphaseCore, second);
+    if (second.ownerScene != receipt.ownerScene ||
+        !Readable(reinterpret_cast<const void*>(timestampAddress), 8u))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnstable, ERROR_RETRY,
+            6u, 0xFFFFFFFFu, 2u);
+    second.sceneTimeStamp = *reinterpret_cast<const uint32_t*>(
+        timestampAddress);
+    second.sceneReportShapePairTimeStamp =
+        *reinterpret_cast<const uint32_t*>(timestampAddress + 4u);
+    if (!SameNPhaseReportSnapshotHeader(receipt, second))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnstable, ERROR_RETRY,
+            6u, 0xFFFFFFFFu, 3u);
+    if ((receipt.actorPairs.backingRequired &&
+            (!Readable(reinterpret_cast<const void*>(
+                receipt.actorPairs.data),
+                receipt.actorPairs.backingRequired * sizeof(uintptr_t)) ||
+            !EqualBytes(
+            reinterpret_cast<const void*>(receipt.actorPairs.data),
+            reinterpret_cast<const uint8_t*>(buffers.actorPairBacking),
+            receipt.actorPairs.backingRequired * sizeof(uintptr_t)))) ||
+        (receipt.persistent.backingRequired &&
+            (!Readable(reinterpret_cast<const void*>(
+                receipt.persistent.data),
+                receipt.persistent.backingRequired * sizeof(uintptr_t)) ||
+            !EqualBytes(
+            reinterpret_cast<const void*>(receipt.persistent.data),
+            reinterpret_cast<const uint8_t*>(buffers.persistentBacking),
+            receipt.persistent.backingRequired * sizeof(uintptr_t)))) ||
+        (receipt.forceThreshold.backingRequired &&
+            (!Readable(reinterpret_cast<const void*>(
+                receipt.forceThreshold.data),
+                receipt.forceThreshold.backingRequired *
+                    sizeof(uintptr_t)) ||
+            !EqualBytes(
+            reinterpret_cast<const void*>(receipt.forceThreshold.data),
+            reinterpret_cast<const uint8_t*>(buffers.forceThresholdBacking),
+            receipt.forceThreshold.backingRequired * sizeof(uintptr_t)))) ||
+        !Readable(reinterpret_cast<const void*>(receipt.reportBuffer),
+            receipt.reportBufferRequired) ||
+        !EqualBytes(reinterpret_cast<const void*>(receipt.reportBuffer),
+            buffers.reportBufferBytes, receipt.reportBufferRequired))
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnstable, ERROR_RETRY,
+            6u, 0xFFFFFFFFu, 4u);
+    invalidKind = invalidIndex = 0xFFFFFFFFu;
+    detail = 0u;
+    if (ValidateNPhaseReportActiveNodes(receipt, invalidKind,
+            invalidIndex, detail) != NPhaseReportSnapshotOk)
+        return FinishNPhaseReportSnapshot(destination, receipt,
+            NPhaseReportSnapshotUnstable, ERROR_RETRY,
+            invalidKind, invalidIndex, detail);
+    receipt.validationFlags |= 0x40u;
+
+    receipt.actorPairs.logicalOrderHash = OrderHash(
+        buffers.actorPairBacking, receipt.actorPairs.count);
+    receipt.actorPairs.backingHash = ByteHash(buffers.actorPairBacking,
+        receipt.actorPairs.backingWritten * sizeof(uintptr_t));
+    receipt.persistent.logicalOrderHash = OrderHash(
+        buffers.persistentBacking, receipt.persistent.count);
+    receipt.persistent.backingHash = ByteHash(buffers.persistentBacking,
+        receipt.persistent.backingWritten * sizeof(uintptr_t));
+    receipt.forceThreshold.logicalOrderHash = OrderHash(
+        buffers.forceThresholdBacking, receipt.forceThreshold.count);
+    receipt.forceThreshold.backingHash = ByteHash(
+        buffers.forceThresholdBacking,
+        receipt.forceThreshold.backingWritten * sizeof(uintptr_t));
+    receipt.reportBufferActiveHash = ByteHash(buffers.reportBufferBytes,
+        receipt.reportBufferCurrentIndex);
+    receipt.reportBufferAllocationHash = ByteHash(
+        buffers.reportBufferBytes, receipt.reportBufferWritten);
+    receipt.metadataHash = NPhaseReportSnapshotMetadataHash(receipt);
+    uint32_t snapshotHash = receipt.metadataHash;
+    snapshotHash = AppendByteHash(snapshotHash, buffers.actorPairBacking,
+        receipt.actorPairs.backingWritten * sizeof(uintptr_t));
+    snapshotHash = AppendByteHash(snapshotHash, buffers.persistentBacking,
+        receipt.persistent.backingWritten * sizeof(uintptr_t));
+    snapshotHash = AppendByteHash(snapshotHash,
+        buffers.forceThresholdBacking,
+        receipt.forceThreshold.backingWritten * sizeof(uintptr_t));
+    snapshotHash = AppendByteHash(snapshotHash, buffers.reportBufferBytes,
+        receipt.reportBufferWritten);
+    receipt.snapshotHash = snapshotHash;
+    receipt.validationFlags |= 0x80u;
+    return FinishNPhaseReportSnapshot(destination, receipt,
+        NPhaseReportSnapshotOk, ERROR_SUCCESS,
+        0xFFFFFFFFu, 0xFFFFFFFFu, 0u);
 }
 
 struct InteractionGraphArrayHeader {
@@ -10255,6 +10961,7 @@ static bool ValidateIslandRestoreTargetV1(
     const IslandSnapshotReceiptV1& receipt,
     IslandRestoreReceiptV1* output) {
     if ((receipt.apiVersion != 18u && receipt.apiVersion != 19u &&
+            receipt.apiVersion != 20u &&
             receipt.apiVersion != kApiVersion) ||
         receipt.structSize != sizeof(receipt) ||
         receipt.result != IslandSnapshotOk ||
@@ -15453,6 +16160,15 @@ oc2_nphase_report_state_capture_snapshot(
         actorPairCapacity, persistentSips, persistentCapacity,
         forceThresholdSips, forceThresholdCapacity, reportBufferBytes,
         reportBufferCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_nphase_report_state_capture_snapshot_v1(
+    uintptr_t unityBase, uintptr_t nphaseCore,
+    const NPhaseReportSnapshotBuffersV1* buffers,
+    NPhaseReportSnapshotReceiptV1* receipt) {
+    return CaptureNPhaseReportSnapshotV1(unityBase, nphaseCore, buffers,
+        receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl

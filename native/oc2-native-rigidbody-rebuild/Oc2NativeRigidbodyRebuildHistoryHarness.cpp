@@ -161,6 +161,40 @@ struct NPhaseReportStateReceipt {
     uint32_t validationFlags;
 };
 
+struct NPhaseReportSnapshotBuffersV1 {
+    uintptr_t* actorPairBacking;
+    uint32_t actorPairCapacity;
+    uintptr_t* persistentBacking;
+    uint32_t persistentCapacity;
+    uintptr_t* forceThresholdBacking;
+    uint32_t forceThresholdCapacity;
+    uint8_t* reportBufferBytes;
+    uint32_t reportBufferByteCapacity;
+};
+
+struct NPhaseReportArrayReceiptV1 {
+    uintptr_t data;
+    uint32_t count, capacityRaw, backingRequired, backingWritten;
+    uint32_t logicalOrderHash, backingHash;
+};
+
+struct NPhaseReportSnapshotReceiptV1 {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, ownerScene;
+    uint32_t sceneTimeStamp, sceneReportShapePairTimeStamp;
+    NPhaseReportArrayReceiptV1 actorPairs, persistent;
+    uint32_t nextFramePersistentIndex;
+    NPhaseReportArrayReceiptV1 forceThreshold;
+    uintptr_t reportBuffer;
+    uint32_t reportBufferCurrentIndex, reportBufferCurrentSize;
+    uint32_t reportBufferDefaultSize, reportBufferLastIndex;
+    uint32_t reportBufferAllocationLocked;
+    uint32_t reportBufferRequired, reportBufferWritten;
+    uint32_t reportBufferActiveHash, reportBufferAllocationHash;
+    uint32_t metadataHash, snapshotHash, validationFlags;
+    uint32_t invalidKind, invalidIndex, detail;
+};
+
 struct InteractionGraphActorRecord {
     uintptr_t actor, vtable, inlineSlots[4], interactionsData, firstElement,
         interactionScene;
@@ -408,6 +442,12 @@ static_assert(sizeof(NPhasePoolSnapshotReceiptV1) == 152,
     "Unexpected Win32 NPhase-pool snapshot receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
+static_assert(sizeof(NPhaseReportSnapshotBuffersV1) == 32,
+    "Unexpected Win32 complete NPhase report buffer ABI");
+static_assert(sizeof(NPhaseReportArrayReceiptV1) == 28,
+    "Unexpected Win32 complete NPhase report array ABI");
+static_assert(sizeof(NPhaseReportSnapshotReceiptV1) == 188,
+    "Unexpected Win32 complete NPhase report receipt ABI");
 static_assert(sizeof(InteractionGraphActorRecord) == 72,
     "Unexpected Win32 interaction-graph actor ABI");
 static_assert(sizeof(InteractionGraphInteractionRecord) == 72,
@@ -495,6 +535,9 @@ typedef int (__cdecl *CaptureNPhasePoolSnapshotV1)(uintptr_t, uintptr_t,
 typedef int (__cdecl *CaptureNPhaseReportState)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t, uintptr_t*, uint32_t,
     uint8_t*, uint32_t, NPhaseReportStateReceipt*);
+typedef int (__cdecl *CaptureNPhaseReportSnapshotV1)(uintptr_t, uintptr_t,
+    const NPhaseReportSnapshotBuffersV1*,
+    NPhaseReportSnapshotReceiptV1*);
 typedef int (__cdecl *CaptureInteractionGraph)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, InteractionGraphActorRecord*, uint32_t,
     InteractionGraphInteractionRecord*, uint32_t, uintptr_t*, uint32_t,
@@ -636,7 +679,32 @@ static void CopyBytes(uint8_t* destination, const uint8_t* source,
     for (uint32_t i = 0; i < count; ++i) destination[i] = source[i];
 }
 
+static uint32_t TestAppendByteHash(uint32_t hash, const void* value,
+    uint32_t count) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(value);
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= bytes[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static uint32_t TestByteHash(const void* value, uint32_t count) {
+    return TestAppendByteHash(2166136261u, value, count);
+}
+
+static uint32_t TestPointerOrderHash(const uintptr_t* values,
+    uint32_t count) {
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < count; ++i) {
+        hash ^= static_cast<uint32_t>(values[i]);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
 static const uint32_t kLargePoolAllocatorRva = 0xA69A90;
+static const uint32_t kCurrentApiVersion = 21u;
 static const uint32_t kSpherePoolAllocatorRva = 0xA69AC0;
 static const uint32_t kLargePoolSlabRva = 0xA69BEA;
 static const uint32_t kSpherePoolSlabRva = 0xA69CCA;
@@ -655,6 +723,7 @@ static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
 static const uint32_t kAddPersistentContactEventPairRva = 0xA4CD90;
 static const uint32_t kRemovePersistentContactEventPairRva = 0xA53840;
 static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
+static const uint32_t kReportSceneTimestampLayoutRva = 0xA551DC;
 static const uint32_t kInitManagerRva = 0xA7E5F0;
 static const uint32_t kCreateSipRva = 0xA54430;
 static const uint32_t kGetShapeTypeRva = 0x842360;
@@ -734,6 +803,10 @@ static const uint8_t kContactReportBufferAllocateBytes[] = {
 static const uint8_t kContactReportBufferLayoutBytes[] = {
     0x8B,0x47,0x30,0x8B,0x55,0x10,0xC1,0xE3,0x04,
     0x8D,0x48,0x0F,0x83,0xE1,0xF0
+};
+static const uint8_t kReportSceneTimestampLayoutBytes[] = {
+    0x8B,0x4D,0xBC,0x8B,0x7F,0x30,0x8B,0x41,0x4C,0x83,0x7F,
+    0x14,0x00,0x89,0x45,0xE0,0x8B,0x41,0x50,0x89,0x45,0x8C
 };
 static const uint8_t kCreateManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
@@ -1059,6 +1132,9 @@ static uint8_t* CreateRevisionImage() {
     CopyBytes(image + kContactReportBufferAllocateRva + 0x1F,
         kContactReportBufferLayoutBytes,
         sizeof(kContactReportBufferLayoutBytes));
+    CopyBytes(image + kReportSceneTimestampLayoutRva,
+        kReportSceneTimestampLayoutBytes,
+        sizeof(kReportSceneTimestampLayoutBytes));
     // ECX was saved by the copied prologue at [EBP-4]. Pop one 0x44-byte SIP
     // from NPhaseCore::mLLSipPool, update PxPool counters, and preserve the
     // real thiscall/RET 0x0c contract used by the hook trampoline.
@@ -1771,7 +1847,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
+    Check(receipt.result == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1858,7 +1934,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
+    Check(receipt.result == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -2006,7 +2082,7 @@ static void RunNPhasePoolSnapshotTests(uint8_t* image,
         const int captured = capture(reinterpret_cast<uintptr_t>(image),
             reinterpret_cast<uintptr_t>(nphase), kind, &buffers, &receipt);
         const bool exact = captured == 1 && receipt.result == 1u &&
-            receipt.apiVersion == 20u &&
+            receipt.apiVersion == kCurrentApiVersion &&
             receipt.structSize == sizeof(receipt) &&
             receipt.pool == reinterpret_cast<uintptr_t>(
                 nphase + layout.offset) &&
@@ -2308,7 +2384,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
+    Check(receipt.result == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -2370,6 +2446,335 @@ static void RunNPhaseReportStateTests(uint8_t* image,
     image[kRemovePersistentContactEventPairRva] ^= 1;
 }
 
+static void RunNPhaseReportSnapshotV1Tests(uint8_t* image,
+    CaptureNPhaseReportSnapshotV1 capture) {
+    __declspec(align(16)) uint8_t nphase[0x80] = {};
+    __declspec(align(16)) uint8_t scene[0x80] = {};
+    __declspec(align(16)) uint8_t actorPairObjects[2][0x18] = {};
+    __declspec(align(16)) uint8_t sipObjects[3][0x44] = {};
+    __declspec(align(16)) uint8_t reportBytes[32] = {};
+    __declspec(align(16)) uintptr_t actorPairBacking[4] = {
+        reinterpret_cast<uintptr_t>(actorPairObjects[1]),
+        reinterpret_cast<uintptr_t>(actorPairObjects[0]),
+        0xA1A2A3A4u, 0xA5A6A7A8u
+    };
+    __declspec(align(16)) uintptr_t persistentBacking[4] = {
+        reinterpret_cast<uintptr_t>(sipObjects[2]),
+        reinterpret_cast<uintptr_t>(sipObjects[0]),
+        0xB1B2B3B4u, 0xB5B6B7B8u
+    };
+    __declspec(align(16)) uintptr_t forceBacking[2] = {
+        reinterpret_cast<uintptr_t>(sipObjects[1]), 0xC1C2C3C4u
+    };
+    *reinterpret_cast<uintptr_t*>(nphase + 0x00) =
+        reinterpret_cast<uintptr_t>(scene);
+    *reinterpret_cast<uintptr_t*>(nphase + 0x04) =
+        reinterpret_cast<uintptr_t>(actorPairBacking);
+    *reinterpret_cast<uint32_t*>(nphase + 0x08) = 2u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x0C) = 0x80000004u;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x10) =
+        reinterpret_cast<uintptr_t>(persistentBacking);
+    *reinterpret_cast<uint32_t*>(nphase + 0x14) = 2u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x18) = 4u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x1C) = 1u;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x20) =
+        reinterpret_cast<uintptr_t>(forceBacking);
+    *reinterpret_cast<uint32_t*>(nphase + 0x24) = 1u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x28) = 2u;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x2C) =
+        reinterpret_cast<uintptr_t>(reportBytes);
+    *reinterpret_cast<uint32_t*>(nphase + 0x30) = 19u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x34) = 32u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x38) = 16u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 16u;
+    nphase[0x40] = 0u;
+    *reinterpret_cast<uint32_t*>(scene + 0x4C) = 0x11223344u;
+    *reinterpret_cast<uint32_t*>(scene + 0x50) = 0x55667788u;
+    for (uint32_t i = 0; i < 2u; ++i)
+        *reinterpret_cast<uint16_t*>(actorPairObjects[i] + 0x0C) = 1u;
+    *reinterpret_cast<uint32_t*>(sipObjects[2] + 0x2C) = 0x00200000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[2] + 0x34) = 0u;
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x2C) = 0x00200000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 1u;
+    *reinterpret_cast<uint32_t*>(sipObjects[1] + 0x2C) = 0x00800000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[1] + 0x34) = 0u;
+    for (uint32_t i = 0; i < sizeof(reportBytes); ++i)
+        reportBytes[i] = static_cast<uint8_t>(0x40u + i);
+
+    __declspec(align(16)) uintptr_t actorOutput[4] = {};
+    __declspec(align(16)) uintptr_t persistentOutput[4] = {};
+    __declspec(align(16)) uintptr_t forceOutput[2] = {};
+    __declspec(align(16)) uint8_t reportOutput[32] = {};
+    NPhaseReportSnapshotBuffersV1 buffers = {
+        actorOutput, 4u, persistentOutput, 4u, forceOutput, 2u,
+        reportOutput, 32u
+    };
+    uint8_t nphaseBefore[sizeof(nphase)] = {};
+    uint8_t sceneBefore[sizeof(scene)] = {};
+    uint8_t actorObjectBefore[sizeof(actorPairObjects)] = {};
+    uint8_t sipBefore[sizeof(sipObjects)] = {};
+    uintptr_t actorBackingBefore[4] = {};
+    uintptr_t persistentBackingBefore[4] = {};
+    uintptr_t forceBackingBefore[2] = {};
+    uint8_t reportBefore[sizeof(reportBytes)] = {};
+    memcpy(nphaseBefore, nphase, sizeof(nphase));
+    memcpy(sceneBefore, scene, sizeof(scene));
+    memcpy(actorObjectBefore, actorPairObjects, sizeof(actorPairObjects));
+    memcpy(sipBefore, sipObjects, sizeof(sipObjects));
+    memcpy(actorBackingBefore, actorPairBacking, sizeof(actorPairBacking));
+    memcpy(persistentBackingBefore, persistentBacking,
+        sizeof(persistentBacking));
+    memcpy(forceBackingBefore, forceBacking, sizeof(forceBacking));
+    memcpy(reportBefore, reportBytes, sizeof(reportBytes));
+
+    NPhaseReportSnapshotReceiptV1 receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers, &receipt) == 1,
+        "complete NPhase report-history capture succeeds");
+    Check(receipt.result == 1u &&
+        receipt.apiVersion == kCurrentApiVersion &&
+        receipt.structSize == sizeof(receipt) &&
+        receipt.ownerScene == reinterpret_cast<uintptr_t>(scene) &&
+        receipt.sceneTimeStamp == 0x11223344u &&
+        receipt.sceneReportShapePairTimeStamp == 0x55667788u &&
+        receipt.actorPairs.count == 2u &&
+        receipt.actorPairs.capacityRaw == 0x80000004u &&
+        receipt.actorPairs.backingRequired == 4u &&
+        receipt.actorPairs.backingWritten == 4u &&
+        receipt.persistent.count == 2u &&
+        receipt.persistent.backingWritten == 4u &&
+        receipt.nextFramePersistentIndex == 1u &&
+        receipt.forceThreshold.count == 1u &&
+        receipt.forceThreshold.backingWritten == 2u &&
+        receipt.reportBufferRequired == 32u &&
+        receipt.reportBufferWritten == 32u &&
+        receipt.validationFlags == 0xFFu &&
+        receipt.invalidKind == 0xFFFFFFFFu &&
+        receipt.invalidIndex == 0xFFFFFFFFu,
+        "complete NPhase report receipt proves timestamps and full extents");
+    Check(Same(actorOutput, actorPairBacking, 4u) &&
+        Same(persistentOutput, persistentBacking, 4u) &&
+        Same(forceOutput, forceBacking, 2u) &&
+        memcmp(reportOutput, reportBytes, sizeof(reportBytes)) == 0,
+        "complete NPhase report capture preserves opaque capacity tails");
+    Check(receipt.actorPairs.logicalOrderHash ==
+            TestPointerOrderHash(actorPairBacking, 2u) &&
+        receipt.actorPairs.backingHash ==
+            TestByteHash(actorPairBacking, sizeof(actorPairBacking)) &&
+        receipt.persistent.logicalOrderHash ==
+            TestPointerOrderHash(persistentBacking, 2u) &&
+        receipt.persistent.backingHash ==
+            TestByteHash(persistentBacking, sizeof(persistentBacking)) &&
+        receipt.forceThreshold.logicalOrderHash ==
+            TestPointerOrderHash(forceBacking, 1u) &&
+        receipt.forceThreshold.backingHash ==
+            TestByteHash(forceBacking, sizeof(forceBacking)) &&
+        receipt.reportBufferActiveHash == TestByteHash(reportBytes, 19u) &&
+        receipt.reportBufferAllocationHash ==
+            TestByteHash(reportBytes, sizeof(reportBytes)) &&
+        receipt.metadataHash != 0u && receipt.snapshotHash != 0u,
+        "complete NPhase report capture hashes logical and raw images separately");
+    Check(memcmp(nphaseBefore, nphase, sizeof(nphase)) == 0 &&
+        memcmp(sceneBefore, scene, sizeof(scene)) == 0 &&
+        memcmp(actorObjectBefore, actorPairObjects,
+            sizeof(actorPairObjects)) == 0 &&
+        memcmp(sipBefore, sipObjects, sizeof(sipObjects)) == 0 &&
+        memcmp(actorBackingBefore, actorPairBacking,
+            sizeof(actorPairBacking)) == 0 &&
+        memcmp(persistentBackingBefore, persistentBacking,
+            sizeof(persistentBacking)) == 0 &&
+        memcmp(forceBackingBefore, forceBacking,
+            sizeof(forceBacking)) == 0 &&
+        memcmp(reportBefore, reportBytes, sizeof(reportBytes)) == 0,
+        "complete NPhase report capture leaves every source byte unchanged");
+
+    uintptr_t actorRepeated[4] = {};
+    uintptr_t persistentRepeated[4] = {};
+    uintptr_t forceRepeated[2] = {};
+    uint8_t reportRepeated[32] = {};
+    NPhaseReportSnapshotBuffersV1 repeatedBuffers = {
+        actorRepeated, 4u, persistentRepeated, 4u, forceRepeated, 2u,
+        reportRepeated, 32u
+    };
+    NPhaseReportSnapshotReceiptV1 repeated = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &repeatedBuffers,
+            &repeated) == 1 &&
+        memcmp(&receipt, &repeated, sizeof(receipt)) == 0 &&
+        Same(actorOutput, actorRepeated, 4u) &&
+        Same(persistentOutput, persistentRepeated, 4u) &&
+        Same(forceOutput, forceRepeated, 2u) &&
+        memcmp(reportOutput, reportRepeated, sizeof(reportOutput)) == 0,
+        "complete NPhase report capture is byte-repeatable");
+
+    actorPairBacking[2] ^= 1u;
+    NPhaseReportSnapshotReceiptV1 tailReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &repeatedBuffers,
+            &tailReceipt) == 1 &&
+        tailReceipt.actorPairs.logicalOrderHash ==
+            receipt.actorPairs.logicalOrderHash &&
+        tailReceipt.actorPairs.backingHash != receipt.actorPairs.backingHash &&
+        tailReceipt.snapshotHash != receipt.snapshotHash &&
+        tailReceipt.reportBufferAllocationHash ==
+            receipt.reportBufferAllocationHash,
+        "inactive array-tail changes affect raw but not logical history");
+    actorPairBacking[2] ^= 1u;
+    reportBytes[25] ^= 1u;
+    NPhaseReportSnapshotReceiptV1 reportTailReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &repeatedBuffers,
+            &reportTailReceipt) == 1 &&
+        reportTailReceipt.reportBufferActiveHash ==
+            receipt.reportBufferActiveHash &&
+        reportTailReceipt.reportBufferAllocationHash !=
+            receipt.reportBufferAllocationHash &&
+        reportTailReceipt.snapshotHash != receipt.snapshotHash,
+        "inactive report-tail changes affect allocation but not active history");
+    reportBytes[25] ^= 1u;
+
+    NPhaseReportSnapshotBuffersV1 shortBuffers = buffers;
+    NPhaseReportSnapshotReceiptV1 shortReceipt = {};
+    shortBuffers.actorPairCapacity = 3u;
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &shortBuffers,
+            &shortReceipt) == 0 && shortReceipt.result == 8u &&
+        shortReceipt.actorPairs.backingRequired == 4u &&
+        shortReceipt.actorPairs.backingWritten == 0u &&
+        shortReceipt.reportBufferWritten == 0u,
+        "complete NPhase report capture reports a short ActorPair backing");
+    shortBuffers = buffers;
+    shortBuffers.persistentCapacity = 3u;
+    shortReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &shortBuffers,
+            &shortReceipt) == 0 && shortReceipt.result == 8u,
+        "complete NPhase report capture reports a short persistent backing");
+    shortBuffers = buffers;
+    shortBuffers.forceThresholdCapacity = 1u;
+    shortReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &shortBuffers,
+            &shortReceipt) == 0 && shortReceipt.result == 8u,
+        "complete NPhase report capture reports a short force backing");
+    shortBuffers = buffers;
+    shortBuffers.reportBufferByteCapacity = 31u;
+    shortReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &shortBuffers,
+            &shortReceipt) == 0 && shortReceipt.result == 8u,
+        "complete NPhase report capture reports a short report allocation");
+
+    NPhaseReportSnapshotBuffersV1 overlapBuffers = buffers;
+    overlapBuffers.persistentBacking = actorOutput;
+    NPhaseReportSnapshotReceiptV1 overlapReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &overlapBuffers,
+            &overlapReceipt) == 0 && overlapReceipt.result == 10u,
+        "complete NPhase report capture rejects overlapping outputs");
+    overlapBuffers = buffers;
+    overlapBuffers.actorPairBacking = actorPairBacking;
+    overlapReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &overlapBuffers,
+            &overlapReceipt) == 0 && overlapReceipt.result == 10u &&
+        memcmp(actorBackingBefore, actorPairBacking,
+            sizeof(actorPairBacking)) == 0,
+        "complete NPhase report capture rejects a backing-source alias");
+    overlapBuffers = buffers;
+    overlapBuffers.actorPairBacking = actorPairBacking + 2;
+    overlapReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &overlapBuffers,
+            &overlapReceipt) == 0 && overlapReceipt.result == 10u &&
+        memcmp(actorBackingBefore, actorPairBacking,
+            sizeof(actorPairBacking)) == 0,
+        "complete NPhase report capture rejects an inactive-tail alias");
+    overlapBuffers = buffers;
+    overlapBuffers.actorPairBacking =
+        reinterpret_cast<uintptr_t*>(actorPairObjects[0]);
+    overlapReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &overlapBuffers,
+            &overlapReceipt) == 0 && overlapReceipt.result == 10u &&
+        memcmp(actorObjectBefore, actorPairObjects,
+            sizeof(actorPairObjects)) == 0,
+        "complete NPhase report capture rejects an active-object alias");
+
+    NPhaseReportSnapshotReceiptV1 noWriteReceipt = {};
+    memset(&noWriteReceipt, 0xA5, sizeof(noWriteReceipt));
+    NPhaseReportSnapshotReceiptV1 noWriteBefore = noWriteReceipt;
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase),
+            reinterpret_cast<const NPhaseReportSnapshotBuffersV1*>(nphase),
+            &noWriteReceipt) == 0 &&
+        memcmp(&noWriteReceipt, &noWriteBefore, sizeof(noWriteReceipt)) == 0 &&
+        memcmp(nphaseBefore, nphase, sizeof(nphase)) == 0,
+        "complete NPhase report capture rejects a source-aliased descriptor without writing");
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            reinterpret_cast<NPhaseReportSnapshotReceiptV1*>(nphase)) == 0 &&
+        memcmp(nphaseBefore, nphase, sizeof(nphase)) == 0,
+        "complete NPhase report capture rejects a source-aliased receipt without writing");
+
+    *reinterpret_cast<uint32_t*>(nphase + 0x30) = 0u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 0u;
+    NPhaseReportSnapshotReceiptV1 pristineReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &pristineReceipt) == 1 && pristineReceipt.result == 1u,
+        "complete NPhase report capture accepts pristine last-index zero");
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 0xFFFFFFFFu;
+    NPhaseReportSnapshotReceiptV1 resetReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &resetReceipt) == 1 && resetReceipt.result == 1u,
+        "complete NPhase report capture accepts reset last-index sentinel");
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 1u;
+    NPhaseReportSnapshotReceiptV1 badLastReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &badLastReceipt) == 0 && badLastReceipt.result == 5u,
+        "complete NPhase report capture rejects an invalid empty last index");
+    *reinterpret_cast<uint32_t*>(nphase + 0x30) = 19u;
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 16u;
+
+    actorPairBacking[1] = actorPairBacking[0];
+    NPhaseReportSnapshotReceiptV1 duplicateReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &duplicateReceipt) == 0 && duplicateReceipt.result == 7u,
+        "complete NPhase report capture rejects duplicate live members");
+    actorPairBacking[1] = actorBackingBefore[1];
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 0u;
+    NPhaseReportSnapshotReceiptV1 indexReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &indexReceipt) == 0 && indexReceipt.result == 6u,
+        "complete NPhase report capture rejects an incoherent SIP index");
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 1u;
+
+    const uintptr_t savedReportBuffer =
+        *reinterpret_cast<uintptr_t*>(nphase + 0x2C);
+    *reinterpret_cast<uintptr_t*>(nphase + 0x2C) =
+        reinterpret_cast<uintptr_t>(actorPairBacking);
+    NPhaseReportSnapshotReceiptV1 sourceLayoutReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &sourceLayoutReceipt) == 0 &&
+        sourceLayoutReceipt.result == 11u,
+        "complete NPhase report capture rejects overlapping source ownership");
+    *reinterpret_cast<uintptr_t*>(nphase + 0x2C) = savedReportBuffer;
+
+    image[kReportSceneTimestampLayoutRva] ^= 1u;
+    NPhaseReportSnapshotReceiptV1 revisionReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+            reinterpret_cast<uintptr_t>(nphase), &buffers,
+            &revisionReceipt) == 0 && revisionReceipt.result == 3u,
+        "complete NPhase report capture guards both Scene timestamp offsets");
+    image[kReportSceneTimestampLayoutRva] ^= 1u;
+}
+
 static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
     CaptureManifoldSnapshot capture, RestoreManifoldSnapshot restore) {
     const uint32_t poolOffset = poolKind == 0 ? 0x2E4 : 0x40C;
@@ -2388,7 +2793,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
+    Check(receipt.result == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -3360,7 +3765,8 @@ static void RunInteractionGraphTests(uint8_t* image,
             receipt.detail, receipt.lastError);
     Check(firstCapture == 1,
         "interaction graph capture succeeds");
-    Check(receipt.apiVersion == 20 && receipt.structSize == sizeof(receipt) &&
+    Check(receipt.apiVersion == kCurrentApiVersion &&
+        receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.validationFlags == 0xFF &&
         receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
         receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
@@ -3617,7 +4023,7 @@ static void RunTransformCacheTests(uint8_t* image,
         printf("transform cache diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
             receipt.result, receipt.invalidKind, receipt.invalidIndex,
             receipt.detail, receipt.lastError);
-    Check(captured == 1 && receipt.apiVersion == 20 &&
+    Check(captured == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt) && receipt.result == 1 &&
         receipt.validationFlags == 0xFF && receipt.currentId == 3 &&
         receipt.entriesWritten == 3 && receipt.freeWritten == 1 &&
@@ -3734,7 +4140,8 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
 
     FinishBroadPhaseObserverReceipt receipt = {};
     Check(installObserver(imagePointer, &receipt) == 1 &&
-        receipt.apiVersion == 20 && receipt.structSize == sizeof(receipt) &&
+        receipt.apiVersion == kCurrentApiVersion &&
+        receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.installed == 1 && receipt.state == 1,
         "finishBroadPhase observer reactivates landed dormant detour");
 
@@ -4716,7 +5123,7 @@ static void RunIslandRestoreTests(uint8_t* image,
         verifyStorage);
     IslandSnapshotReceiptV1 targetReceipt = {};
     Check(capture(unity, nphase, 1u, &targetBuffers, &targetReceipt) == 1 &&
-        targetReceipt.apiVersion == 20u &&
+        targetReceipt.apiVersion == kCurrentApiVersion &&
         targetReceipt.node.freeCount == 247u &&
         targetReceipt.edge.freeCount == 244u &&
         targetReceipt.island.freeCount == 247u &&
@@ -4790,7 +5197,7 @@ static void RunIslandRestoreTests(uint8_t* image,
     }
     IslandSnapshotReceiptV1 rollbackReceipt = {}, verifyReceipt = {};
     IslandRestoreRequestV1 request = {};
-    request.apiVersion = 20u;
+    request.apiVersion = kCurrentApiVersion;
     request.structSize = sizeof(request);
     request.flags = 1u;
     request.expectedThreadId = GetCurrentThreadId();
@@ -4822,8 +5229,8 @@ static void RunIslandRestoreTests(uint8_t* image,
         receipt.result == 14u && receipt.mutationStarted == 0u,
         "island restore rejects partially overlapping image ranges");
     request.verifyBuffers = &verifyBuffers;
-    // API 20 adds only the generic pool-capture surface.  The settled island
-    // image itself is unchanged, so an API-19 target remains supported.
+    // Later read-only capture APIs do not change the settled island image;
+    // retain compatibility with historical API-19 and API-20 checkpoints.
     targetReceipt.apiVersion = 19u;
     receipt = {};
     const int restored = restore(unity, nphase, &request, &receipt);
@@ -4839,7 +5246,7 @@ static void RunIslandRestoreTests(uint8_t* image,
             nodeBindings[i].targetBodyCore != nodeBindings[i].liveBodyCore &&
             nodeBindings[i].currentNodeId != nodeBindings[i].targetNodeId;
     Check(restored == 1 && distinctBodyIncarnations &&
-        receipt.apiVersion == 20u &&
+        receipt.apiVersion == kCurrentApiVersion &&
         receipt.result == 1u && receipt.stage == 8u &&
         receipt.validationFlags == 0xFFu &&
         receipt.nodeBindingsValidated == 9u &&
@@ -4951,6 +5358,9 @@ int main(int argc, char** argv) {
     CaptureNPhaseReportState captureNPhaseReport =
         reinterpret_cast<CaptureNPhaseReportState>(GetProcAddress(
             library, "oc2_nphase_report_state_capture_snapshot"));
+    CaptureNPhaseReportSnapshotV1 captureNPhaseReportV1 =
+        reinterpret_cast<CaptureNPhaseReportSnapshotV1>(GetProcAddress(
+            library, "oc2_nphase_report_state_capture_snapshot_v1"));
     CaptureInteractionGraph captureInteractionGraph =
         reinterpret_cast<CaptureInteractionGraph>(GetProcAddress(
             library, "oc2_interaction_graph_capture_snapshot"));
@@ -5034,7 +5444,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 20, "API version");
+    Check(version && version() == kCurrentApiVersion, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -5046,6 +5456,8 @@ int main(int argc, char** argv) {
     Check(captureNPhasePool != 0, "NPhase pool snapshot export");
     Check(captureNPhaseReport != 0,
         "NPhase report-state capture export");
+    Check(captureNPhaseReportV1 != 0,
+        "complete NPhase report-history capture export");
     Check(captureInteractionGraph != 0,
         "interaction graph capture export");
     Check(captureTransformCache != 0,
@@ -5065,7 +5477,8 @@ int main(int argc, char** argv) {
         statusRecreate && cancelRecreate, "contact recreation exports");
     if (!version || !capture || !restore || !captureManifold || !captureSip ||
         !captureActorPair || !captureActorPairReport || !captureNPhasePool ||
-        !captureNPhaseReport || !captureInteractionGraph ||
+        !captureNPhaseReport || !captureNPhaseReportV1 ||
+        !captureInteractionGraph ||
         !captureTransformCache || !installFinishBroadPhaseObserver ||
         !statusFinishBroadPhaseObserver || !armFinishBroadPhaseObserver ||
         !copyFinishBroadPhaseObserver || !cancelFinishBroadPhaseObserver ||
@@ -5100,7 +5513,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 20 &&
+    Check(receipt.result == 1 && receipt.apiVersion == kCurrentApiVersion &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -5150,6 +5563,8 @@ int main(int argc, char** argv) {
         RunActorPairReportPoolTests(revisionImage, captureActorPairReport);
         RunNPhasePoolSnapshotTests(revisionImage, captureNPhasePool);
         RunNPhaseReportStateTests(revisionImage, captureNPhaseReport);
+        RunNPhaseReportSnapshotV1Tests(revisionImage,
+            captureNPhaseReportV1);
         RunInteractionGraphTests(revisionImage, captureInteractionGraph);
         RunTransformCacheTests(revisionImage, captureTransformCache);
         RunFinishBroadPhaseObserverTests(revisionImage, library,

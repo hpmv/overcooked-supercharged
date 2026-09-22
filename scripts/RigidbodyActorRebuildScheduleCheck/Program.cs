@@ -140,8 +140,8 @@ Check(Calls("CaptureInteractionGraphState").Contains("CaptureInteractionPrimaryB
 Check(Calls("SameInteractionGraphState").Contains("SameByteMatrix"),
     "interaction-graph equality includes rigid primary-object history");
 var nativeAbi=type.Fields.Single(value=>value.Name=="NativeAbiVersion");
-Check(nativeAbi.HasConstant&&Convert.ToUInt32(nativeAbi.Constant)==20u,
-    "managed activation is pinned to native ABI version 20");
+Check(nativeAbi.HasConstant&&Convert.ToUInt32(nativeAbi.Constant)==21u,
+    "managed activation is pinned to native ABI version 21");
 var poolBuffers=Nested("NativeNPhasePoolSnapshotBuffers");
 Check(poolBuffers.IsSequentialLayout&&poolBuffers.PackingSize==8&&
     poolBuffers.Fields.Select(value=>value.Name).SequenceEqual(new[]{
@@ -151,7 +151,7 @@ Check(poolBuffers.IsSequentialLayout&&poolBuffers.PackingSize==8&&
         value.FieldType.MetadataType==MetadataType.IntPtr)&&
     poolBuffers.Fields.Where((value,index)=>(index&1)!=0).All(value=>
         value.FieldType.MetadataType==MetadataType.UInt32),
-    "complete NPhase-pool output buffers preserve the API20 32-byte ABI");
+    "complete NPhase-pool output buffers preserve the API21 32-byte ABI");
 var poolReceipt=Nested("NativeNPhasePoolSnapshotReceipt");
 var poolReceiptFields=new[]{"ApiVersion","StructSize","Result","LastError",
     "UnityBase","NPhaseCore","Pool","SlabsData","FreeHead","PoolKind","PoolOffset",
@@ -167,7 +167,7 @@ Check(poolReceipt.IsSequentialLayout&&poolReceipt.PackingSize==8&&
         .Contains(value.Name)).All(value=>value.FieldType.MetadataType==MetadataType.UIntPtr)&&
     poolReceipt.Fields.Where(value=>!new[]{"UnityBase","NPhaseCore","Pool","SlabsData","FreeHead"}
         .Contains(value.Name)).All(value=>value.FieldType.MetadataType==MetadataType.UInt32),
-    "complete NPhase-pool receipt preserves the API20 152-byte field contract");
+    "complete NPhase-pool receipt preserves the API21 152-byte field contract");
 var poolCaptureInvoke=Nested("NativeNPhasePoolCaptureSnapshot").Methods.Single(value=>
     value.Name=="Invoke");
 Check(poolCaptureInvoke.ReturnType.MetadataType==MetadataType.Int32&&
@@ -188,10 +188,69 @@ foreach(string owner in new[]{"PhysicsPhaseSnapshot","CheckpointSidecar"})
     Check(Nested(owner).Fields.Any(value=>value.Name=="NPhasePoolImages"&&
         value.FieldType.FullName.EndsWith("/NPhasePoolImageState[]")),
         owner+" retains all complete NPhase-pool images");
+var reportBuffers=Nested("NativeNPhaseReportSnapshotBuffersV1");
+Check(reportBuffers.IsSequentialLayout&&reportBuffers.PackingSize==8&&
+    reportBuffers.Fields.Select(value=>value.Name).SequenceEqual(new[]{
+        "ActorPairBacking","ActorPairCapacity","PersistentBacking","PersistentCapacity",
+        "ForceThresholdBacking","ForceThresholdCapacity","ReportBufferBytes",
+        "ReportBufferByteCapacity"})&&
+    reportBuffers.Fields.Where((value,index)=>(index&1)==0).All(value=>
+        value.FieldType.MetadataType==MetadataType.IntPtr)&&
+    reportBuffers.Fields.Where((value,index)=>(index&1)!=0).All(value=>
+        value.FieldType.MetadataType==MetadataType.UInt32),
+    "complete report-history output buffers preserve the API21 32-byte ABI");
+var reportArrayReceipt=Nested("NativeNPhaseReportArrayReceiptV1");
+Check(reportArrayReceipt.IsSequentialLayout&&reportArrayReceipt.PackingSize==8&&
+    reportArrayReceipt.Fields.Select(value=>value.Name).SequenceEqual(new[]{
+        "Data","Count","CapacityRaw","BackingRequired","BackingWritten",
+        "LogicalOrderHash","BackingHash"})&&
+    reportArrayReceipt.Fields.Single(value=>value.Name=="Data").FieldType.MetadataType==
+        MetadataType.UIntPtr&&reportArrayReceipt.Fields.Where(value=>value.Name!="Data")
+        .All(value=>value.FieldType.MetadataType==MetadataType.UInt32),
+    "complete report-history array receipt preserves the API21 28-byte field contract");
+var reportReceipt=Nested("NativeNPhaseReportSnapshotReceiptV1");
+var reportReceiptFields=new[]{"ApiVersion","StructSize","Result","LastError",
+    "UnityBase","NPhaseCore","OwnerScene","SceneTimeStamp",
+    "SceneReportShapePairTimeStamp","ActorPairs","Persistent",
+    "NextFramePersistentIndex","ForceThreshold","ReportBuffer",
+    "ReportBufferCurrentIndex","ReportBufferCurrentSize","ReportBufferDefaultSize",
+    "ReportBufferLastIndex","ReportBufferAllocationLocked","ReportBufferRequired",
+    "ReportBufferWritten","ReportBufferActiveHash","ReportBufferAllocationHash",
+    "MetadataHash","SnapshotHash","ValidationFlags","InvalidKind","InvalidIndex","Detail"};
+Check(reportReceipt.IsSequentialLayout&&reportReceipt.PackingSize==8&&
+    reportReceipt.Fields.Select(value=>value.Name).SequenceEqual(reportReceiptFields)&&
+    new[]{"UnityBase","NPhaseCore","OwnerScene","ReportBuffer"}.All(name=>
+        reportReceipt.Fields.Single(value=>value.Name==name).FieldType.MetadataType==
+            MetadataType.UIntPtr)&&
+    new[]{"ActorPairs","Persistent","ForceThreshold"}.All(name=>
+        reportReceipt.Fields.Single(value=>value.Name==name).FieldType.Name==
+            "NativeNPhaseReportArrayReceiptV1"),
+    "complete report-history receipt preserves the API21 188-byte field contract");
+var reportCaptureInvoke=Nested("NativeNPhaseReportStateCaptureSnapshotV1").Methods.Single(
+    value=>value.Name=="Invoke");
+Check(reportCaptureInvoke.ReturnType.MetadataType==MetadataType.Int32&&
+    reportCaptureInvoke.Parameters.Select(value=>value.ParameterType.MetadataType)
+        .SequenceEqual(new[]{MetadataType.UIntPtr,MetadataType.UIntPtr,
+            MetadataType.IntPtr,MetadataType.IntPtr}),
+    "complete report-history capture delegate matches the four-argument V1 export");
+var reportState=Nested("NPhaseReportState");
+foreach(string logical in new[]{"ActorPairs","PersistentSips","ForceThresholdSips"})
+    Check(reportState.Fields.Any(value=>value.Name==logical&&
+        value.FieldType.FullName=="System.UInt32[]"),
+        "complete report history retains legacy logical list "+logical);
+foreach(string backing in new[]{"ActorPairBacking","PersistentBacking","ForceThresholdBacking"})
+    Check(reportState.Fields.Any(value=>value.Name==backing&&
+        value.FieldType.FullName=="System.UInt32[]"),
+        "complete report history retains full-capacity backing "+backing);
+Check(reportState.Fields.Any(value=>value.Name=="ReportBufferBytes"&&
+        value.FieldType.FullName=="System.Byte[]"),
+    "complete report history retains the full report-buffer allocation");
 Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot")&&
     Strings("Activate").Contains("oc2_island_restore_snapshot_v1")&&
-    Strings("Activate").Contains("oc2_nphase_pool_capture_snapshot_v1"),
-    "activation requires the API20 complete-pool, stateless-capture, and island-restore exports");
+    Strings("Activate").Contains("oc2_nphase_pool_capture_snapshot_v1")&&
+    Strings("Activate").Contains("oc2_nphase_report_state_capture_snapshot_v1")&&
+    !Strings("Activate").Contains("oc2_nphase_report_state_capture_snapshot"),
+    "activation requires the API21 complete-pool/report, stateless-capture, and island-restore exports");
 Check(Calls("CaptureNPhasePoolImages").Contains("CaptureNPhasePoolImage")&&
     Calls("CaptureNPhasePoolImages").Contains("ValidateNPhasePoolImages")&&
     Calls("CaptureNPhasePoolImage").Contains("ReadPointerBuffer")&&
@@ -220,8 +279,46 @@ Check(Calls("DescribePhysicsPhaseSnapshot").Contains("DescribeNPhasePoolImages")
     Strings("DescribePhysicsPhaseComparison").Contains("allRawFamiliesEqual")&&
     !Strings("DescribePhysicsPhaseComparison").Contains("allFamiliesEqual"),
     "phase diagnostics explicitly distinguish raw complete NPhase-pool equality");
+Check(Calls("CaptureNPhaseReportState").Count(value=>value=="ReadPointerBuffer")==3&&
+    Calls("CaptureNPhaseReportState").Count(value=>value=="NPhaseReportLogicalPrefix")==3&&
+    Calls("CaptureNPhaseReportState").Contains("ValidateNPhaseReportState"),
+    "complete report capture retains every full backing and derives each legacy logical prefix");
+Check(Calls("RunContactPoolAction").Contains("CaptureNPhaseReportState")&&
+    Calls("CapturePhysicsPhaseSnapshot").Contains("CaptureNPhaseReportState")&&
+    Calls("ValidateCheckpointPoolCoherence").Contains("ValidateNPhaseReportState")&&
+    Instructions("RunContactPoolAction").Any(value=>value.Operand is FieldReference field&&
+        field.Name=="captureNPhaseReportStateSnapshotV1"),
+    "entry and exact post-output boundaries capture and cross-validate complete report history");
+Check(Calls("ValidateNPhaseReportState").Count(value=>
+        value=="ValidateNPhaseReportArray")==3&&
+    Calls("ValidateNPhaseReportState").Contains("NPhaseReportMetadataHash")&&
+    Calls("ValidateNPhaseReportState").Contains("ValidNPhaseReportLastIndex")&&
+    Calls("ValidateNPhaseReportState").Contains("AppendUInt32ArrayByteHash")&&
+    Calls("ValidateNPhaseReportState").Contains("AppendByteArrayHash")&&
+    Calls("ValidateNPhaseReportArray").Contains("NPhaseReportBackingHash")&&
+    Calls("ValidateNPhaseReportArray").Contains("ContactPoolOrderHash"),
+    "managed report validation proves complete backings, logical prefixes, and native hashes");
+Check(Calls("AppendNPhaseReportReadiness").Contains("SameRawNPhaseReportState")&&
+    Strings("AppendNPhaseReportReadiness").Contains("NPHASE_SCENE_TIMESTAMPS_CAPTURED"),
+    "report readiness treats complete capture equality as raw and admits both Scene timestamps");
+Check(Calls("StoreCheckpointSidecar").Contains("SameRawNPhaseReportState")&&
+    Calls("SamePhysicsPhaseSnapshot").Contains("SameRawNPhaseReportState")&&
+    Calls("DescribePhysicsPhaseComparison").Contains("SameRawNPhaseReportState")&&
+    Strings("DescribePhysicsPhaseComparison").Contains("nphaseReportsRawEqual")&&
+    !Strings("DescribePhysicsPhaseComparison").Contains("nphaseReportsEqual"),
+    "publication and diagnostics label address-sensitive report history as raw equality");
+var reportDescriptionStrings=Strings("DescribeNPhaseReportState");
+foreach(string field in new[]{"sceneTimeStamp","sceneReportShapePairTimeStamp",
+    "sceneTimestampsEqual","actorPairBackingHash","actorPairBackingSha256",
+    "persistentBackingHash","persistentBackingSha256","forceThresholdBackingHash",
+    "forceThresholdBackingSha256","reportBufferAllocationSha256","metadataHash",
+    "snapshotHash"})
+    Check(reportDescriptionStrings.Contains(field),
+        "complete report diagnostics expose "+field);
 Check(StoresNull("Deactivate","captureNPhasePoolSnapshot"),
-    "deactivation clears the API20 complete NPhase-pool capture delegate");
+    "deactivation clears the API21 complete NPhase-pool capture delegate");
+Check(StoresNull("Deactivate","captureNPhaseReportStateSnapshotV1"),
+    "deactivation clears the API21 complete report-history capture delegate");
 Check(Calls("CaptureDirtyInteractionStateReadOnly").Contains("Equals")&&
     Strings("CaptureDirtyInteractionStateReadOnly").Any(value=>
         value.Contains("changed the pending hook transaction receipt")),
