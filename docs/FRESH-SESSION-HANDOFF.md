@@ -1,5 +1,44 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Dispatcher-worker observer milestone (2026-09-22, managed r19 / native
+> r36 / API 17):** the passive broadphase and island observers no longer
+> mistake PhysX task dispatch for corrupt capture provenance.  Arming still
+> binds the exact Scene/Context/NPhase or manager, pass, sequence, and ordinal;
+> the callback thread must be nonzero and owns both embedded snapshots, but it
+> need not equal Unity's arming thread.  The native island hook now relies on
+> that identity transaction and its atomic Armed -> Capturing claim rather
+> than filtering valid dispatcher callbacks by caller thread.  No gameplay or
+> restore mutation changed.
+>
+> Fresh minimized v83 evidence is
+> `artifacts/island-first-replay-audit-story11-v83-r1-from-prefix1/`.
+> Unity armed both observations on thread 22664.  `finishBroadPhase` executed
+> on worker 54200 and captured ordinal 1 with zero created and six deleted
+> overlaps.  `updateIslands` executed on worker 58364 and captured ordinal 1,
+> validation `0x7F`, embedded snapshot validation `0x3FF`, no overflow, and
+> journal interval `[233,237)`.  The four ordered removal records retain edge
+> IDs 8, 9, 10, and 11.  Thus the former f488 observer rejection is closed by
+> a real cross-thread live capture, not only by the native harness.
+>
+> The same uninterrupted run completed all original prefixes to f1048,
+> rewound to f444, and produced source readiness 52 pass / 0 fail / 41
+> deferred and target readiness 86 pass / 0 fail / 37 deferred / 1
+> not-applicable, with zero blockers.  It remains safely paused at f444.
+> The next stop occurs before any replay physics: the audit driver requested a
+> one-frame ordinary step, while the headless host correctly requires at least
+> two advancing frames for its original release/pause handshake.  Fix that
+> bounded driver seam without relaxing the general host invariant, then
+> observe the exact restored f444 -> f445 transition.  Do not reload-loop and
+> do not search.
+>
+> Managed DLL SHA-256 is
+> `36F86465BE15618CBFFB4D0EEB90E2DEF8681761F44F6C302EAE89B4DACFF36F`;
+> native DLL SHA-256 is
+> `A03C0BC3A80FEFDD8346E7CDDD1A58575DAE35D4F0BE36A991ED2BEB7D3CD8D1`.
+> The managed checker passes 24 contracts.  The native harness explicitly
+> dispatches both observer callbacks to worker threads and passes the complete
+> caller-owned history suite.
+
 > **Phase-compatible tutorial skip and live resume milestone (2026-09-22,
 > LevelSession r4c / headless v12r):** the Story 1-1 sashimi shortcut now
 > preserves the native 60 Hz render / 50 Hz physics scheduler residue.  The

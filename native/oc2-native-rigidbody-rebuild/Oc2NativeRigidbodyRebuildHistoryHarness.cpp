@@ -495,12 +495,30 @@ struct FinishBroadPhaseWorkerCall {
     FakeFinishBroadPhase finish;
     void* scene;
     uint32_t pass;
+    DWORD threadId;
 };
 
 static DWORD WINAPI RunFinishBroadPhaseWorker(void* value) {
     FinishBroadPhaseWorkerCall* call =
         static_cast<FinishBroadPhaseWorkerCall*>(value);
+    call->threadId = GetCurrentThreadId();
     call->finish(call->scene, call->pass);
+    return 0;
+}
+
+struct IslandUpdateWorkerCall {
+    FakeIslandUpdate update;
+    void* manager;
+    void* task;
+    uint32_t pass;
+    DWORD threadId;
+};
+
+static DWORD WINAPI RunIslandUpdateWorker(void* value) {
+    IslandUpdateWorkerCall* call =
+        static_cast<IslandUpdateWorkerCall*>(value);
+    call->threadId = GetCurrentThreadId();
+    call->update(call->manager, call->task, call->pass);
     return 0;
 }
 
@@ -3340,14 +3358,14 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
             &receipt) == 1,
         "finishBroadPhase concurrent-owner observation arms");
     FinishBroadPhaseWorkerCall firstCall = {
-        finish, fixture.ownerScene, 0
+        finish, fixture.ownerScene, 0, 0
     };
     HANDLE firstThread = CreateThread(0, 0, RunFinishBroadPhaseWorker,
         &firstCall, 0, 0);
     const DWORD entered = g_finishPauseEntered ? WaitForSingleObject(
         g_finishPauseEntered, 10000) : WAIT_FAILED;
     FinishBroadPhaseWorkerCall secondCall = {
-        finish, fixture.ownerScene, 0
+        finish, fixture.ownerScene, 0, 0
     };
     HANDLE secondThread = entered == WAIT_OBJECT_0 ? CreateThread(0, 0,
         RunFinishBroadPhaseWorker, &secondCall, 0, 0) : 0;
@@ -3364,7 +3382,11 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
     status = {};
     Check(firstDone == WAIT_OBJECT_0 &&
         statusObserver(imagePointer, &status) == 1 && status.state == 4 &&
-        status.observationOrdinal == 1,
+        status.observationOrdinal == 1 && status.armedThreadId != 0u &&
+        status.threadId != 0u &&
+        status.armedThreadId != status.threadId &&
+        status.armedThreadId == GetCurrentThreadId() &&
+        status.threadId == firstCall.threadId,
         "owner exit commits the concurrent observation exactly once");
     if (firstThread) CloseHandle(firstThread);
     if (secondThread) CloseHandle(secondThread);
@@ -3813,20 +3835,39 @@ static void RunIslandTests(uint8_t* image, CaptureIslandSnapshot capture,
     IslandSnapshotBuffersV1 postSourceBuffers = IslandBuffers(postSource);
     IslandSnapshotReceiptV1 preSourceReceipt = {}, postSourceReceipt = {};
     observer = {};
+    const DWORD islandArmThreadId = GetCurrentThreadId();
     Check(arm(unity, manager, nphase, 0u, &preSourceBuffers,
             &preSourceReceipt, &postSourceBuffers, &postSourceReceipt,
             &observer) == 1 && observer.state == 2u &&
-        observer.armedOrdinal == 1u,
+        observer.armedOrdinal == 1u && observer.armedThreadId != 0u &&
+        observer.armedThreadId == islandArmThreadId,
         "island observer arms caller-owned pre/post buffers");
     FakeIslandUpdate update = reinterpret_cast<FakeIslandUpdate>(
         image + kIslandUpdateRva);
-    update(reinterpret_cast<void*>(manager), 0, 0u);
+    IslandUpdateWorkerCall updateCall = {
+        update, reinterpret_cast<void*>(manager), 0, 0u, 0
+    };
+    HANDLE updateThread = CreateThread(0, 0, RunIslandUpdateWorker,
+        &updateCall, 0, 0);
+    const DWORD updateDone = updateThread ? WaitForSingleObject(updateThread,
+        10000) : WAIT_FAILED;
+    DWORD updateExitCode = 1;
+    const BOOL updateExitRead = updateThread ?
+        GetExitCodeThread(updateThread, &updateExitCode) : FALSE;
+    if (updateThread) CloseHandle(updateThread);
     observer = {};
     const int observerStatus = status(unity, &observer);
-    Check(observerStatus == 1 && observer.state == 4u &&
+    Check(updateThread && updateDone == WAIT_OBJECT_0 && updateExitRead &&
+        updateExitCode == 0 && updateCall.threadId != 0u &&
+        observerStatus == 1 && observer.state == 4u &&
         observer.observationOrdinal == 1u && observer.inFlight == 0u &&
-        observer.validationFlags == 0x7Fu,
-        "island observer passively commits one exact first-pass transition");
+        observer.validationFlags == 0x7Fu &&
+        observer.expectedManager == manager &&
+        observer.observedManager == manager && observer.pass == 0u &&
+        observer.armedThreadId == islandArmThreadId &&
+        observer.threadId == updateCall.threadId &&
+        observer.armedThreadId != observer.threadId,
+        "island observer commits an exact cross-thread first-pass transition");
     IslandOutputStorage preCopy = {}, postCopy = {};
     IslandSnapshotBuffersV1 preCopyBuffers = IslandBuffers(preCopy);
     IslandSnapshotBuffersV1 postCopyBuffers = IslandBuffers(postCopy);

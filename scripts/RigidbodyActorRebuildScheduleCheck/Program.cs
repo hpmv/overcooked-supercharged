@@ -56,7 +56,7 @@ Check(captureCalls.Contains("RefreshObservedContactManagerContext")&&
     "target transaction refreshes context and binds exact core snapshot");
 Check(Strings("CaptureContactPoolAtScheduledFrame").Any(value=>value.Contains("skipped exact output frame")),
     "late observation fails closed instead of capturing a neighboring frame");
-Check(captureCalls.Contains("RunContactPoolAction")&&captureCalls.Contains("CancelDirtyInteractionWork"),
+Check(captureCalls.Contains("RunContactPoolAction")&&captureCalls.Contains("CancelCheckpointObservationWork"),
     "target transaction uses existing capture path and has native-arm rollback");
 int run=CallIndex("CaptureContactPoolAtScheduledFrame","RunContactPoolAction");
 int clear=StoreIndex("CaptureContactPoolAtScheduledFrame","scheduledContactPoolCaptureFrame");
@@ -75,11 +75,11 @@ Check(captureBody.Any(value=>value.OpCode.Code==Code.Ldfld&&value.Operand is Fie
         value.OpCode.Code==Code.Beq||value.OpCode.Code==Code.Beq_S),
     "staged sidecar retains the identical exact core snapshot object");
 Check(!captureCalls.Contains("StoreCheckpointSidecar")&&
-    Calls("FinalizePendingDirtyInteractionCapture").Contains("StoreCheckpointSidecar"),
+    Calls("FinalizePendingDirtyInteractionCaptureCore").Contains("StoreCheckpointSidecar"),
     "sidecar publication remains deferred until dirty-interaction sample finalization");
-Check(Calls("RunContactPoolAction").Contains("ArmDirtyInteractionCapture")&&
+Check(Calls("RunContactPoolAction").Contains("ArmCheckpointObservationCapture")&&
     Calls("RunContactPoolAction").Contains("RunTransformDispatchAction"),
-    "shared capture path stages dirty-interaction and Transform-dispatch state");
+    "shared capture path stages the complete observation transaction and Transform-dispatch state");
 
 Check(Strings("InstallAutomaticHook").Contains("CaptureFrame")&&
     Calls("InstallAutomaticHook").Contains("Patch"),

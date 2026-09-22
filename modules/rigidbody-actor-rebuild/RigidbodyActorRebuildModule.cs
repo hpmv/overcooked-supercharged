@@ -4830,10 +4830,14 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Pending island observation does not belong to the sealed checkpoint.");
             NativeIslandObserverReceipt status=CallIslandObserverAction(
                 statusIslandObserver,"capture-status",1);
+            // The arm is published from Unity's output callback, while PhysX
+            // may run the matching island task on a dispatcher worker.  The
+            // armed thread is diagnostic; the callback thread is bound by the
+            // exact manager/pass/ordinal and both embedded snapshot receipts.
             if(status.Installed!=1||status.State!=4||status.ExpectedPass!=0||status.Pass!=0||
                 status.ArmedOrdinal!=pending.ArmedOrdinal||status.ObservationOrdinal!=pending.ArmedOrdinal||
                 status.ObserverSequence!=pending.ObserverSequence||status.ArmedThreadId!=pending.ArmedThreadId||
-                status.ThreadId!=pending.ArmedThreadId||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
+                status.ThreadId==0||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
                 throw new InvalidOperationException("Native island observation did not complete exactly once: state="+
                     status.State+", armedOrdinal="+status.ArmedOrdinal+", observationOrdinal="+
                     status.ObservationOrdinal+", inFlight="+status.InFlight+".");
@@ -4904,7 +4908,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(status.Installed!=1||status.State!=4||status.ExpectedPass!=0||status.Pass!=0||
                 status.ArmedOrdinal!=pending.ArmedOrdinal||status.ObservationOrdinal!=pending.ArmedOrdinal||
                 status.ObserverSequence!=pending.ObserverSequence||status.ArmedThreadId!=pending.ArmedThreadId||
-                status.ThreadId!=pending.ArmedThreadId||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
+                status.ThreadId==0||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
                 throw new InvalidOperationException("Native first-replay island audit did not complete exactly once: state="+
                     status.State+", armedOrdinal="+status.ArmedOrdinal+", observationOrdinal="+
                     status.ObservationOrdinal+", inFlight="+status.InFlight+".");
@@ -5797,7 +5801,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 receipt.ObservedManager!=receipt.ExpectedManager||
                 receipt.ObservedContext!=receipt.ExpectedContext||receipt.ObservedNPhase!=receipt.ExpectedNPhase||
                 receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedThreadId!=pending.ArmedThreadId||
-                receipt.ThreadId!=pending.ArmedThreadId||receipt.ObserverSequence!=pending.ObserverSequence||
+                receipt.ThreadId==0||receipt.ObserverSequence!=pending.ObserverSequence||
                 receipt.ArmedOrdinal!=pending.ArmedOrdinal||receipt.ObservationOrdinal!=pending.ArmedOrdinal||
                 receipt.SlotIndex!=0||receipt.PreResult!=1||receipt.PostResult!=1||
                 receipt.PreSnapshotHash!=a.SnapshotHash||receipt.PostSnapshotHash!=b.SnapshotHash||
@@ -5834,7 +5838,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 receipt.ObservedManager!=receipt.ExpectedManager||
                 receipt.ObservedContext!=receipt.ExpectedContext||receipt.ObservedNPhase!=receipt.ExpectedNPhase||
                 receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedThreadId!=pending.ArmedThreadId||
-                receipt.ThreadId!=pending.ArmedThreadId||receipt.ObserverSequence!=pending.ObserverSequence||
+                receipt.ThreadId==0||receipt.ObserverSequence!=pending.ObserverSequence||
                 receipt.ArmedOrdinal!=pending.ArmedOrdinal||receipt.ObservationOrdinal!=pending.ArmedOrdinal||
                 receipt.SlotIndex!=0||receipt.PreResult!=1||receipt.PostResult!=1||
                 receipt.PreSnapshotHash!=a.SnapshotHash||receipt.PostSnapshotHash!=b.SnapshotHash||
@@ -5989,12 +5993,16 @@ namespace SuperchargedPatch.Authoring.Modules
             NativeFinishBroadPhaseObserverReceipt receipt=value.Receipt;
             NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
             NativeTransformCacheReceipt cache=sidecar.TransformCache.Receipt;
+            // Scene::finishBroadPhase is a PhysX task.  Its callback may run
+            // on a different dispatcher worker than the Unity thread that
+            // armed this observation; only the callback's own entry/exit
+            // thread, exact identities, ordinal and double-copy are semantic.
             if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=152u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.Installed!=1||receipt.State!=4||
                 receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedOrdinal==0||
                 receipt.ArmedOrdinal!=receipt.ObservationOrdinal||
                 receipt.SlotIndex!=(receipt.ObservationOrdinal-1u)%4u||
-                receipt.ArmedThreadId==0||receipt.ArmedThreadId!=receipt.ThreadId||
+                receipt.ArmedThreadId==0||receipt.ThreadId==0||
                 receipt.ExpectedScene!=receipt.ObservedScene||
                 receipt.ExpectedContext!=receipt.ObservedContext||
                 receipt.ExpectedNPhaseCore!=receipt.ObservedNPhaseCore||

@@ -784,7 +784,8 @@ def main():
                             broadphase.get("armedOrdinal") == broadphase.get("observationOrdinal") and
                             isinstance(broadphase.get("observationOrdinal"), int) and
                             broadphase.get("observationOrdinal") > 0 and
-                            broadphase.get("armedThreadId") == broadphase.get("threadId") and
+                            isinstance(broadphase.get("armedThreadId"), int) and
+                            broadphase.get("armedThreadId") > 0 and
                             isinstance(broadphase.get("threadId"), int) and
                             broadphase.get("threadId") > 0 and
                             broadphase.get("droppedObservations") == 0 and
@@ -831,7 +832,10 @@ def main():
                             isinstance(island_transition.get("observerSequence"), int) and
                             island_transition.get("observerSequence") ==
                             island_snapshot.get("observerSequence") + 1 and
-                            island_transition.get("armedThreadId") ==
+                            isinstance(island_transition.get("armedThreadId"), int) and
+                            island_transition.get("armedThreadId") > 0 and
+                            isinstance(island_transition.get("threadId"), int) and
+                            island_transition.get("threadId") > 0 and
                             island_transition.get("threadId") ==
                             island_pre.get("captureThreadId") ==
                             island_post.get("captureThreadId") and

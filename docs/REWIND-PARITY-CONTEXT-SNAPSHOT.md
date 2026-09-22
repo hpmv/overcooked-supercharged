@@ -6,6 +6,40 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — native observers accept real PhysX dispatcher workers
+
+Managed RigidbodyActorRebuild r19 and native r36/API 17 preserve the exact
+capture transaction while treating the arming thread and callback thread as
+separate provenance.  Scene/Context/NPhase or manager, pass, sequence, and
+ordinal must still match; the callback thread must be nonzero and must own the
+embedded pre/post snapshots.  The island hook's atomic Armed -> Capturing
+claim remains the single winner.  Only the invalid caller-thread-equality
+assumption changed; gameplay and restore paths did not.
+
+The fresh minimized v83 run is
+`artifacts/island-first-replay-audit-story11-v83-r1-from-prefix1/`.  Both
+observers were armed on thread 22664.  Broadphase ran on worker 54200 and
+captured ordinal 1 with zero created and six deleted overlaps.  Island update
+ran on worker 58364 and captured ordinal 1, full validation, no overflow, and
+four ordered removal journal records `[233,237)` for edge IDs 8 through 11.
+This is the canonical transition content and directly proves that valid live
+cross-thread callbacks are now retained.
+
+That same run continued through f1048, rewound to f444, and passed the source
+and restored-target readiness reports with zero failures or blockers.  It is
+currently paused at f444.  No restored f445 physics has run yet: the driver
+asked the host's ordinary step command for one advancing frame, but that
+command deliberately requires at least two frames to complete its original
+release/pause handshake.  The next unit is a bounded one-output observation
+mechanism that preserves the host's general invariant, followed by the exact
+f444 -> f445 comparison.  Search remains disabled.
+
+Managed/native SHA-256 values are respectively
+`36F86465BE15618CBFFB4D0EEB90E2DEF8681761F44F6C302EAE89B4DACFF36F` and
+`A03C0BC3A80FEFDD8346E7CDDD1A58575DAE35D4F0BE36A991ED2BEB7D3CD8D1`.
+The managed checker passes 24 contracts and the native worker-thread harness
+passes.
+
 ## Latest result — the tutorial shortcut preserves the native scheduler phase
 
 LevelSession r4c replaces the sashimi popup's native 15-second wait with one

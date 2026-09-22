@@ -9150,8 +9150,7 @@ static uint32_t __cdecl ObserveIslandUpdateEntry(uintptr_t self,
     const uint32_t armedOrdinal = g_islandArmedOrdinal;
     const LONG observerSequence = InterlockedCompareExchange(
         &g_islandObserverSequence, 0, 0);
-    if (self != expectedManager || !expectedNphase ||
-        pass != expectedPass || GetCurrentThreadId() != armedThreadId)
+    if (self != expectedManager || !expectedNphase || pass != expectedPass)
         return 0u;
     if (InterlockedCompareExchange(&g_islandState,
             IslandObserverCapturing, IslandObserverArmed) !=

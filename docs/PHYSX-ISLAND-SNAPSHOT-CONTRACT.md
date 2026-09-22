@@ -399,13 +399,21 @@ of D.  D order is likewise observable state.
 ## Passive first-update observer and edge journal
 
 Install one detour at `UnityPlayer + 0xa65530`.  For the expected manager,
-thread, pass, and ordinal it must:
+pass, and ordinal it must:
 
 1. claim a one-shot slot with an interlocked compare/exchange;
 2. copy and validate the pre-call snapshot into fixed caller-owned storage;
 3. call the trampoline exactly once with the original arguments;
 4. copy and validate the post-call snapshot before returning to the caller;
 5. publish the completed slot with a release operation.
+
+The thread that arms this observation is not a simulation identity. PhysX
+schedules the island-generation task on its dispatcher, so the matching
+callback may run on another worker. Retain both thread IDs as diagnostics,
+require each to be nonzero, and bind both embedded snapshots to the actual
+callback thread. The atomic armed-to-capturing claim plus exact manager,
+NPhase, pass, sequence, and ordinal—not equality with the arming caller—owns
+the one transition.
 
 The detour must not allocate, log synchronously, wait on another thread, call a
 PhysX mutator, or change an argument or return path.  Under those conditions a
