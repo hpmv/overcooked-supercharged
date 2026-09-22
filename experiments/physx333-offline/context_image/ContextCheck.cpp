@@ -141,10 +141,12 @@ int main()
     fixture.step(false);
     std::string error;
     ContextImage warm;
-    require(CaptureContextImage(*fixture.scene, warm, error),
-            "warm capture: " + error);
+    const bool warmCaptured = CaptureContextImage(*fixture.scene, warm, error);
+    require(warmCaptured, "warm capture: " + error);
     require(warm.cachedThreadOrder.size() == 1,
             "inline six-box fixture should retain one cached thread context");
+    require(warm.cachedThreads.size() == 1,
+            "cached thread-context image missing");
     ContextImage duplicate;
     require(CaptureContextImage(*fixture.scene, duplicate, error),
             "duplicate capture: " + error);
@@ -154,19 +156,30 @@ int main()
     ContextImage away;
     require(CaptureContextImage(*fixture.scene, away, error),
             "away capture: " + error);
+    require(warm.bitmaps[0].name == "thread[0].localChangeTouch" &&
+            away.bitmaps[0].name == warm.bitmaps[0].name &&
+            warm.bitmaps[0].wordCount == 1 &&
+            away.bitmaps[0].wordCount == 8 &&
+            warm.bitmaps[0].data != away.bitmaps[0].data,
+            "fixture did not exercise cached bitmap rebasing");
+    std::cout << "cached thread counters A="
+              << warm.cachedThreads[0].compressedCacheSize << '/'
+              << warm.cachedThreads[0].constraintSize << " B="
+              << away.cachedThreads[0].compressedCacheSize << '/'
+              << away.cachedThreads[0].constraintSize << '\n';
     require(!warm.equals(away, error),
             "six-box context did not change at all");
 
     for (int i = 0; i < 100; ++i)
     {
-        require(RestoreContextImage(*fixture.scene, warm, error),
-                "restore warm: " + error);
+        const bool restoredWarm = RestoreContextImage(*fixture.scene, warm, error);
+        require(restoredWarm, "restore warm: " + error);
         ContextImage observed;
         require(CaptureContextImage(*fixture.scene, observed, error) &&
                 warm.equals(observed, error),
                 "warm verification: " + error);
-        require(RestoreContextImage(*fixture.scene, away, error),
-                "restore away: " + error);
+        const bool restoredAway = RestoreContextImage(*fixture.scene, away, error);
+        require(restoredAway, "restore away: " + error);
         require(CaptureContextImage(*fixture.scene, observed, error) &&
                 away.equals(observed, error),
                 "away verification: " + error);
@@ -204,6 +217,27 @@ int main()
     require(CaptureContextImage(*fixture.scene, after, error) &&
             before.equals(after, error),
             "corrupt world solver binding changed the context");
+    corrupt = warm;
+    corrupt.cachedThreads[0].compressedCacheSize++;
+    require(!RestoreContextImage(*fixture.scene, corrupt, error),
+            "corrupt cached thread counter accepted");
+    require(CaptureContextImage(*fixture.scene, after, error) &&
+            before.equals(after, error),
+            "corrupt cached thread counter changed the context");
+    corrupt = warm;
+    corrupt.cachedThreads[0].ignoredHeaderBytes[0] ^= 1;
+    require(!RestoreContextImage(*fixture.scene, corrupt, error),
+            "corrupt cached thread header mask accepted");
+    require(CaptureContextImage(*fixture.scene, after, error) &&
+            before.equals(after, error),
+            "corrupt cached thread mask changed the context");
+    corrupt = warm;
+    corrupt.cachedThreadOrder[0] += 4;
+    require(!RestoreContextImage(*fixture.scene, corrupt, error),
+            "corrupt cached thread LIFO identity accepted");
+    require(CaptureContextImage(*fixture.scene, after, error) &&
+            before.equals(after, error),
+            "corrupt cached thread LIFO identity changed the context");
     std::cout << "PASS context duplicate, 100 A-B-A component round trips, "
                  "atomic structural rejection\n";
     }

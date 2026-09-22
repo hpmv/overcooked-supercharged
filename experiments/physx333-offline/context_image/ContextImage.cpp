@@ -17,6 +17,7 @@
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
 #include "PxsDynamics.h"
+#include "PxsThreadContext.h"
 #include "PxsThresholdTable.h"
 #undef protected
 #undef private
@@ -42,11 +43,12 @@ void addField(ContextImage& image, const char* name, T& value,
 
 template<class A>
 void addArray(ContextImage& image, const char* name, A& array,
-              bool invariant = false)
+              bool invariant = false, bool fullCapacityBytes = false)
 {
     typedef typename std::remove_reference<decltype(array[0])>::type Element;
-    static_assert(std::is_trivially_destructible<Element>::value,
-                  "ContextImage arrays must have trivial destruction");
+    // These enumerated source arrays hold values/pointers, not owning
+    // elements. Cm::SpatialVector has a user-declared empty destructor, so a
+    // trivial-destructor trait would reject it despite bytewise safe storage.
     ContextImage::Array row;
     row.name = name;
     row.object = reinterpret_cast<std::uintptr_t>(&array);
@@ -55,14 +57,38 @@ void addArray(ContextImage& image, const char* name, A& array,
     row.size = array.size();
     row.capacity = array.capacity();
     row.elementBytes = sizeof(Element);
-    row.bytes.resize(size_t(row.size) * row.elementBytes);
+    row.objectBytes = sizeof(array);
+    row.fullCapacityBytes = fullCapacityBytes;
+    row.bytes.resize(size_t(fullCapacityBytes ? row.capacity : row.size) *
+                     row.elementBytes);
     if (!row.bytes.empty())
         std::memcpy(row.bytes.data(), array.begin(), row.bytes.size());
     row.invariant = invariant;
     image.arrays.push_back(std::move(row));
 }
 
-void addBitmap(ContextImage& image, const char* name, Cm::BitMap& bitmap)
+template<class A>
+void addThreadArray(ContextImage& image, size_t index, const char* name,
+                    A& array)
+{
+    const std::string key = "thread[" + std::to_string(index) + "]." + name;
+    // resizeArrays() uses forceSize_Unsafe. Preserve capacity tails as well
+    // as the currently published prefix for the next solver update.
+    addArray(image, key.c_str(), array, false, true);
+}
+
+void addBitmap(ContextImage& image, const char* name, Cm::BitMap& bitmap,
+               bool resetBeforeNextUse = false);
+
+void addThreadBitmap(ContextImage& image, size_t index, const char* name,
+                     Cm::BitMap& bitmap)
+{
+    const std::string key = "thread[" + std::to_string(index) + "]." + name;
+    addBitmap(image, key.c_str(), bitmap, true);
+}
+
+void addBitmap(ContextImage& image, const char* name, Cm::BitMap& bitmap,
+               bool resetBeforeNextUse)
 {
     ContextImage::Bitmap row;
     row.name = name;
@@ -70,9 +96,82 @@ void addBitmap(ContextImage& image, const char* name, Cm::BitMap& bitmap)
     row.data = reinterpret_cast<std::uintptr_t>(bitmap.getWords());
     row.wordCount = bitmap.getWordCount();
     row.userMemory = bitmap.isInUserMemory();
+    row.objectBytes = sizeof(bitmap);
+    row.resetBeforeNextUse = resetBeforeNextUse;
     if (row.wordCount)
         row.words.assign(bitmap.getWords(), bitmap.getWords() + row.wordCount);
     image.bitmaps.push_back(std::move(row));
+}
+
+void addCachedThread(ContextImage& image, size_t index,
+                     PxsThreadContext& thread)
+{
+    const size_t firstArray = image.arrays.size();
+    const size_t firstBitmap = image.bitmaps.size();
+    ContextImage::ThreadObject object;
+    object.address = reinterpret_cast<std::uintptr_t>(&thread);
+    object.compressedCacheSize = thread.mCompressedCacheSize;
+    object.constraintSize = thread.mConstraintSize;
+    object.bytes.resize(sizeof(thread));
+    object.ignoredHeaderBytes.resize(sizeof(thread), 0);
+    std::memcpy(object.bytes.data(), &thread, sizeof(thread));
+    image.cachedThreads.push_back(std::move(object));
+
+    addThreadArray(image, index, "constraintBlockTracking",
+                   thread.mConstraintBlockManager.mTrackingArray);
+    addThreadArray(image, index, "constraintsPerPartition",
+                   thread.mConstraintsPerPartition);
+    addThreadArray(image, index, "frictionConstraintsPerPartition",
+                   thread.mFrictionConstraintsPerPartition);
+    addThreadArray(image, index, "partitionNormalizationBitmap",
+                   thread.mPartitionNormalizationBitmap);
+    addThreadArray(image, index, "bodyCoreArray", thread.bodyCoreArray);
+    addThreadArray(image, index, "accelerationArray", thread.accelerationArray);
+    addThreadArray(image, index, "motionVelocityArray", thread.motionVelocityArray);
+    addThreadArray(image, index, "contactConstraintDescArray",
+                   thread.contactConstraintDescArray);
+    addThreadArray(image, index, "tempConstraintDescArray",
+                   thread.tempConstraintDescArray);
+    addThreadArray(image, index, "frictionConstraintDescArray",
+                   thread.frictionConstraintDescArray);
+    addThreadArray(image, index, "orderedContactConstraints",
+                   thread.orderedContactConstraints);
+    addThreadArray(image, index, "contactConstraintBatchHeaders",
+                   thread.contactConstraintBatchHeaders);
+    addThreadArray(image, index, "frictionConstraintBatchHeaders",
+                   thread.frictionConstraintBatchHeaders);
+    addThreadArray(image, index, "compoundConstraints",
+                   thread.compoundConstraints);
+    addThreadArray(image, index, "orderedContactList",
+                   thread.orderedContactList);
+    addThreadArray(image, index, "tempContactList", thread.tempContactList);
+    addThreadArray(image, index, "sortIndexArray", thread.sortIndexArray);
+    addThreadArray(image, index, "thresholdStream", thread.mThresholdStream);
+    addThreadArray(image, index, "articulations", thread.mArticulations);
+    addThreadBitmap(image, index, "localChangeTouch", thread.mLocalChangeTouch);
+    addThreadBitmap(image, index, "localChangedActors",
+                    thread.mLocalChangedActors);
+    ContextImage::ThreadObject& saved = image.cachedThreads.back();
+    for (size_t i = firstArray; i < image.arrays.size(); ++i)
+    {
+        const ContextImage::Array& row = image.arrays[i];
+        const size_t offset = row.object - saved.address;
+        for (size_t j = 0; j < row.objectBytes; ++j)
+        {
+            saved.ignoredHeaderBytes[offset + j] = 1;
+            saved.bytes[offset + j] = 0;
+        }
+    }
+    for (size_t i = firstBitmap; i < image.bitmaps.size(); ++i)
+    {
+        const ContextImage::Bitmap& row = image.bitmaps[i];
+        const size_t offset = row.object - saved.address;
+        for (size_t j = 0; j < row.objectBytes; ++j)
+        {
+            saved.ignoredHeaderBytes[offset + j] = 1;
+            saved.bytes[offset + j] = 0;
+        }
+    }
 }
 
 bool zeroBitmap(const Cm::BitMap& bitmap)
@@ -153,12 +252,62 @@ bool preflight(const ContextImage& target, const ContextImage& live,
         target.dynamics != live.dynamics || target.actors != live.actors ||
         target.threadCacheHeader != live.threadCacheHeader ||
         target.cachedThreadOrder != live.cachedThreadOrder ||
+        target.cachedThreads.size() != live.cachedThreads.size() ||
         target.fields.size() != live.fields.size() ||
         target.arrays.size() != live.arrays.size() ||
         target.bitmaps.size() != live.bitmaps.size())
     {
         error = "context scene, actor, or image schema changed";
         return false;
+    }
+    for (size_t i = 0; i < target.cachedThreads.size(); ++i)
+    {
+        const ContextImage::ThreadObject& a = target.cachedThreads[i];
+        const ContextImage::ThreadObject& b = live.cachedThreads[i];
+        std::uintptr_t nextEntry = 0;
+        if (a.address != b.address || a.address != target.cachedThreadOrder[i] ||
+            a.bytes.size() != sizeof(PxsThreadContext) ||
+            b.bytes.size() != sizeof(PxsThreadContext) ||
+            a.ignoredHeaderBytes != b.ignoredHeaderBytes ||
+            a.ignoredHeaderBytes.size() != a.bytes.size())
+        {
+            error = "cached thread-context identity or image size changed";
+            return false;
+        }
+        std::memcpy(&nextEntry, a.bytes.data(), sizeof(void*));
+        const std::uintptr_t expectedNext =
+            i + 1 < target.cachedThreadOrder.size() ?
+            target.cachedThreadOrder[i + 1] : 0;
+        if (nextEntry != expectedNext)
+        {
+            error = "cached thread-context image corrupts its LIFO link";
+            return false;
+        }
+        const PxsThreadContext* thread =
+            reinterpret_cast<const PxsThreadContext*>(a.address);
+        const size_t compressedOffset =
+            reinterpret_cast<std::uintptr_t>(&thread->mCompressedCacheSize) -
+            a.address;
+        const size_t constraintOffset =
+            reinterpret_cast<std::uintptr_t>(&thread->mConstraintSize) -
+            a.address;
+        PxU32 compressed = 0, constraint = 0;
+        std::memcpy(&compressed, a.bytes.data() + compressedOffset,
+                    sizeof(compressed));
+        std::memcpy(&constraint, a.bytes.data() + constraintOffset,
+                    sizeof(constraint));
+        if (compressed != a.compressedCacheSize ||
+            constraint != a.constraintSize)
+        {
+            error = "cached thread size counters differ from object payload";
+            return false;
+        }
+        for (size_t j = 0; j < a.bytes.size(); ++j)
+            if (a.ignoredHeaderBytes[j] && a.bytes[j])
+            {
+                error = "cached thread image has data in an ignored header";
+                return false;
+            }
     }
     for (size_t i = 0; i < target.fields.size(); ++i)
     {
@@ -207,10 +356,14 @@ bool preflight(const ContextImage& target, const ContextImage& live,
     {
         const ContextImage::Array& a = target.arrays[i];
         const ContextImage::Array& b = live.arrays[i];
-        if (a.name != b.name || a.object != b.object || a.data != b.data ||
+        if (a.name != b.name || a.object != b.object ||
             a.sizeAddress != b.sizeAddress || a.capacity != b.capacity ||
-            a.elementBytes != b.elementBytes || a.size > a.capacity ||
-            a.bytes.size() != size_t(a.size) * a.elementBytes ||
+            a.elementBytes != b.elementBytes ||
+            a.objectBytes != b.objectBytes || a.size > a.capacity ||
+            a.fullCapacityBytes != b.fullCapacityBytes ||
+            a.bytes.size() !=
+                size_t(a.fullCapacityBytes ? a.capacity : a.size) *
+                    a.elementBytes ||
             a.invariant != b.invariant ||
             (a.invariant && (a.size != b.size || a.bytes != b.bytes)))
         {
@@ -222,9 +375,13 @@ bool preflight(const ContextImage& target, const ContextImage& live,
     {
         const ContextImage::Bitmap& a = target.bitmaps[i];
         const ContextImage::Bitmap& b = live.bitmaps[i];
-        if (a.name != b.name || a.object != b.object || a.data != b.data ||
-            a.wordCount != b.wordCount || a.userMemory != b.userMemory ||
-            a.words.size() != a.wordCount)
+        if (a.name != b.name || a.object != b.object ||
+            a.objectBytes != b.objectBytes ||
+            a.resetBeforeNextUse != b.resetBeforeNextUse ||
+            (!a.resetBeforeNextUse &&
+             (a.data != b.data || a.wordCount != b.wordCount ||
+              a.userMemory != b.userMemory ||
+              a.words.size() != a.wordCount)))
         {
             error = a.name + " bitmap allocation or payload changed";
             return false;
@@ -239,6 +396,14 @@ void apply(const ContextImage& image)
         if (!row.invariant)
             std::memcpy(reinterpret_cast<void*>(row.address),
                         row.bytes.data(), row.bytes.size());
+    for (const ContextImage::ThreadObject& thread : image.cachedThreads)
+    {
+        unsigned char* destination =
+            reinterpret_cast<unsigned char*>(thread.address);
+        for (size_t i = 0; i < thread.bytes.size(); ++i)
+            if (!thread.ignoredHeaderBytes[i])
+                destination[i] = thread.bytes[i];
+    }
     for (const ContextImage::Array& row : image.arrays)
         if (!row.invariant)
         {
@@ -248,7 +413,7 @@ void apply(const ContextImage& image)
             *reinterpret_cast<PxU32*>(row.sizeAddress) = row.size;
         }
     for (const ContextImage::Bitmap& row : image.bitmaps)
-        if (!row.words.empty())
+        if (!row.resetBeforeNextUse && !row.words.empty())
             std::memcpy(reinterpret_cast<void*>(row.data), row.words.data(),
                         row.words.size() * sizeof(PxU32));
     const ContextImage::ThresholdTable& table = image.thresholdTable;
@@ -271,6 +436,7 @@ bool ContextImage::equals(const ContextImage& other,
         dynamics != other.dynamics || actors != other.actors ||
         threadCacheHeader != other.threadCacheHeader ||
         cachedThreadOrder != other.cachedThreadOrder ||
+        cachedThreads.size() != other.cachedThreads.size() ||
         fields.size() != other.fields.size() ||
         arrays.size() != other.arrays.size() ||
         bitmaps.size() != other.bitmaps.size())
@@ -278,6 +444,31 @@ bool ContextImage::equals(const ContextImage& other,
         firstDifference = "context identity or schema";
         return false;
     }
+    for (size_t i = 0; i < cachedThreads.size(); ++i)
+        if (cachedThreads[i].address != other.cachedThreads[i].address ||
+            cachedThreads[i].compressedCacheSize !=
+                other.cachedThreads[i].compressedCacheSize ||
+            cachedThreads[i].constraintSize !=
+                other.cachedThreads[i].constraintSize ||
+            cachedThreads[i].ignoredHeaderBytes !=
+                other.cachedThreads[i].ignoredHeaderBytes ||
+            cachedThreads[i].bytes != other.cachedThreads[i].bytes)
+        {
+            size_t first = 0;
+            const size_t length =
+                (std::min)(cachedThreads[i].bytes.size(),
+                           other.cachedThreads[i].bytes.size());
+            while (first < length && cachedThreads[i].bytes[first] ==
+                                     other.cachedThreads[i].bytes[first])
+                ++first;
+            firstDifference = "cached thread context " + std::to_string(i) +
+                              " byte " + std::to_string(first) + " " +
+                              std::to_string(first < cachedThreads[i].bytes.size() ?
+                                  cachedThreads[i].bytes[first] : 999) + " vs " +
+                              std::to_string(first < other.cachedThreads[i].bytes.size() ?
+                                  other.cachedThreads[i].bytes[first] : 999);
+            return false;
+        }
     for (size_t i = 0; i < fields.size(); ++i)
         if (fields[i].name != other.fields[i].name ||
             fields[i].address != other.fields[i].address ||
@@ -294,6 +485,8 @@ bool ContextImage::equals(const ContextImage& other,
         if (a.name != b.name || a.object != b.object || a.data != b.data ||
             a.sizeAddress != b.sizeAddress || a.size != b.size ||
             a.capacity != b.capacity || a.elementBytes != b.elementBytes ||
+            a.objectBytes != b.objectBytes ||
+            a.fullCapacityBytes != b.fullCapacityBytes ||
             a.bytes != b.bytes || a.invariant != b.invariant)
         {
             firstDifference = a.name;
@@ -304,9 +497,12 @@ bool ContextImage::equals(const ContextImage& other,
     {
         const Bitmap& a = bitmaps[i];
         const Bitmap& b = other.bitmaps[i];
-        if (a.name != b.name || a.object != b.object || a.data != b.data ||
-            a.wordCount != b.wordCount || a.userMemory != b.userMemory ||
-            a.words != b.words)
+        if (a.name != b.name || a.object != b.object ||
+            a.objectBytes != b.objectBytes ||
+            a.resetBeforeNextUse != b.resetBeforeNextUse ||
+            (!a.resetBeforeNextUse &&
+             (a.data != b.data || a.wordCount != b.wordCount ||
+              a.userMemory != b.userMemory || a.words != b.words)))
         {
             firstDifference = a.name;
             return false;
@@ -393,6 +589,10 @@ bool CaptureContextImage(PxScene& scene, ContextImage& image,
             return false;
         }
         next.cachedThreadOrder.push_back(address);
+        PxsThreadContext* thread = static_cast<PxsThreadContext*>(
+            reinterpret_cast<
+                PxcThreadCoherantCache<PxsThreadContext>::EntryBase*>(entry));
+        addCachedThread(next, next.cachedThreadOrder.size() - 1, *thread);
     }
     if (next.cachedThreadOrder.size() != threadHeader->Depth)
     {
@@ -446,6 +646,7 @@ bool CaptureContextImage(PxScene& scene, ContextImage& image,
     addField(next, "dynamics.solverBatchSize",
              dynamics.mSolverBatchSize, true);
 
+    const size_t firstContextArray = next.arrays.size();
     addArray(next, "threshold.stream", context.mThresholdStream);
     addArray(next, "solver.bodies", dynamics.mSolverBodyPool);
     addArray(next, "solver.bodyData", dynamics.mSolverBodyDataPool);
@@ -456,7 +657,7 @@ bool CaptureContextImage(PxScene& scene, ContextImage& image,
     addArray(next, "scratch.batchCnvxMesh",
              context.mBatchWorkUnitArrayCnvxMesh, true);
     addArray(next, "scratch.batchOther", context.mBatchWorkUnitArrayOther, true);
-    for (size_t i = 3; i < next.arrays.size(); ++i)
+    for (size_t i = firstContextArray + 3; i < next.arrays.size(); ++i)
         if (next.arrays[i].size)
         {
             error = next.arrays[i].name + " is nonempty at settled boundary";

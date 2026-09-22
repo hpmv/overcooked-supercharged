@@ -30,6 +30,8 @@ struct ContextImage
         std::uint32_t size = 0;
         std::uint32_t capacity = 0;
         std::uint32_t elementBytes = 0;
+        std::uint32_t objectBytes = 0;
+        bool fullCapacityBytes = false;
         std::vector<unsigned char> bytes;
         bool invariant = false;
     };
@@ -41,6 +43,8 @@ struct ContextImage
         std::uintptr_t data = 0;
         std::uint32_t wordCount = 0;
         std::uint32_t userMemory = 0;
+        std::uint32_t objectBytes = 0;
+        bool resetBeforeNextUse = false;
         std::vector<std::uint32_t> words;
     };
 
@@ -58,11 +62,21 @@ struct ContextImage
         std::vector<unsigned char> bytes;
     };
 
+    struct ThreadObject
+    {
+        std::uintptr_t address = 0;
+        std::uint32_t compressedCacheSize = 0;
+        std::uint32_t constraintSize = 0;
+        std::vector<unsigned char> bytes;
+        std::vector<unsigned char> ignoredHeaderBytes;
+    };
+
     std::uintptr_t scene = 0;
     std::uintptr_t context = 0;
     std::uintptr_t dynamics = 0;
     std::uintptr_t threadCacheHeader = 0;
     std::vector<std::uintptr_t> cachedThreadOrder;
+    std::vector<ThreadObject> cachedThreads;
     std::vector<std::uintptr_t> actors;
     std::vector<Field> fields;
     std::vector<Array> arrays;
@@ -75,8 +89,9 @@ struct ContextImage
 
 // Requires a completed PxScene::fetchResults boundary. Rejects CCD,
 // constraints, articulations, aggregates, contact modification, and nonempty
-// solver scratch arrays. The thread-context cache is not covered; callers
-// must not step after restoring this component alone.
+// solver scratch arrays. Cached thread contexts are covered only while their
+// LIFO order and all owned allocations stay identical. Callers must not step
+// after restoring this component alone.
 bool CaptureContextImage(physx::PxScene& scene, ContextImage& image,
                          std::string& error);
 
