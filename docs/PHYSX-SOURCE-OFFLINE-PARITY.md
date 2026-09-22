@@ -22,6 +22,12 @@ manifolds, the level-shaped ten-touch/two-no-report pattern, and the same
 full-image/ordered-callback gates. A diagnostic fixed-address allocator independently
 replays a five-step alternating 12↔8 suffix for each cold variant, matching
 initialized arena bytes, allocation ledgers, and callbacks over 100 cycles.
+The same arena diagnostic also survives releasing and recreating one static
+actor and shape before restoring its checkpoint, then reproduces a five-step
+suffix for 100 cycles after repairing the fixture's external actor pointer.
+That narrow result does not make actor lifetime safe in the component-based
+restorer or in Unity: deletion listeners, OS synchronization, and external
+allocations are outside this snapshot.
 See the
 [12→8 fixture](../experiments/physx333-offline/partial_contacts/README.md),
 [arena diagnostic](../experiments/physx333-offline/arena_snapshot/README.md),

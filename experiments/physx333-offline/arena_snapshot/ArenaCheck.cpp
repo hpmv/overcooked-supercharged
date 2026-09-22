@@ -12,6 +12,7 @@
 
 #define private public
 #define protected public
+#include "NpPhysics.h"
 #include "PxsAABBManager.h"
 #undef protected
 #undef private
@@ -262,12 +263,170 @@ bool sameInitializedArena(const oc2::offline::ArenaSnapshotAllocator::Image& a,
     return lhs.equals(rhs, error);
 }
 
+PxShape* onlyShape(PxRigidStatic& actor)
+{
+    PxShape* shape = nullptr;
+    require(actor.getNbShapes() == 1 && actor.getShapes(&shape, 1) == 1 &&
+            shape != nullptr, "static actor must have one shape");
+    return shape;
+}
+
+PxShape* staticRayHit(PxScene& scene, PxReal x, PxReal z)
+{
+    PxRaycastBuffer hit;
+    const PxQueryFilterData filter{PxQueryFlags(PxQueryFlag::eSTATIC)};
+    const bool found = scene.raycast(PxVec3(x, 5.0f, z),
+                                     PxVec3(0.0f, -1.0f, 0.0f), 10.0f,
+                                     hit, PxHitFlag::eDEFAULT, filter);
+    return found && hit.hasBlock ? hit.block.shape : nullptr;
+}
+
+int runLifetimeDiagnostic()
+{
+    // PxDeletionListener callbacks and the fixture's C++ vectors live outside
+    // the arena. Keep the former absent and explicitly repair the latter.
+    Fixture f(false);
+    require(!static_cast<NpPhysics*>(f.physics)->mDeletionListenersExist,
+            "lifetime diagnostic requires no deletion listeners");
+    f.step(0.0f);
+    f.step(0.0f);
+    require(f.contactPairs() == 12, "lifetime checkpoint must have twelve pairs");
+    require(f.physics->getNbShapes() == 24,
+            "lifetime checkpoint must have twenty-four shapes");
+
+    const PxU32 victimIndex = 11;
+    const PxReal victimX = PxReal(victimIndex) * 3.0f;
+    const PxReal victimZ = 0.9f;
+    PxRigidStatic* const checkpointActor = f.statics[victimIndex];
+    PxShape* const checkpointShape = onlyShape(*checkpointActor);
+    require(staticRayHit(*f.scene, victimX, victimZ) == checkpointShape,
+            "checkpoint static query must hit victim shape");
+    require(staticRayHit(*f.scene, victimX, 6.0f) == nullptr,
+            "checkpoint static query must miss replacement position");
+    const auto checkpoint = f.allocator.capture();
+
+    const PxActorTypeFlags staticFlags = PxActorTypeFlag::eRIGID_STATIC;
+    require(f.scene->getNbActors(staticFlags) == 12,
+            "checkpoint static actor inventory");
+    std::vector<PxActor*> checkpointActors(12);
+    require(f.scene->getActors(staticFlags, checkpointActors.data(), 12) == 12,
+            "capture checkpoint static actor order");
+
+    struct Observation
+    {
+        oc2::offline::ArenaSnapshotAllocator::Image arena;
+        std::vector<PxU32> events;
+        PxU32 pairs = 0;
+    };
+    const PxReal suffixPoses[] = {-0.2f, 0.0f, -0.2f, 0.0f, -0.2f};
+    std::vector<Observation> expected;
+    for (unsigned step = 0; step < 5; ++step)
+    {
+        f.step(suffixPoses[step]);
+        require(staticRayHit(*f.scene, victimX, victimZ) == checkpointShape,
+                "reference suffix static query");
+        Observation observed;
+        observed.arena = f.allocator.capture();
+        observed.events = f.events.words;
+        observed.pairs = f.contactPairs();
+        require(observed.pairs == (step % 2 ? 12u : 8u),
+                "reference suffix pair count");
+        expected.push_back(std::move(observed));
+    }
+
+    for (unsigned iteration = 0; iteration < 100; ++iteration)
+    {
+        std::string error;
+        if (!f.allocator.restore(checkpoint, error))
+            require(false, "pre-perturbation arena restore: " + error);
+        f.statics[victimIndex] = checkpointActor;
+        f.events.words.clear();
+        if (!checkpoint.equals(f.allocator.capture(), error))
+            require(false, "pre-perturbation checkpoint differs: " + error);
+
+        // Releasing this actor also destroys its attached shape: the fixture
+        // relinquished the user shape reference during construction.
+        checkpointActor->release();
+        f.statics[victimIndex] = nullptr;
+        require(f.scene->getNbActors(staticFlags) == 11 &&
+                f.physics->getNbShapes() == 23,
+                "victim actor and attached shape were not both released");
+        PxRigidStatic* replacement = f.physics->createRigidStatic(
+            PxTransform(PxVec3(victimX, 0.0f, 6.0f)));
+        require(replacement != nullptr, "replacement static actor creation");
+        PxShape* replacementShape = f.physics->createShape(
+            PxBoxGeometry(0.5f, 0.5f, 0.5f), *f.material);
+        require(replacementShape != nullptr, "replacement static shape creation");
+        replacement->attachShape(*replacementShape);
+        replacementShape->release();
+        replacement->userData = reinterpret_cast<void*>(
+            std::uintptr_t(victimIndex + 1));
+        f.scene->addActor(*replacement);
+        f.statics[victimIndex] = replacement;
+        require(f.scene->getNbActors(staticFlags) == 12 &&
+                f.physics->getNbShapes() == 24,
+                "replacement actor and shape inventory differs");
+        f.step(0.0f);
+        require(f.contactPairs() == 11,
+                "replacement successor must have eleven contacts");
+        require(staticRayHit(*f.scene, victimX, victimZ) == nullptr &&
+                staticRayHit(*f.scene, victimX, 6.0f) == replacementShape,
+                "replacement static query differs");
+        require(f.errors.count == 0, "replacement successor PhysX error");
+
+        // The replacement no longer exists in the restored graph. Never
+        // release it after this point; its address may alias checkpointActor.
+        if (!f.allocator.restore(checkpoint, error))
+            require(false, "lifetime arena restore: " + error);
+        f.statics[victimIndex] = checkpointActor;
+        f.events.words.clear();
+        if (!checkpoint.equals(f.allocator.capture(), error))
+            require(false, "lifetime checkpoint bytes or ledger differ: " +
+                    error);
+        require(f.scene->getNbActors(staticFlags) == 12 &&
+                f.physics->getNbShapes() == 24,
+                "restored actor or shape count differs");
+        std::vector<PxActor*> restoredActors(12);
+        require(f.scene->getActors(staticFlags, restoredActors.data(), 12) == 12 &&
+                restoredActors == checkpointActors,
+                "restored static actor order differs");
+        require(onlyShape(*checkpointActor) == checkpointShape,
+                "restored static shape identity differs");
+        require(staticRayHit(*f.scene, victimX, victimZ) == checkpointShape &&
+                staticRayHit(*f.scene, victimX, 6.0f) == nullptr,
+                "restored static query differs");
+        if (!checkpoint.equals(f.allocator.capture(), error))
+            require(false, "restored query changed checkpoint arena: " + error);
+
+        for (unsigned step = 0; step < 5; ++step)
+        {
+            f.step(suffixPoses[step]);
+            require(staticRayHit(*f.scene, victimX, victimZ) == checkpointShape,
+                    "replayed suffix static query differs");
+            require(f.contactPairs() == expected[step].pairs,
+                    "replayed suffix contact count differs");
+            require(f.events.words == expected[step].events,
+                    "replayed suffix callbacks differ");
+            const auto replayed = f.allocator.capture();
+            if (!sameInitializedArena(expected[step].arena, replayed, error))
+                require(false, "replayed lifetime suffix arena differs at step " +
+                        std::to_string(step) + ": " + error);
+        }
+    }
+    std::cout << "PASS source-built static actor/shape lifetime arena replay x100 "
+                 "(single fixture, inline dispatcher only)\n";
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
+    if (argc == 2 && std::string(argv[1]) == "--lifetime")
+        return runLifetimeDiagnostic();
     const bool mixed = argc == 2 && std::string(argv[1]) == "--mixed";
-    require(argc == 1 || mixed, "usage: physx333_arena_snapshot [--mixed]");
+    require(argc == 1 || mixed,
+            "usage: physx333_arena_snapshot [--mixed|--lifetime]");
     Fixture f(mixed);
     f.step(0.0f);
     f.step(0.0f);

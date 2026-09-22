@@ -15,4 +15,6 @@ if errorlevel 1 exit /b 1
 "%~dp0out-ninja\physx333_arena_snapshot.exe"
 if errorlevel 1 exit /b 1
 "%~dp0out-ninja\physx333_arena_snapshot.exe" --mixed
+if errorlevel 1 exit /b 1
+"%~dp0out-ninja\physx333_arena_snapshot.exe" --lifetime
 exit /b %errorlevel%

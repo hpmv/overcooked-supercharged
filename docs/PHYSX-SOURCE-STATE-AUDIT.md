@@ -61,6 +61,11 @@ A separate [raw-arena diagnostic](../experiments/physx333-offline/arena_snapshot
 also replays five-step suffixes for its two cold layouts over 100 cycles,
 but it does not capture OS
 state or imply direct use in the statically linked Unity binary.
+Its separate actor-lifetime diagnostic also passes a one-static-actor/shape
+release-and-recreate perturbation followed by five-step replay x100, with
+exact arena checkpoint and static-query/identity checks. This is raw-arena
+coverage in the single-threaded fixture, not actor-lifetime support in the
+component-based restorer or Unity.
 The separate [trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)
 reproduces 12/4/2→8/2/2 source-built interaction and pool counts plus ordered
 four-contact/two-trigger losses, but it is a fresh-scene reference only, not
