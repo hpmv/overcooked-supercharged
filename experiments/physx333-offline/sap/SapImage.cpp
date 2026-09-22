@@ -12,6 +12,7 @@
 #include "ScScene.h"
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
+#include "PsAllocator.h"
 
 // The private access is confined to this offline test translation unit. The
 // vendor checkout and the linked PhysX DLLs are unmodified.
@@ -771,12 +772,17 @@ bool validateSavedImage(const SapImage& image, std::string& error)
     return true;
 }
 
-void writeImage(const Plan& target, const SapImage& image)
+void writeImage(const Plan& target, const SapImage& image,
+                bool skipDeletedOverlapBuffer = false)
 {
     for (std::size_t i = 0; i < target.buffers.size(); ++i)
+    {
+        if (skipDeletedOverlapBuffer &&
+            target.buffers[i].name == "aabb.deletedOverlaps") continue;
         if (target.buffers[i].size)
             std::memcpy(const_cast<void*>(target.buffers[i].address),
                         image.buffers[i].bytes.data(), target.buffers[i].size);
+    }
     for (std::size_t i = 0; i < target.scalars.size(); ++i)
         if (!target.scalars[i].topology)
             std::memcpy(target.scalars[i].address, image.scalars[i].bytes.data(),
@@ -824,7 +830,17 @@ bool SapImage::equals(const SapImage& other, std::string& firstDifference) const
     {
         const Buffer& a = buffers[i];
         const Buffer& b = other.buffers[i];
-        if (a.name != b.name || a.address != b.address || a.bytes != b.bytes)
+        // This is an owned, settled-frame result array. Replaying a cold
+        // checkpoint allocates a new backing buffer at an arbitrary address.
+        // The capacity scalar and every backing byte are still compared.
+        const bool rebasedDeletedOverlaps =
+            a.name == "aabb.deletedOverlaps" &&
+            a.bytes.size() == 32u * sizeof(PxvBroadPhaseOverlap) &&
+            b.bytes.size() == a.bytes.size() &&
+            a.address != 0 && b.address != 0;
+        if (a.name != b.name ||
+            (!rebasedDeletedOverlaps && a.address != b.address) ||
+            a.bytes != b.bytes)
         {
             firstDifference = a.name;
             return false;
@@ -900,8 +916,30 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
         error = "SAP image inventory is incompatible with live scene";
         return false;
     }
-    // Every validation completes before any write. No game or PhysX allocator is
-    // called after this point; the image is copied into existing allocations.
+    // The AABB manager starts with no deleted-overlap result array and
+    // allocates 32 slots on its first deletion. At a settled frame this
+    // buffer has already been consumed by Sc::Scene::finishBroadPhase, but
+    // the manager still owns it. This is the only allocation change accepted
+    // here: all other topology and allocation identities remain strict.
+    PxsAABBManager& mgr = *reinterpret_cast<PxsAABBManager*>(live.manager);
+    PxU32 savedDeletedCapacity = 0, savedDeletedSize = 0;
+    if (!imageU32(image, "aabb.deletedOverlapCapacity", savedDeletedCapacity, error) ||
+        !imageU32(image, "aabb.deletedOverlapSize", savedDeletedSize, error))
+        return false;
+    const SapImage::Buffer* savedDeleted =
+        findBuffer(image, "aabb.deletedOverlaps");
+    const bool coldDeletedRollback =
+        savedDeletedCapacity == 0 && savedDeletedSize == 0 &&
+        mgr.mDeletedPairsCapacity == 32 && mgr.mDeletedPairs != nullptr;
+    if (coldDeletedRollback &&
+        (!savedDeleted || savedDeleted->address != 0 ||
+         !savedDeleted->bytes.empty()))
+    {
+        error = "cold deleted-overlap image must have a null, empty buffer";
+        return false;
+    }
+    // Validate every remaining field before modifying the scene. The cold
+    // result-array path detaches and frees one owned allocation after verify.
     for (std::size_t i = 0; i < live.scalars.size(); ++i)
     {
         const ScalarRef& target = live.scalars[i];
@@ -915,6 +953,8 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
             return false;
         }
         if (target.topology &&
+            !(coldDeletedRollback &&
+              target.name == "aabb.deletedOverlapCapacity") &&
             std::memcmp(target.address, source.bytes.data(), target.size) != 0)
         {
             error = "allocation capacity changed at " + target.name;
@@ -926,8 +966,9 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
         const BufferRef& target = live.buffers[i];
         const SapImage::Buffer& source = image.buffers[i];
         if (source.name != target.name ||
-            source.address != reinterpret_cast<std::uintptr_t>(target.address) ||
-            source.bytes.size() != target.size)
+            (!(coldDeletedRollback && target.name == "aabb.deletedOverlaps") &&
+             (source.address != reinterpret_cast<std::uintptr_t>(target.address) ||
+              source.bytes.size() != target.size)))
         {
             error = "allocation identity/capacity changed at " + target.name;
             return false;
@@ -937,7 +978,19 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
 
     SapImage rollback;
     if (!CaptureSap(scene, rollback, error)) return false;
-    writeImage(live, image);
+    PxvBroadPhaseOverlap* detachedDeletedPairs = nullptr;
+    if (coldDeletedRollback)
+    {
+        // Retain ownership until the complete postwrite image verifies. If
+        // verification fails, the original B allocation can be reattached.
+        detachedDeletedPairs = mgr.mDeletedPairs;
+    }
+    writeImage(live, image, coldDeletedRollback);
+    if (coldDeletedRollback)
+    {
+        mgr.mDeletedPairs = nullptr;
+        mgr.mDeletedPairsCapacity = 0;
+    }
     SapImage observed;
     std::string verifyError;
     bool verified = false;
@@ -952,6 +1005,11 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
     }
     if (!verified)
     {
+        if (coldDeletedRollback)
+        {
+            mgr.mDeletedPairs = detachedDeletedPairs;
+            mgr.mDeletedPairsCapacity = 32;
+        }
         writeImage(live, rollback);
         SapImage reverted;
         std::string rollbackError;
@@ -961,6 +1019,7 @@ bool RestoreSap(PxScene& scene, const SapImage& image, std::string& error)
         error = "SAP restore verification failed and was rolled back: " + verifyError;
         return false;
     }
+    if (coldDeletedRollback) PX_FREE(detachedDeletedPairs);
     return true;
 }
 

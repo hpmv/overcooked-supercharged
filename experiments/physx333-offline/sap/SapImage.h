@@ -9,8 +9,10 @@ namespace physx { class PxScene; }
 namespace oc2 { namespace offline {
 
 // Test-only image of the SAP and broadphase element allocations in one stopped
-// PhysX 3.3.3 scene. Addresses deliberately remain process-local: this first
-// restore requires the same scene and the same live allocation topology.
+// PhysX 3.3.3 scene. Addresses remain process-local. Restore requires the same
+// scene and allocation topology except for a cold AABB deleted-overlap result
+// array growing from zero to 32 slots; that owned scratch buffer can be freed
+// when restoring the cold checkpoint.
 struct SapImage
 {
     struct Scalar
