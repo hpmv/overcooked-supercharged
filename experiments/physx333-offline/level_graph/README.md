@@ -34,9 +34,9 @@ The moving chef's shape 0 is the contact capsule and shape 1 is the auxiliary
 box. In the shipped graph, the fifth active dynamic has no recorded
 interactions; its object identity and geometry are unknown.
 
-| Settled image | Contact SIPs | Trigger interactions | Markers | Contact manifolds / island edges | Touching/report ActorPairs | TransformCache live IDs / refs | AABB deleted overlaps |
+| Settled image | Contact SIPs | Trigger interactions | Markers | Contact manifolds / island edges | ActorPair / report-data pool used | TransformCache live IDs / refs | AABB deleted overlaps |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| A, two established steps | 12 | 4 | 2 | 12 / 12 | 10 / 10 | 10 / 24 | 0 |
+| A, two established steps | 12 | 4 | 2 | 12 / 12 | 12 / 10 | 10 / 24 | 0 |
 | B, moving chef z=-0.2 | 8 | 2 | 2 | 8 / 8 | 8 / 8 | 6 / 16 | 6 |
 
 At A, all 12 contact-manager manifolds are the 240-byte capsule/box large
@@ -80,6 +80,18 @@ Capsule/box and box/box trigger overlap callbacks in this source version
 ignore the uninitialized cache direction/GJK fields, so those bytes are
 deliberately excluded from the auxiliary image.
 
+The fixture also captures a read-only `ActorPairGraphImage` at A and B. Every
+contact SIP is checked against its canonical chef/static actor pair and
+physical ActorPair pool slot. The twelve A contacts have twelve distinct
+ActorPairs; ten touch and own report data. B retains eight contacts,
+eight ActorPairs, and eight report-data objects. The settled report set is
+empty at both boundaries, so every live ActorPair has exactly one SIP owner
+and reference. The image includes native actor A/B orientation, report fields,
+physical used slots, and exact free-list order for both pools. The fixture
+checks that all surviving ActorPairs and report objects keep their slots,
+the four removed ActorPair slots and two removed report slots return to their
+free chains, and the full A/B images equal those of a second fresh scene.
+
 It constructs a second scene with the same public API call trace, requires
 the expected graph/counts, and compares all those images and callback orders
 between the two scenes. This establishes a deterministic baseline for a
@@ -108,9 +120,9 @@ The most important known deviations from the f444 image are:
   raw SAP handle history, or Animator/gameplay state. Its 23→17 active SAP
   pairs include physical overlaps rejected by the filter and cannot be
   compared to an absent game SAP snapshot.
-- The auxiliary image covers trigger/marker physical state and mixed array
-  order; it does not yet capture all contact ActorPair pool and report-set
-  occupancy. Shared contact ActorPairs remain a separate joined-restore gate.
+- The ActorPair and auxiliary images are capture-only controls. The joined
+  restorer does not yet recreate contact and trigger lifecycles for this
+  shared-endpoint graph or restore their pool order and report state.
 
 The next step is to add source-private restore for this joined graph and
 require A checkpoint and B successor images to match. A passing fresh-scene

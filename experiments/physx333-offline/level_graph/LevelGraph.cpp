@@ -17,6 +17,7 @@
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
 #include "../aux_interactions/AuxInteractionImage.h"
+#include "../actor_pair_graph/ActorPairGraphImage.h"
 
 #define private public
 #define protected public
@@ -461,6 +462,7 @@ struct Snapshot
 {
     physx333_offline::OracleImage oracle;
     physx333_offline::AuxInteractionImage aux;
+    physx333_offline::ActorPairGraphImage actorPair;
     GraphImage graph;
     Facts facts;
     std::vector<PairKey> deletedOverlaps;
@@ -609,6 +611,9 @@ struct World
         if (!physx333_offline::CaptureAuxInteractionImage(
                 *scene, image.aux, error))
             fail("CaptureAuxInteractionImage: " + error);
+        if (!physx333_offline::CaptureActorPairGraph(
+                *scene, image.actorPair, error))
+            fail("CaptureActorPairGraph: " + error);
         oc2::offline::TransformCacheImage cache;
         if (!oc2::offline::CaptureTransformCache(*scene, cache, error))
             fail("CaptureTransformCache: " + error);
@@ -654,20 +659,10 @@ struct World
         const auto& cm = part(image.oracle, "contact.managers");
         if (cm.size() % 14) fail("contact manager row layout changed");
         image.facts.contactManagers = static_cast<PxU32>(cm.size() / 14);
-        std::set<const Sc::ActorPair*> seen;
-        Cm::Range<Sc::Interaction*const> overlaps = interactions.getInteractions(
-            Sc::PX_INTERACTION_TYPE_OVERLAP);
-        while (!overlaps.empty())
+        for (const auto& actorPair : image.actorPair.actorPairs)
         {
-            const Sc::ShapeInstancePairLL* sip =
-                static_cast<const Sc::ShapeInstancePairLL*>(overlaps.front());
-            overlaps.popFront();
-            const Sc::ActorPair* actorPair = sip->getActorPair();
-            if (seen.insert(actorPair).second)
-            {
-                if (actorPair->mTouchCount) ++image.facts.touchPairs;
-                if (actorPair->mReportData) ++image.facts.reportPairs;
-            }
+            if (actorPair.touchCount) ++image.facts.touchPairs;
+            if (actorPair.hasReportData) ++image.facts.reportPairs;
         }
         image.events = callback.rows;
         return image;
@@ -844,9 +839,116 @@ void verifyAuxTransition(const Snapshot& a, const Snapshot& b)
     }
 }
 
+void verifyActorPairs(const Snapshot& s, bool successor)
+{
+    const auto& graph = s.actorPair;
+    const PxU32 contacts = successor ? 8u : 12u;
+    const PxU32 touching = successor ? 8u : 10u;
+    if (graph.sips.size() != contacts ||
+        graph.actorPairs.size() != contacts ||
+        graph.actorPairPool.usedCount != contacts ||
+        graph.actorPairPool.usedSlots.size() != contacts ||
+        graph.reportDataPool.usedCount != touching ||
+        graph.reportDataPool.usedSlots.size() != touching ||
+        !graph.reportSetOrder.empty())
+        fail("level-like ActorPair/report pool ownership differs");
+    if (graph.actorPairPool.slabCount != 1 ||
+        graph.reportDataPool.slabCount != 1 ||
+        graph.actorPairPool.elementsPerSlab != 32 ||
+        graph.reportDataPool.elementsPerSlab != 32 ||
+        graph.actorPairPool.freeOrder.size() != 32 - contacts ||
+        graph.reportDataPool.freeOrder.size() != 32 - touching)
+        fail("ActorPair/report pool physical partition differs");
+
+    std::map<physx333_offline::ActorGraphKey,
+             const physx333_offline::ActorGraphPairRow*> actorPairs;
+    std::set<PxU32> actorSlots, reportSlots;
+    for (const auto& row : graph.actorPairs)
+    {
+        if (!actorPairs.insert(std::make_pair(row.key, &row)).second ||
+            !actorSlots.insert(row.poolSlot).second ||
+            row.sipOwners != 1 || row.refCount != 1 ||
+            row.touchingOwners != row.touchCount ||
+            row.touchCount > 1 || row.inReportSet ||
+            row.hasReportData != (row.touchCount == 1))
+            fail("contact actor endpoints did not own distinct ActorPairs");
+        if (row.hasReportData &&
+            (!reportSlots.insert(row.reportPoolSlot).second ||
+             row.reportActorA != row.actorA ||
+             row.reportActorB != row.actorB ||
+             !row.streamValid))
+            fail("touching ActorPair report-data identity differs");
+    }
+    if (actorSlots != std::set<PxU32>(
+            graph.actorPairPool.usedSlots.begin(),
+            graph.actorPairPool.usedSlots.end()) ||
+        reportSlots != std::set<PxU32>(
+            graph.reportDataPool.usedSlots.begin(),
+            graph.reportDataPool.usedSlots.end()))
+        fail("ActorPair physical pool slots do not match live owners");
+
+    for (PxU32 i = 0; i < graph.sips.size(); ++i)
+    {
+        const auto& sip = graph.sips[i];
+        const auto found = actorPairs.find(sip.actorKey);
+        if (found == actorPairs.end() ||
+            found->second->poolSlot != sip.actorPairSlot ||
+            sip.shape0.actor == sip.shape1.actor ||
+            sip.isReportPair != true ||
+            !(s.graph.scenePairs[i] == pair(
+                Sc::PX_INTERACTION_TYPE_OVERLAP,
+                {sip.shape0.actor, sip.shape0.index},
+                {sip.shape1.actor, sip.shape1.index})))
+            fail("contact SIP ActorPair binding or scene order differs");
+    }
+}
+
+void verifyActorPairTransition(const Snapshot& a, const Snapshot& b)
+{
+    if (a.actorPair.actorPairPool.slabCount !=
+            b.actorPair.actorPairPool.slabCount ||
+        a.actorPair.reportDataPool.slabCount !=
+            b.actorPair.reportDataPool.slabCount ||
+        b.actorPair.actorPairPool.freeOrder.size() !=
+            a.actorPair.actorPairPool.freeOrder.size() + 4 ||
+        b.actorPair.reportDataPool.freeOrder.size() !=
+            a.actorPair.reportDataPool.freeOrder.size() + 2)
+        fail("ActorPair/report pool deletion counts differ");
+    for (const auto& before : a.actorPair.actorPairs)
+    {
+        const auto survivor = std::find_if(
+            b.actorPair.actorPairs.begin(), b.actorPair.actorPairs.end(),
+            [&before](const physx333_offline::ActorGraphPairRow& row) {
+                return row.key == before.key;
+            });
+        if (before.key.second == kMover &&
+            before.key.first >= kExtraFirst &&
+            before.key.first <= kExtraLast)
+        {
+            if (survivor != b.actorPair.actorPairs.end() ||
+                std::find(b.actorPair.actorPairPool.freeOrder.begin(),
+                          b.actorPair.actorPairPool.freeOrder.end(),
+                          before.poolSlot) ==
+                    b.actorPair.actorPairPool.freeOrder.end())
+                fail("deleted ActorPair slot was not returned to pool");
+            if (before.hasReportData &&
+                std::find(b.actorPair.reportDataPool.freeOrder.begin(),
+                          b.actorPair.reportDataPool.freeOrder.end(),
+                          before.reportPoolSlot) ==
+                    b.actorPair.reportDataPool.freeOrder.end())
+                fail("deleted ActorPair report slot was not returned to pool");
+        }
+        else if (survivor == b.actorPair.actorPairs.end() ||
+                 survivor->poolSlot != before.poolSlot ||
+                 survivor->reportPoolSlot != before.reportPoolSlot)
+            fail("surviving ActorPair changed physical pool ownership");
+    }
+}
+
 void verify(const Snapshot& s, bool successor)
 {
     verifyAux(s, successor);
+    verifyActorPairs(s, successor);
     const PxU32 contacts = successor ? 8u : 12u;
     const PxU32 triggers = successor ? 2u : 4u;
     if (s.graph.counts.size() != Sc::PX_INTERACTION_TYPE_COUNT ||
@@ -960,6 +1062,7 @@ int main()
     print("B", b);
     verify(b, true);
     verifyAuxTransition(a, b);
+    verifyActorPairTransition(a, b);
     World fresh(runtime);
     fresh.step(0.0f);
     const Snapshot freshA = fresh.step(0.0f);
@@ -978,9 +1081,12 @@ int main()
         !b.aux.equals(freshB.aux, difference))
         fail("fresh-scene A/B trigger/marker physical images differ: " +
              difference);
+    if (!(a.actorPair == freshA.actorPair) ||
+        !(b.actorPair == freshB.actorPair))
+        fail("fresh-scene A/B ActorPair ownership/pool images differ");
     if (runtime.errors.count) fail("PhysX issued an error");
     std::cout << "PASS level-like shared-endpoint 12/4/2 -> 8/2/2 graph, "
                  "six SAP deletions, cache/manifold/island facts, and "
-                 "fresh-scene ordered callback/Oracle/auxiliary equality\n";
+                 "fresh-scene ordered callback/Oracle/auxiliary/ActorPair equality\n";
 }
 #endif
