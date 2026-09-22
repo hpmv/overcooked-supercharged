@@ -27,6 +27,8 @@ if errorlevel 1 exit /b 1
 
 call "%~dp0trigger_marker\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0level_graph\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 call "%~dp0arena_snapshot\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 

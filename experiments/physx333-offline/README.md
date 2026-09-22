@@ -9,10 +9,11 @@ cmd /c experiments\physx333-offline\Run-Current-Gates.cmd
 The script stops on the first failure. It builds and runs the six-contact
 joined rewind, the box/box and capsule/box 12→8 cold/warm joined fixtures,
 their mixed-contact fresh-scene baselines, the read-only trigger/marker
-baseline, and the raw-arena replay/lifetime diagnostics. Joined fixtures
+baseline, the level-shaped shared-endpoint fresh-scene graph, and the
+raw-arena replay/lifetime diagnostics. Joined fixtures
 repeat their next-step comparisons 100 times; the arena fixture also checks
 five-step continuations 100 times.
 
 These are **current covered gates**, not a test for complete level or Unity
-parity. The [remaining trigger/marker and actor-graph work](../../docs/PHYSX-TRIGGER-MARKER-JOIN-PLAN.md)
+parity. The [remaining trigger/marker and graph-aware rewind work](../../docs/PHYSX-TRIGGER-MARKER-JOIN-PLAN.md)
 is still open. The script never launches the game.

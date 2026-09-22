@@ -29,6 +29,12 @@ contact-slot ownership, not this actor/shape graph. A joined rewind on the
 simplified graph is an intermediate step; exact level-shaped ownership needs
 a separate fixture and replay gate.
 
+The target `finishBroadPhase` observer orders its six deleted overlaps as
+contact with graph static A10, contact A9, contact A8, trigger A12, contact
+A7, trigger A11. The four contact removals release island edge IDs 8–11.
+These graph labels are checkpoint-local names, not portable actor IDs; the
+order is a fixture target, while raw pointer values from the game are not.
+
 ## Retained state to image
 
 - Capture trigger and marker interactions in their ordered scene arrays,
@@ -40,11 +46,13 @@ a separate fixture and replay gate.
   the mover and each touched static actor. Source destruction swaps entries
   with the last entry, so the mixed contact/trigger/marker order can change.
 - For each trigger retain `mFlags`, `mLastFrameHadContacts`, and the
-  `Gu::TriggerCache` direction/state/GJK state. A newly constructed trigger
-  starts without previous touch history; restoring only its public pair
-  flags cannot reproduce a loss notification. Markers have no derived
-  payload beyond their base interaction linkage but still need identity,
-  slot, and order verification.
+  initialized `Gu::TriggerCache::state`. The capsule/box and box/box overlap
+  callbacks ignore the cache's indeterminate `dir` and `gjkState` fields;
+  do not read or image those fields for these geometries. A newly
+  constructed trigger starts without previous touch history; restoring only
+  its public pair flags cannot reproduce a loss notification. Markers have
+  no derived payload beyond their base interaction linkage but still need
+  identity, slot, and order verification.
 - Key each interaction by type and canonical unordered shape endpoints, but
   retain its **oriented** shape0/shape1 order for filter and work-unit
   reproduction. Key ActorPair ownership separately by canonical actor
@@ -68,10 +76,14 @@ pair reconstruction contact-only; do not let trigger indices masquerade as
 SIP indices in actor or scene arrays.
 
 The existing `AuxInteractionImage` is the first read-only observer for mixed
-scene/actor order and trigger pool/history. Its current trigger-cache policy
-accepts only box/box geometry. The actual graph's capsule/trigger combination
-needs a source audit of which `TriggerCache` fields are initialized/read
-before the image can be used as a restoration contract there.
+scene/actor order and trigger pool/history. Its initial trigger-cache policy
+accepts only box/box geometry. A pinned-source audit found that the
+capsule/box overlap callback also ignores the cache entirely: the trigger
+constructor/initialize path sets only `state = TRIGGER_DISJOINT`, while
+`dir` and `gjkState` are indeterminate for this geometry. The capsule/box
+observer should therefore gate exact geometry, check/restore only that
+initialized `state`, and never read or compare the other two fields. Trigger
+flags and `mLastFrameHadContacts` remain behavior-relevant.
 
 Add a separate, preflighted source bridge to recreate the two missing trigger
 pairs through original `NPhaseCore::onOverlapCreated`, preserving the two
@@ -99,8 +111,12 @@ passes full image readback and next-step replay.
    two-shape-moving-chef graph. Require deterministic fresh-scene A/B
    images, 12/4/2→8/2/2 counts, and exact ownership of the four contact and
    two trigger deletions, plus the shared 10-shape/24-reference contact
-   topology. Drive new restore logic against this graph; keep
-   the simpler one-mover fixtures as regression controls.
+   topology. **Fresh-scene baseline now passes** in
+   [level_graph](../experiments/physx333-offline/level_graph/README.md).
+   It does not yet reproduce the game's historical TransformCache free-ID
+   chain or ordered SAP deletions, and it has no rewind. Drive new restore
+   logic against this graph; keep the simpler one-mover fixtures as
+   regression controls.
 3. Recreate only four missing contacts, then only two missing triggers,
    checking survivor identity and no marker mutation. Key pair lookup by
    actor/shape identity rather than contiguous mover shape indices.
