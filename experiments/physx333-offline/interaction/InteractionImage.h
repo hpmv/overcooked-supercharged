@@ -10,7 +10,7 @@ namespace physx { class PxScene; }
 
 namespace physx333_offline {
 
-// Six box contacts only. The pool slots are physical slots in the stopped,
+// Six or twelve rigid contacts only. The pool slots are physical slots in the stopped,
 // same-scene PhysX 3.3.3 pools; they are not portable serialization IDs.
 struct InteractionPairImage {
     std::uint32_t moverShape = 0;
@@ -42,7 +42,7 @@ struct InteractionPairImage {
     std::vector<unsigned char> pairCacheBytes;
     std::vector<unsigned char> manifoldTransformBytes;
     std::vector<unsigned char> manifoldContactBytes;
-    std::uint32_t manifoldKind = 0; // 0 absent, 1 box/box single manifold
+    std::uint32_t manifoldKind = 0; // 0 absent, 1 box/box or capsule/box manifold
     std::uint32_t manifoldContactCount = 0;
     std::uint32_t manifoldWarmStartCount = 0;
     std::vector<unsigned char> manifoldIndexBytes;

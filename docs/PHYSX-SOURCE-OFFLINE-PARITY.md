@@ -16,7 +16,10 @@ four modes: cold and warmed allocation states, each with either twelve
 touching pairs or ten touching and two overlapping/non-touching pairs. It
 matches ordered callbacks, all 39 implemented source-Oracle sections, and
 the SAP, island, interaction, cache, body, clock, context, query, and contact
-memory component images. A diagnostic fixed-address allocator independently
+memory component images. A capsule/box variant of the mixed fixture now
+passes both cold and warmed 100-cycle joined replays with twelve PCM
+manifolds, the level-shaped ten-touch/two-no-report pattern, and the same
+full-image/ordered-callback gates. A diagnostic fixed-address allocator independently
 replays a five-step alternating 12↔8 suffix for each cold variant, matching
 initialized arena bytes, allocation ledgers, and callbacks over 100 cycles.
 See the
@@ -25,8 +28,8 @@ See the
 and [source-state audit](PHYSX-SOURCE-STATE-AUDIT.md). The older milestone
 narrative below records how the experiment reached this point.
 
-This is not complete PhysX-only parity for the level. The fixture still uses
-box/box rather than the observed capsule/box contacts, deletes only four
+This is not complete PhysX-only parity for the level. The joined capsule
+fixture still uses a simplified single-mover layout, deletes only four
 contact pairs rather than the level's four contact plus two trigger pairs,
 and has no trigger/marker interactions. A separate
 [trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)

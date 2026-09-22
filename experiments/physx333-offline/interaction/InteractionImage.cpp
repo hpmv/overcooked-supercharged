@@ -20,6 +20,7 @@
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
 #include "PxsContactManager.h"
+#include "PxvGeometry.h"
 #include "PxcNpMemBlockPool.h"
 #undef protected
 #undef private
@@ -34,6 +35,22 @@ static_assert(sizeof(PxsIslandManagerEdgeHook) == sizeof(PxU32),
               "Unexpected island edge hook layout");
 
 typedef std::vector<Sc::ShapeInstancePairLL*> PairPointers;
+
+bool supportedSingleManifoldGeometry(const PxcNpWorkUnit& work)
+{
+    const PxU8 a = work.geomType0;
+    const PxU8 b = work.geomType1;
+    return (a == PxGeometryType::eBOX && b == PxGeometryType::eBOX) ||
+           (a == PxGeometryType::eCAPSULE && b == PxGeometryType::eBOX) ||
+           (a == PxGeometryType::eBOX && b == PxGeometryType::eCAPSULE);
+}
+
+bool geometryMatchesBoundCores(const PxcNpWorkUnit& work)
+{
+    return work.shapeCore0 && work.shapeCore1 &&
+           work.geomType0 == work.shapeCore0->geometry.getType() &&
+           work.geomType1 == work.shapeCore1->geometry.getType();
+}
 
 InteractionImage::Bitmap captureBitmap(const Cm::BitMap& bitmap)
 {
@@ -128,7 +145,7 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) ||
         interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER))
     {
-        error = "Interaction scene is outside the active box-pair fixture";
+        error = "Interaction scene is outside the active rigid-pair fixture";
         return false;
     }
 
@@ -191,6 +208,12 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
         row.actorPairRefCount = actorPair.mRefCount;
         row.managerFlags = sip->mManager->mFlags;
         const PxcNpWorkUnit& work = sip->mManager->getWorkUnit();
+        if (!supportedSingleManifoldGeometry(work) ||
+            !geometryMatchesBoundCores(work))
+        {
+            error = "Contact geometry or bound shape-core order is unsupported";
+            return false;
+        }
         row.managerStatusFlags = work.statusFlags;
         const unsigned char* workBegin =
             reinterpret_cast<const unsigned char*>(&work);
@@ -214,11 +237,9 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
                 work.pairCache.ptr + work.pairCache.size);
         if (work.pairCache.manifold)
         {
-            if ((work.pairCache.manifold & 1u) != 0 ||
-                work.geomType0 != PxGeometryType::eBOX ||
-                work.geomType1 != PxGeometryType::eBOX)
+            if ((work.pairCache.manifold & 1u) != 0)
             {
-                error = "Only a single box/box PCM manifold is supported";
+                error = "Only a single box/box or capsule/box PCM manifold is supported";
                 return false;
             }
             const Gu::PersistentContactManifold& manifold =
@@ -1461,8 +1482,11 @@ static bool restoreInteractionContactPayload(PxScene& scene,
         PxcNpWorkUnit saved;
         std::memcpy(&saved, source.workUnitBytes.data(), sizeof(saved));
         if (saved.index != source.managerSlot ||
-            saved.geomType0 != PxGeometryType::eBOX ||
-            saved.geomType1 != PxGeometryType::eBOX ||
+            !supportedSingleManifoldGeometry(saved) ||
+            !geometryMatchesBoundCores(saved) ||
+            !geometryMatchesBoundCores(live) ||
+            saved.geomType0 != live.geomType0 ||
+            saved.geomType1 != live.geomType1 ||
             saved.rigidCore0 != live.rigidCore0 ||
             saved.rigidCore1 != live.rigidCore1 ||
             saved.shapeCore0 != live.shapeCore0 ||
@@ -1521,7 +1545,7 @@ static bool restoreInteractionContactPayload(PxScene& scene,
                       sizeof(Gu::PersistentContact))) ||
             source.manifoldKind > 1)
         {
-            error = "Single box/box PCM manifold allocation or image is invalid";
+            error = "Single rigid-pair PCM manifold allocation or image is invalid";
             return false;
         }
         plan[shape].manager = &cm;

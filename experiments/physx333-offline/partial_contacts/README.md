@@ -106,9 +106,11 @@ tests allocation-lifetime rollback directly. Both replay x100.
 
 The real Story 1-1 checkpoint has twelve capsule/box managers with zero
 current contact points; ten pairs still have the touch bit and a report
-object, while two do not. It also has trigger and marker interactions. This
-fixture instead uses twelve touching box/box pairs and gates out triggers and
-markers; those level features require separate source-built coverage.
+object, while two do not. It also has four trigger and two marker
+interactions. The original fixture uses box/box pairs and gates out triggers
+and markers; the capsule variant below covers its contact geometry and PCM
+allocation, but not trigger/marker history or the level's four-chef actor
+layout.
 
 The separate `--mixed-baseline` mode uses twelve box/box broadphase pairs,
 with rotated corner-gap geometry for mover shapes 8 and 10. Both pairs have
@@ -119,5 +121,25 @@ leaving eight pairs and reporting two ordered losses (static actors 10, 12)
 followed by eight persistent contacts. Fresh-scene A/B Oracle and callbacks
 match. `--mixed-subset-probe` performs the same full cold joined rewind and
 replay x100; `--mixed-warm-subset-probe` is its separate high-water control.
-This reproduces the checkpoint's mixed ownership pattern without yet claiming
-capsule/box or trigger/marker coverage.
+This reproduces the checkpoint's mixed ownership pattern without trigger or
+marker coverage.
+
+The `--capsule-mixed-baseline`, `--capsule-mixed-subset-probe`, and
+`--capsule-mixed-warm-subset-probe` modes replace all twelve mover boxes with
+capsules against static boxes. The capsule scene enables PCM, so each of its
+twelve settled checkpoint pairs owns a single large persistent manifold,
+including the two AABB-overlapping but non-touching pairs at shapes 8 and 10.
+The latter are set diagonally away from their boxes but remain in broadphase
+at A; all four pairs at shapes 8–11 disappear at B. The cold and warm joined
+probes each require the complete checkpoint Oracle and component images before
+simulation, then exact ordered callbacks, the full Oracle, and every component
+image at B for 100 rewind/replay cycles. A mismatched checkpoint geometry type
+is rejected before NPhase lifecycle creation; a reversed capsule/box work-unit
+geometry order is rejected without scene mutation. The original box/box modes stay
+available as regressions.
+
+The shipped f444→f445 broadphase deletes six pairs in order: four contacts
+(the same four CM slots 8–11, with slots 8 and 10 non-touching) and two
+triggers. Two other triggers and two markers survive. This capsule fixture
+still has only four broadphase deletions; reproducing the trigger/marker
+lifecycle is a separate next step and must not be inferred from these passes.

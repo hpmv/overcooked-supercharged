@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "PxPhysicsAPI.h"
+#include "PxcNpWorkUnit.h"
 #include "../oracle/Oracle.h"
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
@@ -275,8 +276,10 @@ struct World
     PxScene* scene = nullptr;
     PxRigidDynamic* mover = nullptr;
     std::vector<PxRigidActor*> actors;
+    bool capsuleShapes = false;
 
-    explicit World(Runtime& rt, bool mixed = false) : runtime(rt)
+    explicit World(Runtime& rt, bool mixed = false, bool capsule = false)
+        : runtime(rt), capsuleShapes(capsule)
     {
         PxSceneDesc desc(rt.physics->getTolerancesScale());
         desc.gravity = PxVec3(0.0f);
@@ -286,6 +289,7 @@ struct World
         desc.broadPhaseType = PxBroadPhaseType::eSAP;
         desc.staticStructure = PxPruningStructure::eSTATIC_AABB_TREE;
         desc.dynamicStructure = PxPruningStructure::eDYNAMIC_AABB_TREE;
+        if (capsule) desc.flags |= PxSceneFlag::eENABLE_PCM;
         scene = rt.physics->createScene(desc);
         if (!scene) fail("createScene");
 
@@ -293,9 +297,10 @@ struct World
         {
             const bool cornerGap = mixed && (i == 8 || i == 10);
             const PxReal x = static_cast<PxReal>(i) * 3.0f +
-                (cornerGap ? 1.1f : 0.0f);
+                (cornerGap ? (capsule ? 1.2f : 1.1f) : 0.0f);
             const PxReal z = i < 8 ? 0.0f :
-                (cornerGap ? 1.1f : 0.9f);
+                (cornerGap ? (capsule ? 1.2f : 1.1f) :
+                 (capsule ? 0.85f : 0.9f));
             PxRigidStatic* fixed = rt.physics->createRigidStatic(
                 PxTransform(PxVec3(x, 0.0f, z)));
             if (!fixed) fail("createRigidStatic");
@@ -311,12 +316,15 @@ struct World
         }
 
         mover = rt.physics->createRigidDynamic(
-            PxTransform(PxVec3(0.0f, 0.95f, 0.0f)));
+            PxTransform(PxVec3(0.0f, capsule ? 0.8f : 0.95f, 0.0f)));
         if (!mover) fail("createRigidDynamic");
         for (PxU32 i = 0; i < kStatics; ++i)
         {
-            PxShape* shape = rt.physics->createShape(
-                PxBoxGeometry(0.5f, 0.5f, 0.5f), *rt.material);
+            PxShape* shape = capsule ?
+                rt.physics->createShape(PxCapsuleGeometry(0.5f, 0.4f),
+                                        *rt.material) :
+                rt.physics->createShape(PxBoxGeometry(0.5f, 0.5f, 0.5f),
+                                        *rt.material);
             if (!shape) fail("create dynamic shape");
             mover->attachShape(*shape);
             const PxVec3 localPosition(static_cast<PxReal>(i) * 3.0f,
@@ -348,7 +356,8 @@ struct World
     void step(PxReal z)
     {
         callback.rows.clear();
-        mover->setGlobalPose(PxTransform(PxVec3(0.0f, 0.95f, z)));
+        mover->setGlobalPose(PxTransform(PxVec3(
+            0.0f, capsuleShapes ? 0.8f : 0.95f, z)));
         mover->setLinearVelocity(PxVec3(0.0f));
         mover->setAngularVelocity(PxVec3(0.0f));
         scene->simulate(kStep);
@@ -580,9 +589,9 @@ void printPairFacts(const char* label, const Capture& image)
 void verifyFreshEqual(const Capture& a, const Capture& b,
                       const char* stage);
 
-void mixedBaseline(Runtime& runtime)
+void mixedBaseline(Runtime& runtime, bool capsule = false)
 {
-    World world(runtime, true);
+    World world(runtime, true, capsule);
     world.step(0.0f);
     world.step(0.0f);
     const Capture checkpoint = world.capture();
@@ -642,6 +651,9 @@ void mixedBaseline(Runtime& runtime)
                 touching)
             fail("Mixed report/touch pattern differs at shape " +
                  std::to_string(i));
+        if (capsule && checkpointInteraction.pairs[i].manifoldKind != 1)
+            fail("Capsule/box fixture is missing its PCM manifold at shape " +
+                 std::to_string(i));
     }
     for (std::size_t i = 0; i < successor.events.size(); ++i)
     {
@@ -655,13 +667,14 @@ void mixedBaseline(Runtime& runtime)
             !(event.flags & flag))
             fail("Mixed successor callback order differs");
     }
-    World fresh(runtime, true);
+    World fresh(runtime, true, capsule);
     fresh.step(0.0f);
     fresh.step(0.0f);
     verifyFreshEqual(checkpoint, fresh.capture(), "mixed checkpoint");
     fresh.step(-0.2f);
     verifyFreshEqual(successor, fresh.capture(), "mixed successor");
-    std::cout << "PASS mixed box/box 10-touch/2-nontouch baseline, "
+    std::cout << "PASS mixed " << (capsule ? "capsule/box" : "box/box")
+              << " 10-touch/2-nontouch baseline, "
                  "12-to-8 topology and ordered callbacks\n";
 }
 
@@ -687,9 +700,10 @@ void verifyFreshEqual(const Capture& a, const Capture& b,
     }
 }
 
-void subsetProbe(Runtime& runtime, bool warm, bool mixed)
+void subsetProbe(Runtime& runtime, bool warm, bool mixed,
+                 bool capsule = false)
 {
-    World world(runtime, mixed);
+    World world(runtime, mixed, capsule);
     if (warm)
     {
         // A separate control: preallocate the broadphase deletion-output
@@ -752,6 +766,18 @@ void subsetProbe(Runtime& runtime, bool warm, bool mixed)
     const Capture afterSlotReject = world.capture();
     if (!successor.oracle.equals(afterSlotReject.oracle, error))
         fail("Rejected NPhase manager slot changed the scene: " + error);
+
+    if (capsule)
+    {
+        invalid = target;
+        invalid.moverGeometryType = PxGeometryType::eBOX;
+        if (physx333_offline::RestoreNPhaseSubset(
+                *world.scene, invalid, error))
+            fail("Mismatched checkpoint capsule geometry was accepted");
+        const Capture afterGeometryReject = world.capture();
+        if (!successor.oracle.equals(afterGeometryReject.oracle, error))
+            fail("Rejected checkpoint geometry changed the scene: " + error);
+    }
 
     if (mixed)
     {
@@ -839,6 +865,35 @@ void subsetProbe(Runtime& runtime, bool warm, bool mixed)
     if (checkpoint.oracle.equals(metadataProjected, error))
         fail("Metadata-only subset unexpectedly matched full checkpoint");
     std::cout << "METADATA_ORACLE_FIRST_DIFFERENCE " << error << '\n';
+    if (capsule)
+    {
+        physx333_offline::InteractionImage invalidGeometry =
+            checkpointInteraction;
+        auto& bytes = invalidGeometry.pairs[0].workUnitBytes;
+        if (bytes.size() != sizeof(PxcNpWorkUnit))
+            fail("Capsule work-unit image size changed");
+        PxcNpWorkUnit reversed;
+        std::memcpy(&reversed, bytes.data(), sizeof(reversed));
+        if (!((reversed.geomType0 == PxGeometryType::eCAPSULE &&
+               reversed.geomType1 == PxGeometryType::eBOX) ||
+              (reversed.geomType0 == PxGeometryType::eBOX &&
+               reversed.geomType1 == PxGeometryType::eCAPSULE)))
+            fail("Capsule work-unit geometry order is unexpected");
+        std::swap(reversed.geomType0, reversed.geomType1);
+        std::memcpy(bytes.data(), &reversed, sizeof(reversed));
+        physx333_offline::OracleImage beforeReject;
+        if (!physx333_offline::CaptureOracle(
+                *world.scene, beforeReject, error))
+            fail("Pre-rejection Oracle capture: " + error);
+        if (physx333_offline::InstallInteractionContactBindingsSubset12(
+                *world.scene, invalidGeometry, error))
+            fail("Reversed capsule/box work-unit geometry was accepted");
+        physx333_offline::OracleImage afterGeometryOrderReject;
+        if (!physx333_offline::CaptureOracle(
+                *world.scene, afterGeometryOrderReject, error) ||
+            !beforeReject.equals(afterGeometryOrderReject, error))
+            fail("Rejected work-unit geometry changed the scene: " + error);
+    }
     if (!physx333_offline::InstallInteractionContactBindingsSubset12(
             *world.scene, checkpointInteraction, error))
         fail("12-pair contact binding install failed; scene is fail-stop: " +
@@ -1053,16 +1108,27 @@ int main(int argc, char** argv)
         std::string(argv[1]) == "--mixed-subset-probe";
     const bool mixedWarmSubset = argc == 2 &&
         std::string(argv[1]) == "--mixed-warm-subset-probe";
+    const bool capsuleMixed = argc == 2 &&
+        std::string(argv[1]) == "--capsule-mixed-baseline";
+    const bool capsuleMixedSubset = argc == 2 &&
+        std::string(argv[1]) == "--capsule-mixed-subset-probe";
+    const bool capsuleMixedWarmSubset = argc == 2 &&
+        std::string(argv[1]) == "--capsule-mixed-warm-subset-probe";
     if (argc != 1 && !subset && !warmSubset && !mixed &&
-        !mixedSubset && !mixedWarmSubset)
+        !mixedSubset && !mixedWarmSubset && !capsuleMixed &&
+        !capsuleMixedSubset && !capsuleMixedWarmSubset)
         fail("Unknown partial-contact fixture argument");
     Runtime runtime;
-    if (subset || warmSubset || mixedSubset || mixedWarmSubset)
-        subsetProbe(runtime, warmSubset || mixedWarmSubset,
-                    mixedSubset || mixedWarmSubset);
-    if (mixed)
+    if (subset || warmSubset || mixedSubset || mixedWarmSubset ||
+        capsuleMixedSubset || capsuleMixedWarmSubset)
+        subsetProbe(runtime, warmSubset || mixedWarmSubset ||
+                    capsuleMixedWarmSubset,
+                    mixedSubset || mixedWarmSubset ||
+                    capsuleMixedSubset || capsuleMixedWarmSubset,
+                    capsuleMixedSubset || capsuleMixedWarmSubset);
+    if (mixed || capsuleMixed)
     {
-        mixedBaseline(runtime);
+        mixedBaseline(runtime, capsuleMixed);
         return 0;
     }
     Capture checkpoint, successor;

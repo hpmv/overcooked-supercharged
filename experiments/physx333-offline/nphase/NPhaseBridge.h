@@ -33,7 +33,8 @@ typedef std::uint32_t (__cdecl* NPhaseRecreateFnV1)(
     std::uint32_t pairCount);
 
 // Export name: oc2_physx333_nphase_recreate_subset_v2. The caller supplies
-// only absent rigid box pairs and the expected count of existing overlaps.
+// only absent dynamic box/static box or dynamic capsule/static box pairs and
+// the expected count of existing overlaps.
 // The source bridge validates all requests and survivor disjointness before
 // invoking the original NPhase lifecycle. Postwrite failure is fail-stop.
 typedef std::uint32_t (__cdecl* NPhaseRecreateSubsetFnV2)(

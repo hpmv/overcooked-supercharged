@@ -56,6 +56,7 @@ typedef std::map<const Sc::ShapeCore*, NPhaseShapeKey> KeyByShape;
 struct FixtureSize {
     PxU32 contacts = 0;
     PxU32 moverId = 0;
+    PxGeometryType::Enum moverGeometryType = PxGeometryType::eGEOMETRY_COUNT;
 };
 
 bool fixtureShapes(PxScene& scene, ShapeByKey& byKey,
@@ -123,9 +124,27 @@ bool fixtureShapes(PxScene& scene, ShapeByKey& byKey,
             PxShape* shape = shapes[shapeIndex];
             // PxShape::getActor() is null for a shareable shape even when
             // PxRigidActor::getShapes() lists its live scene attachment.
-            if (!shape || shape->getGeometryType() != PxGeometryType::eBOX)
+            if (!shape)
             {
                 error = "Fixture shape binding changed";
+                return false;
+            }
+            const PxGeometryType::Enum geometry = shape->getGeometryType();
+            if (id == size.moverId)
+            {
+                if ((geometry != PxGeometryType::eBOX &&
+                     geometry != PxGeometryType::eCAPSULE) ||
+                    (size.moverGeometryType != PxGeometryType::eGEOMETRY_COUNT &&
+                     geometry != size.moverGeometryType))
+                {
+                    error = "Mover fixture shapes must be uniform boxes or capsules";
+                    return false;
+                }
+                size.moverGeometryType = geometry;
+            }
+            else if (geometry != PxGeometryType::eBOX)
+            {
+                error = "Static fixture shape is not a box";
                 return false;
             }
             NPhaseShapeKey key = { id, shapeIndex };
@@ -221,6 +240,11 @@ bool NPhasePairTopology::operator==(const NPhasePairTopology& other) const
 bool NPhaseTopologyImage::equals(const NPhaseTopologyImage& other,
                                  std::string& firstDifference) const
 {
+    if (moverGeometryType != other.moverGeometryType)
+    {
+        firstDifference = "mover geometry type differs";
+        return false;
+    }
     if (activePairCount != other.activePairCount)
     {
         firstDifference = "active shape-pair count differs";
@@ -247,10 +271,11 @@ bool NPhaseTopologyImage::sameShapePairs(
     const NPhaseTopologyImage& other,
     std::string& firstDifference) const
 {
-    if (activePairCount != other.activePairCount ||
+    if (moverGeometryType != other.moverGeometryType ||
+        activePairCount != other.activePairCount ||
         pairs.size() != other.pairs.size())
     {
-        firstDifference = "shape-pair count or active count differs";
+        firstDifference = "fixture geometry, shape-pair count, or active count differs";
         return false;
     }
     for (size_t i = 0; i < pairs.size(); ++i)
@@ -294,6 +319,7 @@ bool CaptureNPhaseTopology(PxScene& scene, NPhaseTopologyImage& image,
         return false;
     }
     NPhaseTopologyImage next;
+    next.moverGeometryType = fixture.moverGeometryType;
     next.activePairCount = interactions.getActiveInteractionCount(
         Sc::PX_INTERACTION_TYPE_OVERLAP);
     Cm::Range<Sc::Interaction*const> range = interactions.getInteractions(
@@ -332,7 +358,7 @@ bool CaptureNPhaseTopology(PxScene& scene, NPhaseTopologyImage& image,
                     sizeof(row.islandEdge));
         if (!pairKeyValid(row, fixture))
         {
-            error = "NPhase interaction does not match the box fixture";
+            error = "NPhase interaction does not match the rigid fixture";
             return false;
         }
         next.pairs.push_back(row);
@@ -477,6 +503,12 @@ bool RestoreNPhaseSubset(PxScene& scene,
     KeyByShape byShape;
     FixtureSize fixture;
     if (!fixtureShapes(scene, byKey, byShape, fixture, error)) return false;
+    if (target.moverGeometryType !=
+        static_cast<PxU32>(fixture.moverGeometryType))
+    {
+        error = "Target mover geometry differs from live fixture";
+        return false;
+    }
     NPhaseTopologyImage current;
     if (!CaptureNPhaseTopology(scene, current, error)) return false;
     if (target.pairs.size() != fixture.contacts ||
@@ -511,7 +543,7 @@ bool RestoreNPhaseSubset(PxScene& scene,
             row.managerSlot == 0xffffffffu ||
             targetRow[row.shape0.shapeIndex] >= 0)
         {
-            error = "Target contains an invalid or duplicate box pair";
+            error = "Target contains an invalid or duplicate rigid pair";
             return false;
         }
         targetRow[row.shape0.shapeIndex] = static_cast<int>(i);

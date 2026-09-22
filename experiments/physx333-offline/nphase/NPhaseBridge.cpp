@@ -195,8 +195,13 @@ oc2_physx333_nphase_recreate_subset_v2(
         if (!shape0 || !shape1 || shape0 == shape1 ||
             !shape0->hasAABBMgrHandle() || !shape1->hasAABBMgrHandle())
             return NPhaseBridgeUnresolvedShape;
-        if (shape0->getGeometryType() != PxGeometryType::eBOX ||
-            shape1->getGeometryType() != PxGeometryType::eBOX ||
+        const bool supportedGeometry =
+            (actor0->getActorType() == PxActorType::eRIGID_DYNAMIC &&
+             actor1->getActorType() == PxActorType::eRIGID_STATIC &&
+             (shape0->getGeometryType() == PxGeometryType::eBOX ||
+              shape0->getGeometryType() == PxGeometryType::eCAPSULE) &&
+             shape1->getGeometryType() == PxGeometryType::eBOX);
+        if (!supportedGeometry ||
             !(shape0->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) ||
             !(shape1->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) ||
             (shape0->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) ||

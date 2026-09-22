@@ -38,9 +38,13 @@ struct NPhasePairTopology {
 struct NPhaseTopologyImage {
     std::vector<NPhasePairTopology> pairs;
     std::uint32_t activePairCount;
+    // The fixture's dynamic shapes are uniformly boxes or capsules; record
+    // their type so a changed live geometry is rejected before lifecycle
+    // reconstruction creates any missing interactions.
+    std::uint32_t moverGeometryType;
 
-    NPhaseTopologyImage() : activePairCount(0) {}
-    // Compare just the ordered shape identities and filter pair flags.
+    NPhaseTopologyImage() : activePairCount(0), moverGeometryType(0) {}
+    // Compare fixture geometry, ordered shape identities, and pair flags.
     // Lifecycle reconstruction is expected to pass this while full state
     // equality remains false until touch/contact/island history is restored.
     bool sameShapePairs(const NPhaseTopologyImage& other,
@@ -65,7 +69,7 @@ bool RestoreNPhaseTopology(physx::PxScene& scene,
                            const NPhaseTopologyImage& target,
                            std::string& error);
 
-// Source-built test-only subset lifecycle stage. The current 6- or 12-box
+// Source-built test-only subset lifecycle stage. The current 6- or 12-pair
 // fixture must retain at least one pair; the function creates only target
 // pairs absent from that successor. It preflights the next SIP/CM pool slots,
 // preserves survivor objects, and restores ordered scene/mover pair arrays.
