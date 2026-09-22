@@ -39,6 +39,12 @@ matched. The [shape-cache binding image](../shape_cache/README.md) repairs
 that dependency; the joined probe includes its corruption-rejection check.
 The `--all-shape-binding-probe` also confirms a contactless seventh mover
 shape is included by the ShapeSim image.
+The separate `--actor-lifetime-probe` releases three fixture colliders,
+recreates visually equivalent actors through the public API, and compares
+the settled source images. It reliably finds different contact-manager
+history and actor/shape identities. This is a negative control for the
+same-allocation guard, not an actor-lifetime restore; it exits before any
+attempted rewind replay.
 
 Current boundaries:
 

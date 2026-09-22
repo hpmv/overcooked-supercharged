@@ -527,6 +527,7 @@ int main(int argc, char** argv)
     bool joinedPayloadProbe = false;
     bool joinedReplayProbe = false;
     bool allShapeBindingProbe = false;
+    bool actorLifetimeProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
@@ -542,7 +543,63 @@ int main(int argc, char** argv)
         }
         else if (std::string(argv[i]) == "--all-shape-binding-probe")
             allShapeBindingProbe = true;
+        else if (std::string(argv[i]) == "--actor-lifetime-probe")
+            actorLifetimeProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
+    }
+
+    if (actorLifetimeProbe)
+    {
+        Runtime runtime;
+        // This process exits without destroying the intentionally divergent
+        // scene. No partially reconstructed physics state is stepped again.
+        World* source = new World(runtime);
+        source->step(false);
+        source->step(false);
+        const physx333_offline::OracleImage checkpointOracle =
+            captureOracle(*source);
+        oc2::offline::BodyImage checkpointBodies;
+        std::string error;
+        if (!oc2::offline::CaptureBodies(*source->scene,
+                                        checkpointBodies, error))
+            die("actor-lifetime checkpoint bodies: " + error);
+        for (PxU32 i = 0; i < 3; ++i)
+        {
+            source->actors[i]->release();
+            source->actors[i] = nullptr;
+        }
+        source->step(false);
+        for (PxU32 i = 0; i < 3; ++i)
+        {
+            PxRigidStatic* fixed = runtime.physics->createRigidStatic(
+                PxTransform(PxVec3(static_cast<PxReal>(i) * 3.0f,
+                                   0.0f, 0.0f)));
+            PxShape* shape = runtime.physics->createShape(
+                PxBoxGeometry(0.5f, 0.5f, 0.5f), *runtime.material);
+            if (!fixed || !shape) die("actor-lifetime public recreation failed");
+            fixed->attachShape(*shape);
+            shape->release();
+            fixed->userData = reinterpret_cast<void*>(
+                static_cast<uintptr_t>(i + 1));
+            source->scene->addActor(*fixed);
+            source->actors[i] = fixed;
+        }
+        source->step(false);
+        const physx333_offline::OracleImage recreatedOracle =
+            captureOracle(*source);
+        oc2::offline::BodyImage recreatedBodies;
+        if (!oc2::offline::CaptureBodies(*source->scene,
+                                        recreatedBodies, error))
+            die("actor-lifetime recreated bodies: " + error);
+        if (checkpointOracle.equals(recreatedOracle, error))
+            die("actor-lifetime public recreation unexpectedly restored internal history");
+        std::cout << "ACTOR_LIFETIME_ORACLE_FIRST_DIFFERENCE " << error << "\n";
+        if (checkpointBodies.equals(recreatedBodies, error))
+            die("actor-lifetime BodyImage unexpectedly retained actor identity");
+        std::cout << "ACTOR_LIFETIME_BODY_FIRST_DIFFERENCE " << error << "\n";
+        std::cout << "PASS public release/recreate restores seven visible actors but not the settled PhysX predecessor; no replay follows\n";
+        std::cout.flush();
+        std::_Exit(0);
     }
 
     if (allShapeBindingProbe)
