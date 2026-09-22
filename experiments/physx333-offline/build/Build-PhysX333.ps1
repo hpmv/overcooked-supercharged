@@ -4,6 +4,7 @@ param(
     [string]$PhysXRoot,
     [string]$VisualStudio = 'C:\Program Files\Microsoft Visual Studio\2022\Community',
     [int]$MaxCpuCount = 4,
+    [switch]$NPhaseBridge,
     [string[]]$MirrorPatch = @()
 )
 
@@ -60,6 +61,43 @@ if (-not $sceneQueriesText.Contains($oldGuard)) {
 }
 $sceneQueriesText = $sceneQueriesText.Replace($oldGuard, '#if !PX_IS_SPU')
 [System.IO.File]::WriteAllText($sceneQueriesPath, $sceneQueriesText, (New-Object System.Text.UTF8Encoding($false)))
+
+# Our test-only bridge is built only in the disposable source mirror. It
+# exposes selected original lifecycle methods without changing vendor files
+# or linking a private PhysX symbol directly from the external harness.
+if ($NPhaseBridge) {
+    $bridgeSource = Join-Path $PSScriptRoot '..\nphase\NPhaseBridge.cpp'
+    $bridgeHeader = Join-Path $PSScriptRoot '..\nphase\NPhaseBridge.h'
+    $bridgeDestination = Join-Path $sdkMirror 'Source\SimulationController\src'
+    foreach ($bridgeFile in @($bridgeSource, $bridgeHeader)) {
+        if (-not (Test-Path -LiteralPath $bridgeFile)) {
+            throw "NPhase bridge source not found: $bridgeFile"
+        }
+        Copy-Item -LiteralPath $bridgeFile -Destination $bridgeDestination -Force
+    }
+
+    $simulationProject = Join-Path $sdkMirror 'Source\compiler\vc12win32\SimulationController.vcxproj'
+    $simulationText = [System.IO.File]::ReadAllText($simulationProject)
+    $compileAnchor = '<ClCompile Include="..\..\SimulationController\src\ScNPhaseCore.cpp">'
+    if (-not $simulationText.Contains($compileAnchor)) {
+        throw "Expected NPhase compile entry missing: $simulationProject"
+    }
+    $simulationText = $simulationText.Replace($compileAnchor,
+        '<ClCompile Include="..\..\SimulationController\src\NPhaseBridge.cpp" />' + "`r`n`t`t" + $compileAnchor)
+    [System.IO.File]::WriteAllText($simulationProject, $simulationText,
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    $physxProject = Join-Path $sdkMirror 'Source\compiler\vc12win32\PhysX.vcxproj'
+    $physxText = [System.IO.File]::ReadAllText($physxProject)
+    $linkAnchor = '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO</AdditionalOptions>'
+    if (-not $physxText.Contains($linkAnchor)) {
+        throw "Expected release linker options missing: $physxProject"
+    }
+    $physxText = $physxText.Replace($linkAnchor,
+        '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO /INCLUDE:_oc2_physx333_nphase_recreate_v1</AdditionalOptions>')
+    [System.IO.File]::WriteAllText($physxProject, $physxText,
+        (New-Object System.Text.UTF8Encoding($false)))
+}
 
 # Optional test-only accessors can be supplied as small patch files. They are
 # applied to the disposable mirror after it is refreshed from pinned source.

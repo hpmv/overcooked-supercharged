@@ -149,3 +149,34 @@ multi-manifold contents are flagged if encountered. The next milestone is a
 same-scene NPhase/contact/island transaction that restores the checkpoint and
 reproduces the full next-step image. Until then, no PhysX-only rewind parity
 claim is warranted.
+
+The first source-lifecycle probe is narrower than that transaction. Build the
+disposable DLL with `-NPhaseBridge`, then run the harness with
+`--nphase-topology-probe`. A test-only export calls the original
+`NPhaseCore::onOverlapCreated` path for six preflighted box pairs. The probe
+first proves that a mismatched filter flag is rejected without mutation; it
+then recreates the six ordered shape pairs, manager presence, and ActorPair
+reference topology. Full touch state still differs. The probe runs in its own
+process and exits without another simulation or normal scene teardown, because
+SAP, contact caches, and islands are not yet jointly restored. The bridge is
+our own C++ code compiled into an ignored source mirror; the pinned external
+PhysX checkout remains unchanged.
+
+A separate island image now captures manager-owned graph pools, ordered free
+chains, bitmaps, queues, counters, and work backing. Same-topology idempotent
+restore passes 100 times, and malformed images or missing contact-edge
+bindings are rejected before mutation. It does not yet restore a deletion
+successor to a contact-bearing predecessor. A read-only memory-block-pool
+image also passes duplicate capture at checkpoint and deletion, covering
+ordered tracking arrays, stream selectors, counters, and all 16 KiB block
+contents; this fixture reports no unsupported allocations. Its address-to-ID
+registry cannot detect a free-and-reallocate at the same address entirely
+between captures. Full raw block bytes are retained for eventual same-scene
+restore, but independent-scene equality cannot compare uninitialized tails.
+
+The semantic oracle excludes `PxcNpWorkUnit::prevSolverConstraintSize`, which
+the pinned source never reads or writes, and compares only the fields and
+contact bytes actually consumed by `PxcNpCacheRead2`, not its unwritten
+16-byte alignment padding. Extra observer allocations exposed both as
+independent-scene false positives; the source-backed normalization restores
+fresh-scene oracle equality.

@@ -27,6 +27,7 @@
 #include "PxsContext.h"
 #include "PxsIslandManager.h"
 #include "PxsContactManager.h"
+#include "PxcContactCache.h"
 #undef protected
 #undef private
 
@@ -77,6 +78,57 @@ void appendHash(Words& out, const void* bytes, size_t count)
     out.push_back(static_cast<std::uint32_t>(count));
     out.push_back(static_cast<std::uint32_t>(value));
     out.push_back(static_cast<std::uint32_t>(value >> 32));
+}
+
+bool appendLocalContactCache(Words& out, const PxcNpCache& cache,
+                             std::string& error)
+{
+    out.push_back(cache.size);
+    if (!cache.size)
+    {
+        if (cache.ptr) { error = "Empty local-contact cache has nonnull data"; return false; }
+        return true;
+    }
+    if (!cache.ptr)
+    {
+        error = "Nonempty local-contact cache has null data";
+        return false;
+    }
+    const size_t payloadSize = (sizeof(PxcLocalContactsCache) + 3u) & ~size_t(3u);
+    if (cache.size < payloadSize + sizeof(PxU32))
+    {
+        error = "Local-contact cache is shorter than its header";
+        return false;
+    }
+    const PxcLocalContactsCache& payload =
+        *reinterpret_cast<const PxcLocalContactsCache*>(cache.ptr);
+    PxU32 contactBytes = 0;
+    std::memcpy(&contactBytes, cache.ptr + payloadSize, sizeof(contactBytes));
+    if (contactBytes > cache.size - payloadSize - sizeof(contactBytes) ||
+        cache.size != ((payloadSize + sizeof(contactBytes) + contactBytes + 15u) & ~size_t(15u)))
+    {
+        error = "Local-contact cache payload length is inconsistent";
+        return false;
+    }
+    // PxcNpCacheWrite rounds its allocation to 16 bytes, but does not write
+    // the tail. PxcNpCacheRead2 reads only these typed fields and contactBytes.
+    // Compare those semantics, not uninitialized allocator padding.
+    const PxTransform transforms[2] = { payload.mTransform0, payload.mTransform1 };
+    for (size_t i = 0; i < 2; ++i)
+    {
+        out.push_back(floatBits(transforms[i].p.x));
+        out.push_back(floatBits(transforms[i].p.y));
+        out.push_back(floatBits(transforms[i].p.z));
+        out.push_back(floatBits(transforms[i].q.x));
+        out.push_back(floatBits(transforms[i].q.y));
+        out.push_back(floatBits(transforms[i].q.z));
+        out.push_back(floatBits(transforms[i].q.w));
+    }
+    out.push_back(payload.mNbCachedContacts);
+    out.push_back(payload.mUseFaceIndices ? 1u : 0u);
+    out.push_back(payload.mSameNormal ? 1u : 0u);
+    appendHash(out, cache.ptr + payloadSize + sizeof(contactBytes), contactBytes);
+    return true;
 }
 
 void appendShape(Words& out, const ShapeIds& ids,
@@ -435,7 +487,9 @@ bool CaptureOracle(PxScene& scene, OracleImage& image, std::string& error)
         cmRows.push_back(work.frictionPatchCount);
         cmRows.push_back(work.axisConstraintCount);
         cmRows.push_back(work.solverConstraintSize);
-        cmRows.push_back(work.prevSolverConstraintSize);
+        // prevSolverConstraintSize is declared in 3.3.3 but has no reads or
+        // writes in the pinned source. It is uninitialized allocator residue,
+        // not a replay state variable, so do not compare it across scenes.
         cmRows.push_back(work.pairCache.pairData);
         cmRows.push_back(work.pairCache.size);
         cmRows.push_back(floatBits(work.restDistance));
@@ -448,13 +502,9 @@ bool CaptureOracle(PxScene& scene, OracleImage& image, std::string& error)
         }
         streamRows.push_back(cm.getIndex());
         appendHash(streamRows, work.compressedContacts, work.compressedContactSize);
-        if (work.pairCache.size && !work.pairCache.ptr)
-        {
-            error = "Contact cache has a nonempty stream with a null pointer";
-            return false;
-        }
         streamRows.push_back(cm.getIndex());
-        appendHash(streamRows, work.pairCache.ptr, work.pairCache.size);
+        if (!appendLocalContactCache(streamRows, work.pairCache, error))
+            return false;
         const uintptr_t manifold = work.pairCache.manifold;
         manifoldRows.push_back(cm.getIndex());
         manifoldRows.push_back(manifold ? ((manifold & 1) ? 2u : 1u) : 0u);

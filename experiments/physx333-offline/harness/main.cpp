@@ -18,6 +18,9 @@
 #include "../sap/SapImage.h"
 #include "../oracle/Oracle.h"
 #include "../cache/TransformCacheImage.h"
+#include "../nphase/NPhaseTopology.h"
+#include "../island/IslandImage.h"
+#include "../memblock/MemBlockImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -458,10 +461,62 @@ void requireOracleEqual(const char* label,
 int main(int argc, char** argv)
 {
     bool publicProbe = false;
+    bool nphaseTopologyProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
+        else if (std::string(argv[i]) == "--nphase-topology-probe") nphaseTopologyProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
+    }
+
+    if (nphaseTopologyProbe)
+    {
+        if (publicProbe) die("NPhase topology probe is a separate process mode");
+        Runtime runtime;
+        // The lifecycle-only reconstruction does not yet restore SAP,
+        // contact caches or islands. Keep this scene isolated and terminate
+        // the process without simulating or tearing down an incoherent scene.
+        World* source = new World(runtime);
+        source->step(false);
+        source->step(true);
+        source->step(false);
+        physx333_offline::NPhaseTopologyImage checkpointTopology;
+        std::string error;
+        if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
+                                                     checkpointTopology, error))
+            die("NPhase checkpoint topology capture: " + error);
+        source->step(true);
+        physx333_offline::NPhaseTopologyImage deletedTopology;
+        if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
+                                                     deletedTopology, error) ||
+            !deletedTopology.pairs.empty())
+            die("NPhase successor is not empty: " + error);
+        physx333_offline::NPhaseTopologyImage badTopology = checkpointTopology;
+        badTopology.pairs[0].pairFlags ^= 1u;
+        if (physx333_offline::RestoreNPhaseTopology(*source->scene,
+                                                     badTopology, error))
+            die("NPhase bridge accepted a mismatched filter pair");
+        physx333_offline::NPhaseTopologyImage afterReject;
+        if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
+                                                     afterReject, error) ||
+            !deletedTopology.equals(afterReject, error))
+            die("NPhase bridge preflight rejection changed the scene: " + error);
+        std::cout << "PASS NPhase filter mismatch rejected before mutation\n";
+        if (!physx333_offline::RestoreNPhaseTopology(*source->scene,
+                                                     checkpointTopology, error))
+            die("NPhase lifecycle reconstruction: " + error);
+        physx333_offline::NPhaseTopologyImage recreated;
+        if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
+                                                     recreated, error))
+            die("NPhase recreated topology capture: " + error);
+        if (!checkpointTopology.sameShapePairs(recreated, error))
+            die("NPhase reconstructed pair identities: " + error);
+        if (checkpointTopology.equals(recreated, error))
+            die("NPhase lifecycle-only reconstruction unexpectedly restored full touch state");
+        std::cout << "PASS NPhase lifecycle restores six ordered shape pairs; "
+                  << "touch/contact history remains different (" << error << ")\n";
+        std::cout.flush();
+        std::_Exit(0);
     }
 
     Runtime runtime;
@@ -506,6 +561,48 @@ int main(int argc, char** argv)
         if (!cacheCheckpoint.equals(cacheCheckpointCopy, cacheDifference))
             die("transform-cache checkpoint capture is not stable: " + cacheDifference);
         std::cout << "PASS transform-cache checkpoint double capture\n";
+        oc2::offline::IslandImage islandCheckpoint;
+        oc2::offline::IslandImage islandCheckpointCopy;
+        std::string islandError;
+        std::string islandDifference;
+        if (!oc2::offline::CaptureIsland(*source.scene, islandCheckpoint, islandError) ||
+            !oc2::offline::CaptureIsland(*source.scene, islandCheckpointCopy, islandError))
+            die("island checkpoint capture: " + islandError);
+        if (!islandCheckpoint.equals(islandCheckpointCopy, islandDifference))
+            die("island checkpoint capture is not stable: " + islandDifference);
+        std::cout << "PASS island checkpoint double capture\n";
+        physx333_offline::MemBlockIdentityRegistry memBlockIds;
+        physx333_offline::MemBlockImage memBlockCheckpoint;
+        physx333_offline::MemBlockImage memBlockCheckpointCopy;
+        std::string memBlockError;
+        std::string memBlockDifference;
+        if (!physx333_offline::CaptureMemBlockPool(*source.scene, memBlockIds,
+                                                    memBlockCheckpoint, memBlockError) ||
+            !physx333_offline::CaptureMemBlockPool(*source.scene, memBlockIds,
+                                                    memBlockCheckpointCopy, memBlockError))
+            die("memblock checkpoint capture: " + memBlockError);
+        if (!memBlockCheckpoint.equals(memBlockCheckpointCopy, memBlockDifference))
+            die("memblock checkpoint capture is not stable: " + memBlockDifference);
+        std::cout << "PASS memblock pool checkpoint double capture"
+                  << " (unsupported=" << memBlockCheckpoint.unsupported.size()
+                  << ")\n";
+        for (PxU32 iteration = 0; iteration != 100; ++iteration)
+            if (!oc2::offline::RestoreIsland(*source.scene,
+                                               islandCheckpoint, islandError))
+                die("island idempotent restore: " + islandError);
+        std::cout << "PASS island same-topology idempotent restore x100\n";
+        oc2::offline::IslandImage corruptIsland = islandCheckpoint;
+        corruptIsland.scene = 0;
+        if (oc2::offline::RestoreIsland(*source.scene,
+                                         corruptIsland, islandError))
+            die("corrupt island image was accepted");
+        oc2::offline::IslandImage islandAfterReject;
+        if (!oc2::offline::CaptureIsland(*source.scene,
+                                          islandAfterReject, islandError) ||
+            !islandCheckpoint.equals(islandAfterReject, islandDifference))
+            die("rejected island image changed live state: " +
+                (islandError.empty() ? islandDifference : islandError));
+        std::cout << "PASS corrupt island image rejected atomically\n";
 
         source.step(true);
         deletion = source.capture();
@@ -521,6 +618,29 @@ int main(int argc, char** argv)
         oc2::offline::TransformCacheImage cacheDeleted;
         if (!oc2::offline::CaptureTransformCache(*source.scene, cacheDeleted, cacheError))
             die("transform-cache deletion capture: " + cacheError);
+        oc2::offline::IslandImage islandDeleted;
+        if (!oc2::offline::CaptureIsland(*source.scene,
+                                          islandDeleted, islandError))
+            die("island deletion capture: " + islandError);
+        physx333_offline::MemBlockImage memBlockDeleted;
+        physx333_offline::MemBlockImage memBlockDeletedCopy;
+        if (!physx333_offline::CaptureMemBlockPool(*source.scene, memBlockIds,
+                                                    memBlockDeleted, memBlockError) ||
+            !physx333_offline::CaptureMemBlockPool(*source.scene, memBlockIds,
+                                                    memBlockDeletedCopy, memBlockError))
+            die("memblock deletion capture: " + memBlockError);
+        if (!memBlockDeleted.equals(memBlockDeletedCopy, memBlockDifference))
+            die("memblock deletion capture is not stable: " + memBlockDifference);
+        std::cout << "PASS memblock pool deletion double capture\n";
+        if (oc2::offline::RestoreIsland(*source.scene,
+                                         islandCheckpoint, islandError))
+            die("island restore accepted missing contact-edge bindings");
+        if (!oc2::offline::CaptureIsland(*source.scene,
+                                          islandAfterReject, islandError) ||
+            !islandDeleted.equals(islandAfterReject, islandDifference))
+            die("island topology rejection changed live state: " +
+                (islandError.empty() ? islandDifference : islandError));
+        std::cout << "PASS missing island contact edges rejected atomically\n";
 
         for (PxU32 iteration = 0; iteration != 100; ++iteration)
         {

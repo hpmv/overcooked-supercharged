@@ -22,6 +22,9 @@ add_executable(physx333_offline_harness
   ../sap/SapImage.cpp
   ../oracle/Oracle.cpp
   ../cache/TransformCacheImage.cpp
+  ../nphase/NPhaseTopology.cpp
+  ../island/IslandImage.cpp
+  ../memblock/MemBlockImage.cpp
 )
 target_compile_features(physx333_offline_harness PRIVATE cxx_std_11)
 target_compile_definitions(physx333_offline_harness PRIVATE
