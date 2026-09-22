@@ -244,12 +244,25 @@ bool captureAuxRow(Sc::Interaction& interaction, const AuxPairKey& key,
     {
         Sc::TriggerInteraction& trigger =
             static_cast<Sc::TriggerInteraction&>(interaction);
-        if (trigger.getShape0().getGeometryType() != PxGeometryType::eBOX ||
-            trigger.getShape1().getGeometryType() != PxGeometryType::eBOX ||
+        const PxGeometryType::Enum geometry0 =
+            trigger.getShape0().getGeometryType();
+        const PxGeometryType::Enum geometry1 =
+            trigger.getShape1().getGeometryType();
+        const bool uncachedGeometry =
+            (geometry0 == PxGeometryType::eBOX &&
+             geometry1 == PxGeometryType::eBOX) ||
+            (geometry0 == PxGeometryType::eCAPSULE &&
+             geometry1 == PxGeometryType::eBOX) ||
+            (geometry0 == PxGeometryType::eBOX &&
+             geometry1 == PxGeometryType::eCAPSULE);
+        // These geometry callbacks ignore the cache. In particular, dir and
+        // gjkState were never initialized and must not be read as state.
+        if (!uncachedGeometry ||
+            trigger.mTriggerCache.state != Gu::TRIGGER_DISJOINT ||
             !poolSlot(nphase.mTriggerPool, &trigger, row.poolSlot) ||
             slotIsFree(nphase.mTriggerPool, triggerPool, row.poolSlot))
         {
-            error = "trigger geometry or physical pool slot is unsupported";
+            error = "trigger geometry, cache state, or pool slot is unsupported";
             return false;
         }
         row.triggerFlags = trigger.mFlags;

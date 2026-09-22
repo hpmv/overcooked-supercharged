@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "PxPhysicsAPI.h"
+#include "GuOverlapTests.h"
 #include "../oracle/Oracle.h"
 #include "../aux_interactions/AuxInteractionImage.h"
 
@@ -482,6 +483,234 @@ void printAux(const char* name,
             image.markers[i].poolSlot << '\n';
 }
 
+// An isolated capsule/box trigger pair exercises the geometry used by the
+// level graph without changing the 12/4/2 contact-and-marker baseline.
+struct CapsuleTriggerWorld
+{
+    Runtime& runtime;
+    Events callback;
+    PxScene* scene = NULL;
+    PxRigidStatic* box = NULL;
+    PxRigidDynamic* capsule = NULL;
+    bool capsuleIsTrigger;
+    PxU32 boxId;
+    PxU32 capsuleId;
+
+    CapsuleTriggerWorld(Runtime& rt, bool capsuleTrigger)
+        : runtime(rt), capsuleIsTrigger(capsuleTrigger),
+          boxId(capsuleTrigger ? 25u : 21u),
+          capsuleId(capsuleTrigger ? 26u : 22u)
+    {
+        PxSceneDesc desc(rt.physics->getTolerancesScale());
+        desc.gravity = PxVec3(0.0f);
+        desc.cpuDispatcher = &rt.dispatcher;
+        desc.filterShader = fixtureFilter;
+        desc.simulationEventCallback = &callback;
+        desc.broadPhaseType = PxBroadPhaseType::eSAP;
+        scene = rt.physics->createScene(desc);
+        if (!scene) fail("create capsule trigger scene");
+
+        box = rt.physics->createRigidStatic(PxTransform(PxVec3(0.0f)));
+        PxShape* boxShape = rt.physics->createShape(
+            PxBoxGeometry(0.5f, 0.5f, 0.5f), *rt.material);
+        if (!box || !boxShape) fail("create capsule trigger box");
+        if (!capsuleIsTrigger)
+        {
+            boxShape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+            boxShape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+        }
+        box->attachShape(*boxShape);
+        boxShape->release();
+        box->userData = reinterpret_cast<void*>(
+            static_cast<std::uintptr_t>(boxId));
+        scene->addActor(*box);
+
+        capsule = rt.physics->createRigidDynamic(
+            PxTransform(PxVec3(0.0f, 0.6f, 0.6f)));
+        PxShape* capsuleShape = rt.physics->createShape(
+            PxCapsuleGeometry(0.2f, 0.5f), *rt.material);
+        if (!capsule || !capsuleShape) fail("create capsule trigger capsule");
+        if (capsuleIsTrigger)
+        {
+            capsuleShape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+            capsuleShape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+        }
+        capsule->attachShape(*capsuleShape);
+        capsuleShape->release();
+        capsule->setMass(1.0f);
+        capsule->setMassSpaceInertiaTensor(PxVec3(1.0f));
+        capsule->userData = reinterpret_cast<void*>(
+            static_cast<std::uintptr_t>(capsuleId));
+        scene->addActor(*capsule);
+    }
+
+    ~CapsuleTriggerWorld()
+    {
+        capsule->release();
+        box->release();
+        scene->release();
+    }
+
+    std::vector<Event> step(PxReal yz)
+    {
+        callback.rows.clear();
+        capsule->setGlobalPose(PxTransform(PxVec3(0.0f, yz, yz)));
+        capsule->setLinearVelocity(PxVec3(0.0f));
+        capsule->setAngularVelocity(PxVec3(0.0f));
+        scene->simulate(kStep);
+        if (!scene->fetchResults(true)) fail("capsule trigger fetchResults");
+        return callback.rows;
+    }
+
+    physx333_offline::AuxInteractionImage capture(const char* stage)
+    {
+        physx333_offline::AuxInteractionImage image;
+        std::string error;
+        if (!physx333_offline::CaptureAuxInteractionImage(
+                *scene, image, error))
+            fail(std::string(stage) + " capsule trigger capture: " + error);
+        return image;
+    }
+};
+
+struct CapsuleTriggerRun
+{
+    physx333_offline::AuxInteractionImage touching;
+    physx333_offline::AuxInteractionImage separated;
+    std::vector<Event> found;
+    std::vector<Event> settled;
+    std::vector<Event> lost;
+    std::vector<Event> stayedSeparated;
+};
+
+CapsuleTriggerRun runCapsuleTrigger(Runtime& runtime, bool capsuleIsTrigger)
+{
+    CapsuleTriggerWorld world(runtime, capsuleIsTrigger);
+    CapsuleTriggerRun run;
+    run.found = world.step(0.6f);
+    run.touching = world.capture("touching");
+    run.settled = world.step(0.6f);
+    run.lost = world.step(0.68f);
+    run.separated = world.capture("separated");
+    run.stayedSeparated = world.step(0.68f);
+
+    const PxU32 triggerId = capsuleIsTrigger ?
+        world.capsuleId : world.boxId;
+    const PxU32 otherId = capsuleIsTrigger ?
+        world.boxId : world.capsuleId;
+    if (run.found.size() != 1 || run.lost.size() != 1 ||
+        !run.settled.empty() || !run.stayedSeparated.empty() ||
+        run.found[0].kind != 'T' || run.lost[0].kind != 'T' ||
+        run.found[0].staticId != triggerId ||
+        run.found[0].otherId != otherId ||
+        run.lost[0].staticId != triggerId ||
+        run.lost[0].otherId != otherId ||
+        run.found[0].flags != PxPairFlag::eNOTIFY_TOUCH_FOUND ||
+        run.lost[0].flags != PxPairFlag::eNOTIFY_TOUCH_LOST)
+        fail("capsule/box trigger callback sequence differs");
+
+    const auto& a = run.touching;
+    const auto& b = run.separated;
+    // TriggerInteraction stores only event bits from eTRIGGER_DEFAULT in
+    // mFlags; eDETECT_DISCRETE_CONTACT is not retained in that 16-bit field.
+    const PxU32 expectedFlags = PxPairFlag::eNOTIFY_TOUCH_FOUND |
+                                PxPairFlag::eNOTIFY_TOUCH_LOST;
+    if (a.triggers.size() != 1 || b.triggers.size() != 1 ||
+        a.triggerPool.usedCount != 1 || b.triggerPool.usedCount != 1 ||
+        !a.markers.empty() || !b.markers.empty() ||
+        a.sceneOrders.size() != 3 || b.sceneOrders.size() != 3 ||
+        a.sceneOrders[1].pairs.size() != 1 ||
+        b.sceneOrders[1].pairs.size() != 1 ||
+        !(a.triggers[0].pair == b.triggers[0].pair) ||
+        a.triggers[0].pair.shape0.actorId != triggerId ||
+        a.triggers[0].pair.shape1.actorId != otherId ||
+        a.triggers[0].poolSlot != b.triggers[0].poolSlot ||
+        !a.triggers[0].lastFrameHadContacts ||
+        b.triggers[0].lastFrameHadContacts ||
+        a.triggers[0].triggerCacheState != Gu::TRIGGER_DISJOINT ||
+        b.triggers[0].triggerCacheState != Gu::TRIGGER_DISJOINT ||
+        a.triggers[0].triggerFlags != expectedFlags ||
+        b.triggers[0].triggerFlags != expectedFlags)
+    {
+        std::cerr << "capsule trigger diagnostic orientation=" <<
+            capsuleIsTrigger << " rows=" << a.triggers.size() << '/' <<
+            b.triggers.size() << " pool=" << a.triggerPool.usedCount <<
+            '/' << b.triggerPool.usedCount;
+        if (!a.triggers.empty() && !b.triggers.empty())
+            std::cerr << " touch=" << a.triggers[0].lastFrameHadContacts <<
+                '/' << b.triggers[0].lastFrameHadContacts <<
+                " flags=" << a.triggers[0].triggerFlags << '/' <<
+                b.triggers[0].triggerFlags << " cache=" <<
+                a.triggers[0].triggerCacheState << '/' <<
+                b.triggers[0].triggerCacheState;
+        std::cerr << '\n';
+        fail("capsule/box trigger image or cache/touch state differs");
+    }
+    return run;
+}
+
+void checkCapsuleBoxCacheCallback()
+{
+    const Gu::GeomOverlapFunc overlap =
+        Gu::GetGeomOverlapMethodTable()[PxGeometryType::eCAPSULE]
+                                       [PxGeometryType::eBOX];
+    if (!overlap) fail("capsule/box overlap callback is absent");
+    const PxCapsuleGeometry capsule(0.2f, 0.5f);
+    const PxBoxGeometry box(0.5f, 0.5f, 0.5f);
+    const PxTransform boxPose(PxVec3(0.0f));
+    const PxReal positions[2] = {0.6f, 0.68f};
+    for (PxU32 i = 0; i < 2; ++i)
+    {
+        const PxTransform capsulePose(
+            PxVec3(0.0f, positions[i], positions[i]));
+        Gu::TriggerCache first;
+        first.dir = PxVec3(1.0f, 2.0f, 3.0f);
+        first.state = Gu::TRIGGER_DISJOINT;
+        first.gjkState = 0x55aau;
+        Gu::TriggerCache second;
+        second.dir = PxVec3(-4.0f, -5.0f, -6.0f);
+        second.state = Gu::TRIGGER_OVERLAP;
+        second.gjkState = 0xaa55u;
+        const bool result0 = overlap(capsule, capsulePose, box, boxPose,
+                                     &first);
+        const bool result1 = overlap(capsule, capsulePose, box, boxPose,
+                                     &second);
+        if (result0 != (i == 0) || result1 != result0 ||
+            first.dir.x != 1.0f || first.dir.y != 2.0f ||
+            first.dir.z != 3.0f ||
+            first.state != Gu::TRIGGER_DISJOINT ||
+            first.gjkState != 0x55aau ||
+            second.dir.x != -4.0f || second.dir.y != -5.0f ||
+            second.dir.z != -6.0f ||
+            second.state != Gu::TRIGGER_OVERLAP ||
+            second.gjkState != 0xaa55u)
+            fail("capsule/box callback used or changed trigger cache");
+    }
+}
+
+void checkCapsuleTriggerCases(Runtime& runtime)
+{
+    checkCapsuleBoxCacheCallback();
+    for (PxU32 orientation = 0; orientation < 2; ++orientation)
+    {
+        const bool capsuleIsTrigger = orientation != 0;
+        const CapsuleTriggerRun first =
+            runCapsuleTrigger(runtime, capsuleIsTrigger);
+        const CapsuleTriggerRun fresh =
+            runCapsuleTrigger(runtime, capsuleIsTrigger);
+        std::string difference;
+        if (!first.touching.equals(fresh.touching, difference) ||
+            !first.separated.equals(fresh.separated, difference) ||
+            first.found != fresh.found ||
+            first.settled != fresh.settled ||
+            first.lost != fresh.lost ||
+            first.stayedSeparated != fresh.stayedSeparated)
+            fail("fresh capsule/box trigger run differs: " + difference);
+    }
+    std::cout << "PASS capsule/box trigger touch -> separate, both trigger "
+                 "orientations, fresh-scene images/events, ignored cache\n";
+}
+
 } // namespace
 
 int main()
@@ -531,5 +760,6 @@ int main()
         fail("fresh-scene ordered events or interaction counts differ");
     std::cout << "PASS 12/4/2 -> 8/2/2, fresh-scene ordered events, "
                  "and full auxiliary images\n";
+    checkCapsuleTriggerCases(runtime);
     return 0;
 }

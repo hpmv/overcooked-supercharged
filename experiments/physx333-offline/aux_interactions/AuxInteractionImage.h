@@ -57,8 +57,8 @@ struct AuxInteractionRow {
     std::uint32_t triggerFlags = 0;
     std::uint32_t lastFrameHadContacts = 0;
     std::uint32_t triggerCacheState = 0;
-    // Box/box trigger overlap ignores cache.dir and cache.gjkState. They are
-    // never initialized by this fixture and must not enter the image.
+    // Box/box and capsule/box trigger overlap ignore cache.dir and
+    // cache.gjkState. They are never initialized and must not enter the image.
     bool operator==(const AuxInteractionRow& b) const {
         return pair == b.pair && poolSlot == b.poolSlot &&
             sceneIndex == b.sceneIndex && actorIndex0 == b.actorIndex0 &&
@@ -114,7 +114,8 @@ struct AuxInteractionImage {
 };
 
 // Quiescent, read-only capture. Actor userData must hold unique nonzero IDs.
-// Current cache policy intentionally supports box/box triggers only.
+// Cache policy supports box/box and capsule/box triggers only, with the
+// source-initialized cache state still DISJOINT. Convex triggers are rejected.
 bool CaptureAuxInteractionImage(physx::PxScene& scene,
                                 AuxInteractionImage& image,
                                 std::string& error);

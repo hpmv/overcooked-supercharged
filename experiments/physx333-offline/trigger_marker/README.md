@@ -33,10 +33,15 @@ images must each match a separately constructed fresh scene. The A-to-B
 checks also prove that only the two deleted trigger slots were pushed onto
 the free-list head while both marker objects and their pool remained intact.
 
-For box/box triggers, `GuOverlapTests.cpp` ignores the cache parameter. The
-source initializes `TriggerCache.state` but not its direction or GJK field;
-those uninitialized fields and C++ padding are deliberately not captured.
+For box/box and capsule/box triggers, `GuOverlapTests.cpp` ignores the cache
+parameter. The source initializes `TriggerCache.state` to DISJOINT but not its
+direction or GJK field; those uninitialized fields and C++ padding are
+deliberately not captured. An isolated capsule/box test runs both trigger
+shape orientations through touch→separate, verifies touch-found/lost events,
+cache state and prior-touch flags, and compares fresh-scene images. A direct
+overlap-callback test seeds different cache values and proves they do not
+affect the capsule/box result.
 
 This is a baseline interaction-count and event fixture, not a rewind
 implementation or an exact level reconstruction. It does not model the
-level's capsule/box contact geometry or game-specific filters.
+level's capsule/box *contact* geometry or game-specific filters.
