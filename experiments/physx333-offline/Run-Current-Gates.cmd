@@ -31,6 +31,8 @@ call "%~dp0level_graph\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0arena_snapshot\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0level_arena\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 
 echo PASS current offline PhysX rewind and baseline gates
 exit /b 0

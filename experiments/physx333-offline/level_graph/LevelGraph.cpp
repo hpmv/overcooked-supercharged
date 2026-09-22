@@ -173,12 +173,14 @@ struct Runtime
         }
         virtual PxU32 getWorkerCount() const { return 0; }
     } dispatcher;
-    PxDefaultAllocator allocator;
+    PxDefaultAllocator defaultAllocator;
+    PxAllocatorCallback* allocator;
     PxFoundation* foundation = NULL;
     PxPhysics* physics = NULL;
     PxMaterial* material = NULL;
-    Runtime() {
-        foundation = PxCreateFoundation(PX_PHYSICS_VERSION, allocator, errors);
+    explicit Runtime(PxAllocatorCallback* customAllocator = NULL)
+        : allocator(customAllocator ? customAllocator : &defaultAllocator) {
+        foundation = PxCreateFoundation(PX_PHYSICS_VERSION, *allocator, errors);
         if (!foundation) fail("PxCreateFoundation");
         physics = PxCreatePhysics(PX_PHYSICS_VERSION, *foundation,
                                   PxTolerancesScale());
@@ -945,6 +947,7 @@ void print(const char* name, const Snapshot& s)
 
 } // namespace
 
+#ifndef OC2_LEVEL_GRAPH_NO_MAIN
 int main()
 {
     Runtime runtime;
@@ -980,3 +983,4 @@ int main()
                  "six SAP deletions, cache/manifold/island facts, and "
                  "fresh-scene ordered callback/Oracle/auxiliary equality\n";
 }
+#endif

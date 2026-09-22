@@ -9,11 +9,11 @@
 
 #include "PxPhysicsAPI.h"
 #include "ArenaSnapshot.h"
+#include "ArenaAabbPadding.h"
 
 #define private public
 #define protected public
 #include "NpPhysics.h"
-#include "PxsAABBManager.h"
 #undef protected
 #undef private
 
@@ -192,74 +192,16 @@ struct Fixture
     }
 };
 
-void normalizeAabbTaskPadding(oc2::offline::ArenaSnapshotAllocator::Image& image)
-{
-    // PxsComputeAABBParams has three unwritten bytes between its bool and
-    // pointer on Win32. PxsAABBManager copies this struct into 25 embedded
-    // tasks each step. Those bytes are not read by the source and can differ
-    // even with identical initialized physics state.
-    static_assert(offsetof(PxsComputeAABBParams, secondBroadPhase) == 12,
-                  "AABB task parameter layout changed");
-    static_assert(offsetof(PxsComputeAABBParams, numFastMovingShapes) == 16,
-                  "AABB task parameter padding changed");
-    std::vector<std::size_t> pads;
-    const auto add = [&pads](std::size_t paramsOffset) {
-        for (std::size_t byte = 1; byte <= 3; ++byte)
-            pads.push_back(paramsOffset +
-                           offsetof(PxsComputeAABBParams, secondBroadPhase) +
-                           byte);
-    };
-    const auto single = [&add](std::size_t taskOffset) {
-        add(taskOffset + offsetof(SingleAABBTask, mParams));
-        for (std::size_t i = 0; i < 6; ++i)
-            add(taskOffset + offsetof(SingleAABBTask, mAABBUpdateTask) +
-                i * sizeof(SingleAABBUpdateTask) +
-                offsetof(SingleAABBUpdateTask, mParams));
-    };
-    single(offsetof(PxsAABBManager, mSingleShapeAABBTask));
-    add(offsetof(PxsAABBManager, mActorAABBTask) +
-        offsetof(ActorAABBTask, mParams));
-    add(offsetof(PxsAABBManager, mAggregateAABBTask) +
-        offsetof(AggregateAABBTask, mParams));
-    for (std::size_t i = 0; i < 6; ++i)
-        add(offsetof(PxsAABBManager, mAggregateAABBTask) +
-            offsetof(AggregateAABBTask, mAABBUpdateTask) +
-            i * sizeof(AggregateAABBUpdateTask) +
-            offsetof(AggregateAABBUpdateTask, mParams));
-    add(offsetof(PxsAABBManager, mBPWorkTask) +
-        offsetof(BPWorkTask, mParams));
-    add(offsetof(PxsAABBManager, mProcessBPResultsTask) +
-        offsetof(ProcessBPResultsTask, mParams));
-    single(offsetof(PxsAABBManager, mAggregateShapeAABBTask));
-    add(offsetof(PxsAABBManager, mAggregateOverlapTask) +
-        offsetof(AggregateOverlapTask, mParams));
-    require(pads.size() == 75, "unexpected AABB padding inventory");
-
-    std::size_t managerOffset = 0;
-    unsigned managers = 0;
-    for (const auto& block : image.blocks)
-        if (block.size == sizeof(PxsAABBManager) &&
-            block.file.find("PxsContext.cpp") != std::string::npos)
-        {
-            managerOffset = block.offset;
-            ++managers;
-        }
-    require(managers == 1, "AABB manager arena block is not unique");
-    for (std::size_t pad : pads)
-    {
-        require(pad < sizeof(PxsAABBManager), "AABB pad out of bounds");
-        image.bytes[managerOffset + pad] = 0;
-    }
-}
-
 bool sameInitializedArena(const oc2::offline::ArenaSnapshotAllocator::Image& a,
                           const oc2::offline::ArenaSnapshotAllocator::Image& b,
                           std::string& error)
 {
     auto lhs = a;
     auto rhs = b;
-    normalizeAabbTaskPadding(lhs);
-    normalizeAabbTaskPadding(rhs);
+    const bool leftValid = oc2::offline::NormalizeAabbTaskPadding(lhs, error);
+    require(leftValid, error);
+    const bool rightValid = oc2::offline::NormalizeAabbTaskPadding(rhs, error);
+    require(rightValid, error);
     return lhs.equals(rhs, error);
 }
 

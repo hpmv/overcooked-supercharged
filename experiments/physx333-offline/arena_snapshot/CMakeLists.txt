@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 project(physx333_arena_snapshot LANGUAGES CXX)
 
 add_subdirectory(../harness harness-build)
-add_executable(physx333_arena_snapshot ArenaCheck.cpp ArenaSnapshot.cpp)
+add_executable(physx333_arena_snapshot
+  ArenaCheck.cpp ArenaSnapshot.cpp ArenaAabbPadding.cpp)
 target_compile_features(physx333_arena_snapshot PRIVATE cxx_std_11)
 target_compile_definitions(physx333_arena_snapshot PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
