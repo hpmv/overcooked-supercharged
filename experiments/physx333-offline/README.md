@@ -9,7 +9,8 @@ cmd /c experiments\physx333-offline\Run-Current-Gates.cmd
 The script stops on the first failure. It builds and runs the six-contact
 joined rewind, the box/box and capsule/box 12→8 cold/warm joined fixtures,
 their mixed-contact fresh-scene baselines, the read-only trigger/marker
-baseline, the level-shaped shared-endpoint fresh-scene graph, and the
+baseline, the level-shaped shared-endpoint fresh-scene graph, a shared
+ActorPair ownership observer, and the
 raw-arena replay/lifetime diagnostics. Joined fixtures
 repeat their next-step comparisons 100 times; the arena fixture also checks
 five-step continuations 100 times. The separate level-shaped allocation

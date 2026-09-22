@@ -64,6 +64,10 @@ order is a fixture target, while raw pointer values from the game are not.
   completed `fetchResults` clears the set and destroys report-only owners.
   Require that settled-phase condition before graph restoration; do not
   generalize it to a mid-step checkpoint.
+  A separate [source-built ActorPair graph observer](../experiments/physx333-offline/actor_pair_graph/README.md)
+  now captures physical AP/report pools and validates two SIPs sharing one
+  AP through 2→1→0 ownership; it has not yet been joined to the level graph
+  or given a restore path.
 - Check the scene trigger-report buffers at settled `fetchResults`; initially
   gate on empty logical sizes and unchanged backing, then add a guarded
   buffer image if the fixture proves that retained capacity/order matters.
