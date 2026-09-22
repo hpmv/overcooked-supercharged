@@ -14,9 +14,11 @@ source-built PhysX scene. After checkpoint A it follows five poses:
 separate, stay separated, return, separate, return. The first step makes the
 same *semantic* four-contact/two-trigger deletion set as the game trace.
 The sequence is recorded once and then repeated from the same A image for
-100 rewinds. At every replay step the test compares all 39 implemented
-source Oracle sections, the full trigger/marker auxiliary image, ordered
-scene/actor graph and callbacks, SAP/cache/manifold/island facts, the
+100 rewinds. A second checkpoint C is taken after the first return; each
+cycle also restores C from a later state and replays its own leave/return
+suffix. At every replay step the test compares all 39 implemented
+source Oracle sections, the full trigger/marker and ActorPair ownership
+images, ordered scene/actor graph and callbacks, SAP/cache/manifold/island facts, the
 allocation ledger, and every initialized byte in its fixed-address arena.
 
 The only normalized comparison bytes are exactly 75 unwritten padding bytes

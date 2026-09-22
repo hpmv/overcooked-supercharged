@@ -21,7 +21,8 @@ add_executable(physx333_level_arena
   ../cache/TransformCacheImage.cpp
   ../sap/SapImage.cpp
   ../island/IslandImage.cpp
-  ../aux_interactions/AuxInteractionImage.cpp)
+  ../aux_interactions/AuxInteractionImage.cpp
+  ../actor_pair_graph/ActorPairGraphImage.cpp)
 target_compile_features(physx333_level_arena PRIVATE cxx_std_11)
 target_compile_definitions(physx333_level_arena PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)

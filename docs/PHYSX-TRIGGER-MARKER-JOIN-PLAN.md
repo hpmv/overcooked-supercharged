@@ -119,6 +119,17 @@ tracks contact-manager edges, not trigger/marker edges, so its contact restore
 may remain valid. Both are hypotheses until the joined six-deletion fixture
 passes full image readback and next-step replay.
 
+The source-built level graph currently starts its TransformCache at current
+ID 10 with no free IDs, unlike shipped f444 (current ID 13 and free-ID LIFO
+`[12,11,10]`). Source `Cm::IDPool` semantics show that reproducing that
+history from the synthetic baseline requires four concurrent temporary IDs
+10–13, then releasing them in order 12, 11, 10, 13: the last release lowers
+the high-water mark. Three temporary IDs cannot produce this free stack.
+Publicly creating and detaching four extra contact shapes could test this,
+but it also changes NPhase, island, SAP, query, actor/shape ID, clock, and
+allocator history. Treat such a warmup as a separate diagnostic, not a
+neutral adjustment to the main fixture or proof of game-state equality.
+
 ## Verification order
 
 1. Read-only A/B auxiliary image and fresh-scene equality in the existing

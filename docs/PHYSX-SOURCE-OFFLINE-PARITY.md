@@ -53,8 +53,9 @@ shipped observation. Graph-aware contact/trigger reconstruction and joined
 component next-step rewind remain open. A separate
 [whole-allocation diagnostic](../experiments/physx333-offline/level_arena/README.md)
 does rewind this synthetic level-shaped source scene: it replays a five-step
-leave/return suffix 100 times, matching the full implemented Oracle,
-trigger/marker image, ordered callbacks, and initialized allocator bytes.
+leave/return suffix and a second non-adjacent checkpoint's suffix 100 times,
+matching the full implemented Oracle, trigger/marker and ActorPair images,
+ordered callbacks, and initialized allocator bytes.
 That result depends on a fixed-address diagnostic allocator unavailable in
 the shipped Unity binary; it is a source-level reference, not a game-side
 restore. An [isolated trigger-rewind fixture](../experiments/physx333-offline/trigger_rewind/README.md)
