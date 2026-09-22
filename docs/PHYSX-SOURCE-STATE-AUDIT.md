@@ -67,10 +67,15 @@ updates into `mSceneQueryManager` pruners before querying
 ([NpSceneQueries.cpp:744](../../PhysX-3.3.3/PhysXSDK/Source/PhysX/src/NpSceneQueries.cpp#L744)).
 `fetchResults` also processes query updates
 ([NpScene.cpp:2299](../../PhysX-3.3.3/PhysXSDK/Source/PhysX/src/NpScene.cpp#L2299)).
-The current harness does not call scene queries, so pruner history is an
-explicitly unsupported feature, not a proven harmless omission for Story 1-1.
-Record the level's query call trace and add a query-pruner image/replay gate
-before claiming PhysX-only parity for a scene that uses those calls.
+The six-contact joined harness does not call scene queries, so its replay
+result alone says nothing about pruner parity. [QueryImage.h](../experiments/physx333-offline/query_image/QueryImage.h)
+now captures/restores the default AABB query manager and both pruners under
+strict same-allocation guards. Offline tests pass 100 pending-to-flushed
+raycast/overlap replays in settled, rebuild-init, and rebuild-in-progress
+phases, plus a fixed-allocation progressive-build next-step replay. It still
+rejects cross-allocation rebuild transitions, bucket fallback, alternate
+pruners, shape topology changes, and volume-cache/batched/PVD paths. Record
+the level's actual query trace and join its image before a level parity claim.
 
 ## Dependency order for a complete transaction
 
