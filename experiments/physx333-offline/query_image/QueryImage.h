@@ -10,7 +10,7 @@ namespace oc2 { namespace offline {
 
 // A source-layout image of the settled SceneQueryManager and its AABB pruners.
 // Same-scene only; guarded allocations must remain live except the explicit
-// progressive FIFO backing-buffer rebase documented below.
+// progressive FIFO rebase and cold BUILD_INIT rewind documented below.
 struct QueryImage
 {
     struct Field
@@ -31,6 +31,13 @@ struct QueryImage
     // must still match. This does not imply identical allocator history.
     bool equalsWithRebasedStack(const QueryImage& other,
                                 std::string& error) const;
+    // After a cold BUILD_INIT rewind, source PhysX rebuilds indices, nodes,
+    // FIFO object and FIFO backing at new addresses. Compare the first
+    // BUILD_IN_PROGRESS step's initialized node fields and translate FIFO
+    // node pointers to node-array offsets. Uninitialized node AABB bytes are
+    // deliberately excluded; later build steps are outside this comparator.
+    bool equalsWithRebuiltColdTree(const QueryImage& other,
+                                   std::string& error) const;
 };
 
 bool CaptureQueryImage(physx::PxScene& scene, QueryImage& out,

@@ -169,6 +169,9 @@ bool sameStorage(const QueryImage& a, const QueryImage& b)
     return true;
 }
 
+const QueryImage::Field* queryField(const QueryImage& image,
+                                    const std::string& name);
+
 void check()
 {
     Fixture fixture;
@@ -271,8 +274,6 @@ void checkRebuildGate()
     QueryImage inProgress;
     if (!CaptureQueryImage(*rebuilding.scene, inProgress, error))
         require(false, "BUILD_IN_PROGRESS capture: " + error);
-    require(!RestoreQueryImage(*rebuilding.scene, initializing, error),
-            "cross-phase image was accepted");
     rebuilding.mover->setGlobalPose(PxTransform(PxVec3(9.0f, 0.0f, 0.0f)));
     QueryImage inProgressPending;
     if (!CaptureQueryImage(*rebuilding.scene, inProgressPending, error))
@@ -326,8 +327,74 @@ void checkRebuildGate()
             require(false, "progressive step replay parity: " + error);
     }
     std::cout << "PASS progressive query-tree image: BUILD_INIT replay, "
-                 "BUILD_IN_PROGRESS query and builder replay, cross-phase "
-                 "rejection\n";
+                 "BUILD_IN_PROGRESS query and builder replay\n";
+}
+
+void checkColdBuildRewind()
+{
+    Fixture fixture(32);
+    fixture.mover->setGlobalPose(PxTransform(PxVec3(7.0f, 0.0f, 0.0f)));
+    fixture.mover->putToSleep();
+    fixture.scene->simulate(1.0f / 60.0f);
+    require(fixture.scene->fetchResults(true), "cold BUILD_INIT fetchResults");
+    std::string error;
+    QueryImage checkpoint;
+    if (!CaptureQueryImage(*fixture.scene, checkpoint, error))
+        require(false, "cold BUILD_INIT capture: " + error);
+    const QueryImage::Field* emptyNodes = queryField(
+        checkpoint, "dynamic.newTreeStorage.nodes");
+    const QueryImage::Field* emptyIndices = queryField(
+        checkpoint, "dynamic.newTreeStorage.indices");
+    require(emptyNodes && emptyNodes->bytes.empty() && !emptyNodes->address &&
+            emptyIndices && emptyIndices->bytes.empty() &&
+            !emptyIndices->address &&
+            !queryField(checkpoint, "dynamic.newTreeStorage.stackStorage"),
+            "cold checkpoint already owns build allocations");
+
+    fixture.scene->simulate(1.0f / 60.0f);
+    require(fixture.scene->fetchResults(true), "cold first build step");
+    QueryImage successor;
+    if (!CaptureQueryImage(*fixture.scene, successor, error))
+        require(false, "cold BUILD_IN_PROGRESS capture: " + error);
+    const QueryImage::Field* fullNodes = queryField(
+        successor, "dynamic.newTreeStorage.nodes");
+    const QueryImage::Field* fullIndices = queryField(
+        successor, "dynamic.newTreeStorage.indices");
+    require(fullNodes && !fullNodes->bytes.empty() && fullNodes->address &&
+            fullIndices && !fullIndices->bytes.empty() &&
+            fullIndices->address &&
+            queryField(successor, "dynamic.newTreeStorage.stackStorage"),
+            "cold build did not allocate tree and FIFO");
+    require(fixture.rayAt(7.0f) && fixture.overlapAt(7.0f),
+            "cold successor query results");
+
+    QueryImage corrupted = checkpoint;
+    corrupted.fields[0].bytes[0] ^= 1;
+    require(!RestoreQueryImage(*fixture.scene, corrupted, error),
+            "corrupt cold checkpoint was accepted");
+    QueryImage observed;
+    if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+        !successor.equals(observed, error))
+        require(false, "corrupt cold checkpoint mutated scene: " + error);
+
+    for (int i = 0; i < 100; ++i)
+    {
+        if (!RestoreQueryImage(*fixture.scene, checkpoint, error))
+            require(false, "cold build restore: " + error);
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !checkpoint.equals(observed, error))
+            require(false, "cold checkpoint parity: " + error);
+        fixture.scene->simulate(1.0f / 60.0f);
+        require(fixture.scene->fetchResults(true), "cold build replay step");
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !successor.equalsWithRebuiltColdTree(observed, error))
+            require(false, "cold build replay parity: " + error);
+        require(fixture.rayAt(7.0f) && fixture.overlapAt(7.0f),
+                "cold replay query results");
+    }
+    std::cout << "PASS cold query build: BUILD_INIT to first "
+                 "BUILD_IN_PROGRESS, 100 allocation-growth rewinds and "
+                 "query replays\n";
 }
 
 struct SixShapeQueryFixture
@@ -507,6 +574,7 @@ int main()
 {
     check();
     checkRebuildGate();
+    checkColdBuildRewind();
     checkStackRebase();
     return 0;
 }

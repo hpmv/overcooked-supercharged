@@ -1,9 +1,13 @@
 #include "QueryImage.h"
 
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <utility>
 
+#include <windows.h>
 #include "PxPhysicsAPI.h"
 
 // Private access is restricted to this source-built offline test component.
@@ -41,6 +45,21 @@ const char* const kRebasedStackData = "dynamic.newTreeStorage.stackData";
 const char* const kRebasedStackCapacity = "dynamic.newTreeStorage.stackCapacity";
 const char* const kRebasedStackSize = "dynamic.newTreeStorage.stackSize";
 const char* const kRebasedStackStorage = "dynamic.newTreeStorage.stackStorage";
+const char* const kColdIndicesPointer = "dynamic.newTreeStorage.indicesPointer";
+const char* const kColdNodesPointer = "dynamic.newTreeStorage.nodesPointer";
+const char* const kColdStackPointer = "dynamic.newTreeStorage.stackPointer";
+const char* const kColdIndices = "dynamic.newTreeStorage.indices";
+const char* const kColdNodes = "dynamic.newTreeStorage.nodes";
+const char* const kColdProgress = "dynamic.progress";
+const char* const kColdBuilderNodePointer = "dynamic.builderNodePointer";
+const char* const kColdStackCursor = "dynamic.newTreeStorage.stackCursor";
+
+bool coldTopologyScalar(const std::string& name)
+{
+    return name == kColdProgress || name == kColdBuilderNodePointer ||
+           name == kColdIndicesPointer || name == kColdNodesPointer ||
+           name == kColdStackPointer;
+}
 
 const QueryImage::Field* findField(const QueryImage& image, const char* name)
 {
@@ -72,6 +91,88 @@ bool validStackBuffer(const QueryImage& image, PxU32& capacity,
         storage->bytes.size() != std::size_t(capacity) * sizeof(StackEntryMirror) ||
         (capacity ? pointer != storage->address : pointer != 0))
         return false;
+    return true;
+}
+
+bool coldBuildRequested(const QueryImage& target, const QueryImage& before)
+{
+    PxU32 targetPhase = 0, beforePhase = 0;
+    return readWord(findField(target, kColdProgress), targetPhase) &&
+           readWord(findField(before, kColdProgress), beforePhase) &&
+           targetPhase == Sq::BUILD_INIT &&
+           beforePhase == Sq::BUILD_IN_PROGRESS;
+}
+
+bool preflightColdBuild(const QueryImage& target, const QueryImage& before,
+                        std::string& error)
+{
+    static const char* const extra[] = {
+        kRebasedStackData, kRebasedStackCapacity, kRebasedStackSize,
+        kColdStackCursor, kRebasedStackStorage
+    };
+    if (target.scene != before.scene ||
+        target.fields.size() + sizeof(extra) / sizeof(extra[0]) !=
+            before.fields.size() ||
+        findField(target, kRebasedStackData) ||
+        !findField(before, kRebasedStackData))
+    {
+        error = "cold query build has an unexpected field layout";
+        return false;
+    }
+    for (std::size_t i = 0; i < sizeof(extra) / sizeof(extra[0]); ++i)
+        if (before.fields[target.fields.size() + i].name != extra[i])
+        {
+            error = "cold query build has unexpected FIFO fields";
+            return false;
+        }
+    PxU32 targetIndices = 1, targetNodes = 1, targetStack = 1;
+    PxU32 beforeIndices = 0, beforeNodes = 0, beforeStack = 0;
+    PxU32 targetBuilderNode = 1, beforeBuilderNode = 0;
+    const QueryImage::Field* targetIndexBytes = findField(target, kColdIndices);
+    const QueryImage::Field* targetNodeBytes = findField(target, kColdNodes);
+    const QueryImage::Field* beforeIndexBytes = findField(before, kColdIndices);
+    const QueryImage::Field* beforeNodeBytes = findField(before, kColdNodes);
+    PxU32 stackCapacity = 0, stackSize = 0;
+    if (!readWord(findField(target, kColdIndicesPointer), targetIndices) ||
+        !readWord(findField(target, kColdNodesPointer), targetNodes) ||
+        !readWord(findField(target, kColdStackPointer), targetStack) ||
+        !readWord(findField(target, kColdBuilderNodePointer), targetBuilderNode) ||
+        !readWord(findField(before, kColdIndicesPointer), beforeIndices) ||
+        !readWord(findField(before, kColdNodesPointer), beforeNodes) ||
+        !readWord(findField(before, kColdStackPointer), beforeStack) ||
+        !readWord(findField(before, kColdBuilderNodePointer), beforeBuilderNode) ||
+        !targetIndexBytes || !targetNodeBytes || !beforeIndexBytes ||
+        !beforeNodeBytes || targetIndices || targetNodes || targetStack ||
+        targetBuilderNode || !beforeIndices || !beforeNodes || !beforeStack ||
+        beforeBuilderNode != beforeNodes ||
+        targetIndexBytes->address || !targetIndexBytes->bytes.empty() ||
+        targetNodeBytes->address || !targetNodeBytes->bytes.empty() ||
+        beforeIndexBytes->address != beforeIndices ||
+        beforeIndexBytes->bytes.empty() ||
+        beforeNodeBytes->address != beforeNodes ||
+        beforeNodeBytes->bytes.empty() ||
+        !validStackBuffer(before, stackCapacity, stackSize) || !stackCapacity)
+    {
+        error = "cold query build has inconsistent tree allocations";
+        return false;
+    }
+    for (std::size_t i = 0; i < target.fields.size(); ++i)
+    {
+        const QueryImage::Field& to = target.fields[i];
+        const QueryImage::Field& from = before.fields[i];
+        const bool releasedArray = to.name == kColdIndices ||
+                                   to.name == kColdNodes;
+        if (to.name != from.name || to.invariant != from.invariant ||
+            (!releasedArray &&
+             (to.address != from.address ||
+              to.bytes.size() != from.bytes.size())) ||
+            (to.invariant && to.bytes != from.bytes &&
+             !coldTopologyScalar(to.name)))
+        {
+            error = "cold query build changed unrelated storage at " + to.name;
+            return false;
+        }
+    }
     return true;
 }
 
@@ -486,6 +587,155 @@ bool QueryImage::equalsWithRebasedStack(const QueryImage& other,
     return true;
 }
 
+bool QueryImage::equalsWithRebuiltColdTree(const QueryImage& other,
+                                           std::string& error) const
+{
+    PxU32 lhsPhase = 0, rhsPhase = 0;
+    if (scene != other.scene || fields.size() != other.fields.size() ||
+        !readWord(findField(*this, kColdProgress), lhsPhase) ||
+        !readWord(findField(other, kColdProgress), rhsPhase) ||
+        lhsPhase != Sq::BUILD_IN_PROGRESS || rhsPhase != lhsPhase)
+    {
+        error = "query images are not matching in-progress cold builds";
+        return false;
+    }
+    const auto validTree = [](const QueryImage& image,
+                              PxU32& nodeBase, PxU32& nodeCount) {
+        PxU32 indices = 0, stack = 0, builderBase = 0;
+        PxU32 stackCapacity = 0, stackSize = 0;
+        const Field* indexBytes = findField(image, kColdIndices);
+        const Field* nodeBytes = findField(image, kColdNodes);
+        if (!readWord(findField(image, kColdIndicesPointer), indices) ||
+            !readWord(findField(image, kColdNodesPointer), nodeBase) ||
+            !readWord(findField(image, kColdStackPointer), stack) ||
+            !readWord(findField(image, kColdBuilderNodePointer), builderBase) ||
+            !indexBytes || !nodeBytes || !indices || !nodeBase || !stack ||
+            indexBytes->address != indices || indexBytes->bytes.empty() ||
+            nodeBytes->address != nodeBase || nodeBytes->bytes.empty() ||
+            nodeBytes->bytes.size() % sizeof(Sq::AABBTreeNode) ||
+            builderBase != nodeBase ||
+            !validStackBuffer(image, stackCapacity, stackSize))
+            return false;
+        nodeCount = static_cast<PxU32>(nodeBytes->bytes.size() /
+                                       sizeof(Sq::AABBTreeNode));
+        return nodeCount != 0;
+    };
+    PxU32 lhsNodes = 0, rhsNodes = 0, lhsCount = 0, rhsCount = 0;
+    if (!validTree(*this, lhsNodes, lhsCount) ||
+        !validTree(other, rhsNodes, rhsCount) || lhsCount != rhsCount)
+    {
+        error = "rebuilt query tree has inconsistent pointer ownership";
+        return false;
+    }
+    const auto firstBuildStep = [](const QueryImage& image) {
+        PxU32 builderCount = 0, treeCount = 1, treePrims = 1;
+        PxU32 stackSize = 0, stackCursor = 1;
+        return readWord(findField(image, "dynamic.builderNodeCount"),
+                        builderCount) && builderCount == 1 &&
+               readWord(findField(image,
+                        "dynamic.newTreeStorage.nodeCount"), treeCount) &&
+               !treeCount &&
+               readWord(findField(image,
+                        "dynamic.newTreeStorage.primitiveCount"),
+                        treePrims) && !treePrims &&
+               readWord(findField(image, kRebasedStackSize), stackSize) &&
+               stackSize == 1 &&
+               readWord(findField(image, kColdStackCursor), stackCursor) &&
+               !stackCursor;
+    };
+    if (!firstBuildStep(*this) || !firstBuildStep(other))
+    {
+        error = "rebuilt query comparator supports only the first build step";
+        return false;
+    }
+    const auto movedAddress = [](const std::string& name) {
+        return name == kColdIndices || name == kColdNodes ||
+               name == kRebasedStackData || name == kRebasedStackCapacity ||
+               name == kRebasedStackSize || name == kColdStackCursor ||
+               name == kRebasedStackStorage;
+    };
+    const auto movedValue = [](const std::string& name) {
+        return name == kColdIndicesPointer || name == kColdNodesPointer ||
+               name == kColdStackPointer || name == kColdBuilderNodePointer ||
+               name == kRebasedStackData;
+    };
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const Field& a = fields[i];
+        const Field& b = other.fields[i];
+        if (a.name != b.name || a.invariant != b.invariant ||
+            a.bytes.size() != b.bytes.size() ||
+            (a.address != b.address && !movedAddress(a.name)) ||
+            (a.bytes != b.bytes && !movedValue(a.name) &&
+             a.name != kRebasedStackStorage && a.name != kColdNodes))
+        {
+            error = "rebuilt query image differs at " + a.name;
+            return false;
+        }
+    }
+    const Field* lhsNodeBytes = findField(*this, kColdNodes);
+    const Field* rhsNodeBytes = findField(other, kColdNodes);
+    if (!lhsNodeBytes || !rhsNodeBytes)
+    {
+        error = "rebuilt query node storage is absent";
+        return false;
+    }
+    for (std::size_t i = 0; i < lhsCount; ++i)
+    {
+        PxU64 lhsBits = 0, rhsBits = 0;
+        const std::size_t offset = i * sizeof(Sq::AABBTreeNode) +
+                                   offsetof(Sq::AABBTreeNode, mBitfield);
+        std::memcpy(&lhsBits, lhsNodeBytes->bytes.data() + offset,
+                    sizeof(lhsBits));
+        std::memcpy(&rhsBits, rhsNodeBytes->bytes.data() + offset,
+                    sizeof(rhsBits));
+        if (lhsBits != rhsBits)
+        {
+            error = "rebuilt query initialized node bits differ";
+            return false;
+        }
+    }
+    const Field* lhsStack = findField(*this, kRebasedStackStorage);
+    const Field* rhsStack = findField(other, kRebasedStackStorage);
+    if (!lhsStack || !rhsStack ||
+        lhsStack->bytes.size() != rhsStack->bytes.size() ||
+        lhsStack->bytes.size() % sizeof(StackEntryMirror))
+    {
+        error = "rebuilt query FIFO storage is invalid";
+        return false;
+    }
+    const auto nodeOffset = [](PxU32 pointer, PxU32 base,
+                               PxU32 count, PxU32& offset) {
+        if (pointer < base) return false;
+        const PxU32 delta = pointer - base;
+        if (delta % sizeof(Sq::AABBTreeNode)) return false;
+        offset = delta / sizeof(Sq::AABBTreeNode);
+        return offset < count;
+    };
+    for (std::size_t i = 0; i < lhsStack->bytes.size();
+         i += sizeof(StackEntryMirror))
+    {
+        StackEntryMirror lhsEntry, rhsEntry;
+        std::memcpy(&lhsEntry, lhsStack->bytes.data() + i, sizeof(lhsEntry));
+        std::memcpy(&rhsEntry, rhsStack->bytes.data() + i, sizeof(rhsEntry));
+        PxU32 lhsNode = 0, rhsNode = 0, lhsParent = 0, rhsParent = 0;
+        if (!nodeOffset(reinterpret_cast<PxU32>(lhsEntry.node), lhsNodes,
+                        lhsCount, lhsNode) ||
+            !nodeOffset(reinterpret_cast<PxU32>(rhsEntry.node), rhsNodes,
+                        rhsCount, rhsNode) ||
+            !nodeOffset(reinterpret_cast<PxU32>(lhsEntry.parent), lhsNodes,
+                        lhsCount, lhsParent) ||
+            !nodeOffset(reinterpret_cast<PxU32>(rhsEntry.parent), rhsNodes,
+                        rhsCount, rhsParent) ||
+            lhsNode != rhsNode || lhsParent != rhsParent)
+        {
+            error = "rebuilt query FIFO node references differ";
+            return false;
+        }
+    }
+    return true;
+}
+
 bool CaptureQueryImage(PxScene& scene, QueryImage& out, std::string& error)
 {
     error.clear();
@@ -503,6 +753,50 @@ bool RestoreQueryImage(PxScene& scene, const QueryImage& target,
     }
     QueryImage before;
     if (!capture(scene, before, error)) return false;
+    if (coldBuildRequested(target, before))
+    {
+        if (!preflightColdBuild(target, before, error)) return false;
+        typedef unsigned (__cdecl* ReleaseColdTreeFn)(void*);
+        HMODULE physxDll = GetModuleHandleA("PhysX3_x86.dll");
+        FARPROC exported = physxDll ? GetProcAddress(
+            physxDll, "oc2_physx333_query_release_cold_v1") : NULL;
+        if (!exported && physxDll)
+            exported = GetProcAddress(
+                physxDll, "_oc2_physx333_query_release_cold_v1");
+        if (!exported)
+        {
+            error = "source query lifecycle bridge is unavailable";
+            return false;
+        }
+        // The exact reverse of progressiveBuild(progress=0): release only the
+        // second tree's indices, nodes and FIFO, then restore its owning
+        // pruner's checkpoint fields. This may free storage, so a failed
+        // postcondition cannot be rolled back to B at the old addresses.
+        NpScene& np = static_cast<NpScene&>(scene);
+        Sq::SceneQueryManager& manager = np.getSceneQueryManagerFast();
+        Sq::AABBPruner& dynamic =
+            *static_cast<Sq::AABBPruner*>(manager.mPruners[1]);
+        ReleaseColdTreeFn releaseColdTree =
+            reinterpret_cast<ReleaseColdTreeFn>(exported);
+        if (releaseColdTree(dynamic.mNewTree))
+        {
+            std::fputs("Fatal cold query lifecycle bridge failure\n", stderr);
+            std::abort();
+        }
+        for (const QueryImage::Field& field : target.fields)
+            if ((!field.invariant || coldTopologyScalar(field.name)) &&
+                !field.bytes.empty())
+                std::memcpy(reinterpret_cast<void*>(field.address),
+                            field.bytes.data(), field.bytes.size());
+        QueryImage observed;
+        std::string verifyError;
+        if (capture(scene, observed, verifyError) &&
+            target.equals(observed, verifyError)) return true;
+        std::fprintf(stderr,
+                     "Fatal cold query rewind verification failure: %s\n",
+                     verifyError.c_str());
+        std::abort();
+    }
     if (target.scene != before.scene ||
         target.fields.size() != before.fields.size())
     {

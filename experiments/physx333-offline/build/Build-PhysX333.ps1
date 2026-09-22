@@ -5,6 +5,7 @@ param(
     [string]$VisualStudio = 'C:\Program Files\Microsoft Visual Studio\2022\Community',
     [int]$MaxCpuCount = 4,
     [switch]$NPhaseBridge,
+    [switch]$QueryBridge,
     [string[]]$MirrorPatch = @()
 )
 
@@ -92,14 +93,45 @@ if ($NPhaseBridge) {
     [System.IO.File]::WriteAllText($simulationProject, $simulationText,
         (New-Object System.Text.UTF8Encoding($false)))
 
+}
+
+if ($QueryBridge) {
+    $queryBridgeSource = Join-Path $PSScriptRoot '..\query_image\QueryTreeBridge.cpp'
+    if (-not (Test-Path -LiteralPath $queryBridgeSource)) {
+        throw "Query bridge source not found: $queryBridgeSource"
+    }
+    $queryDestination = Join-Path $sdkMirror 'Source\SceneQuery\QueryTreeBridge.cpp'
+    Copy-Item -LiteralPath $queryBridgeSource -Destination $queryDestination -Force
+    $queryProject = Join-Path $sdkMirror 'Source\compiler\vc12win32\SceneQuery.vcxproj'
+    $queryText = [System.IO.File]::ReadAllText($queryProject)
+    $queryAnchor = '<ClCompile Include="..\..\SceneQuery\SqAABBTree.cpp">'
+    if (-not $queryText.Contains($queryAnchor)) {
+        throw "Expected SceneQuery compile entry missing: $queryProject"
+    }
+    $queryText = $queryText.Replace($queryAnchor,
+        '<ClCompile Include="..\..\SceneQuery\QueryTreeBridge.cpp" />' + "`r`n`t`t" +
+        $queryAnchor)
+    [System.IO.File]::WriteAllText($queryProject, $queryText,
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+
+if ($NPhaseBridge -or $QueryBridge) {
     $physxProject = Join-Path $sdkMirror 'Source\compiler\vc12win32\PhysX.vcxproj'
     $physxText = [System.IO.File]::ReadAllText($physxProject)
     $linkAnchor = '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO</AdditionalOptions>'
     if (-not $physxText.Contains($linkAnchor)) {
         throw "Expected release linker options missing: $physxProject"
     }
+    $forceIncludes = ''
+    if ($NPhaseBridge) {
+        $forceIncludes += ' /INCLUDE:_oc2_physx333_nphase_recreate_v1 /INCLUDE:_oc2_physx333_report_create_v1'
+    }
+    if ($QueryBridge) {
+        $forceIncludes += ' /INCLUDE:_oc2_physx333_query_release_cold_v1'
+    }
     $physxText = $physxText.Replace($linkAnchor,
-        '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO /INCLUDE:_oc2_physx333_nphase_recreate_v1 /INCLUDE:_oc2_physx333_report_create_v1</AdditionalOptions>')
+        '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO' +
+        $forceIncludes + '</AdditionalOptions>')
     [System.IO.File]::WriteAllText($physxProject, $physxText,
         (New-Object System.Text.UTF8Encoding($false)))
 }

@@ -39,6 +39,15 @@ their exports into the Win32 DLL:
 .\Build-PhysX333.ps1 -Configuration release -NPhaseBridge
 ```
 
+For a cold scene-query tree rewind, also use `-QueryBridge`. It adds a
+test-only source export for the original `AABBTree::release()` lifecycle
+method, which the Win32 DLL otherwise does not expose. Both switches may be
+used together; the pinned vendor checkout remains untouched:
+
+```powershell
+.\Build-PhysX333.ps1 -Configuration release -NPhaseBridge -QueryBridge
+```
+
 Run `..\harness\Build-Harness.cmd --nphase-topology-probe` or
 `..\harness\Build-Harness.cmd --interaction-metadata-probe` from a command
 prompt after that build. These probes intentionally exit without normal PhysX

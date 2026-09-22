@@ -12,10 +12,17 @@ checkpoint address is already freed. Restore copies the checkpoint entries
 to the currently owned buffer and lowers its *logical* capacity; the next
 build step grows the array naturally. It never writes to the freed address.
 `equalsWithRebasedStack` compares this one buffer by logical capacity and
-content; `equals` remains a raw exact image check. All other allocation and
-topology identities are checked before writing. Restore verifies a new
-capture and rolls back if verification fails. The source checkout and game
-are untouched.
+content. A second, narrower exception reverses a cold `BUILD_INIT` checkpoint
+after the first `BUILD_IN_PROGRESS` step allocates indices, nodes, and FIFO.
+It strictly preflights the exact phase and unchanged unrelated topology, then
+invokes the source tree's `release()` through a test-only DLL export and
+restores the checkpoint fields. The restored checkpoint must pass raw `equals`.
+Because release frees storage, a failed postcondition terminates the probe;
+preflight rejections leave the scene untouched. On replay the new tree's
+addresses can differ. `equalsWithRebuiltColdTree` compares that first build
+step by initialized node bits, index data, and FIFO node offsets; the node
+AABB bytes have not yet been initialized by PhysX. Later build steps are
+outside that comparator. The source checkout and game are untouched.
 
 Source basis:
 
@@ -34,6 +41,7 @@ Source basis:
 Run from the framework root:
 
 ```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File experiments\physx333-offline\build\Build-PhysX333.ps1 -Configuration release -NPhaseBridge -QueryBridge
 cmd /c experiments\physx333-offline\query_image\Build-Check.cmd
 ```
 
@@ -44,8 +52,10 @@ that update, and an overlap checks the updated shape. Capture and restore pass
 raycast/overlap results. A raycast with no pending update leaves the image
 unchanged. Corrupt-image and changed-topology restores reject without writing.
 A 32-shape fixture passes another 100 pending↔flushed query replays at
-`BUILD_INIT`, 100 at `BUILD_IN_PROGRESS`, and rejects a restore across those
-phases after the allocation graph changes. With the actor asleep, the test
+`BUILD_INIT` and 100 at `BUILD_IN_PROGRESS`. A separate sleeping 32-shape
+fixture tests 100 cold `BUILD_INIT`→first `BUILD_IN_PROGRESS` allocation
+growth rewinds, exact checkpoint images, rebuilt-step semantic equality,
+and repeated raycast/overlap results. With the actor asleep, the test
 also finds one progressive build step whose allocations remain fixed,
 restores the preceding query image, and replays the actual next
 `simulate`/`fetchResults` step 100 times to the same query image. This last
@@ -63,11 +73,12 @@ The present gate requires a stopped scene, static AABB tree plus dynamic AABB
 tree, the same scene, unchanged shape topology and pool capacity, no
 uncommitted pruner changes, no bucket-pruner objects, and no queued rebuild
 fixups. All allocation addresses must match except the explicitly rebased
-FIFO buffer. `BUILD_INIT` and `BUILD_IN_PROGRESS` are supported when the
-second tree and cached bounds retain their allocation addresses. A dynamic
-new-tree FIFO buffer may have grown after the checkpoint if its live capacity
-is at least the checkpoint capacity; shrinking or replacing the stack object
-or node pool is rejected.
+FIFO buffer and the strictly gated cold tree release. `BUILD_INIT` and
+`BUILD_IN_PROGRESS` are supported when the second tree and cached bounds
+retain their allocation addresses. A dynamic new-tree FIFO buffer may have
+grown after the checkpoint if its live capacity is at least the checkpoint
+capacity; shrinking or replacing the stack object or node pool is otherwise
+rejected.
 It permits pending `SceneQueryManager` dirty shapes, which is the path
 exercised above. It does not yet restore a progressive rebuild across other
 allocation changes, bucket fallback, static tree replacement, pruner growth,
