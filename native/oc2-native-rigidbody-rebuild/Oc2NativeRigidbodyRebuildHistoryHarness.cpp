@@ -392,6 +392,8 @@ typedef int (__cdecl *DirtyAction)(uintptr_t, DirtyInteractionOrderReceipt*);
 typedef int (__cdecl *DirtyLastNPhase)(uintptr_t, uintptr_t*, uint32_t*);
 typedef int (__cdecl *DirtyCaptureCopy)(uintptr_t, DirtyInteractionKey*,
     uint32_t, DirtyInteractionOrderReceipt*);
+typedef int (__cdecl *DirtyCaptureSnapshot)(uintptr_t, uintptr_t,
+    DirtyInteractionKey*, uint32_t, DirtyInteractionOrderReceipt*);
 typedef int (__cdecl *DirtyRestoreArm)(uintptr_t, uintptr_t, uintptr_t,
     uintptr_t, uintptr_t, uint32_t, uint32_t,
     const DirtyInteractionKey*, uint32_t, uint32_t,
@@ -1222,7 +1224,7 @@ static bool DirtyHashValid(const uintptr_t* entries, uint32_t count,
 
 static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     DirtyAction status, DirtyLastNPhase lastNPhase, DirtyAction armCapture,
-    DirtyCaptureCopy copyCapture,
+    DirtyCaptureCopy copyCapture, DirtyCaptureSnapshot captureSnapshot,
     DirtyRestoreArm armRestore, DirtyAction cancel, DirtyAction uninstall) {
     const uint32_t capacity = 8;
     const uint32_t hashSize = 16;
@@ -1316,6 +1318,54 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
         SameDirtyKey(captured[2], DirtyKey(interactions[2])),
         "dirty capture uses element identity");
 
+    // Change only the live dense order.  The stateless reader must return the
+    // current C/A/B image while the completed hook capture remains A/B/C.
+    entries[0] = reinterpret_cast<uintptr_t>(interactions[2]);
+    entries[1] = reinterpret_cast<uintptr_t>(interactions[0]);
+    entries[2] = reinterpret_cast<uintptr_t>(interactions[1]);
+    BuildDirtyHash(entries, 3, next, capacity, hash, hashSize);
+    DirtyInteractionOrderReceipt hookBeforeSnapshot = {};
+    Check(status(imagePointer, &hookBeforeSnapshot) == 1 &&
+        hookBeforeSnapshot.result == 1,
+        "dirty hook receipt is readable before stateless capture");
+    DirtyInteractionKey snapshotKeys[3] = {};
+    DirtyInteractionOrderReceipt snapshotReceipt = {};
+    Check(captureSnapshot(imagePointer,
+            reinterpret_cast<uintptr_t>(nphase), snapshotKeys, 3,
+            &snapshotReceipt) == 1 && snapshotReceipt.result == 1 &&
+        snapshotReceipt.nphaseCore == reinterpret_cast<uintptr_t>(nphase) &&
+        snapshotReceipt.count == 3 &&
+        snapshotReceipt.orderHashBefore == snapshotReceipt.orderHashAfter &&
+        SameDirtyKey(snapshotKeys[0], captured[2]) &&
+        SameDirtyKey(snapshotKeys[1], captured[0]) &&
+        SameDirtyKey(snapshotKeys[2], captured[1]),
+        "dirty stateless snapshot captures the exact current dense order");
+    DirtyInteractionOrderReceipt hookAfterSnapshot = {};
+    Check(status(imagePointer, &hookAfterSnapshot) == 1 &&
+        memcmp(&hookBeforeSnapshot, &hookAfterSnapshot,
+            sizeof(hookBeforeSnapshot)) == 0,
+        "dirty stateless snapshot preserves the pending hook receipt byte-for-byte");
+    DirtyInteractionOrderReceipt shortSnapshot = {};
+    Check(captureSnapshot(imagePointer,
+            reinterpret_cast<uintptr_t>(nphase), snapshotKeys, 2,
+            &shortSnapshot) == 0 && shortSnapshot.result == 11 &&
+        shortSnapshot.count == 3,
+        "dirty stateless snapshot reports required caller capacity");
+    Check(status(imagePointer, &hookAfterSnapshot) == 1 &&
+        memcmp(&hookBeforeSnapshot, &hookAfterSnapshot,
+            sizeof(hookBeforeSnapshot)) == 0,
+        "dirty stateless capacity failure leaves the hook receipt unchanged");
+    DirtyInteractionKey legacyAfterSnapshot[3] = {};
+    Check(copyCapture(imagePointer, legacyAfterSnapshot, 3, &receipt) == 1 &&
+        SameDirtyKey(legacyAfterSnapshot[0], captured[0]) &&
+        SameDirtyKey(legacyAfterSnapshot[1], captured[1]) &&
+        SameDirtyKey(legacyAfterSnapshot[2], captured[2]),
+        "dirty stateless snapshot preserves the completed legacy A/B/C capture");
+    entries[0] = reinterpret_cast<uintptr_t>(interactions[0]);
+    entries[1] = reinterpret_cast<uintptr_t>(interactions[1]);
+    entries[2] = reinterpret_cast<uintptr_t>(interactions[2]);
+    BuildDirtyHash(entries, 3, next, capacity, hash, hashSize);
+
     // Cancel while idle is a true no-op: reset cleanup must not erase the
     // receipt or semantic snapshot from an already completed one-shot capture.
     const uint32_t capturesBeforeIdleCancel = receipt.captures;
@@ -1329,6 +1379,21 @@ static void RunDirtyInteractionTests(uint8_t* image, DirtyAction install,
     // on the following update and must not increment the one-shot counter.
     Check(armCapture(imagePointer, &receipt) == 1 && receipt.result == 18 &&
         receipt.armed == 1, "dirty second capture arms before cancel");
+    DirtyInteractionOrderReceipt armedBeforeSnapshot = {};
+    Check(status(imagePointer, &armedBeforeSnapshot) == 1 &&
+        armedBeforeSnapshot.result == 18 && armedBeforeSnapshot.armed == 1,
+        "dirty armed hook receipt is readable before rejected snapshot");
+    snapshotReceipt = {};
+    Check(captureSnapshot(imagePointer,
+            reinterpret_cast<uintptr_t>(nphase), snapshotKeys, 3,
+            &snapshotReceipt) == 0 && snapshotReceipt.result == 18 &&
+        snapshotReceipt.lastError == ERROR_IO_PENDING,
+        "dirty stateless snapshot rejects an in-flight hook transaction");
+    DirtyInteractionOrderReceipt armedAfterSnapshot = {};
+    Check(status(imagePointer, &armedAfterSnapshot) == 1 &&
+        memcmp(&armedBeforeSnapshot, &armedAfterSnapshot,
+            sizeof(armedBeforeSnapshot)) == 0,
+        "dirty rejected stateless snapshot preserves the armed hook receipt");
     Check(cancel(imagePointer, &receipt) == 1 && receipt.result == 10 &&
         receipt.lastError == ERROR_CANCELLED && receipt.armed == 0,
         "dirty pending capture cancels");
@@ -1614,7 +1679,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1701,7 +1766,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1824,7 +1889,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -1904,7 +1969,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -2875,7 +2940,7 @@ static void RunInteractionGraphTests(uint8_t* image,
             receipt.detail, receipt.lastError);
     Check(firstCapture == 1,
         "interaction graph capture succeeds");
-    Check(receipt.apiVersion == 17 && receipt.structSize == sizeof(receipt) &&
+    Check(receipt.apiVersion == 18 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.validationFlags == 0xFF &&
         receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
         receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
@@ -3124,7 +3189,7 @@ static void RunTransformCacheTests(uint8_t* image,
         printf("transform cache diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
             receipt.result, receipt.invalidKind, receipt.invalidIndex,
             receipt.detail, receipt.lastError);
-    Check(captured == 1 && receipt.apiVersion == 17 &&
+    Check(captured == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt) && receipt.result == 1 &&
         receipt.validationFlags == 0xFF && receipt.currentId == 3 &&
         receipt.entriesWritten == 3 && receipt.freeWritten == 1 &&
@@ -3241,7 +3306,7 @@ static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
 
     FinishBroadPhaseObserverReceipt receipt = {};
     Check(installObserver(imagePointer, &receipt) == 1 &&
-        receipt.apiVersion == 17 && receipt.structSize == sizeof(receipt) &&
+        receipt.apiVersion == 18 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.installed == 1 && receipt.state == 1,
         "finishBroadPhase observer reactivates landed dormant detour");
 
@@ -3985,6 +4050,9 @@ int main(int argc, char** argv) {
     DirtyCaptureCopy copyDirtyCapture =
         reinterpret_cast<DirtyCaptureCopy>(GetProcAddress(library,
             "oc2_dirty_interaction_order_capture_copy"));
+    DirtyCaptureSnapshot captureDirtySnapshot =
+        reinterpret_cast<DirtyCaptureSnapshot>(GetProcAddress(library,
+            "oc2_dirty_interaction_order_capture_snapshot"));
     DirtyRestoreArm armDirtyRestore =
         reinterpret_cast<DirtyRestoreArm>(GetProcAddress(library,
             "oc2_dirty_interaction_order_restore_arm"));
@@ -4009,7 +4077,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 17, "API version");
+    Check(version && version() == 18, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -4031,7 +4099,8 @@ int main(int argc, char** argv) {
     Check(captureIsland && installIsland && statusIsland && armIsland &&
         copyIsland && cancelIsland && uninstallIsland && copyIslandJournal,
         "island snapshot/observer/journal exports");
-    Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
+    Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture &&
+        copyDirtyCapture && captureDirtySnapshot &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
     Check(installObserver && uninstallObserver && auditRecreate && armRecreate &&
@@ -4047,7 +4116,8 @@ int main(int argc, char** argv) {
         !copyIsland || !cancelIsland || !uninstallIsland ||
         !copyIslandJournal ||
         !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
-        !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
+        !copyDirtyCapture || !captureDirtySnapshot || !armDirtyRestore ||
+        !cancelDirty ||
         !uninstallDirty || !installObserver || !uninstallObserver ||
         !auditRecreate || !armRecreate || !statusRecreate ||
         !cancelRecreate) {
@@ -4072,7 +4142,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 17 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 18 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -4155,9 +4225,10 @@ int main(int argc, char** argv) {
             reinterpret_cast<uintptr_t>(manifoldContext), 2, manifoldSaved,
             3, &manifoldReceipt) == 0 && manifoldReceipt.result == 4,
             "invalid manifold pool kind is rejected");
-        RunDirtyInteractionTests(revisionImage, installDirty, statusDirty, lastDirtyNPhase,
-            armDirtyCapture, copyDirtyCapture, armDirtyRestore,
-            cancelDirty, uninstallDirty);
+        RunDirtyInteractionTests(revisionImage, installDirty, statusDirty,
+            lastDirtyNPhase, armDirtyCapture, copyDirtyCapture,
+            captureDirtySnapshot, armDirtyRestore, cancelDirty,
+            uninstallDirty);
         VirtualFree(revisionImage, 0, MEM_RELEASE);
     }
 

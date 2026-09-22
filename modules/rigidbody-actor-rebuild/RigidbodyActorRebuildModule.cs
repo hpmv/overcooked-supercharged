@@ -21,7 +21,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // chefs during the checkpoint restore's internal main-physics unfreeze.
     public sealed class RigidbodyActorRebuildModule : IAuthoringModule
     {
-        private const uint NativeAbiVersion=17;
+        private const uint NativeAbiVersion=18;
         // Four active chef actors plus Unity's one replacement allocation form
         // the observed five-address cycle. Rebuilding five times removes every
         // chef actor/contact set while restoring the incoming chef/address map.
@@ -564,6 +564,8 @@ namespace SuperchargedPatch.Authoring.Modules
             UIntPtr unityBase,out UIntPtr nphaseCore,out uint observations);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionCaptureCopy(
             UIntPtr unityBase,IntPtr keys,uint capacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr keys,uint capacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeDirtyInteractionRestoreArm(
             UIntPtr unityBase,UIntPtr nphaseCore,UIntPtr entries,UIntPtr entriesNext,UIntPtr hash,
             uint entriesCapacity,uint hashSize,IntPtr keys,uint count,uint restoreMode,IntPtr receipt);
@@ -834,6 +836,28 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint[] Order;
         }
 
+        // Exact synchronous physics-family image at one managed output
+        // boundary.  It retains that output's exact core snapshot, but does
+        // not own the following transition's passive observations.
+        private sealed class PhysicsPhaseSnapshot
+        {
+            internal int Frame;
+            internal uint Context,FreeArray,OrderHash;
+            internal uint[] ContactPoolOrder;
+            internal ContactManagerOwnerState ContactManagerOwners;
+            internal SipPoolState ShapeInstancePairPool;
+            internal ActorPairPoolState ActorPairPool;
+            internal ActorPairReportPoolState ActorPairReportPool;
+            internal NPhaseReportState NPhaseReports;
+            internal InteractionGraphState InteractionGraph;
+            internal TransformCacheState TransformCache;
+            internal IslandSnapshotState IslandSnapshot;
+            internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
+            internal TransformDispatchState TransformDispatch;
+            internal DirtyInteractionState DirtyInteractions;
+            internal object CoreSnapshot;
+        }
+
         private sealed class CheckpointSidecar
         {
             internal int Frame;
@@ -852,6 +876,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
+            internal PhysicsPhaseSnapshot PostTransitionSnapshot;
             internal object CoreSnapshot;
         }
 
@@ -910,6 +935,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeDirtyInteractionLastNPhase lastObservedDirtyNPhase;
         private NativeDirtyInteractionAction armDirtyInteractionCapture,cancelDirtyInteractionOrder,uninstallDirtyInteractionOrder;
         private NativeDirtyInteractionCaptureCopy copyDirtyInteractionCapture;
+        private NativeDirtyInteractionCaptureSnapshot captureDirtyInteractionSnapshot;
         private NativeDirtyInteractionRestoreArm armDirtyInteractionRestore;
         private uint unityPlayerBase;
         private uint dirtyNPhaseObservationFloor;
@@ -941,6 +967,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private CheckpointSidecar pendingIslandTransitionAuditSidecar;
         private IslandTransitionState lastIslandTransitionAudit;
         private FinishBroadPhaseState lastFinishBroadPhaseTransitionAudit;
+        private PhysicsPhaseSnapshot lastTargetPostTransitionAudit;
+        private PhysicsPhaseSnapshot lastRestoredPostTransitionAudit;
         private int lastIslandTransitionAuditCheckpointFrame=-1;
         private int lastIslandTransitionAuditTransitionFrame=-1;
         private int lastIslandTransitionAuditCapturedAtOutputFrame=-1;
@@ -955,6 +983,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
         private long transformCacheCaptures,finishBroadPhaseCaptures,islandSnapshotCaptures,islandTransitionCaptures;
         private long islandTransitionAuditArms,islandTransitionAuditCaptures;
+        private long transitionPostSnapshotCaptures;
         private uint pendingFinishBroadPhaseOrdinal;
         private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
@@ -1078,6 +1107,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 lastObservedDirtyNPhase=Export<NativeDirtyInteractionLastNPhase>("oc2_dirty_interaction_last_nphase");
                 armDirtyInteractionCapture=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_capture_arm");
                 copyDirtyInteractionCapture=Export<NativeDirtyInteractionCaptureCopy>("oc2_dirty_interaction_order_capture_copy");
+                captureDirtyInteractionSnapshot=Export<NativeDirtyInteractionCaptureSnapshot>(
+                    "oc2_dirty_interaction_order_capture_snapshot");
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
@@ -1246,7 +1277,8 @@ namespace SuperchargedPatch.Authoring.Modules
             if(module==null||!module.automaticContactPoolRestore)return;
             bool pendingLifecycle=module.contactRecreatePendingValidation||
                 module.scheduledContactPoolCaptureFrame>=0||
-                module.pendingIslandTransitionAuditSidecar!=null;
+                module.pendingIslandTransitionAuditSidecar!=null||
+                module.pendingDirtyCaptureSidecar!=null;
             try
             {
                 module.ObserveSceneGeneration();
@@ -1260,6 +1292,15 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(module.contactManagerContext!=0)
                     module.EnsureIslandObserverForCurrentContext();
                 if(!pendingLifecycle)return;
+                // The entry sidecar is captured at N and remains unpublished
+                // while its passive transition observers run.  Capture every
+                // synchronously readable mutable family at output N+1, before
+                // any later validation or pause can change allocator membership.
+                if(module.pendingDirtyCaptureSidecar!=null)
+                {
+                    module.CapturePendingPostTransitionSnapshotAtOutput(__0);
+                    module.FinalizePendingDirtyInteractionCapture();
+                }
                 // Persist the first replay's native transition before contact
                 // validation or the later pause fence can cancel its one-shot
                 // observer state.  This is read-only and remains bound to the
@@ -1459,6 +1500,8 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateIslandSnapshotState(selected.IslandSnapshot,IslandPhaseSettled);
             lastIslandTransitionAudit=null;
             lastFinishBroadPhaseTransitionAudit=null;
+            lastTargetPostTransitionAudit=null;
+            lastRestoredPostTransitionAudit=null;
             lastIslandTransitionAuditCheckpointFrame=-1;
             lastIslandTransitionAuditTransitionFrame=-1;
             lastIslandTransitionAuditCapturedAtOutputFrame=-1;
@@ -1478,6 +1521,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
                 throw new InvalidOperationException("First-replay island audit copy requires the authoring pause fence.");
             if(lastIslandTransitionAudit==null||lastFinishBroadPhaseTransitionAudit==null||
+                lastTargetPostTransitionAudit==null||lastRestoredPostTransitionAudit==null||
                 lastIslandTransitionAuditCheckpointFrame<0||
                 lastIslandTransitionAuditTransitionFrame<0||
                 lastIslandTransitionAuditCapturedAtOutputFrame<0)
@@ -1545,16 +1589,24 @@ namespace SuperchargedPatch.Authoring.Modules
                     transitionFrame+"; next observed frame was "+observedFrame+".");
             FinishBroadPhaseState broadPhase=null;
             IslandTransitionState island=null;
+            PhysicsPhaseSnapshot restoredPost=null;
             try
             {
                 broadPhase=CopyFinishBroadPhaseCapture(selected,pendingFinishBroadPhaseOrdinal);
                 island=CopyIslandTransitionAudit(selected);
+                if(selected.PostTransitionSnapshot==null)
+                    throw new InvalidOperationException(
+                        "The selected checkpoint lacks its exact post-transition snapshot.");
+                restoredPost=CapturePhysicsPhaseSnapshot(selected,observedFrame);
                 lastFinishBroadPhaseTransitionAudit=broadPhase;
                 lastIslandTransitionAudit=island;
+                lastTargetPostTransitionAudit=selected.PostTransitionSnapshot;
+                lastRestoredPostTransitionAudit=restoredPost;
                 lastIslandTransitionAuditCheckpointFrame=selected.Frame;
                 lastIslandTransitionAuditTransitionFrame=transitionFrame;
                 lastIslandTransitionAuditCapturedAtOutputFrame=observedFrame;
                 islandTransitionAuditCaptures++;
+                transitionPostSnapshotCaptures++;
             }
             finally
             {
@@ -1571,7 +1623,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"capturedAtOutputFrame",lastIslandTransitionAuditCapturedAtOutputFrame},
                 {"readAtFrame",readAtFrame},
                 {"broadPhase",DescribeFinishBroadPhaseState(lastFinishBroadPhaseTransitionAudit)},
-                {"transition",DescribeIslandTransitionState(lastIslandTransitionAudit)}};
+                {"transition",DescribeIslandTransitionState(lastIslandTransitionAudit)},
+                {"targetPostSnapshot",DescribePhysicsPhaseSnapshot(lastTargetPostTransitionAudit)},
+                {"restoredPostSnapshot",DescribePhysicsPhaseSnapshot(lastRestoredPostTransitionAudit)},
+                {"postSnapshotComparison",DescribePhysicsPhaseComparison(
+                    lastTargetPostTransitionAudit,lastRestoredPostTransitionAudit)}};
         }
 
         private void RunContactPoolAction(int action,bool automaticAction,bool requireTransformCapture=false)
@@ -1815,6 +1871,126 @@ namespace SuperchargedPatch.Authoring.Modules
                 Marshal.FreeHGlobal(orderBuffer);
                 Marshal.FreeHGlobal(receiptBuffer);
             }
+        }
+
+        private void CapturePendingPostTransitionSnapshotAtOutput(int observedFrame)
+        {
+            CheckpointSidecar entry=pendingDirtyCaptureSidecar;
+            if(entry==null||entry.PostTransitionSnapshot!=null)return;
+            int expected=checked(entry.Frame+1);
+            if(observedFrame<expected)return;
+            if(observedFrame!=expected)
+                throw new InvalidOperationException("Checkpoint post-transition snapshot skipped exact output frame "+
+                    expected+"; next observed frame was "+observedFrame+".");
+            entry.PostTransitionSnapshot=CapturePhysicsPhaseSnapshot(entry,observedFrame);
+            transitionPostSnapshotCaptures++;
+        }
+
+        private PhysicsPhaseSnapshot CapturePhysicsPhaseSnapshot(
+            CheckpointSidecar entry,int frame)
+        {
+            if(entry==null||entry.ShapeInstancePairPool==null||
+                entry.ShapeInstancePairPool.NPhaseCore==0)
+                throw new InvalidOperationException(
+                    "Physics phase capture requires one exact checkpoint entry image.");
+            uint observationBefore;
+            uint nphase=ReadObservedNPhaseCore(out observationBefore);
+            if(nphase!=entry.ShapeInstancePairPool.NPhaseCore)
+                throw new InvalidOperationException(
+                    "Physics phase capture observed a different NPhaseCore than its checkpoint entry.");
+            LiveContactPoolState contact=CaptureLiveContactPoolState();
+            if(contact.Receipt.Context.ToUInt32()!=entry.Context||
+                contact.Receipt.FreeArray.ToUInt32()!=entry.FreeArray)
+                throw new InvalidOperationException(
+                    "Physics phase capture observed a different contact allocator than its checkpoint entry.");
+            if(CurrentCheckpointFrame()!=frame)
+                throw new InvalidOperationException(
+                    "Physics phase capture does not own the requested core output boundary.");
+            object core=CoreCheckpointSnapshot(frame);
+            if(core==null)
+                throw new InvalidOperationException(
+                    "Physics phase capture requires the exact retained core output snapshot.");
+            var value=new PhysicsPhaseSnapshot {
+                Frame=frame,
+                Context=contact.Receipt.Context.ToUInt32(),
+                FreeArray=contact.Receipt.FreeArray.ToUInt32(),
+                OrderHash=contact.Receipt.OrderHashBefore,
+                ContactPoolOrder=contact.Order,
+                ContactManagerOwners=CaptureContactManagerOwners(frame),
+                ShapeInstancePairPool=CaptureSipPoolState(nphase,frame),
+                ActorPairPool=CaptureActorPairPoolState(nphase,frame),
+                ActorPairReportPool=CaptureActorPairReportPoolState(nphase,frame),
+                NPhaseReports=CaptureNPhaseReportState(nphase,frame),
+                InteractionGraph=CaptureInteractionGraphState(nphase,frame),
+                TransformCache=CaptureTransformCacheState(nphase,frame),
+                IslandSnapshot=CaptureIslandSnapshotState(nphase,IslandPhaseSettled,frame),
+                LargeManifoldPool=CaptureManifoldPoolStateReadOnly(
+                    LargeManifoldPoolKind,frame),
+                SphereManifoldPool=CaptureManifoldPoolStateReadOnly(
+                    SphereManifoldPoolKind,frame),
+                TransformDispatch=entry.TransformDispatch==null?null:
+                    RunTransformDispatchAction(1,null),
+                DirtyInteractions=CaptureDirtyInteractionStateReadOnly(nphase),
+                CoreSnapshot=core
+            };
+            uint observationAfter;
+            uint nphaseAfter=ReadObservedNPhaseCore(out observationAfter);
+            if(nphaseAfter!=nphase||observationAfter!=observationBefore)
+                throw new InvalidOperationException(
+                    "A physics update crossed the synchronous post-transition capture interval.");
+            ValidatePhysicsPhaseSnapshot(value);
+            return value;
+        }
+
+        private static void ValidatePhysicsPhaseSnapshot(PhysicsPhaseSnapshot value)
+        {
+            if(value==null||value.Frame<0||value.Context==0||value.FreeArray==0||
+                value.CoreSnapshot==null||
+                value.ContactPoolOrder==null||value.ContactPoolOrder.Length<1||
+                value.ContactPoolOrder.Length>MaximumContactManagers||
+                value.TransformDispatch==null||value.TransformDispatch.Dispatch==0||
+                value.TransformDispatch.Entries==null||
+                value.TransformDispatch.Count!=(uint)value.TransformDispatch.Entries.Length||
+                value.TransformDispatch.Count>value.TransformDispatch.Capacity||
+                value.OrderHash!=ContactPoolOrderHash(value.ContactPoolOrder))
+                throw new InvalidOperationException("Physics phase snapshot is incomplete.");
+            if(value.TransformDispatch.Entries.Any(item=>item.Hierarchy==0)||
+                value.TransformDispatch.Entries.Select(item=>item.Hierarchy).Distinct().Count()!=
+                    value.TransformDispatch.Entries.Length)
+                throw new InvalidOperationException(
+                    "Physics phase Transform-dispatch snapshot contains an invalid queue.");
+            ValidateContactManagerOwnerState(value.ContactManagerOwners);
+            ValidateSipPoolState(value.ShapeInstancePairPool);
+            ValidateActorPairPoolState(value.ActorPairPool);
+            ValidateActorPairReportPoolState(value.ActorPairReportPool);
+            ValidateNPhaseReportState(value.NPhaseReports);
+            ValidateInteractionGraphState(value.InteractionGraph);
+            ValidateTransformCacheState(value.TransformCache);
+            ValidateIslandSnapshotState(value.IslandSnapshot,IslandPhaseSettled);
+            ValidateManifoldPoolState(value.LargeManifoldPool,LargeManifoldPoolKind,"large");
+            ValidateManifoldPoolState(value.SphereManifoldPool,SphereManifoldPoolKind,"sphere");
+            ValidateDirtyInteractionState(value.DirtyInteractions);
+            var coherence=new CheckpointSidecar {
+                Frame=value.Frame,Context=value.Context,FreeArray=value.FreeArray,
+                OrderHash=value.OrderHash,ContactPoolOrder=value.ContactPoolOrder,
+                ContactManagerOwners=value.ContactManagerOwners,
+                ShapeInstancePairPool=value.ShapeInstancePairPool,
+                ActorPairPool=value.ActorPairPool,
+                ActorPairReportPool=value.ActorPairReportPool,
+                NPhaseReports=value.NPhaseReports,
+                InteractionGraph=value.InteractionGraph,
+                TransformCache=value.TransformCache,
+                IslandSnapshot=value.IslandSnapshot,
+                LargeManifoldPool=value.LargeManifoldPool,
+                SphereManifoldPool=value.SphereManifoldPool,
+                TransformDispatch=value.TransformDispatch,
+                DirtyInteractions=value.DirtyInteractions,
+                CoreSnapshot=value.CoreSnapshot
+            };
+            ValidateCheckpointPoolCoherence(coherence);
+            if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore)
+                throw new InvalidOperationException(
+                    "Physics phase snapshot families belong to different NPhaseCore instances.");
         }
 
         private bool RequiresContactRecreate(CheckpointSidecar selected)
@@ -4846,6 +5022,61 @@ namespace SuperchargedPatch.Authoring.Modules
             return value;
         }
 
+        private DirtyInteractionState CaptureDirtyInteractionStateReadOnly(uint nphase)
+        {
+            if(nphase==0||captureDirtyInteractionSnapshot==null)
+                throw new InvalidOperationException(
+                    "Stateless dirty-interaction capture requires one live NPhaseCore and native export.");
+            NativeDirtyInteractionReceipt before=CallDirtyInteractionAction(
+                statusDirtyInteractionOrder,"snapshot-status-before",1);
+            int keySize=Marshal.SizeOf(typeof(NativeDirtyInteractionKey));
+            int receiptSize=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
+            IntPtr keysBuffer=Marshal.AllocHGlobal(MaximumDirtyInteractions*keySize);
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            NativeDirtyInteractionReceipt receipt;
+            NativeDirtyInteractionKey[] keys;
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureDirtyInteractionSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphase),keysBuffer,MaximumDirtyInteractions,receiptBuffer);
+                receipt=(NativeDirtyInteractionReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeDirtyInteractionReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException(
+                        "Native stateless dirty-interaction capture failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+                if(receipt.Count>MaximumDirtyInteractions)
+                    throw new InvalidOperationException(
+                        "Native stateless dirty-interaction count exceeds the managed bound.");
+                keys=new NativeDirtyInteractionKey[receipt.Count];
+                for(int i=0;i<keys.Length;i++)keys[i]=(NativeDirtyInteractionKey)
+                    Marshal.PtrToStructure(new IntPtr(keysBuffer.ToInt64()+i*keySize),
+                        typeof(NativeDirtyInteractionKey));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(receiptBuffer);
+                Marshal.FreeHGlobal(keysBuffer);
+            }
+            ValidateDirtyInteractionReceiptContract(receipt,receiptSize);
+            RecordDirtyInteractionReceipt("snapshot-capture",receipt);
+            NativeDirtyInteractionReceipt after=CallDirtyInteractionAction(
+                statusDirtyInteractionOrder,"snapshot-status-after",1);
+            if(!before.Equals(after))
+                throw new InvalidOperationException(
+                    "Stateless dirty-interaction capture changed the pending hook transaction receipt.");
+            var state=new DirtyInteractionState {NPhaseCore=receipt.NPhaseCore.ToUInt32(),
+                Entries=receipt.Entries.ToUInt32(),EntriesNext=receipt.EntriesNext.ToUInt32(),
+                Hash=receipt.Hash.ToUInt32(),EntriesCapacity=receipt.EntriesCapacity,
+                HashSize=receipt.HashSize,OrderHash=receipt.OrderHashAfter,Keys=keys};
+            ValidateDirtyInteractionState(state);
+            if(state.NPhaseCore!=nphase||DirtyInteractionOrderHash(keys)!=receipt.OrderHashAfter)
+                throw new InvalidOperationException(
+                    "Stateless dirty-interaction capture differs from its requested NPhaseCore or key order.");
+            return state;
+        }
+
         private void FinalizePendingDirtyInteractionCapture()
         {
             try{FinalizePendingDirtyInteractionCaptureCore();}
@@ -5361,6 +5592,8 @@ namespace SuperchargedPatch.Authoring.Modules
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
             lastIslandTransitionAudit=null;
             lastFinishBroadPhaseTransitionAudit=null;
+            lastTargetPostTransitionAudit=null;
+            lastRestoredPostTransitionAudit=null;
             lastIslandTransitionAuditCheckpointFrame=-1;
             lastIslandTransitionAuditTransitionFrame=-1;
             lastIslandTransitionAuditCapturedAtOutputFrame=-1;
@@ -6229,6 +6462,80 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"orderHash","0x"+value.OrderHash.ToString("X8")},{"top",top}};
         }
 
+        private static object DescribePhysicsPhaseSnapshot(PhysicsPhaseSnapshot value)
+        {
+            if(value==null)return null;
+            return new Dictionary<string,object>{{"frame",value.Frame},
+                {"context","0x"+value.Context.ToString("X8")},
+                {"freeArray","0x"+value.FreeArray.ToString("X8")},
+                {"contactFreeCount",value.ContactPoolOrder==null?0:value.ContactPoolOrder.Length},
+                {"contactFreeOrderHash","0x"+value.OrderHash.ToString("X8")},
+                {"contactManagerOwners",DescribeContactManagerOwnerState(
+                    value.ContactManagerOwners,true)},
+                {"shapeInstancePairPool",DescribeSipPoolState(value.ShapeInstancePairPool)},
+                {"actorPairPool",DescribeActorPairPoolState(value.ActorPairPool)},
+                {"actorPairReportPool",DescribeActorPairReportPoolState(
+                    value.ActorPairReportPool)},
+                {"nphaseReports",DescribeNPhaseReportState(value.NPhaseReports)},
+                {"interactionGraph",DescribeInteractionGraphState(value.InteractionGraph)},
+                {"transformCache",DescribeTransformCacheState(value.TransformCache)},
+                {"islandSnapshot",DescribeIslandSnapshotState(value.IslandSnapshot)},
+                {"largeManifoldPool",DescribeManifoldPoolState(value.LargeManifoldPool)},
+                {"sphereManifoldPool",DescribeManifoldPoolState(value.SphereManifoldPool)},
+                {"transformDispatch",DescribeTransformDispatchState(value.TransformDispatch)},
+                {"dirtyInteractions",DescribeDirtyInteractionState(value.DirtyInteractions)},
+                {"coreSnapshotPresent",value.CoreSnapshot!=null}};
+        }
+
+        private static object DescribePhysicsPhaseComparison(PhysicsPhaseSnapshot target,
+            PhysicsPhaseSnapshot restored)
+        {
+            if(target==null||restored==null)return null;
+            bool contactFree=target.Context==restored.Context&&
+                target.FreeArray==restored.FreeArray&&target.OrderHash==restored.OrderHash&&
+                target.ContactPoolOrder!=null&&restored.ContactPoolOrder!=null&&
+                target.ContactPoolOrder.SequenceEqual(restored.ContactPoolOrder);
+            bool contactOwners=SameContactManagerOwnerSnapshot(
+                target.ContactManagerOwners,restored.ContactManagerOwners);
+            bool sip=SameSipPoolSnapshot(target.ShapeInstancePairPool,
+                restored.ShapeInstancePairPool);
+            bool actorPair=SameActorPairPoolSnapshot(target.ActorPairPool,
+                restored.ActorPairPool);
+            bool actorPairReport=SameActorPairReportPoolSnapshot(
+                target.ActorPairReportPool,restored.ActorPairReportPool);
+            bool nphaseReports=SameNPhaseReportState(target.NPhaseReports,
+                restored.NPhaseReports);
+            bool graph=SameInteractionGraphState(target.InteractionGraph,
+                restored.InteractionGraph);
+            bool transformCache=SameTransformCacheState(target.TransformCache,
+                restored.TransformCache);
+            bool islandRaw=SameIslandSnapshotState(target.IslandSnapshot,
+                restored.IslandSnapshot);
+            bool island=SameIslandPhysicalSnapshotState(target.IslandSnapshot,
+                restored.IslandSnapshot);
+            bool large=SameManifoldPoolSnapshot(target.LargeManifoldPool,
+                restored.LargeManifoldPool);
+            bool sphere=SameManifoldPoolSnapshot(target.SphereManifoldPool,
+                restored.SphereManifoldPool);
+            bool dispatch=SameTransformDispatchSnapshot(target.TransformDispatch,
+                restored.TransformDispatch);
+            bool dirty=SameDirtyInteractionSnapshot(target.DirtyInteractions,
+                restored.DirtyInteractions);
+            bool frame=target.Frame==restored.Frame;
+            return new Dictionary<string,object>{{"frameEqual",frame},
+                {"contactFreeEqual",contactFree},{"contactOwnersEqual",contactOwners},
+                {"shapeInstancePairPoolEqual",sip},{"actorPairPoolEqual",actorPair},
+                {"actorPairReportPoolEqual",actorPairReport},
+                {"nphaseReportsEqual",nphaseReports},{"interactionGraphEqual",graph},
+                {"transformCacheEqual",transformCache},{"islandSnapshotEqual",island},
+                {"islandSnapshotRawEqual",islandRaw},
+                {"largeManifoldPoolEqual",large},{"sphereManifoldPoolEqual",sphere},
+                {"transformDispatchEqual",dispatch},{"dirtyInteractionsEqual",dirty},
+                {"allFamiliesEqual",frame&&contactFree&&contactOwners&&sip&&actorPair&&
+                    actorPairReport&&nphaseReports&&graph&&transformCache&&island&&large&&
+                    sphere&&dispatch&&dirty}};
+        }
+
         private static object DescribeSipPoolState(SipPoolState value)
         {
             if(value==null)return null;
@@ -6568,10 +6875,28 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateInteractionGraphState(value.InteractionGraph);
             ValidateTransformCacheState(value.TransformCache);
             ValidateIslandSnapshotState(value.IslandSnapshot,IslandPhaseSettled);
+            ValidatePhysicsPhaseSnapshot(value.PostTransitionSnapshot);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
             ValidateFinishBroadPhaseState(value.FinishBroadPhase,value);
             ValidateIslandTransitionState(value);
+            PhysicsPhaseSnapshot post=value.PostTransitionSnapshot;
+            NativeIslandSnapshotReceipt entryIsland=value.IslandSnapshot.Receipt;
+            NativeIslandSnapshotReceipt postIsland=post.IslandSnapshot.Receipt;
+            if(post.Frame!=checked(value.Frame+1)||post.Context!=value.Context||
+                post.FreeArray!=value.FreeArray||post.ShapeInstancePairPool.NPhaseCore!=
+                    value.ShapeInstancePairPool.NPhaseCore||
+                postIsland.OwnerScene!=entryIsland.OwnerScene||
+                postIsland.InteractionScene!=entryIsland.InteractionScene||
+                postIsland.Context!=entryIsland.Context||
+                postIsland.IslandManager!=entryIsland.IslandManager||
+                postIsland.ObserverSequence!=value.IslandTransition.Receipt.ObserverSequence||
+                postIsland.JournalEndOrdinal<value.IslandTransition.Receipt.JournalEndOrdinal)
+                throw new InvalidOperationException(
+                    "Checkpoint post-transition snapshot is not phase-linked to its entry and transition.");
+            if(!ReferenceEquals(post.CoreSnapshot,CoreCheckpointSnapshot(post.Frame)))
+                throw new InvalidOperationException(
+                    "Checkpoint post-transition snapshot no longer owns its retained core output image.");
             if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
@@ -6602,6 +6927,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameFinishBroadPhaseState(previous.FinishBroadPhase,value.FinishBroadPhase)&&
                     SameIslandSnapshotState(previous.IslandSnapshot,value.IslandSnapshot)&&
                     SameIslandTransitionState(previous.IslandTransition,value.IslandTransition)&&
+                    SamePhysicsPhaseSnapshot(previous.PostTransitionSnapshot,
+                        value.PostTransitionSnapshot)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -7016,6 +7343,33 @@ namespace SuperchargedPatch.Authoring.Modules
                 left.RawBytes.SequenceEqual(right.RawBytes);
         }
 
+        private static bool SameIslandPhysicalSnapshotState(IslandSnapshotState left,
+            IslandSnapshotState right)
+        {
+            if(left==null||right==null)return left==right;
+            if(left.RawBytes==null||right.RawBytes==null||
+                left.RawBytes.Length!=right.RawBytes.Length)return false;
+            byte[] leftBytes=(byte[])left.RawBytes.Clone();
+            byte[] rightBytes=(byte[])right.RawBytes.Clone();
+            ClearIslandCaptureProvenance(leftBytes);
+            ClearIslandCaptureProvenance(rightBytes);
+            return leftBytes.SequenceEqual(rightBytes);
+        }
+
+        private static void ClearIslandCaptureProvenance(byte[] bytes)
+        {
+            // These fields identify the observation transaction, not the
+            // persistent island-manager image.  Comparing them would make a
+            // later replay unequal even after exact physical restoration.
+            foreach(string field in new[]{"ObserverSequence","ObservationOrdinal",
+                "CaptureThreadId","Epoch","JournalBeginOrdinal","JournalEndOrdinal",
+                "JournalOverflowCount"})
+            {
+                int offset=Marshal.OffsetOf(typeof(NativeIslandSnapshotReceipt),field).ToInt32();
+                Array.Clear(bytes,offset,4);
+            }
+        }
+
         private static bool SameIslandTransitionState(IslandTransitionState left,
             IslandTransitionState right)
         {
@@ -7026,6 +7380,36 @@ namespace SuperchargedPatch.Authoring.Modules
                 left.JournalReceipt.Equals(right.JournalReceipt)&&
                 left.JournalRawBytes!=null&&right.JournalRawBytes!=null&&
                 left.JournalRawBytes.SequenceEqual(right.JournalRawBytes);
+        }
+
+        private static bool SamePhysicsPhaseSnapshot(PhysicsPhaseSnapshot left,
+            PhysicsPhaseSnapshot right)
+        {
+            if(left==null||right==null)return left==right;
+            return left.Frame==right.Frame&&left.Context==right.Context&&
+                left.FreeArray==right.FreeArray&&left.OrderHash==right.OrderHash&&
+                ReferenceEquals(left.CoreSnapshot,right.CoreSnapshot)&&
+                left.ContactPoolOrder!=null&&right.ContactPoolOrder!=null&&
+                left.ContactPoolOrder.SequenceEqual(right.ContactPoolOrder)&&
+                SameContactManagerOwnerSnapshot(left.ContactManagerOwners,
+                    right.ContactManagerOwners)&&
+                SameSipPoolSnapshot(left.ShapeInstancePairPool,
+                    right.ShapeInstancePairPool)&&
+                SameActorPairPoolSnapshot(left.ActorPairPool,right.ActorPairPool)&&
+                SameActorPairReportPoolSnapshot(left.ActorPairReportPool,
+                    right.ActorPairReportPool)&&
+                SameNPhaseReportState(left.NPhaseReports,right.NPhaseReports)&&
+                SameInteractionGraphState(left.InteractionGraph,right.InteractionGraph)&&
+                SameTransformCacheState(left.TransformCache,right.TransformCache)&&
+                SameIslandSnapshotState(left.IslandSnapshot,right.IslandSnapshot)&&
+                SameManifoldPoolSnapshot(left.LargeManifoldPool,
+                    right.LargeManifoldPool)&&
+                SameManifoldPoolSnapshot(left.SphereManifoldPool,
+                    right.SphereManifoldPool)&&
+                SameTransformDispatchSnapshot(left.TransformDispatch,
+                    right.TransformDispatch)&&
+                SameDirtyInteractionSnapshot(left.DirtyInteractions,
+                    right.DirtyInteractions);
         }
 
         private static bool SameStructArray<T>(T[] left,T[] right) where T:struct
@@ -7207,7 +7591,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
-                {"dirtyInteractions",found?DescribeDirtyInteractionState(value.DirtyInteractions):null}};
+                {"dirtyInteractions",found?DescribeDirtyInteractionState(value.DirtyInteractions):null},
+                {"postTransitionSnapshot",found?
+                    DescribePhysicsPhaseSnapshot(value.PostTransitionSnapshot):null}};
         }
 
         private object[] RebuildBodies(Rigidbody[] bodies,string reason)
@@ -7418,6 +7804,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"firstReplayIslandAuditCaptures",islandTransitionAuditCaptures},
                 {"firstReplayBroadPhaseAudit",DescribeFinishBroadPhaseState(lastFinishBroadPhaseTransitionAudit)},
                 {"firstReplayIslandAudit",DescribeIslandTransitionState(lastIslandTransitionAudit)},
+                {"firstReplayTargetPostSnapshot",DescribePhysicsPhaseSnapshot(
+                    lastTargetPostTransitionAudit)},
+                {"firstReplayRestoredPostSnapshot",DescribePhysicsPhaseSnapshot(
+                    lastRestoredPostTransitionAudit)},
+                {"transitionPostSnapshotCaptures",transitionPostSnapshotCaptures},
                 {"retainedIslandBufferTransactions",processRetainedIslandBuffers.Count},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
@@ -7512,6 +7903,8 @@ namespace SuperchargedPatch.Authoring.Modules
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             pendingIslandTransitionAuditSidecar=null;lastIslandTransitionAudit=null;
             lastFinishBroadPhaseTransitionAudit=null;
+            lastTargetPostTransitionAudit=null;
+            lastRestoredPostTransitionAudit=null;
             lastIslandTransitionAuditCheckpointFrame=-1;
             lastIslandTransitionAuditTransitionFrame=-1;
             lastIslandTransitionAuditCapturedAtOutputFrame=-1;
@@ -7537,7 +7930,8 @@ namespace SuperchargedPatch.Authoring.Modules
             armContactRecreate=null;statusContactRecreate=null;cancelContactRecreate=null;
             installDirtyInteractionOrder=null;statusDirtyInteractionOrder=null;armDirtyInteractionCapture=null;
             lastObservedDirtyNPhase=null;dirtyNPhaseObservationFloor=0;
-            copyDirtyInteractionCapture=null;armDirtyInteractionRestore=null;cancelDirtyInteractionOrder=null;
+            copyDirtyInteractionCapture=null;captureDirtyInteractionSnapshot=null;
+            armDirtyInteractionRestore=null;cancelDirtyInteractionOrder=null;
             uninstallDirtyInteractionOrder=null;
             if(library!=IntPtr.Zero)
             {

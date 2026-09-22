@@ -6,6 +6,62 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — the complete f445 post image is captured
+
+Managed RigidbodyActorRebuild r21 and native r37/API 18 complete the
+three-phase oracle for the deep f1048 -> f444 rewind.  Each checkpoint now
+links an exact settled f444 entry image, the passive f444 -> f445 broadphase
+and first-island-update transaction, and a complete f445 output image.  The
+post image includes contact free/owner state; SIP, ActorPair and ActorPairReport
+pools; NPhase reports and report buffer; InteractionScene; TransformCache;
+settled island state; large and sphere manifold pools;
+TransformChangeDispatch; dirty interactions; and the retained f445 core
+snapshot.  It is captured at f445 before the ordinary f446 authoring fence.
+
+Fresh minimized evidence is
+`artifacts/island-first-replay-post-snapshot-story11-v85-r1/`.  The audit ran
+to completion with search disabled and reports the expected parity failure.
+Original f444 -> f445 has broadphase created/deleted `0/6`, island contacts
+`12 -> 8`, and four ordered removals.  Replay has `0/0`, `0 -> 0`, and no
+journal.  At the later f445 output snapshot both sides nevertheless have eight
+contact managers, SIPs, ActorPairs, ActorPairReports, island contact edges, and
+large manifolds.  Replay's island journal advances from 483 to 491 after the
+empty first-pass interval, recording exactly those eight late adds.
+
+This resolves an earlier ambiguity.  Shipped SIP construction unconditionally
+adds its island edge; the eight matched replay creations did not bypass that
+call.  They occurred after the captured first island update.  They can produce
+the right survivor counts at output, but cannot retroactively supply the
+twelve-contact predecessor or the six/four canonical deletions.
+
+The exact family comparison is:
+
+- equal: output frame, sphere-manifold pool, TransformChangeDispatch, and the
+  empty dirty-interaction set;
+- different: contact-manager free/owner order, SIP pool, ActorPair pool,
+  ActorPairReport pool, NPhase report-buffer allocation, InteractionScene,
+  TransformCache, island topology/allocator state, and large-manifold pool.
+
+First-pass target pre/post island hashes are `0x45B69F77` / `0x6CB577A8`;
+replay is `0xA6AF118F` at both boundaries.  Target/replay settled f445 island
+hashes are `0xBCE1B6B9` / `0x48E6DB2E`.  Thus full parity is not a collection of ten new
+independent bugs: most differences descend from entering the transition
+without the f444 semantic interactions and their allocation history.  The
+next implementation is an atomic predecessor restore in dependency order,
+followed by the same whole-image oracle.  Search remains disabled.
+
+The new dirty-interaction snapshot export uses caller-owned/stack storage and
+does not touch the installed legacy hook's global receipt or scratch state.
+The native harness proves byte-identical legacy status across successful and
+short-buffer stateless reads.  Live-evidence managed/native SHA-256 values are
+respectively
+`E70DFFD156A017C6FCAFB32CD1D5CE3B753730A0093978890460A358136117B2` and
+`658339E51DB314CCC2675D7087B916AA06716B7B770AD7E4088C97DE80E091F6`.
+The post-audit physical-island comparator and fail-closed native reread build
+as `D07FE8AAD2526DA4C7860A1DA79D7A93007BD6D7B5699501A395CDDF3930BD33`
+and `5D192083335029A4E227CFE82D1091EE823DAF884DA9152A8A0184444E89E3BF`;
+the managed checker passes 49 contracts.
+
 ## Latest result — the restored first transition has no contact-edge predecessor
 
 Managed RigidbodyActorRebuild r20 preserves the replay's broadphase and island

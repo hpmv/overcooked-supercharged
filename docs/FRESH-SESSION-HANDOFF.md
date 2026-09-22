@@ -1,5 +1,51 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Complete post-transition oracle milestone (2026-09-22, managed r21 /
+> native r37 / API 18):** the f444 checkpoint now owns three explicitly linked
+> artifacts: its settled entry snapshot, the passive f444 -> f445 broadphase
+> and island transaction, and a complete f445 output snapshot.  The post image
+> covers contact-manager ownership/free order, SIP/ActorPair/report pools,
+> NPhase report state, InteractionScene, TransformCache, settled islands, both
+> manifold pools, TransformChangeDispatch, dirty interactions, and the exact
+> retained f445 core snapshot.  Dirty-interaction output capture is a new
+> synchronous caller-owned native read which leaves the legacy one-shot hook
+> receipt byte-identical.
+>
+> Fresh minimized, no-search evidence is
+> `artifacts/island-first-replay-post-snapshot-story11-v85-r1/`.  The audit
+> completed and deliberately reports parity failure.  Original f444 -> f445 is
+> broadphase `0/6`, first island update `12 -> 8`, and four ordered removals;
+> replay is broadphase `0/0`, first island update `0 -> 0`, and no removals.
+> By the f445 output boundary replay has nevertheless created eight live
+> managers, SIPs, ActorPairs, reports, island contact edges, and large
+> manifolds, and its island journal advances from 483 to 491 through those
+> eight late adds.  This corrects the earlier ambiguous interpretation: the shipped
+> SIP path did add edges, but the eight survivor creations occurred after the
+> captured first island update and therefore cannot reproduce its missing
+> twelve-contact predecessor transaction.
+>
+> Only the frame, sphere-manifold pool, TransformChangeDispatch, and empty
+> dirty-interaction image are exact at f445.  Contact free/owner state, SIP,
+> ActorPair and report pools, NPhase report-buffer allocation, InteractionScene,
+> TransformCache, island topology/allocator history, and the large-manifold
+> pool all differ.  The first-pass target pre/post island hashes are
+> `0x45B69F77` / `0x6CB577A8`; replay remains `0xA6AF118F` at both boundaries.
+> Target/replay settled output-island hashes are `0xBCE1B6B9` / `0x48E6DB2E`.
+>
+> The live evidence used managed DLL SHA-256
+> `E70DFFD156A017C6FCAFB32CD1D5CE3B753730A0093978890460A358136117B2`;
+> its native DLL SHA-256 is
+> `658339E51DB314CCC2675D7087B916AA06716B7B770AD7E4088C97DE80E091F6`.
+> Post-audit candidates separate physical island bytes from advancing observer
+> provenance and fail closed if a dirty-interaction reread becomes unreadable:
+> managed `D07FE8AAD2526DA4C7860A1DA79D7A93007BD6D7B5699501A395CDDF3930BD33`,
+> native `5D192083335029A4E227CFE82D1091EE823DAF884DA9152A8A0184444E89E3BF`.
+> The managed checker passes 49 contracts, the native caller-owned-history
+> harness passes, focused Python readiness tests pass 7 checks, and the live
+> background audit required neither focus nor a reload loop.  The next mutation
+> unit is the atomic f444 predecessor restore, not post-f445 count patching and
+> not search.
+
 > **First restored-transition capture milestone (2026-09-22, managed r20 /
 > native r36 / API 17):** the first replay audit now preserves both the exact
 > `finishBroadPhase` result and the island pre/post transaction at advancing

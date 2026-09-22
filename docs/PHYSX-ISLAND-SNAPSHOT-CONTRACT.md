@@ -11,6 +11,18 @@ to frame 445.  A restored run must match both the state on entry to the first
 island update and the state on return from it.  Matching only the final scene
 objects is insufficient.
 
+The complete phase model has three distinct objects:
+
+- `EntrySnapshot(N)`: the settled checkpoint image before simulation resumes.
+- `TransitionContract(N -> N+1)`: the passive `finishBroadPhase` result and
+  first `PxsIslandManager::updateIslands` pre/post transaction.
+- `PostSnapshot(N+1)`: every synchronously readable physics family at the exact
+  managed N+1 output, linked to its retained core output snapshot.
+
+The transition observer's post-call island bytes are not the complete
+`PostSnapshot`.  Additional same-output PhysX work can occur after that first
+island call and before the managed output boundary.
+
 All offsets below are hexadecimal, all pointers and handles are 32-bit, and
 `INVALID_NODE`, `INVALID_EDGE`, and `INVALID_ISLAND` are all `0xffffffff`.
 
@@ -437,14 +449,37 @@ The fresh v84 Story 1-1 capture proves why this distinction matters.  The
 uninterrupted f444 -> f445 transition reports broadphase created/deleted
 `0/6`, island live contact edges `12 -> 8`, and ordered removals
 `8,9,10,11`.  The restored transition reports `0/0`, island `0 -> 0`, and no
-journal.  Although eight manager and SIP allocation hooks match checkpoint
-rows during f445, those output-time allocations do not recreate the settled
-pre-transition contact edges.  A correct restore therefore needs three
+journal.  Eight manager and SIP allocation hooks later match checkpoint rows
+during f445.  Reverse engineering of the shipped creation path shows that a
+successful SIP initialization unconditionally calls `addEdge`; the fresh v85
+post-output snapshot confirms eight replay contact edges exist by the f445
+output boundary, and the replay journal advances from 483 to 491 through those
+eight adds.  Therefore those creations occurred after the observed first
+island update.  They do not recreate its settled pre-transition contact edges
+or its historical removals.  A correct restore therefore needs three
 phase-linked objects: an exact settled entry snapshot at `N`, the native
 transition contract for `N -> N+1`, and an exact post snapshot at `N+1`.
 Validation at `N+1` must compare with the post snapshot, not require every
 entry object to remain allocated.  In this case rows 8--11 are ordinary
 historical removals, not failed survivor allocations.
+
+The v85 implementation captures that complete `N+1` output object while still
+at the exact output callback and retains its exact core snapshot.  Its families
+are contact-manager free/owner state, SIP/ActorPair/ActorPairReport pools,
+NPhase reports and report buffer, InteractionScene, TransformCache, the
+settled island snapshot, both manifold pools, TransformChangeDispatch, and
+dirty interactions.  Dirty-interaction capture is synchronous, caller-owned,
+and observational: it rereads and validates the live CoalescedHashSet without
+changing the installed one-shot hook's receipt, counters, or scratch arrays.
+
+Fresh evidence is
+`artifacts/island-first-replay-post-snapshot-story11-v85-r1/`.  The target and
+replay f445 output both contain eight managers, SIPs, ActorPairs, reports,
+contact edges, and large manifolds, but only the sphere-manifold pool,
+TransformChangeDispatch, and empty dirty set compare equal.  The target/replay
+settled island hashes are `0xBCE1B6B9` / `0x48E6DB2E`; their first-pass post
+island hashes are `0x6CB577A8` / `0xA6AF118F`.  This is the output oracle for the restore
+transaction below; equal survivor counts alone are insufficient.
 
 That single hook is **not** sufficient to recover semantic ownership for every
 deferred-deleted edge.  `removeEdge` writes `ffffffff` to the caller's edge
@@ -533,16 +568,20 @@ Interpret the comparison as follows:
 - Both match but later frame 445 diverges means the next observation boundary
   is `a655b0` and then `PxsIslandManager::freeBuffers`, not another special case
   in first-pass restore.
+- A matching first island pass does not excuse a complete `PostSnapshot`
+  mismatch, and matching post counts does not excuse a transition mismatch.
+  Both the native transaction and every behavior-relevant output family must
+  converge.
 
 ## Explicit limitations and unresolved work
 
-- The uninterrupted frame-444/445 records are now captured under
-  `artifacts/readiness-plan-island-f1048-to-f444-r2/`.  The settled, pre, and
-  post hashes are `0x39B41B41`, `0x2433DECA`, and `0x74601DDB`; journal
-  interval `[233,237)` contains four ordered contact removals and no overflow.
-  Restored f444 repeats exactly at `0x4F772361`, proving that topology,
-  allocator order, bitmaps, and SIP-edge bindings still require projection.
-  The restore transaction described above is not implemented yet.
+- Complete current evidence is
+  `artifacts/island-first-replay-post-snapshot-story11-v85-r1/`.  Target
+  f444 -> f445 is broadphase `0/6`, island `12 -> 8`, with four removals in
+  `[233,237)`.  Replay's first pass is `0/0`, island `0 -> 0`, with empty
+  `[483,483)`; eight later adds advance the output journal to 491.  The f445
+  target/replay island hashes are `0xBCE1B6B9` / `0x48E6DB2E`.  Semantic
+  predecessor restoration is still not implemented.
 - `ShapeInstancePairLL + 0x3c` and the contact semantic key are resolved.
   The live Story 1-1 oracle proves all 12 settled edges and all four journal
   events are contacts.  Equivalent owner offsets and stable semantic keys for
@@ -568,3 +607,7 @@ Interpret the comparison as follows:
 - If asynchronous tasking is enabled in a different build, the synchronous
   `a65530` assumption and this observer are invalid.  The byte signatures and
   phase checks intentionally fail closed in that case.
+- `PostSnapshot` is an output-boundary oracle, not permission to copy the
+  pointer-rich transient island work region or restore in the middle of an
+  update.  Observer sequence, epoch, callback thread, and journal ordinals are
+  retained as provenance but excluded from physical-island equality.

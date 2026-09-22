@@ -957,6 +957,7 @@ def main():
         summary["capturedAnimatorResumeReady"] = animator_receipt
 
         contact_before = None
+        target_post_snapshot = None
         if args.restore_contact_manager_free_stack:
             actor = original_modules["modules"].get(args.actor_rebuild_slot)
             require(isinstance(actor, dict) and actor.get("active") is True and
@@ -983,9 +984,15 @@ def main():
                                "operation": "checkpoint-status", "args": {"frame": args.target_frame}},
                               "target-contact-sidecar")["detail"]["result"].get("result", {})
             require(checkpoint.get("captured") is True and checkpoint.get("coreSnapshotMatches") is True and
+                    isinstance(checkpoint.get("postTransitionSnapshot"), dict) and
+                    checkpoint.get("postTransitionSnapshot", {}).get("frame") ==
+                    args.target_frame + 1 and
+                    checkpoint.get("postTransitionSnapshot", {}).get(
+                        "coreSnapshotPresent") is True and
                     (not args.restore_transform_dispatch or
                      checkpoint.get("transformDispatchCaptured") is True),
-                    "No exact contact/Transform sidecar exists for f444.")
+                    "No exact entry/transition/post physics sidecar exists for f444.")
+            target_post_snapshot = checkpoint["postTransitionSnapshot"]
             contact_before = actor
 
             source_actor_readiness = actor_readiness(
@@ -1091,6 +1098,9 @@ def main():
                 copied_result = copied.get("detail", {}).get("result", {}).get("result", {})
                 restored_transition = copied_result.get("transition")
                 restored_broad_phase = copied_result.get("broadPhase")
+                target_post = copied_result.get("targetPostSnapshot")
+                restored_post = copied_result.get("restoredPostSnapshot")
+                post_comparison = copied_result.get("postSnapshotComparison")
                 target_transition = target_actor_observation_f488.get("islandTransition")
                 target_broad_phase = target_actor_observation_f488.get("finishBroadPhaseSnapshot")
                 require(copied_result.get("captured") is True and
@@ -1102,14 +1112,25 @@ def main():
                         isinstance(restored_transition, dict) and
                         isinstance(target_transition, dict) and
                         isinstance(restored_broad_phase, dict) and
-                        isinstance(target_broad_phase, dict),
-                        "The exact f445 native transition was not preserved for settled f446.")
+                        isinstance(target_broad_phase, dict) and
+                        isinstance(target_post, dict) and
+                        isinstance(restored_post, dict) and
+                        isinstance(post_comparison, dict) and
+                        exact_values(target_post, target_post_snapshot) and
+                        target_post.get("frame") == audit_plan["transitionFrame"] and
+                        restored_post.get("frame") == audit_plan["transitionFrame"] and
+                        target_post.get("coreSnapshotPresent") is True and
+                        restored_post.get("coreSnapshotPresent") is True,
+                        "The exact f445 transition and complete output images were not preserved for settled f446.")
                 audit = {
                     **audit_plan,
                     "target": target_transition,
                     "restored": restored_transition,
                     "targetBroadPhase": target_broad_phase,
                     "restoredBroadPhase": restored_broad_phase,
+                    "targetPostState": target_post,
+                    "restoredPostState": restored_post,
+                    "postSnapshotComparison": post_comparison,
                     "targetPreSnapshotHash": target_transition.get("preSnapshotHash"),
                     "restoredPreSnapshotHash": restored_transition.get("preSnapshotHash"),
                     "targetPostSnapshotHash": target_transition.get("postSnapshotHash"),
@@ -1128,15 +1149,56 @@ def main():
                     "restoredBroadPhaseCreated": len(restored_broad_phase.get("created", [])),
                     "targetBroadPhaseDeleted": len(target_broad_phase.get("deleted", [])),
                     "restoredBroadPhaseDeleted": len(restored_broad_phase.get("deleted", [])),
+                    "targetPostContactManagers": target_post.get(
+                        "contactManagerOwners", {}).get("usedCount"),
+                    "restoredPostContactManagers": restored_post.get(
+                        "contactManagerOwners", {}).get("usedCount"),
+                    "targetPostSipUsed": target_post.get(
+                        "shapeInstancePairPool", {}).get("used"),
+                    "restoredPostSipUsed": restored_post.get(
+                        "shapeInstancePairPool", {}).get("used"),
+                    "targetPostActorPairs": target_post.get(
+                        "actorPairPool", {}).get("used"),
+                    "restoredPostActorPairs": restored_post.get(
+                        "actorPairPool", {}).get("used"),
+                    "targetPostActorPairReports": target_post.get(
+                        "actorPairReportPool", {}).get("used"),
+                    "restoredPostActorPairReports": restored_post.get(
+                        "actorPairReportPool", {}).get("used"),
+                    "targetPostInteractionGraphHash": target_post.get(
+                        "interactionGraph", {}).get("graphHash"),
+                    "restoredPostInteractionGraphHash": restored_post.get(
+                        "interactionGraph", {}).get("graphHash"),
+                    "targetPostTransformCacheHash": target_post.get(
+                        "transformCache", {}).get("snapshotHash"),
+                    "restoredPostTransformCacheHash": restored_post.get(
+                        "transformCache", {}).get("snapshotHash"),
+                    "targetPostIslandHash": target_post.get(
+                        "islandSnapshot", {}).get("snapshotHash"),
+                    "restoredPostIslandHash": restored_post.get(
+                        "islandSnapshot", {}).get("snapshotHash"),
+                    "targetPostIslandContactEdges": target_post.get(
+                        "islandSnapshot", {}).get("liveContactEdges"),
+                    "restoredPostIslandContactEdges": restored_post.get(
+                        "islandSnapshot", {}).get("liveContactEdges"),
+                    "targetPostLargeManifolds": target_post.get(
+                        "largeManifoldPool", {}).get("used"),
+                    "restoredPostLargeManifolds": restored_post.get(
+                        "largeManifoldPool", {}).get("used"),
+                    "targetPostDirtyCount": target_post.get(
+                        "dirtyInteractions", {}).get("count"),
+                    "restoredPostDirtyCount": restored_post.get(
+                        "dirtyInteractions", {}).get("count"),
                 }
                 save("first-replay-island-transition-audit.json", audit)
                 summary["firstReplayIslandTransition"] = {
                     key: value for key, value in audit.items()
-                    if key not in ("target", "restored")
+                    if key not in ("target", "restored", "targetPostState",
+                                   "restoredPostState")
                 }
                 summary["auditCompleted"] = True
                 summary["classification"] = (
-                    "bounded Story11 f444-to-f445 read-only native transition audit, preserved at f445 and read while paused at f446")
+                    "bounded Story11 f444-to-f445 read-only transition plus complete post-state audit, preserved at f445 and read while paused at f446")
                 raise ReadinessAuditComplete()
 
         arm_advancing("replay-604-arm")

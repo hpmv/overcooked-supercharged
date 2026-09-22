@@ -1560,7 +1560,8 @@ enum DirtyInteractionOrderResult : uint32_t {
     DirtyInteractionOrderIdentityChanged = 15,
     DirtyInteractionOrderNotWritable = 16,
     DirtyInteractionOrderWriteVerificationFailed = 17,
-    DirtyInteractionOrderPending = 18
+    DirtyInteractionOrderPending = 18,
+    DirtyInteractionOrderUnstable = 19
 };
 
 enum DirtyInteractionOrderAction : uint32_t {
@@ -1788,7 +1789,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 17;
+static const uint32_t kApiVersion = 18;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -4119,6 +4120,205 @@ static void CompleteDirtyInteractionOrder(DirtyInteractionOrderResult result,
     InterlockedExchange(&g_dirtyInteractionError, static_cast<LONG>(error));
     MemoryBarrier();
     InterlockedExchange(&g_dirtyInteractionAction, DirtyInteractionOrderIdle);
+}
+
+static int FailDirtyInteractionSnapshot(DirtyInteractionOrderReceipt* receipt,
+    DirtyInteractionOrderResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+// Reads the current CoalescedHashSet directly at a quiescent managed output
+// boundary.  This deliberately uses only caller-owned scratch/output storage:
+// the one-shot hook receipt may still be awaiting managed validation, so a
+// diagnostic snapshot must not alter any g_dirtyInteraction* field or counter.
+static int CaptureDirtyInteractionOrderSnapshot(uintptr_t unityBase,
+    uintptr_t nphase, DirtyInteractionKey* keys, uint32_t capacity,
+    DirtyInteractionOrderReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeDirtyInteractionOrderReceipt(receipt, unityBase);
+    if (!g_dirtyInteractionInstalled ||
+        unityBase != g_dirtyInteractionUnityBase)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderNotInstalled, ERROR_INVALID_STATE);
+    if (!nphase || nphase != g_lastObservedNPhaseCore)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderIdentityChanged, ERROR_INVALID_STATE);
+    if (InterlockedCompareExchange(&g_dirtyInteractionAction, 0, 0) !=
+        DirtyInteractionOrderIdle)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderPending, ERROR_IO_PENDING);
+
+    const uintptr_t set = nphase + 0x44;
+    if (!Readable(reinterpret_cast<const void*>(nphase), sizeof(uintptr_t)) ||
+        !Readable(reinterpret_cast<const void*>(set), 0x28))
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderInvalidHeader, ERROR_NOACCESS);
+    const uintptr_t buffer =
+        *reinterpret_cast<const uintptr_t*>(set + 0x00);
+    const uintptr_t entries =
+        *reinterpret_cast<const uintptr_t*>(set + 0x04);
+    const uintptr_t entriesNext =
+        *reinterpret_cast<const uintptr_t*>(set + 0x08);
+    const uintptr_t hash =
+        *reinterpret_cast<const uintptr_t*>(set + 0x0C);
+    const uint32_t entriesCapacity =
+        *reinterpret_cast<const uint32_t*>(set + 0x10);
+    const uint32_t hashSize =
+        *reinterpret_cast<const uint32_t*>(set + 0x14);
+    const uint32_t loadFactorBits =
+        *reinterpret_cast<const uint32_t*>(set + 0x18);
+    const uint32_t freeList =
+        *reinterpret_cast<const uint32_t*>(set + 0x1C);
+    const uint32_t count =
+        *reinterpret_cast<const uint32_t*>(set + 0x24);
+    receipt->nphaseCore = nphase;
+    receipt->set = set;
+    receipt->entries = entries;
+    receipt->entriesNext = entriesNext;
+    receipt->hash = hash;
+    receipt->entriesCapacity = entriesCapacity;
+    receipt->hashSize = hashSize;
+    receipt->count = count;
+    const uintptr_t expectedEntriesNext =
+        buffer + hashSize * sizeof(uint32_t);
+    const uintptr_t expectedEntries = (expectedEntriesNext +
+        entriesCapacity * sizeof(uint32_t) + 15u) &
+        ~static_cast<uintptr_t>(15u);
+    const uintptr_t ownerScene =
+        *reinterpret_cast<const uintptr_t*>(nphase);
+    if (!buffer || !entries || !entriesNext || !hash || hash != buffer ||
+        entriesNext != expectedEntriesNext || entries != expectedEntries ||
+        !ownerScene ||
+        !Readable(reinterpret_cast<const void*>(ownerScene + 0x4A4), 1) ||
+        (*reinterpret_cast<const uint8_t*>(ownerScene + 0x4A4) & 6u) != 0 ||
+        entriesCapacity == 0 ||
+        entriesCapacity > kMaximumDirtyInteractions ||
+        hashSize == 0 || hashSize > kMaximumDirtyHashSize ||
+        (hashSize & (hashSize - 1)) != 0 || count > entriesCapacity ||
+        freeList != count || loadFactorBits != 0x3F400000u ||
+        !Readable(reinterpret_cast<const void*>(entries),
+            count * sizeof(uintptr_t)) ||
+        !Readable(reinterpret_cast<const void*>(entriesNext),
+            entriesCapacity * sizeof(uint32_t)) ||
+        !Readable(reinterpret_cast<const void*>(hash),
+            hashSize * sizeof(uint32_t)))
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderInvalidHeader, ERROR_INVALID_DATA);
+    if (capacity < count)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER);
+    if (count != 0 && (!keys ||
+        !Writable(keys, count * sizeof(DirtyInteractionKey))))
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderBadArgument, ERROR_INVALID_PARAMETER);
+
+    DirtyInteractionKey localKeys[kMaximumDirtyInteractions] = {};
+    uint8_t used[kMaximumDirtyInteractions] = {};
+    const uintptr_t* dense = reinterpret_cast<const uintptr_t*>(entries);
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!dense[i] || !Readable(reinterpret_cast<const void*>(dense[i]),
+                10 * sizeof(uintptr_t)))
+            return FailDirtyInteractionSnapshot(receipt,
+                DirtyInteractionOrderInvalidEntry, ERROR_NOACCESS);
+        const DirtyInteractionKey key = ReadDirtyInteractionKey(dense[i]);
+        const uint16_t coreFlags =
+            *reinterpret_cast<const uint16_t*>(dense[i] + 0x06);
+        if (!key.primaryVtable || !key.elementLow || !key.elementHigh ||
+            key.elementLow == key.elementHigh || key.interactionType > 5 ||
+            (coreFlags & 3u) != 3u)
+            return FailDirtyInteractionSnapshot(receipt,
+                DirtyInteractionOrderInvalidEntry, ERROR_INVALID_DATA);
+        localKeys[i] = key;
+        for (uint32_t prior = 0; prior < i; ++prior)
+            if (dense[prior] == dense[i] ||
+                SameDirtyInteractionKey(localKeys[prior], key))
+                return FailDirtyInteractionSnapshot(receipt,
+                    DirtyInteractionOrderInvalidEntry, ERROR_DUP_NAME);
+    }
+    const uint32_t* currentNext =
+        reinterpret_cast<const uint32_t*>(entriesNext);
+    const uint32_t* currentHash = reinterpret_cast<const uint32_t*>(hash);
+    uint32_t visited = 0;
+    for (uint32_t bucket = 0; bucket < hashSize; ++bucket) {
+        uint32_t index = currentHash[bucket];
+        while (index != 0xFFFFFFFFu) {
+            if (index >= count || used[index] ||
+                (PhysxPointerHash(dense[index]) & (hashSize - 1)) != bucket ||
+                ++visited > count)
+                return FailDirtyInteractionSnapshot(receipt,
+                    DirtyInteractionOrderInvalidHeader, ERROR_INVALID_DATA);
+            used[index] = 1;
+            index = currentNext[index];
+        }
+    }
+    if (visited != count)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderInvalidHeader, ERROR_INVALID_DATA);
+    const uint32_t orderHash = DirtyInteractionKeyOrderHash(localKeys, count);
+
+    // There is no public lock for this container.  The managed caller invokes
+    // us only after the physics step has joined, but repeat-read every owned
+    // field and chain before publishing so an accidental live call fails
+    // closed instead of returning a torn state.
+    if (!Readable(reinterpret_cast<const void*>(set), 0x28) ||
+        *reinterpret_cast<const uintptr_t*>(set + 0x00) != buffer ||
+        *reinterpret_cast<const uintptr_t*>(set + 0x04) != entries ||
+        *reinterpret_cast<const uintptr_t*>(set + 0x08) != entriesNext ||
+        *reinterpret_cast<const uintptr_t*>(set + 0x0C) != hash ||
+        *reinterpret_cast<const uint32_t*>(set + 0x10) != entriesCapacity ||
+        *reinterpret_cast<const uint32_t*>(set + 0x14) != hashSize ||
+        *reinterpret_cast<const uint32_t*>(set + 0x18) != loadFactorBits ||
+        *reinterpret_cast<const uint32_t*>(set + 0x1C) != freeList ||
+        *reinterpret_cast<const uint32_t*>(set + 0x24) != count ||
+        *reinterpret_cast<const uintptr_t*>(nphase) != ownerScene ||
+        (*reinterpret_cast<const uint8_t*>(ownerScene + 0x4A4) & 6u) != 0)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderUnstable, ERROR_RETRY);
+    if ((count != 0 && !Readable(dense, count * sizeof(uintptr_t))) ||
+        !Readable(currentNext, entriesCapacity * sizeof(uint32_t)) ||
+        !Readable(currentHash, hashSize * sizeof(uint32_t)))
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderUnstable, ERROR_RETRY);
+    for (uint32_t i = 0; i < count; ++i) {
+        const uintptr_t interaction = dense[i];
+        if (interaction == 0 ||
+            !Readable(reinterpret_cast<const void*>(interaction),
+                10 * sizeof(uintptr_t)) ||
+            !SameDirtyInteractionKey(ReadDirtyInteractionKey(interaction),
+                localKeys[i]))
+            return FailDirtyInteractionSnapshot(receipt,
+                DirtyInteractionOrderUnstable, ERROR_RETRY);
+    }
+    for (uint32_t i = 0; i < count; ++i) used[i] = 0;
+    visited = 0;
+    for (uint32_t bucket = 0; bucket < hashSize; ++bucket) {
+        uint32_t index = currentHash[bucket];
+        while (index != 0xFFFFFFFFu) {
+            if (index >= count || used[index] ||
+                (PhysxPointerHash(dense[index]) & (hashSize - 1)) != bucket ||
+                ++visited > count)
+                return FailDirtyInteractionSnapshot(receipt,
+                    DirtyInteractionOrderUnstable, ERROR_RETRY);
+            used[index] = 1;
+            index = currentNext[index];
+        }
+    }
+    if (visited != count ||
+        DirtyInteractionKeyOrderHash(localKeys, count) != orderHash)
+        return FailDirtyInteractionSnapshot(receipt,
+            DirtyInteractionOrderUnstable, ERROR_RETRY);
+    if (count != 0)
+        CopyBytes(keys, localKeys, count * sizeof(DirtyInteractionKey));
+    receipt->orderHashBefore = orderHash;
+    receipt->orderHashAfter = orderHash;
+    receipt->result = DirtyInteractionOrderOk;
+    receipt->lastError = ERROR_SUCCESS;
+    return 1;
 }
 
 // Runs at the exact entry to Sc::NPhaseCore::updateDirtyInteractions.  The
@@ -13115,6 +13315,13 @@ extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_capture
     uintptr_t unityBase, DirtyInteractionKey* keys, uint32_t capacity,
     DirtyInteractionOrderReceipt* receipt) {
     return CopyDirtyInteractionOrderCapture(unityBase, keys, capacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore, DirtyInteractionKey* keys,
+    uint32_t capacity, DirtyInteractionOrderReceipt* receipt) {
+    return CaptureDirtyInteractionOrderSnapshot(unityBase, nphaseCore, keys,
+        capacity, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_dirty_interaction_order_restore_arm(

@@ -82,23 +82,60 @@ Check(Calls("RunContactPoolAction").Contains("ArmCheckpointObservationCapture")&
     "shared capture path stages the complete observation transaction and Transform-dispatch state");
 
 var outputCalls=Calls("AfterCaptureFrame");
+Check(outputCalls.Contains("CapturePendingPostTransitionSnapshotAtOutput")&&
+    outputCalls.Contains("FinalizePendingDirtyInteractionCapture")&&
+    outputCalls.IndexOf("CapturePendingPostTransitionSnapshotAtOutput")<
+        outputCalls.IndexOf("FinalizePendingDirtyInteractionCapture"),
+    "output boundary seals the full post-transition image before publishing the entry transaction");
 Check(outputCalls.Contains("CaptureFirstReplayTransitionAuditAtOutput")&&
     outputCalls.IndexOf("CaptureFirstReplayTransitionAuditAtOutput")<
         outputCalls.IndexOf("ValidatePendingContactRecreate"),
     "first-replay native transition is persisted at the output boundary before contact validation can cancel it");
+var phaseCalls=Calls("CapturePhysicsPhaseSnapshot");
+foreach(string family in new[]{"CurrentCheckpointFrame","CoreCheckpointSnapshot",
+    "CaptureLiveContactPoolState","CaptureContactManagerOwners","CaptureSipPoolState",
+    "CaptureActorPairPoolState","CaptureActorPairReportPoolState","CaptureNPhaseReportState",
+    "CaptureInteractionGraphState","CaptureTransformCacheState","CaptureIslandSnapshotState",
+    "CaptureManifoldPoolStateReadOnly","RunTransformDispatchAction",
+    "CaptureDirtyInteractionStateReadOnly"})
+    Check(phaseCalls.Contains(family),
+        "post-transition image captures "+family+" at the same output boundary");
+Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot"),
+    "activation requires the API18 stateless dirty-interaction snapshot export");
+Check(Calls("CaptureDirtyInteractionStateReadOnly").Contains("Equals")&&
+    Strings("CaptureDirtyInteractionStateReadOnly").Any(value=>
+        value.Contains("changed the pending hook transaction receipt")),
+    "stateless dirty capture proves the native hook receipt remained unchanged");
+Check(Calls("DescribePhysicsPhaseComparison").Contains("SameIslandPhysicalSnapshotState")&&
+    Calls("DescribePhysicsPhaseComparison").Contains("SameIslandSnapshotState")&&
+    Strings("DescribePhysicsPhaseComparison").Contains("islandSnapshotRawEqual"),
+    "post comparison separates physical island state from advancing observer provenance");
+Check(Strings("ClearIslandCaptureProvenance").Contains("ObserverSequence")&&
+    Strings("ClearIslandCaptureProvenance").Contains("Epoch")&&
+    Strings("ClearIslandCaptureProvenance").Contains("JournalEndOrdinal"),
+    "physical island comparison removes only capture and journal provenance");
+Check(Calls("StoreCheckpointSidecar").Contains("ValidatePhysicsPhaseSnapshot")&&
+    Calls("StoreCheckpointSidecar").Contains("CoreCheckpointSnapshot")&&
+    Strings("StoreCheckpointSidecar").Any(value=>
+        value.Contains("not phase-linked to its entry and transition")),
+    "publication validates the entry-transition-post link and exact N+1 core identity");
 var transitionCaptureCalls=Calls("CaptureFirstReplayTransitionAuditAtOutput");
 Check(transitionCaptureCalls.Contains("CopyFinishBroadPhaseCapture")&&
     transitionCaptureCalls.Contains("CopyIslandTransitionAudit")&&
+    transitionCaptureCalls.Contains("CapturePhysicsPhaseSnapshot")&&
     transitionCaptureCalls.Contains("CancelFirstReplayTransitionObservationWork"),
-    "first-replay audit captures and fences both broadphase and island observations");
+    "first-replay audit captures broadphase, island, and the complete restored post image");
 var auditReceiptStrings=Strings("DescribeFirstReplayTransitionAudit");
 Check(auditReceiptStrings.Contains("checkpointFrame")&&
     auditReceiptStrings.Contains("transitionFrame")&&
     auditReceiptStrings.Contains("capturedAtOutputFrame")&&
     auditReceiptStrings.Contains("readAtFrame")&&
     auditReceiptStrings.Contains("broadPhase")&&
-    auditReceiptStrings.Contains("transition"),
-    "first-replay receipt separates checkpoint, transition, output capture, and later read boundaries");
+    auditReceiptStrings.Contains("transition")&&
+    auditReceiptStrings.Contains("targetPostSnapshot")&&
+    auditReceiptStrings.Contains("restoredPostSnapshot")&&
+    auditReceiptStrings.Contains("postSnapshotComparison"),
+    "first-replay receipt separates boundaries and compares every target/restored post family");
 
 Check(Strings("InstallAutomaticHook").Contains("CaptureFrame")&&
     Calls("InstallAutomaticHook").Contains("Patch"),
