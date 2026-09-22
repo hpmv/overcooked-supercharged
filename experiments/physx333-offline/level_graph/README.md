@@ -64,6 +64,22 @@ contact pairs have no lost-touch callback.
 The executable captures the full source Oracle, an ordered scene/per-actor
 interaction graph, SAP deleted-overlap keys, TransformCache refcounts,
 manifold pool use, island edge bindings, and ordered callbacks at A and B.
+It also captures the complete read-only `AuxInteractionImage` at both
+boundaries: physical trigger and marker pool slots and free-list order,
+oriented shape endpoints, trigger flags/previous-touch/cache state, scene
+active prefixes and capacities, and the mixed interaction order and reverse
+indices for every actor. The test checks that these oriented rows agree with
+the canonical interaction graph, including trigger-first shape orientation,
+four touching triggers at A, two touching survivors at B, and two inactive
+markers at both boundaries. It compares the entire auxiliary images between
+independent fresh scenes, including pool allocation history and order.
+Across A→B it also requires each surviving trigger and marker to retain its
+physical pool slot, both lost main-shape triggers to return their slots to
+the trigger free chain, and the marker pool to remain unchanged.
+Capsule/box and box/box trigger overlap callbacks in this source version
+ignore the uninitialized cache direction/GJK fields, so those bytes are
+deliberately excluded from the auxiliary image.
+
 It constructs a second scene with the same public API call trace, requires
 the expected graph/counts, and compares all those images and callback orders
 between the two scenes. This establishes a deterministic baseline for a
@@ -92,7 +108,10 @@ The most important known deviations from the f444 image are:
   raw SAP handle history, or Animator/gameplay state. Its 23→17 active SAP
   pairs include physical overlaps rejected by the filter and cannot be
   compared to an absent game SAP snapshot.
+- The auxiliary image covers trigger/marker physical state and mixed array
+  order; it does not yet capture all contact ActorPair pool and report-set
+  occupancy. Shared contact ActorPairs remain a separate joined-restore gate.
 
-This baseline should be extended with the already separate trigger/marker
-restore and then with full graph-aware rewind only after its A checkpoint
-images agree; a passing fresh-scene comparison alone is not rewind parity.
+The next step is to add source-private restore for this joined graph and
+require A checkpoint and B successor images to match. A passing fresh-scene
+comparison alone is not rewind parity.

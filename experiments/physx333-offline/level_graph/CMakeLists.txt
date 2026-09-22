@@ -22,7 +22,8 @@ add_executable(physx333_level_graph
   ../oracle/Oracle.cpp
   ../cache/TransformCacheImage.cpp
   ../sap/SapImage.cpp
-  ../island/IslandImage.cpp)
+  ../island/IslandImage.cpp
+  ../aux_interactions/AuxInteractionImage.cpp)
 target_compile_features(physx333_level_graph PRIVATE cxx_std_11)
 target_compile_definitions(physx333_level_graph PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)

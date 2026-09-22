@@ -16,6 +16,7 @@
 #include "../cache/TransformCacheImage.h"
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
+#include "../aux_interactions/AuxInteractionImage.h"
 
 #define private public
 #define protected public
@@ -457,6 +458,7 @@ std::vector<PairKey> deletedOverlapKeys(PxScene& scene,
 struct Snapshot
 {
     physx333_offline::OracleImage oracle;
+    physx333_offline::AuxInteractionImage aux;
     GraphImage graph;
     Facts facts;
     std::vector<PairKey> deletedOverlaps;
@@ -602,6 +604,9 @@ struct World
             fail("CaptureOracle: " + error);
         if (!captureGraph(*scene, image.graph, error))
             fail("captureGraph: " + error);
+        if (!physx333_offline::CaptureAuxInteractionImage(
+                *scene, image.aux, error))
+            fail("CaptureAuxInteractionImage: " + error);
         oc2::offline::TransformCacheImage cache;
         if (!oc2::offline::CaptureTransformCache(*scene, cache, error))
             fail("CaptureTransformCache: " + error);
@@ -693,8 +698,153 @@ std::set<PairKey> expectedPairs(bool successor)
     return result;
 }
 
+PairKey graphKey(const physx333_offline::AuxPairKey& key)
+{
+    // The auxiliary image preserves PhysX's endpoint orientation. The graph
+    // image intentionally canonicalizes its semantic pair keys.
+    return pair(key.type,
+                {key.shape0.actorId, key.shape0.shapeIndex},
+                {key.shape1.actorId, key.shape1.shapeIndex});
+}
+
+void verifyAux(const Snapshot& s, bool successor)
+{
+    const auto& aux = s.aux;
+    const PxU32 expectedTriggers = successor ? 2u : 4u;
+    if (aux.triggerPool.usedCount != expectedTriggers ||
+        aux.markerPool.usedCount != 2 ||
+        aux.triggers.size() != expectedTriggers || aux.markers.size() != 2 ||
+        aux.sceneOrders.size() != 3 ||
+        aux.actorOrders.size() != s.graph.actors.size())
+        fail("aux physical pool or interaction inventory differs");
+
+    const PxU32 types[3] = {
+        Sc::PX_INTERACTION_TYPE_OVERLAP,
+        Sc::PX_INTERACTION_TYPE_TRIGGER,
+        Sc::PX_INTERACTION_TYPE_MARKER
+    };
+    std::map<PxU32, const physx333_offline::AuxActorOrder*> actorOrders;
+    for (const auto& actor : aux.actorOrders)
+        if (!actorOrders.insert(std::make_pair(actor.actorId, &actor)).second)
+            fail("aux actor order contains a duplicate identity");
+    for (PxU32 i = 0; i < s.graph.actors.size(); ++i)
+    {
+        const auto& graphActor = s.graph.actors[i];
+        const auto& auxActor = aux.actorOrders[i];
+        if (graphActor.id != auxActor.actorId ||
+            graphActor.pairs.size() != auxActor.pairs.size())
+            fail("aux mixed actor order differs from graph actor order");
+        for (PxU32 p = 0; p < graphActor.pairs.size(); ++p)
+            if (!(graphActor.pairs[p] == graphKey(auxActor.pairs[p])))
+                fail("aux oriented actor endpoint differs from graph key");
+    }
+    PxU32 graphIndex = 0;
+    for (PxU32 typeIndex = 0; typeIndex < 3; ++typeIndex)
+    {
+        const auto& order = aux.sceneOrders[typeIndex];
+        const PxU32 type = types[typeIndex];
+        if (order.type != type ||
+            order.activeCount != s.graph.activeCounts[type] ||
+            order.pairs.size() != s.graph.counts[type])
+            fail("aux scene type/count/active prefix differs from graph");
+        for (const auto& oriented : order.pairs)
+        {
+            if (graphIndex >= s.graph.scenePairs.size() ||
+                !(graphKey(oriented) == s.graph.scenePairs[graphIndex++]))
+                fail("aux oriented scene endpoint differs from graph key");
+        }
+    }
+    if (graphIndex != s.graph.scenePairs.size())
+        fail("aux scene order omits a graph interaction");
+
+    std::set<PxU32> triggerSlots, markerSlots;
+    for (PxU32 i = 0; i < aux.triggers.size(); ++i)
+    {
+        const auto& row = aux.triggers[i];
+        if (!(row.pair == aux.sceneOrders[1].pairs[i]) ||
+            row.sceneIndex != i || row.active != 1 ||
+            row.pair.shape0.shapeIndex != 0 ||
+            (row.pair.shape0.actorId != kTriggerA &&
+             row.pair.shape0.actorId != kTriggerB) ||
+            row.pair.shape1.actorId != kMover ||
+            row.pair.shape1.shapeIndex > 1 ||
+            row.lastFrameHadContacts != 1 ||
+            row.triggerCacheState != 0 ||
+            !triggerSlots.insert(row.poolSlot).second)
+            fail("oriented trigger slot/history differs");
+        const auto a = actorOrders.find(row.pair.shape0.actorId);
+        const auto b = actorOrders.find(row.pair.shape1.actorId);
+        if (a == actorOrders.end() || b == actorOrders.end() ||
+            row.actorIndex0 >= a->second->pairs.size() ||
+            row.actorIndex1 >= b->second->pairs.size() ||
+            !(a->second->pairs[row.actorIndex0] == row.pair) ||
+            !(b->second->pairs[row.actorIndex1] == row.pair))
+            fail("trigger actor reverse indices differ");
+    }
+    for (PxU32 i = 0; i < aux.markers.size(); ++i)
+    {
+        const auto& row = aux.markers[i];
+        if (!(row.pair == aux.sceneOrders[2].pairs[i]) ||
+            row.sceneIndex != i || row.active != 0 ||
+            !markerSlots.insert(row.poolSlot).second ||
+            row.triggerFlags || row.lastFrameHadContacts ||
+            row.triggerCacheState)
+            fail("marker slot/history differs");
+        const auto a = actorOrders.find(row.pair.shape0.actorId);
+        const auto b = actorOrders.find(row.pair.shape1.actorId);
+        if (a == actorOrders.end() || b == actorOrders.end() ||
+            row.actorIndex0 >= a->second->pairs.size() ||
+            row.actorIndex1 >= b->second->pairs.size() ||
+            !(a->second->pairs[row.actorIndex0] == row.pair) ||
+            !(b->second->pairs[row.actorIndex1] == row.pair))
+            fail("marker actor reverse indices differ");
+    }
+}
+
+void verifyAuxTransition(const Snapshot& a, const Snapshot& b)
+{
+    if (!(a.aux.markerPool == b.aux.markerPool) ||
+        a.aux.triggerPool.slabCount != b.aux.triggerPool.slabCount ||
+        a.aux.triggerPool.elementsPerSlab !=
+            b.aux.triggerPool.elementsPerSlab ||
+        b.aux.triggerPool.freeOrder.size() !=
+            a.aux.triggerPool.freeOrder.size() + 2)
+        fail("auxiliary physical pool transition differs");
+    for (const auto& before : a.aux.triggers)
+    {
+        const auto survivor = std::find_if(b.aux.triggers.begin(),
+            b.aux.triggers.end(), [&before](
+                const physx333_offline::AuxInteractionRow& row) {
+                return row.pair == before.pair;
+            });
+        if (before.pair.shape1.shapeIndex == 0)
+        {
+            if (survivor != b.aux.triggers.end() ||
+                std::find(b.aux.triggerPool.freeOrder.begin(),
+                          b.aux.triggerPool.freeOrder.end(),
+                          before.poolSlot) == b.aux.triggerPool.freeOrder.end())
+                fail("deleted trigger physical slot was not returned to pool");
+        }
+        else if (survivor == b.aux.triggers.end() ||
+                 survivor->poolSlot != before.poolSlot)
+            fail("surviving trigger changed physical pool slot");
+    }
+    for (const auto& before : a.aux.markers)
+    {
+        const auto survivor = std::find_if(b.aux.markers.begin(),
+            b.aux.markers.end(), [&before](
+                const physx333_offline::AuxInteractionRow& row) {
+                return row.pair == before.pair;
+            });
+        if (survivor == b.aux.markers.end() ||
+            survivor->poolSlot != before.poolSlot)
+            fail("surviving marker changed physical pool slot");
+    }
+}
+
 void verify(const Snapshot& s, bool successor)
 {
+    verifyAux(s, successor);
     const PxU32 contacts = successor ? 8u : 12u;
     const PxU32 triggers = successor ? 2u : 4u;
     if (s.graph.counts.size() != Sc::PX_INTERACTION_TYPE_COUNT ||
@@ -806,6 +956,7 @@ int main()
     const Snapshot b = first.step(-0.2f);
     print("B", b);
     verify(b, true);
+    verifyAuxTransition(a, b);
     World fresh(runtime);
     fresh.step(0.0f);
     const Snapshot freshA = fresh.step(0.0f);
@@ -820,8 +971,12 @@ int main()
         a.events != freshA.events || b.events != freshB.events)
         fail("fresh-scene A/B Oracle, graph, component facts, or callback order differs: " +
              difference);
+    if (!a.aux.equals(freshA.aux, difference) ||
+        !b.aux.equals(freshB.aux, difference))
+        fail("fresh-scene A/B trigger/marker physical images differ: " +
+             difference);
     if (runtime.errors.count) fail("PhysX issued an error");
     std::cout << "PASS level-like shared-endpoint 12/4/2 -> 8/2/2 graph, "
                  "six SAP deletions, cache/manifold/island facts, and "
-                 "fresh-scene ordered callback/Oracle equality\n";
+                 "fresh-scene ordered callback/Oracle/auxiliary equality\n";
 }

@@ -59,6 +59,11 @@ order is a fixture target, while raw pointer values from the game are not.
   endpoints: PhysX can share one ActorPair across multiple shape pairs from
   the same two actors. A shape-index-keyed map can silently collapse or
   duplicate its refcount, touch count, report object, and physical slot.
+  Account separately for the reference held by the contact-report set. A
+  deleted pair may leave an ActorPair in that set *during* a step, but normal
+  completed `fetchResults` clears the set and destroys report-only owners.
+  Require that settled-phase condition before graph restoration; do not
+  generalize it to a mid-step checkpoint.
 - Check the scene trigger-report buffers at settled `fetchResults`; initially
   gate on empty logical sizes and unchanged backing, then add a guarded
   buffer image if the fixture proves that retained capacity/order matters.
@@ -93,6 +98,11 @@ first write. After contact and trigger lifecycle creation, restore unified
 scene and actor interaction order and reverse indices, then trigger history
 and pool state. Markers should remain the same objects in this fixture; no
 marker reconstruction is required for the 12/4/2→8/2/2 transaction.
+The four missing contact pairs each have a distinct static actor in the
+level-like graph, so each should receive a distinct ActorPair; surviving
+markers on two of those actor endpoints do not count as SIPs for source
+`findActorPair` reuse. Verify the four expected AP allocations and their
+report ownership rather than inferring pool use from the SIP count.
 
 The existing SAP image appears structurally able to roll back six deleted
 overlaps: all actor/shape AABB elements survive, and the cold deletion-output

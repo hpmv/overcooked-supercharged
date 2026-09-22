@@ -41,7 +41,16 @@ and has no trigger/marker interactions. A separate
 [trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)
 now reproduces the level's 12/4/2→8/2/2 interaction-count pattern and
 ordered four-contact/two-trigger losses in a fresh-scene source-built test;
-it does **not** rewind those interactions yet. Actor and
+it does **not** rewind those interactions yet. Its auxiliary observer now
+also accepts the level-relevant capsule/box triggers in either orientation,
+and an isolated source-built test verifies touch and separation histories.
+The newer [level-shaped graph baseline](../experiments/physx333-offline/level_graph/README.md)
+reproduces four chef capsules, a fifth active body, shared static endpoints,
+two auxiliary markers, four triggers, twelve large capsule manifolds, and
+the six semantic broadphase deletions. It is still a fresh-scene control:
+its deletion order and TransformCache allocation history differ from the
+shipped observation. Graph-aware contact/trigger reconstruction and joined
+next-step rewind remain open. Actor and
 shape lifetime, CCD, and several other native-state families remain gated.
 Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and
