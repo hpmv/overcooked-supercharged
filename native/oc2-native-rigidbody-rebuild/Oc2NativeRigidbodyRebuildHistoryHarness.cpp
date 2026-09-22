@@ -186,6 +186,54 @@ struct InteractionGraphReceipt {
         invalidKind, invalidIndex, detail;
     InteractionGraphPoolReceipt pools[3];
 };
+
+struct TransformCacheEntryRecord {
+    uint32_t id, refCount;
+    float rotation[4], position[3];
+    uint32_t poseHash, bindingCount, stateFlags;
+};
+
+struct TransformCacheBindingRecord {
+    uintptr_t shapeSim, shapeCore, pxsShapeCore, interaction;
+    uint32_t interactionIndex, endpointIndex, cacheId, refCount, poseHash,
+        validationFlags;
+};
+
+struct TransformCacheReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, ownerScene, interactionScene, context,
+        transformCache;
+    uint32_t currentId;
+    uintptr_t freeData;
+    uint32_t freeCount, freeCapacityRaw;
+    uintptr_t transformsData;
+    uint32_t transformsCount, transformsCapacityRaw;
+    uintptr_t refCountsData;
+    uint32_t refCountsCount, refCountsCapacityRaw;
+    uint32_t entriesRequired, entriesWritten, freeRequired, freeWritten,
+        bindingsRequired, bindingsWritten, liveCount, totalRefCount,
+        entryHash, freeOrderHash, bindingHash, snapshotHash, validationFlags,
+        invalidKind, invalidIndex, detail;
+};
+
+struct BroadPhaseOverlapRecord {
+    uintptr_t userData0, userData1, shapeCore0, shapeCore1, pxsShapeCore0,
+        pxsShapeCore1;
+    uint32_t cacheId0, cacheId1, pairHash, validationFlags;
+};
+
+struct FinishBroadPhaseObserverReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, expectedScene, expectedContext, expectedNPhaseCore,
+        observedScene, observedContext, observedNPhaseCore, aabbManager,
+        interactionScene, transformCache;
+    uint32_t installed, state, expectedPass, armedThreadId, armedOrdinal,
+        observationOrdinal, slotIndex, pass, threadId, createdRequired,
+        createdWritten, deletedRequired, deletedWritten, createdHash,
+        deletedHash, preCacheHash, postCacheHash, preGraphHash, postGraphHash,
+        validationFlags, invalidKind, invalidIndex, detail,
+        droppedObservations;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -214,6 +262,16 @@ static_assert(sizeof(InteractionGraphPoolReceipt) == 80,
     "Unexpected Win32 interaction-graph pool ABI");
 static_assert(sizeof(InteractionGraphReceipt) == 500,
     "Unexpected Win32 interaction-graph receipt ABI");
+static_assert(sizeof(TransformCacheEntryRecord) == 48,
+    "Unexpected Win32 transform-cache entry ABI");
+static_assert(sizeof(TransformCacheBindingRecord) == 40,
+    "Unexpected Win32 transform-cache binding ABI");
+static_assert(sizeof(TransformCacheReceipt) == 144,
+    "Unexpected Win32 transform-cache receipt ABI");
+static_assert(sizeof(BroadPhaseOverlapRecord) == 40,
+    "Unexpected Win32 broadphase overlap ABI");
+static_assert(sizeof(FinishBroadPhaseObserverReceipt) == 152,
+    "Unexpected Win32 finishBroadPhase receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
 typedef int (__cdecl *CaptureSnapshot)(uintptr_t, uintptr_t*, uint32_t,
@@ -259,6 +317,17 @@ typedef int (__cdecl *CaptureInteractionGraph)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, InteractionGraphActorRecord*, uint32_t,
     InteractionGraphInteractionRecord*, uint32_t, uintptr_t*, uint32_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t, InteractionGraphReceipt*);
+typedef int (__cdecl *CaptureTransformCache)(uintptr_t, uintptr_t,
+    TransformCacheEntryRecord*, uint32_t, uint32_t*, uint32_t,
+    TransformCacheBindingRecord*, uint32_t, TransformCacheReceipt*);
+typedef int (__cdecl *FinishBroadPhaseAction)(uintptr_t,
+    FinishBroadPhaseObserverReceipt*);
+typedef int (__cdecl *FinishBroadPhaseArm)(uintptr_t, uintptr_t, uintptr_t,
+    uintptr_t, uint32_t, FinishBroadPhaseObserverReceipt*);
+typedef int (__cdecl *FinishBroadPhaseCopy)(uintptr_t, uint32_t,
+    BroadPhaseOverlapRecord*, uint32_t, BroadPhaseOverlapRecord*, uint32_t,
+    FinishBroadPhaseObserverReceipt*);
+typedef void (__thiscall *FakeFinishBroadPhase)(void*, uint32_t);
 typedef int (__cdecl *ContactRecreateStatus)(uintptr_t, uintptr_t,
     ContactRecreateReceipt*);
 typedef int (__cdecl *ContactRecreateCancel)(uintptr_t,
@@ -292,6 +361,19 @@ static bool InvokeFakeCreateOnWorker(FakeCreateManager create, void* context,
     CloseHandle(thread);
     threadId = call.threadId;
     return wait == WAIT_OBJECT_0 && readExit && exitCode == 0;
+}
+
+struct FinishBroadPhaseWorkerCall {
+    FakeFinishBroadPhase finish;
+    void* scene;
+    uint32_t pass;
+};
+
+static DWORD WINAPI RunFinishBroadPhaseWorker(void* value) {
+    FinishBroadPhaseWorkerCall* call =
+        static_cast<FinishBroadPhaseWorkerCall*>(value);
+    call->finish(call->scene, call->pass);
+    return 0;
 }
 
 static int failures = 0;
@@ -349,6 +431,9 @@ static const uint32_t kInteractionActivateRva = 0xA41EE0;
 static const uint32_t kInteractionDeactivateRva = 0xA41F40;
 static const uint32_t kInteractionRegisterRva = 0xA420B0;
 static const uint32_t kInteractionUnregisterRva = 0xA42950;
+static const uint32_t kFinishBroadPhaseRva = 0xA31CA0;
+static const uint32_t kCreateManagerTransformCacheLayoutRva = 0xA54530;
+static const uint32_t kShapeSimCreateTransformCacheRva = 0xA473B0;
 static const uint8_t kCreateManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
 static const uint8_t kCreateShapeInstancePairBytes[] = {
     0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
@@ -484,6 +569,22 @@ static const uint8_t kInteractionUnregisterBytes[] = {
     0x55,0x8B,0xEC,0x51,0x8B,0x55,0x08,0x53,0x56,0x57,
     0x0F,0xB6,0x7A,0x14,0x8B,0x5A,0x0C
 };
+static const uint8_t kFinishBroadPhaseBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0xD9,0x56,0x57
+};
+static const uint8_t kFinishBroadPhaseLayoutBytes[] = {
+    0x8B,0x83,0xB4,0x04,0x00,0x00,0x8B,0x8B,0x50,0x04,0x00,0x00,
+    0x8B,0x80,0xE8,0x03,0x00,0x00,0x8B,0x70,0x08
+};
+static const uint8_t kCreateManagerTransformCacheLayoutBytes[] = {
+    0x8B,0x86,0xB4,0x04,0x00,0x00,0x8B,0x4D,0xF8,
+    0x8B,0xB0,0xE8,0x03,0x00,0x00,0x81,0xC6,0xBC,0x1D,0x00,0x00,
+    0x56
+};
+static const uint8_t kShapeSimCreateTransformCacheBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x20,0x8B,0xC1,0x53,0x8B,0x5D,0x08,
+    0x89,0x45,0xFC,0x83,0x78,0x18,0xFF
+};
 static const uint8_t kDirtyUpdateFunctionBytes[] = {
     0x55,0x8B,0xEC,0x83,0xEC,0x34,0x8B,0xE5,0x5D,0xC3
 };
@@ -519,6 +620,77 @@ static const uint8_t kLargePoolCallsiteBytes[] = {
 static const uint8_t kSpherePoolCallsiteBytes[] = {
     0x8D,0x8B,0x0C,0x04,0x00,0x00,0xE8,0x83,0xFB,0xFF,0xFF
 };
+
+static HANDLE g_finishPauseEntered = 0;
+static HANDLE g_finishPauseRelease = 0;
+static volatile LONG g_finishPauseClaimed = 0;
+typedef BOOL (WINAPI *VirtualProtectFunction)(LPVOID, SIZE_T, DWORD, PDWORD);
+static VirtualProtectFunction g_realVirtualProtect = 0;
+static volatile LONG g_virtualProtectCallCount = 0;
+
+static BOOL WINAPI FailSecondVirtualProtect(LPVOID address, SIZE_T size,
+    DWORD protection, PDWORD oldProtection) {
+    const LONG call = InterlockedIncrement(&g_virtualProtectCallCount);
+    const BOOL changed = g_realVirtualProtect(address, size, protection,
+        oldProtection);
+    if (call == 2 && changed) {
+        SetLastError(ERROR_ACCESS_DENIED);
+        return FALSE;
+    }
+    return changed;
+}
+
+static DWORD* FindVirtualProtectImport(HMODULE module) {
+    uint8_t* base = reinterpret_cast<uint8_t*>(module);
+    const IMAGE_DOS_HEADER* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(
+        base);
+    if (!base || dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+    const IMAGE_NT_HEADERS32* nt =
+        reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+    const IMAGE_DATA_DIRECTORY& imports = nt->OptionalHeader.DataDirectory[
+        IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!imports.VirtualAddress) return 0;
+    IMAGE_IMPORT_DESCRIPTOR* descriptor =
+        reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base +
+            imports.VirtualAddress);
+    for (; descriptor->Name; ++descriptor) {
+        if (!descriptor->OriginalFirstThunk) continue;
+        IMAGE_THUNK_DATA32* names = reinterpret_cast<IMAGE_THUNK_DATA32*>(
+            base + descriptor->OriginalFirstThunk);
+        IMAGE_THUNK_DATA32* functions = reinterpret_cast<IMAGE_THUNK_DATA32*>(
+            base + descriptor->FirstThunk);
+        for (; names->u1.AddressOfData; ++names, ++functions) {
+            if (IMAGE_SNAP_BY_ORDINAL32(names->u1.Ordinal)) continue;
+            const IMAGE_IMPORT_BY_NAME* importName =
+                reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(base +
+                    names->u1.AddressOfData);
+            if (strcmp(reinterpret_cast<const char*>(importName->Name),
+                    "VirtualProtect") == 0)
+                return &functions->u1.Function;
+        }
+    }
+    return 0;
+}
+
+static bool WriteImportFunction(DWORD* slot, uintptr_t value) {
+    if (!slot) return false;
+    DWORD oldProtection = 0;
+    if (!VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE,
+            &oldProtection)) return false;
+    *slot = static_cast<uint32_t>(value);
+    DWORD ignored = 0;
+    return VirtualProtect(slot, sizeof(*slot), oldProtection, &ignored) !=
+        FALSE;
+}
+
+static void __cdecl PauseFirstSyntheticFinishBroadPhase() {
+    if (!g_finishPauseEntered || !g_finishPauseRelease ||
+        InterlockedCompareExchange(&g_finishPauseClaimed, 1, 0) != 0)
+        return;
+    SetEvent(g_finishPauseEntered);
+    WaitForSingleObject(g_finishPauseRelease, 10000);
+}
 
 static uint8_t* CreateRevisionImage() {
     const uint32_t size = 0xA80000;
@@ -658,6 +830,43 @@ static uint8_t* CreateRevisionImage() {
         kInteractionRegisterBytes, sizeof(kInteractionRegisterBytes));
     CopyBytes(image + kInteractionUnregisterRva,
         kInteractionUnregisterBytes, sizeof(kInteractionUnregisterBytes));
+    CopyBytes(image + kCreateManagerTransformCacheLayoutRva,
+        kCreateManagerTransformCacheLayoutBytes,
+        sizeof(kCreateManagerTransformCacheLayoutBytes));
+    CopyBytes(image + kShapeSimCreateTransformCacheRva,
+        kShapeSimCreateTransformCacheBytes,
+        sizeof(kShapeSimCreateTransformCacheBytes));
+
+    // Executable synthetic Scene::finishBroadPhase.  Its entry/layout bytes
+    // match the shipped revision exactly.  After the guarded prefix it makes
+    // one deterministic cache-byte and graph-timestamp change, then returns
+    // with the real thiscall RET 4 contract.  Observer tests compare this
+    // unhooked baseline with the hooked pass-through result byte-for-byte.
+    CopyBytes(image + kFinishBroadPhaseRva, kFinishBroadPhaseBytes,
+        sizeof(kFinishBroadPhaseBytes));
+    const uint8_t finishArgument[] = {0xFF,0x75,0x08};
+    CopyBytes(image + kFinishBroadPhaseRva + 0x09, finishArgument,
+        sizeof(finishArgument));
+    CopyBytes(image + kFinishBroadPhaseRva + 0x0C,
+        kFinishBroadPhaseLayoutBytes, sizeof(kFinishBroadPhaseLayoutBytes));
+    uint8_t finishTail[] = {
+        0x83,0xC4,0x04,                         // add esp,4
+        0x8B,0x83,0xB4,0x04,0x00,0x00,          // mov eax,[ebx+4b4h]
+        0xFF,0x80,0xEC,0x03,0x00,0x00,          // inc [eax+3ech]
+        0x8B,0x80,0xE8,0x03,0x00,0x00,          // mov eax,[eax+3e8h]
+        0x8B,0x80,0xCC,0x1D,0x00,0x00,          // mov eax,[eax+1dcch]
+        0xFF,0x00,                               // inc dword ptr [eax]
+        0xB8,0x00,0x00,0x00,0x00,               // mov eax,pause helper
+        0xFF,0xD0,                               // call eax
+        0x5F,0x5E,0x5B,                          // pop edi; pop esi; pop ebx
+        0x8B,0xE5,0x5D,0xC2,0x04,0x00           // leave-ish; ret 4
+    };
+    const uint32_t pauseAddress = static_cast<uint32_t>(
+        reinterpret_cast<uintptr_t>(PauseFirstSyntheticFinishBroadPhase));
+    CopyBytes(finishTail + 30, reinterpret_cast<const uint8_t*>(
+        &pauseAddress), sizeof(pauseAddress));
+    CopyBytes(image + kFinishBroadPhaseRva + 0x21, finishTail,
+        sizeof(finishTail));
     return image;
 }
 
@@ -1160,7 +1369,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1247,7 +1456,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1370,7 +1579,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -1450,7 +1659,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -2421,7 +2630,7 @@ static void RunInteractionGraphTests(uint8_t* image,
             receipt.detail, receipt.lastError);
     Check(firstCapture == 1,
         "interaction graph capture succeeds");
-    Check(receipt.apiVersion == 15 && receipt.structSize == sizeof(receipt) &&
+    Check(receipt.apiVersion == 16 && receipt.structSize == sizeof(receipt) &&
         receipt.result == 1 && receipt.validationFlags == 0xFF &&
         receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
         receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
@@ -2517,6 +2726,439 @@ static void RunInteractionGraphTests(uint8_t* image,
     image[kInteractionActorRegisterRva] ^= 1;
 }
 
+struct TransformBroadPhaseFixture {
+    uint8_t nphase[4];
+    uint8_t ownerScene[0x4B8];
+    uint8_t interactionScene[0x3F4];
+    uint8_t context[0x1DE4];
+    uint8_t aabbManager[0xC2BC];
+    uint8_t actors[6][0x34];
+    uint8_t sips[3][0x3C];
+    uint8_t managers[2][0x80];
+    uint8_t shapeSims[6][0x20];
+    uint8_t shapeCores[6][0x24];
+    uintptr_t globalInteractions[3];
+    float transforms[4][7];
+    uint32_t refCounts[4];
+    uint32_t freeIds[4];
+    uintptr_t createdOverlaps[2];
+    uintptr_t deletedOverlaps[2];
+};
+
+static void InitializeTransformBroadPhaseFixture(
+    TransformBroadPhaseFixture& f) {
+    ZeroMemory(&f, sizeof(f));
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(f.nphase);
+    const uintptr_t owner = reinterpret_cast<uintptr_t>(f.ownerScene);
+    const uintptr_t interactionScene =
+        reinterpret_cast<uintptr_t>(f.interactionScene);
+    const uintptr_t context = reinterpret_cast<uintptr_t>(f.context);
+    const uintptr_t aabb = reinterpret_cast<uintptr_t>(f.aabbManager);
+    *reinterpret_cast<uintptr_t*>(f.nphase) = owner;
+    *reinterpret_cast<uintptr_t*>(f.ownerScene + 0x450) = nphase;
+    *reinterpret_cast<uintptr_t*>(f.ownerScene + 0x4B4) = interactionScene;
+    *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x3E8) = context;
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x3EC) = 700;
+    *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x3F0) = owner;
+    *reinterpret_cast<uintptr_t*>(f.context + 0x08) = aabb;
+
+    uint8_t* cache = f.context + 0x1DBC;
+    *reinterpret_cast<uint32_t*>(cache) = 3;
+    *reinterpret_cast<uintptr_t*>(cache + 0x04) =
+        reinterpret_cast<uintptr_t>(f.freeIds);
+    *reinterpret_cast<uint32_t*>(cache + 0x08) = 1;
+    *reinterpret_cast<uint32_t*>(cache + 0x0C) = 4;
+    *reinterpret_cast<uintptr_t*>(cache + 0x10) =
+        reinterpret_cast<uintptr_t>(f.transforms);
+    *reinterpret_cast<uint32_t*>(cache + 0x14) = 4;
+    *reinterpret_cast<uint32_t*>(cache + 0x18) = 4;
+    *reinterpret_cast<uintptr_t*>(cache + 0x1C) =
+        reinterpret_cast<uintptr_t>(f.refCounts);
+    *reinterpret_cast<uint32_t*>(cache + 0x20) = 4;
+    *reinterpret_cast<uint32_t*>(cache + 0x24) = 4;
+    f.freeIds[0] = 1;
+    f.refCounts[0] = 2;
+    f.refCounts[2] = 2;
+    for (uint32_t id = 0; id < 4; ++id) {
+        f.transforms[id][3] = 1.0f;
+        f.transforms[id][4] = static_cast<float>(id + 1u);
+        f.transforms[id][5] = static_cast<float>(id + 2u);
+        f.transforms[id][6] = static_cast<float>(id + 3u);
+    }
+
+    *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x10) =
+        reinterpret_cast<uintptr_t>(f.globalInteractions);
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x14) = 3;
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x18) = 3;
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x58) = 3;
+    for (uint32_t i = 0; i < 3; ++i) {
+        uint8_t* interaction = f.sips[i] + 8;
+        f.globalInteractions[i] =
+            reinterpret_cast<uintptr_t>(interaction);
+        const uint32_t endpoint0 = i * 2u;
+        const uint32_t endpoint1 = endpoint0 + 1u;
+        *reinterpret_cast<uintptr_t*>(interaction) =
+            reinterpret_cast<uintptr_t>(interaction + 0x1C);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x04) =
+            reinterpret_cast<uintptr_t>(f.actors[endpoint0]);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x08) =
+            reinterpret_cast<uintptr_t>(f.actors[endpoint1]);
+        *reinterpret_cast<uint32_t*>(interaction + 0x0C) = i;
+        *reinterpret_cast<uint16_t*>(interaction + 0x10) = 0;
+        *reinterpret_cast<uint16_t*>(interaction + 0x12) = 0;
+        *reinterpret_cast<uint8_t*>(interaction + 0x14) = 0;
+        *reinterpret_cast<uint8_t*>(interaction + 0x15) = 0x10;
+        *reinterpret_cast<uintptr_t*>(interaction + 0x18) =
+            reinterpret_cast<uintptr_t>(f.shapeSims[endpoint0]);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x1C) =
+            reinterpret_cast<uintptr_t>(f.shapeSims[endpoint1]);
+        if (i < 2) {
+            const uintptr_t manager = reinterpret_cast<uintptr_t>(
+                f.managers[i]);
+            *reinterpret_cast<uintptr_t*>(interaction + 0x30) = manager;
+            *reinterpret_cast<uintptr_t*>(f.managers[i] + 0x0C) =
+                reinterpret_cast<uintptr_t>(f.sips[i]);
+            *reinterpret_cast<uintptr_t*>(f.managers[i] + 0x58) =
+                reinterpret_cast<uintptr_t>(f.shapeCores[endpoint0] + 0x20);
+            *reinterpret_cast<uintptr_t*>(f.managers[i] + 0x5C) =
+                reinterpret_cast<uintptr_t>(f.shapeCores[endpoint1] + 0x20);
+        }
+    }
+    const uint32_t cacheIds[6] = {
+        0u, 2u, 0u, 2u, 0xFFFFFFFFu, 0xFFFFFFFFu
+    };
+    for (uint32_t i = 0; i < 6; ++i) {
+        *reinterpret_cast<uintptr_t*>(f.shapeSims[i] + 0x08) =
+            reinterpret_cast<uintptr_t>(f.actors[i]);
+        *reinterpret_cast<uint32_t*>(f.shapeSims[i] + 0x18) = cacheIds[i];
+        *reinterpret_cast<uintptr_t*>(f.shapeSims[i] + 0x1C) =
+            reinterpret_cast<uintptr_t>(f.shapeCores[i]);
+        *reinterpret_cast<uintptr_t*>(f.shapeCores[i] + 0x20) =
+            reinterpret_cast<uintptr_t>(f.shapeCores[i] + 0x20);
+    }
+    for (uint32_t i = 0; i < 2; ++i) {
+        *reinterpret_cast<uint32_t*>(f.managers[i] + 0x74) =
+            cacheIds[i * 2u];
+        *reinterpret_cast<uint32_t*>(f.managers[i] + 0x78) =
+            cacheIds[i * 2u + 1u];
+    }
+
+    f.createdOverlaps[0] = reinterpret_cast<uintptr_t>(f.shapeSims[0]);
+    f.createdOverlaps[1] = reinterpret_cast<uintptr_t>(f.shapeSims[1]);
+    f.deletedOverlaps[0] = reinterpret_cast<uintptr_t>(f.shapeSims[2]);
+    f.deletedOverlaps[1] = reinterpret_cast<uintptr_t>(f.shapeSims[3]);
+    *reinterpret_cast<uintptr_t*>(f.aabbManager + 0xC2A8) =
+        reinterpret_cast<uintptr_t>(f.createdOverlaps);
+    *reinterpret_cast<uint32_t*>(f.aabbManager + 0xC2AC) = 1;
+    *reinterpret_cast<uintptr_t*>(f.aabbManager + 0xC2B4) =
+        reinterpret_cast<uintptr_t>(f.deletedOverlaps);
+    *reinterpret_cast<uint32_t*>(f.aabbManager + 0xC2B8) = 1;
+}
+
+static void RunTransformCacheTests(uint8_t* image,
+    CaptureTransformCache capture) {
+    TransformBroadPhaseFixture fixture = {};
+    InitializeTransformBroadPhaseFixture(fixture);
+    TransformBroadPhaseFixture before = {};
+    CopyMemory(&before, &fixture, sizeof(fixture));
+    TransformCacheEntryRecord entries[4] = {};
+    uint32_t freeIds[4] = {};
+    TransformCacheBindingRecord bindings[4] = {};
+    TransformCacheReceipt receipt = {};
+    const uintptr_t imagePointer = reinterpret_cast<uintptr_t>(image);
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(fixture.nphase);
+    const auto invoke = [&](TransformCacheReceipt* output,
+        uint32_t entryCapacity, uint32_t freeCapacity,
+        uint32_t bindingCapacity) {
+        return capture(imagePointer, nphase, entries, entryCapacity,
+            freeIds, freeCapacity, bindings, bindingCapacity, output);
+    };
+
+    const int captured = invoke(&receipt, 4, 4, 4);
+    if (!captured)
+        printf("transform cache diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
+            receipt.result, receipt.invalidKind, receipt.invalidIndex,
+            receipt.detail, receipt.lastError);
+    Check(captured == 1 && receipt.apiVersion == 16 &&
+        receipt.structSize == sizeof(receipt) && receipt.result == 1 &&
+        receipt.validationFlags == 0xFF && receipt.currentId == 3 &&
+        receipt.entriesWritten == 3 && receipt.freeWritten == 1 &&
+        receipt.bindingsRequired == 4 && receipt.bindingsWritten == 4 &&
+        receipt.liveCount == 2 &&
+        receipt.totalRefCount == 4,
+        "transform cache captures only manager-backed settled state");
+    Check(freeIds[0] == 1 && entries[0].bindingCount == 2 &&
+        entries[0].stateFlags == 5 && entries[1].stateFlags == 3 &&
+        entries[2].bindingCount == 2 &&
+        bindings[0].shapeSim ==
+            reinterpret_cast<uintptr_t>(fixture.shapeSims[0]) &&
+        bindings[0].cacheId == 0 && bindings[1].cacheId == 2 &&
+        bindings[2].cacheId == 0 && bindings[3].cacheId == 2,
+        "transform cache preserves LIFO free order and oriented bindings");
+    Check(memcmp(&before, &fixture, sizeof(fixture)) == 0,
+        "transform cache capture is non-mutating");
+
+    TransformCacheEntryRecord repeatedEntries[4] = {};
+    uint32_t repeatedFree[4] = {};
+    TransformCacheBindingRecord repeatedBindings[4] = {};
+    TransformCacheReceipt repeated = {};
+    Check(capture(imagePointer, nphase, repeatedEntries, 4, repeatedFree, 4,
+        repeatedBindings, 4, &repeated) == 1 &&
+        memcmp(&receipt, &repeated, sizeof(receipt)) == 0 &&
+        memcmp(entries, repeatedEntries, sizeof(entries)) == 0 &&
+        memcmp(freeIds, repeatedFree, sizeof(freeIds)) == 0 &&
+        memcmp(bindings, repeatedBindings, sizeof(bindings)) == 0,
+        "transform cache capture is byte-repeatable");
+
+    TransformCacheReceipt shortReceipt = {};
+    Check(invoke(&shortReceipt, 2, 0, 3) == 0 &&
+        shortReceipt.result == 6 && shortReceipt.entriesRequired == 3 &&
+        shortReceipt.freeRequired == 1 && shortReceipt.bindingsRequired == 4,
+        "transform cache reports all required caller capacities");
+
+    fixture.freeIds[0] = 0;
+    TransformCacheReceipt freeReceipt = {};
+    Check(invoke(&freeReceipt, 4, 4, 4) == 0 &&
+        freeReceipt.result == 7,
+        "transform cache rejects a referenced ID in the free stack");
+    fixture.freeIds[0] = 1;
+
+    fixture.refCounts[0] = 1;
+    TransformCacheReceipt referenceReceipt = {};
+    Check(invoke(&referenceReceipt, 4, 4, 4) == 0 &&
+        referenceReceipt.result == 9,
+        "transform cache rejects binding/reference-count mismatch");
+    fixture.refCounts[0] = 2;
+
+    const uintptr_t managerBacklink = *reinterpret_cast<uintptr_t*>(
+        fixture.managers[0] + 0x0C);
+    *reinterpret_cast<uintptr_t*>(fixture.managers[0] + 0x0C) =
+        managerBacklink + 4u;
+    TransformCacheReceipt backlinkReceipt = {};
+    Check(invoke(&backlinkReceipt, 4, 4, 4) == 0 &&
+        backlinkReceipt.result == 8,
+        "transform cache rejects a manager with the wrong SIP backlink");
+    *reinterpret_cast<uintptr_t*>(fixture.managers[0] + 0x0C) =
+        managerBacklink;
+
+    const uintptr_t managerShape = *reinterpret_cast<uintptr_t*>(
+        fixture.managers[0] + 0x58);
+    *reinterpret_cast<uintptr_t*>(fixture.managers[0] + 0x58) =
+        managerShape + 4u;
+    TransformCacheReceipt managerShapeReceipt = {};
+    Check(invoke(&managerShapeReceipt, 4, 4, 4) == 0 &&
+        managerShapeReceipt.result == 8,
+        "transform cache rejects a manager/shape identity mismatch");
+    *reinterpret_cast<uintptr_t*>(fixture.managers[0] + 0x58) = managerShape;
+
+    image[kCreateManagerTransformCacheLayoutRva] ^= 1;
+    TransformCacheReceipt revisionReceipt = {};
+    Check(invoke(&revisionReceipt, 4, 4, 4) == 0 &&
+        revisionReceipt.result == 3,
+        "transform cache fails closed on layout revision mismatch");
+    image[kCreateManagerTransformCacheLayoutRva] ^= 1;
+}
+
+static void RunFinishBroadPhaseObserverTests(uint8_t* image, HMODULE library,
+    FinishBroadPhaseAction installObserver,
+    FinishBroadPhaseAction statusObserver,
+    FinishBroadPhaseArm armObserver,
+    FinishBroadPhaseCopy copyObserver,
+    FinishBroadPhaseAction cancelObserver,
+    FinishBroadPhaseAction uninstallObserver) {
+    TransformBroadPhaseFixture fixture = {};
+    InitializeTransformBroadPhaseFixture(fixture);
+    const uintptr_t imagePointer = reinterpret_cast<uintptr_t>(image);
+    const uintptr_t scene = reinterpret_cast<uintptr_t>(fixture.ownerScene);
+    const uintptr_t context = reinterpret_cast<uintptr_t>(fixture.context);
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(fixture.nphase);
+    FakeFinishBroadPhase finish = reinterpret_cast<FakeFinishBroadPhase>(
+        imagePointer + kFinishBroadPhaseRva);
+
+    DWORD* virtualProtectImport = FindVirtualProtectImport(library);
+    const DWORD originalVirtualProtect = virtualProtectImport ?
+        *virtualProtectImport : 0;
+    g_realVirtualProtect = reinterpret_cast<VirtualProtectFunction>(
+        static_cast<uintptr_t>(originalVirtualProtect));
+    InterlockedExchange(&g_virtualProtectCallCount, 0);
+    const bool injected = originalVirtualProtect && WriteImportFunction(
+        virtualProtectImport, reinterpret_cast<uintptr_t>(
+            FailSecondVirtualProtect));
+    FinishBroadPhaseObserverReceipt failureReceipt = {};
+    const int failedInstall = injected ? installObserver(imagePointer,
+        &failureReceipt) : 1;
+    const bool importRestored = injected && WriteImportFunction(
+        virtualProtectImport, originalVirtualProtect);
+    Check(injected && importRestored && failedInstall == 0 &&
+        failureReceipt.result == 7 && failureReceipt.installed == 1 &&
+        failureReceipt.state == 0 && image[kFinishBroadPhaseRva] == 0xE9,
+        "landed detour survives post-write protection-restore failure");
+
+    FinishBroadPhaseObserverReceipt receipt = {};
+    Check(installObserver(imagePointer, &receipt) == 1 &&
+        receipt.apiVersion == 16 && receipt.structSize == sizeof(receipt) &&
+        receipt.result == 1 && receipt.installed == 1 && receipt.state == 1,
+        "finishBroadPhase observer reactivates landed dormant detour");
+
+    receipt = {};
+    Check(armObserver(imagePointer, scene, context, nphase, 0, &receipt) == 1 &&
+        receipt.result == 1 && receipt.state == 2 &&
+        receipt.armedOrdinal == 1,
+        "finishBroadPhase observer arms exact pass-zero identity");
+
+    // Model the two writes performed by the synthetic original and compare
+    // the entire fixture after the hooked call.  Any additional hook write
+    // would make this byte comparison fail.
+    TransformBroadPhaseFixture expected = {};
+    CopyMemory(&expected, &fixture, sizeof(expected));
+    ++*reinterpret_cast<uint32_t*>(expected.interactionScene + 0x3EC);
+    ++*reinterpret_cast<uint32_t*>(expected.transforms[0]);
+    finish(fixture.ownerScene, 0);
+    Check(memcmp(&fixture, &expected, sizeof(fixture)) == 0,
+        "finishBroadPhase hook is a data-pass-through around the original");
+
+    FinishBroadPhaseObserverReceipt status = {};
+    Check(statusObserver(imagePointer, &status) == 1 &&
+        status.result == 1 && status.state == 4 &&
+        status.armedOrdinal == 1 && status.observationOrdinal == 1 &&
+        status.createdRequired == 1 && status.deletedRequired == 1 &&
+        status.expectedScene == scene && status.observedScene == scene &&
+        status.expectedContext == context && status.observedContext == context &&
+        status.expectedNPhaseCore == nphase &&
+        status.observedNPhaseCore == nphase && status.pass == 0 &&
+        status.preCacheHash != status.postCacheHash &&
+        status.preGraphHash != status.postGraphHash &&
+        status.validationFlags == 0x3FF,
+        "finishBroadPhase status returns the committed exact observation");
+
+    FinishBroadPhaseObserverReceipt shortReceipt = {};
+    Check(copyObserver(imagePointer, 1, 0, 0, 0, 0,
+        &shortReceipt) == 0 && shortReceipt.result == 12 &&
+        shortReceipt.createdRequired == 1 && shortReceipt.deletedRequired == 1,
+        "finishBroadPhase copy reports exact required capacities");
+    BroadPhaseOverlapRecord created[1] = {};
+    BroadPhaseOverlapRecord deleted[1] = {};
+    FinishBroadPhaseObserverReceipt copyReceipt = {};
+    Check(copyObserver(imagePointer, 1, created, 1, deleted, 1,
+        &copyReceipt) == 1 && copyReceipt.result == 1 &&
+        copyReceipt.createdWritten == 1 && copyReceipt.deletedWritten == 1 &&
+        created[0].userData0 ==
+            reinterpret_cast<uintptr_t>(fixture.shapeSims[0]) &&
+        created[0].userData1 ==
+            reinterpret_cast<uintptr_t>(fixture.shapeSims[1]) &&
+        deleted[0].userData0 ==
+            reinterpret_cast<uintptr_t>(fixture.shapeSims[2]) &&
+        deleted[0].userData1 ==
+            reinterpret_cast<uintptr_t>(fixture.shapeSims[3]) &&
+        created[0].validationFlags == 0x0F &&
+        deleted[0].validationFlags == 0x0F,
+        "finishBroadPhase copy preserves ordered oriented overlap rows");
+
+    // Four additional observations overwrite ring slot zero.  Exact ordinal
+    // copy must reject the retained-looking first buffers as stale.
+    uint32_t latestOrdinal = 1;
+    for (uint32_t i = 0; i < 4; ++i) {
+        receipt = {};
+        Check(armObserver(imagePointer, scene, context, nphase, 0,
+            &receipt) == 1, "finishBroadPhase observer rearms");
+        latestOrdinal = receipt.armedOrdinal;
+        finish(fixture.ownerScene, 0);
+    }
+    FinishBroadPhaseObserverReceipt staleReceipt = {};
+    Check(latestOrdinal == 5 &&
+        copyObserver(imagePointer, 1, created, 1, deleted, 1,
+            &staleReceipt) == 0 && staleReceipt.result == 11,
+        "finishBroadPhase ring rejects overwritten observation ordinal");
+
+    *reinterpret_cast<uint32_t*>(fixture.aabbManager + 0xC2AC) = 4097;
+    receipt = {};
+    Check(armObserver(imagePointer, scene, context, nphase, 0,
+        &receipt) == 1 && receipt.armedOrdinal == 6,
+        "finishBroadPhase observer arms capacity-error observation");
+    finish(fixture.ownerScene, 0);
+    status = {};
+    Check(statusObserver(imagePointer, &status) == 0 &&
+        status.result == 12 && status.state == 5 &&
+        status.observationOrdinal == 6 && status.createdRequired == 4097,
+        "finishBroadPhase status returns committed capacity failure");
+    *reinterpret_cast<uint32_t*>(fixture.aabbManager + 0xC2AC) = 1;
+
+    receipt = {};
+    Check(armObserver(imagePointer, scene, context, nphase, 0,
+        &receipt) == 1 && cancelObserver(imagePointer, &receipt) == 1 &&
+        receipt.state == 1,
+        "finishBroadPhase pending observation can be cancelled");
+    finish(fixture.ownerScene, 0);
+    status = {};
+    Check(statusObserver(imagePointer, &status) == 1 &&
+        status.state == 1 && status.observationOrdinal == 6,
+        "cancelled observer remains dormant while original still runs");
+
+    receipt = {};
+    Check(uninstallObserver(imagePointer, &receipt) == 1 &&
+        receipt.result == 1 && receipt.installed == 1 && receipt.state == 0 &&
+        image[kFinishBroadPhaseRva] == 0xE9,
+        "finishBroadPhase observer uninstalls to a resident dormant hook");
+
+    receipt = {};
+    Check(installObserver(imagePointer, &receipt) == 1 &&
+        receipt.installed == 1 && receipt.state == 1,
+        "finishBroadPhase observer reinstalls with retained trampoline");
+    g_finishPauseEntered = CreateEventA(0, TRUE, FALSE, 0);
+    g_finishPauseRelease = CreateEventA(0, TRUE, FALSE, 0);
+    InterlockedExchange(&g_finishPauseClaimed, 0);
+    receipt = {};
+    Check(g_finishPauseEntered && g_finishPauseRelease &&
+        armObserver(imagePointer, scene, context, nphase, 0,
+            &receipt) == 1,
+        "finishBroadPhase concurrent-owner observation arms");
+    FinishBroadPhaseWorkerCall firstCall = {
+        finish, fixture.ownerScene, 0
+    };
+    HANDLE firstThread = CreateThread(0, 0, RunFinishBroadPhaseWorker,
+        &firstCall, 0, 0);
+    const DWORD entered = g_finishPauseEntered ? WaitForSingleObject(
+        g_finishPauseEntered, 10000) : WAIT_FAILED;
+    FinishBroadPhaseWorkerCall secondCall = {
+        finish, fixture.ownerScene, 0
+    };
+    HANDLE secondThread = entered == WAIT_OBJECT_0 ? CreateThread(0, 0,
+        RunFinishBroadPhaseWorker, &secondCall, 0, 0) : 0;
+    const DWORD secondDone = secondThread ? WaitForSingleObject(
+        secondThread, 10000) : WAIT_FAILED;
+    status = {};
+    Check(firstThread && entered == WAIT_OBJECT_0 && secondThread &&
+        secondDone == WAIT_OBJECT_0 &&
+        statusObserver(imagePointer, &status) == 1 && status.state == 3,
+        "token-zero concurrent exit cannot finalize the owner observation");
+    if (g_finishPauseRelease) SetEvent(g_finishPauseRelease);
+    const DWORD firstDone = firstThread ? WaitForSingleObject(firstThread,
+        10000) : WAIT_FAILED;
+    status = {};
+    Check(firstDone == WAIT_OBJECT_0 &&
+        statusObserver(imagePointer, &status) == 1 && status.state == 4 &&
+        status.observationOrdinal == 1,
+        "owner exit commits the concurrent observation exactly once");
+    if (firstThread) CloseHandle(firstThread);
+    if (secondThread) CloseHandle(secondThread);
+    if (g_finishPauseEntered) CloseHandle(g_finishPauseEntered);
+    if (g_finishPauseRelease) CloseHandle(g_finishPauseRelease);
+    g_finishPauseEntered = 0;
+    g_finishPauseRelease = 0;
+    receipt = {};
+    Check(uninstallObserver(imagePointer, &receipt) == 1 &&
+        receipt.installed == 1 && receipt.state == 0 &&
+        image[kFinishBroadPhaseRva] == 0xE9,
+        "reinstalled observer returns to its resident dormant hook");
+
+    image[kFinishBroadPhaseRva + 0x0C] ^= 1;
+    receipt = {};
+    Check(installObserver(imagePointer, &receipt) == 0 &&
+        receipt.result == 3,
+        "finishBroadPhase observer fails closed on layout revision mismatch");
+    image[kFinishBroadPhaseRva + 0x0C] ^= 1;
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("usage: Oc2NativeRigidbodyRebuildHistoryHarness <dll>\n");
@@ -2554,6 +3196,27 @@ int main(int argc, char** argv) {
     CaptureInteractionGraph captureInteractionGraph =
         reinterpret_cast<CaptureInteractionGraph>(GetProcAddress(
             library, "oc2_interaction_graph_capture_snapshot"));
+    CaptureTransformCache captureTransformCache =
+        reinterpret_cast<CaptureTransformCache>(GetProcAddress(
+            library, "oc2_transform_cache_capture_snapshot"));
+    FinishBroadPhaseAction installFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseAction>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_install"));
+    FinishBroadPhaseAction statusFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseAction>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_status"));
+    FinishBroadPhaseArm armFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseArm>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_arm"));
+    FinishBroadPhaseCopy copyFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseCopy>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_copy"));
+    FinishBroadPhaseAction cancelFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseAction>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_cancel"));
+    FinishBroadPhaseAction uninstallFinishBroadPhaseObserver =
+        reinterpret_cast<FinishBroadPhaseAction>(GetProcAddress(library,
+            "oc2_finish_broad_phase_observer_uninstall"));
     DirtyAction installDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_install"));
     DirtyAction statusDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
@@ -2589,7 +3252,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 15, "API version");
+    Check(version && version() == 16, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -2602,6 +3265,12 @@ int main(int argc, char** argv) {
         "NPhase report-state capture export");
     Check(captureInteractionGraph != 0,
         "interaction graph capture export");
+    Check(captureTransformCache != 0,
+        "transform-cache capture export");
+    Check(installFinishBroadPhaseObserver && statusFinishBroadPhaseObserver &&
+        armFinishBroadPhaseObserver && copyFinishBroadPhaseObserver &&
+        cancelFinishBroadPhaseObserver && uninstallFinishBroadPhaseObserver,
+        "finishBroadPhase observer exports");
     Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
@@ -2610,6 +3279,10 @@ int main(int argc, char** argv) {
     if (!version || !capture || !restore || !captureManifold || !captureSip ||
         !captureActorPair || !captureActorPairReport ||
         !captureNPhaseReport || !captureInteractionGraph ||
+        !captureTransformCache || !installFinishBroadPhaseObserver ||
+        !statusFinishBroadPhaseObserver || !armFinishBroadPhaseObserver ||
+        !copyFinishBroadPhaseObserver || !cancelFinishBroadPhaseObserver ||
+        !uninstallFinishBroadPhaseObserver ||
         !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
         !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
         !uninstallDirty || !installObserver || !uninstallObserver ||
@@ -2636,7 +3309,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 16 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -2686,6 +3359,12 @@ int main(int argc, char** argv) {
         RunActorPairReportPoolTests(revisionImage, captureActorPairReport);
         RunNPhaseReportStateTests(revisionImage, captureNPhaseReport);
         RunInteractionGraphTests(revisionImage, captureInteractionGraph);
+        RunTransformCacheTests(revisionImage, captureTransformCache);
+        RunFinishBroadPhaseObserverTests(revisionImage, library,
+            installFinishBroadPhaseObserver, statusFinishBroadPhaseObserver,
+            armFinishBroadPhaseObserver, copyFinishBroadPhaseObserver,
+            cancelFinishBroadPhaseObserver,
+            uninstallFinishBroadPhaseObserver);
         RunManifoldPoolTests(revisionImage, 0, captureManifold,
             restoreManifold);
         RunManifoldPoolTests(revisionImage, 1, captureManifold,

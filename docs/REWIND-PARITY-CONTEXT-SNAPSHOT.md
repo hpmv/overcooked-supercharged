@@ -6,6 +6,60 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — Transform-cache state and the first broadphase transition are exact
+
+Managed RigidbodyActorRebuild r17g and native API 16/r34 extend the same f444
+checkpoint transaction through `PxsTransformCache`, then observe the original
+pass-zero `finishBroadPhase` call on uninterrupted f445.  The cache capture is
+caller-owned and raw-bit exact; the observer uses a fixed four-slot ring, does
+not allocate or mutate in the hook, and publishes only an exact
+Scene/Context/NPhase/pass/thread/ordinal match.  Two copies of the committed
+observation must be byte-equivalent before managed code publishes the sidecar.
+
+Fresh evidence is
+`artifacts/readiness-plan-transform-broadphase-f1048-to-f444-r1/`.  Source
+readiness is 34 pass / 0 fail / 41 deferred.  Restored-target readiness is 74
+pass / 0 fail / 31 deferred / 1 not-applicable.  The aggregate correctly
+remains incomplete because restore/steering is not implemented, but the audit
+completed with no blockers.  It stops at restored f444 before f445, and no
+search ran.
+
+The target f444 cache has watermark 13, free-ID stack `[12,11,10]`, ten live
+IDs, and 24 exact manager-backed endpoint bindings/refcounts.  Its active-entry
+hash is `0xC5E9A0DD` and aggregate hash is `0x7B0406C8`.  Restored f444 instead
+has watermark 12, no live IDs or bindings, and free stack
+`[1,3,8,6,9,5,7,2,10,11,0,4]`; repeated live captures are identical at active
+entry hash `0x8D70C5C2` and aggregate hash `0xAF4E40AD`.  This independently
+confirms that the missing target interaction graph also lacks its complete
+cache-ID/refcount/pose projection.
+
+The next uninterrupted `finishBroadPhase` call creates no overlap and deletes
+six overlaps in exact oriented order.  The empty created hash is `0x811C9DC5`;
+the deleted-order hash is `0x6D391CA5`.  Around that single original call, the
+cache hash changes `0x17C4FCF7 -> 0x11C88313` and the graph hash changes
+`0x874C5254 -> 0xA564BE5E`.  Observation ordinal 1 was copied twice with no
+drops.
+
+The observer teardown was deliberately hardened before this run.  Its DLL,
+trampoline, and entry detour remain resident and pinned until process exit;
+"uninstall" is a data-only disarm and later activation validates/reuses the
+same JMP.  The 20-run native harness also injects the rare case where the JMP
+lands but restoration of page protection reports failure, proving that the
+live jump target is retained.  Managed SHA-256 is
+`84940705C9696EB162B21A3A6692527E97831038270C311B37341B57014A5D26`;
+native SHA-256 is
+`F61461A570F816F64624257C221A8CD49C10E292750878B076CD5417CC7355E6`.
+
+The next planning unit is the complete island boundary, whose implementation
+contract is now written in `docs/PHYSX-ISLAND-SNAPSHOT-CONTRACT.md`.  Capture
+all node/edge/island slots, allocator chains, five bitmaps, and ordered C/D/B/J
+queues before and after the first island update.  Passive add/remove-edge
+journals are required because `removeEdge` clears a SIP's hook before that
+queue is consumed.  Only after that evidence should mutation begin as one
+atomic dependency-ordered restore across Transform cache, broadphase,
+interaction graph, contact ownership, island graph, ActorPair/report history,
+and first output.
+
 ## Latest result — the complete PhysX interaction graph is captured
 
 Managed RigidbodyActorRebuild r16c and native API 15/r33 extend the atomic

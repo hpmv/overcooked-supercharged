@@ -621,6 +621,129 @@ struct InteractionGraphReceipt {
     InteractionGraphPoolReceipt pools[3];
 };
 
+// Exact, caller-owned projection of PxsTransformCache.  Entries cover every
+// ID below mCurrentID, including IDs in the LIFO free array.  Binding rows
+// follow the type-zero InteractionScene array and preserve endpoint
+// orientation (endpoint zero, then endpoint one for each interaction).
+struct TransformCacheEntryRecord {
+    uint32_t id;
+    uint32_t refCount;
+    float rotation[4];
+    float position[3];
+    uint32_t poseHash;
+    uint32_t bindingCount;
+    uint32_t stateFlags;
+};
+
+struct TransformCacheBindingRecord {
+    uintptr_t shapeSim;
+    uintptr_t shapeCore;
+    uintptr_t pxsShapeCore;
+    uintptr_t interaction;
+    uint32_t interactionIndex;
+    uint32_t endpointIndex;
+    uint32_t cacheId;
+    uint32_t refCount;
+    uint32_t poseHash;
+    uint32_t validationFlags;
+};
+
+struct TransformCacheReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t ownerScene;
+    uintptr_t interactionScene;
+    uintptr_t context;
+    uintptr_t transformCache;
+    uint32_t currentId;
+    uintptr_t freeData;
+    uint32_t freeCount;
+    uint32_t freeCapacityRaw;
+    uintptr_t transformsData;
+    uint32_t transformsCount;
+    uint32_t transformsCapacityRaw;
+    uintptr_t refCountsData;
+    uint32_t refCountsCount;
+    uint32_t refCountsCapacityRaw;
+    uint32_t entriesRequired;
+    uint32_t entriesWritten;
+    uint32_t freeRequired;
+    uint32_t freeWritten;
+    uint32_t bindingsRequired;
+    uint32_t bindingsWritten;
+    uint32_t liveCount;
+    uint32_t totalRefCount;
+    uint32_t entryHash;
+    uint32_t freeOrderHash;
+    uint32_t bindingHash;
+    uint32_t snapshotHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
+
+// One oriented AABB overlap as it existed at finishBroadPhase entry.  The
+// hook writes these records only into a fixed DLL-owned ring; callers copy
+// them later using the exact observation ordinal returned by arm/status.
+struct BroadPhaseOverlapRecord {
+    uintptr_t userData0;
+    uintptr_t userData1;
+    uintptr_t shapeCore0;
+    uintptr_t shapeCore1;
+    uintptr_t pxsShapeCore0;
+    uintptr_t pxsShapeCore1;
+    uint32_t cacheId0;
+    uint32_t cacheId1;
+    uint32_t pairHash;
+    uint32_t validationFlags;
+};
+
+struct FinishBroadPhaseObserverReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t expectedScene;
+    uintptr_t expectedContext;
+    uintptr_t expectedNPhaseCore;
+    uintptr_t observedScene;
+    uintptr_t observedContext;
+    uintptr_t observedNPhaseCore;
+    uintptr_t aabbManager;
+    uintptr_t interactionScene;
+    uintptr_t transformCache;
+    uint32_t installed;
+    uint32_t state;
+    uint32_t expectedPass;
+    uint32_t armedThreadId;
+    uint32_t armedOrdinal;
+    uint32_t observationOrdinal;
+    uint32_t slotIndex;
+    uint32_t pass;
+    uint32_t threadId;
+    uint32_t createdRequired;
+    uint32_t createdWritten;
+    uint32_t deletedRequired;
+    uint32_t deletedWritten;
+    uint32_t createdHash;
+    uint32_t deletedHash;
+    uint32_t preCacheHash;
+    uint32_t postCacheHash;
+    uint32_t preGraphHash;
+    uint32_t postGraphHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+    uint32_t droppedObservations;
+};
+
 struct ManifoldPoolReceipt {
     uint32_t apiVersion;
     uint32_t structSize;
@@ -979,6 +1102,16 @@ static_assert(sizeof(InteractionGraphPoolReceipt) == 80,
     "Unexpected Win32 interaction-graph pool ABI");
 static_assert(sizeof(InteractionGraphReceipt) == 500,
     "Unexpected Win32 interaction-graph receipt ABI");
+static_assert(sizeof(TransformCacheEntryRecord) == 48,
+    "Unexpected Win32 transform-cache entry ABI");
+static_assert(sizeof(TransformCacheBindingRecord) == 40,
+    "Unexpected Win32 transform-cache binding ABI");
+static_assert(sizeof(TransformCacheReceipt) == 144,
+    "Unexpected Win32 transform-cache receipt ABI");
+static_assert(sizeof(BroadPhaseOverlapRecord) == 40,
+    "Unexpected Win32 broadphase overlap ABI");
+static_assert(sizeof(FinishBroadPhaseObserverReceipt) == 152,
+    "Unexpected Win32 finishBroadPhase observer ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1176,6 +1309,47 @@ enum InteractionGraphResult : uint32_t {
     InteractionGraphUnstable = 11
 };
 
+enum TransformCacheResult : uint32_t {
+    TransformCacheOk = 1,
+    TransformCacheBadArgument = 2,
+    TransformCacheRevisionMismatch = 3,
+    TransformCacheUnreadable = 4,
+    TransformCacheInvalidMetadata = 5,
+    TransformCacheCapacityTooSmall = 6,
+    TransformCacheInvalidFreeId = 7,
+    TransformCacheInvalidBinding = 8,
+    TransformCacheReferenceMismatch = 9,
+    TransformCacheUnstable = 10
+};
+
+enum FinishBroadPhaseObserverResult : uint32_t {
+    FinishBroadPhaseObserverOk = 1,
+    FinishBroadPhaseObserverBadArgument = 2,
+    FinishBroadPhaseObserverRevisionMismatch = 3,
+    FinishBroadPhaseObserverAlreadyInstalled = 4,
+    FinishBroadPhaseObserverNotInstalled = 5,
+    FinishBroadPhaseObserverAllocationFailed = 6,
+    FinishBroadPhaseObserverProtectFailed = 7,
+    FinishBroadPhaseObserverPatchChanged = 8,
+    FinishBroadPhaseObserverBusy = 9,
+    FinishBroadPhaseObserverNotReady = 10,
+    FinishBroadPhaseObserverStale = 11,
+    FinishBroadPhaseObserverCapacityTooSmall = 12,
+    FinishBroadPhaseObserverInvalidIdentity = 13,
+    FinishBroadPhaseObserverInvalidMetadata = 14,
+    FinishBroadPhaseObserverUnstable = 15,
+    FinishBroadPhaseObserverCaptureFailed = 16
+};
+
+enum FinishBroadPhaseObserverState : uint32_t {
+    FinishBroadPhaseObserverUninstalled = 0,
+    FinishBroadPhaseObserverIdle = 1,
+    FinishBroadPhaseObserverArmed = 2,
+    FinishBroadPhaseObserverCapturing = 3,
+    FinishBroadPhaseObserverCaptured = 4,
+    FinishBroadPhaseObserverFailed = 5
+};
+
 enum DirtyInteractionRestoreMode : uint32_t {
     DirtyInteractionRestoreNone = 0,
     DirtyInteractionRestoreExact = 1,
@@ -1278,7 +1452,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 15;
+static const uint32_t kApiVersion = 16;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1290,6 +1464,11 @@ static const uint32_t kMaximumInteractionGraphActors = 4096;
 static const uint32_t kMaximumInteractionGraphInteractions = 16384;
 static const uint32_t kMaximumInteractionGraphActorSlots = 32768;
 static const uint32_t kMaximumInteractionGraphPoolEntries = 65536;
+static const uint32_t kMaximumTransformCacheIds = 16384;
+static const uint32_t kMaximumTransformCacheBindings =
+    kMaximumInteractionGraphInteractions * 2u;
+static const uint32_t kMaximumBroadPhaseOverlaps = 4096;
+static const uint32_t kFinishBroadPhaseRingCapacity = 4;
 static const uint32_t kCleanupRva = 0x481ED0;
 static const uint32_t kCreateRva = 0x482510;
 static const uint32_t kGetShapesRva = 0xA10740;
@@ -1320,6 +1499,9 @@ static const uint32_t kInteractionDeactivateRva = 0xA41F40;
 static const uint32_t kInteractionRegisterRva = 0xA420B0;
 static const uint32_t kInteractionUnregisterRva = 0xA42950;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
+static const uint32_t kFinishBroadPhaseRva = 0xA31CA0;
+static const uint32_t kCreateManagerTransformCacheLayoutRva = 0xA54530;
+static const uint32_t kShapeSimCreateTransformCacheRva = 0xA473B0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
 static const uint32_t kLargeManifoldPoolSlabRva = 0xA69BEA;
@@ -1489,6 +1671,18 @@ static const uint8_t kCreateSipShapeCoreBytes[] = {
 };
 static const uint8_t kNpShapeGetTypeBytes[] = {0x8B,0x41,0x74,0xC3};
 static const uint8_t kUpdateDirtyInteractionsBytes[] = {0x55,0x8B,0xEC,0x83,0xEC,0x34};
+static const uint8_t kFinishBroadPhaseBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0xD9,0x56,0x57
+};
+static const uint8_t kFinishBroadPhaseLayoutBytes[] = {
+    0x8B,0x83,0xB4,0x04,0x00,0x00,0x8B,0x8B,0x50,0x04,0x00,0x00,
+    0x8B,0x80,0xE8,0x03,0x00,0x00,0x8B,0x70,0x08
+};
+static const uint8_t kCreateManagerTransformCacheLayoutBytes[] = {
+    0x8B,0x86,0xB4,0x04,0x00,0x00,0x8B,0x4D,0xF8,
+    0x8B,0xB0,0xE8,0x03,0x00,0x00,0x81,0xC6,0xBC,0x1D,0x00,0x00,
+    0x56
+};
 // These exact UnityPlayer 2017.4.8f1 Win32 instructions prove both the
 // PxsContext member offsets and the intrusive Ps::Pool bookkeeping layout.
 // In particular, allocate() pops mFreeElement at +0x124 while updating used
@@ -1746,6 +1940,34 @@ static uint32_t g_dirtyInteractionNewNext[kMaximumDirtyInteractions] = {};
 static uint32_t g_dirtyInteractionOldHash[kMaximumDirtyHashSize] = {};
 static uint32_t g_dirtyInteractionNewHash[kMaximumDirtyHashSize] = {};
 
+struct FinishBroadPhaseCaptureSlot {
+    volatile LONG committedOrdinal;
+    FinishBroadPhaseObserverReceipt receipt;
+    BroadPhaseOverlapRecord created[kMaximumBroadPhaseOverlaps];
+    BroadPhaseOverlapRecord deleted[kMaximumBroadPhaseOverlaps];
+};
+
+static uintptr_t g_finishBroadPhaseUnityBase = 0;
+static void* g_finishBroadPhaseTrampoline = 0;
+static uint8_t g_finishBroadPhaseOriginal[sizeof(kFinishBroadPhaseBytes)] = {};
+static const uint8_t g_finishBroadPhaseModuleMarker = 0;
+static volatile LONG g_finishBroadPhaseModulePinned = 0;
+// 0 = uninstalled, -1 = lifecycle transition, 1 = installed.
+static volatile LONG g_finishBroadPhaseInstalled = 0;
+static volatile LONG g_finishBroadPhaseInFlight = 0;
+static volatile LONG g_finishBroadPhaseState =
+    FinishBroadPhaseObserverUninstalled;
+static volatile LONG g_finishBroadPhaseOrdinal = 0;
+static volatile LONG g_finishBroadPhaseDropped = 0;
+static uintptr_t g_finishBroadPhaseExpectedScene = 0;
+static uintptr_t g_finishBroadPhaseExpectedContext = 0;
+static uintptr_t g_finishBroadPhaseExpectedNPhaseCore = 0;
+static uint32_t g_finishBroadPhaseExpectedPass = 0;
+static uint32_t g_finishBroadPhaseArmedThreadId = 0;
+static uint32_t g_finishBroadPhaseArmedOrdinal = 0;
+static FinishBroadPhaseCaptureSlot
+    g_finishBroadPhaseSlots[kFinishBroadPhaseRingCapacity] = {};
+
 static int Fail(RebuildReceipt* receipt, RebuildResult result, uint32_t error) {
     receipt->result = result;
     receipt->lastError = error;
@@ -1841,6 +2063,33 @@ static int FailNPhaseReportState(NPhaseReportStateReceipt* receipt,
     if (receipt) {
         receipt->result = result;
         receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailTransformCache(TransformCacheReceipt* receipt,
+    TransformCacheResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidKind = kind;
+        receipt->invalidIndex = index;
+        receipt->detail = detail;
+    }
+    return 0;
+}
+
+static int FailFinishBroadPhaseObserver(
+    FinishBroadPhaseObserverReceipt* receipt,
+    FinishBroadPhaseObserverResult result, uint32_t error,
+    uint32_t kind, uint32_t index, uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidKind = kind;
+        receipt->invalidIndex = index;
+        receipt->detail = detail;
     }
     return 0;
 }
@@ -6629,6 +6878,1318 @@ static int CaptureInteractionGraph(uintptr_t unityBase, uintptr_t nphaseCore,
     return 1;
 }
 
+struct TransformCacheHeaderState {
+    uint32_t currentId;
+    InteractionGraphArrayHeader freeIds;
+    InteractionGraphArrayHeader transforms;
+    InteractionGraphArrayHeader refCounts;
+};
+
+static bool TransformCacheRevisionMatches(uintptr_t unityBase) {
+    if (!InteractionGraphCodeMatches(unityBase)) return false;
+    const void* layout = reinterpret_cast<const void*>(unityBase +
+        kCreateManagerTransformCacheLayoutRva);
+    const void* shapeCreate = reinterpret_cast<const void*>(unityBase +
+        kShapeSimCreateTransformCacheRva);
+    static const uint8_t shapeCreateBytes[] = {
+        0x55,0x8B,0xEC,0x83,0xEC,0x20,0x8B,0xC1,0x53,0x8B,0x5D,0x08,
+        0x89,0x45,0xFC,0x83,0x78,0x18,0xFF
+    };
+    return Readable(layout, sizeof(kCreateManagerTransformCacheLayoutBytes)) &&
+        EqualBytes(layout, kCreateManagerTransformCacheLayoutBytes,
+            sizeof(kCreateManagerTransformCacheLayoutBytes)) &&
+        Readable(shapeCreate, sizeof(shapeCreateBytes)) &&
+        EqualBytes(shapeCreate, shapeCreateBytes, sizeof(shapeCreateBytes));
+}
+
+static bool ReadTransformCacheHeader(uintptr_t transformCache,
+    TransformCacheHeaderState& header) {
+    ZeroMemory(&header, sizeof(header));
+    if (!transformCache || !Readable(reinterpret_cast<const void*>(
+            transformCache), 0x28)) return false;
+    header.currentId = *reinterpret_cast<const uint32_t*>(transformCache);
+    header.freeIds.data = *reinterpret_cast<const uintptr_t*>(
+        transformCache + 0x04);
+    header.freeIds.count = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x08);
+    header.freeIds.capacityRaw = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x0C);
+    header.transforms.data = *reinterpret_cast<const uintptr_t*>(
+        transformCache + 0x10);
+    header.transforms.count = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x14);
+    header.transforms.capacityRaw = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x18);
+    header.refCounts.data = *reinterpret_cast<const uintptr_t*>(
+        transformCache + 0x1C);
+    header.refCounts.count = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x20);
+    header.refCounts.capacityRaw = *reinterpret_cast<const uint32_t*>(
+        transformCache + 0x24);
+    const uint32_t freeCapacity =
+        header.freeIds.capacityRaw & 0x7FFFFFFFu;
+    const uint32_t transformCapacity =
+        header.transforms.capacityRaw & 0x7FFFFFFFu;
+    const uint32_t refCapacity =
+        header.refCounts.capacityRaw & 0x7FFFFFFFu;
+    if (header.currentId > kMaximumTransformCacheIds ||
+        header.freeIds.count > freeCapacity ||
+        header.freeIds.count > header.currentId ||
+        header.transforms.count > transformCapacity ||
+        header.refCounts.count > refCapacity ||
+        transformCapacity > kMaximumTransformCacheIds ||
+        refCapacity > kMaximumTransformCacheIds ||
+        header.transforms.count != transformCapacity ||
+        header.refCounts.count != refCapacity ||
+        transformCapacity != refCapacity ||
+        header.currentId > header.transforms.count ||
+        (header.freeIds.count && (!header.freeIds.data || !Readable(
+            reinterpret_cast<const void*>(header.freeIds.data),
+            header.freeIds.count * sizeof(uint32_t)))) ||
+        (header.currentId && (!header.transforms.data || !Readable(
+            reinterpret_cast<const void*>(header.transforms.data),
+            header.currentId * sizeof(PhysxTransform)))) ||
+        (header.currentId && (!header.refCounts.data || !Readable(
+            reinterpret_cast<const void*>(header.refCounts.data),
+            header.currentId * sizeof(uint32_t))))) return false;
+    return true;
+}
+
+static bool ResolveTransformCache(uintptr_t nphaseCore,
+    uintptr_t& ownerScene, uintptr_t& interactionScene, uintptr_t& context,
+    uintptr_t& transformCache) {
+    ownerScene = 0;
+    interactionScene = 0;
+    context = 0;
+    transformCache = 0;
+    if (!nphaseCore || !Readable(reinterpret_cast<const void*>(nphaseCore),
+            sizeof(uintptr_t))) return false;
+    ownerScene = *reinterpret_cast<const uintptr_t*>(nphaseCore);
+    if (!ownerScene || !Readable(reinterpret_cast<const void*>(ownerScene +
+            0x450), 0x68)) return false;
+    interactionScene = *reinterpret_cast<const uintptr_t*>(ownerScene +
+        0x4B4);
+    if (!interactionScene ||
+        *reinterpret_cast<const uintptr_t*>(ownerScene + 0x450) != nphaseCore ||
+        !Readable(reinterpret_cast<const void*>(interactionScene), 0x3F4) ||
+        *reinterpret_cast<const uintptr_t*>(interactionScene + 0x3F0) !=
+            ownerScene) return false;
+    context = *reinterpret_cast<const uintptr_t*>(interactionScene + 0x3E8);
+    if (!context || !Readable(reinterpret_cast<const void*>(context),
+            0x1DE4)) return false;
+    transformCache = context + 0x1DBCu;
+    return true;
+}
+
+static bool SameTransformCacheHeader(const TransformCacheHeaderState& left,
+    const TransformCacheHeaderState& right) {
+    return left.currentId == right.currentId &&
+        left.freeIds.data == right.freeIds.data &&
+        left.freeIds.count == right.freeIds.count &&
+        left.freeIds.capacityRaw == right.freeIds.capacityRaw &&
+        left.transforms.data == right.transforms.data &&
+        left.transforms.count == right.transforms.count &&
+        left.transforms.capacityRaw == right.transforms.capacityRaw &&
+        left.refCounts.data == right.refCounts.data &&
+        left.refCounts.count == right.refCounts.count &&
+        left.refCounts.capacityRaw == right.refCounts.capacityRaw;
+}
+
+static bool HashTransformCacheNoAllocation(uintptr_t context,
+    uint32_t& hash) {
+    hash = 0;
+    if (!context || !Readable(reinterpret_cast<const void*>(context),
+            0x1DE4)) return false;
+    const uintptr_t cache = context + 0x1DBCu;
+    TransformCacheHeaderState header = {};
+    if (!ReadTransformCacheHeader(cache, header)) return false;
+    const uint32_t* freeIds = reinterpret_cast<const uint32_t*>(
+        header.freeIds.data);
+    const uint32_t* refs = reinterpret_cast<const uint32_t*>(
+        header.refCounts.data);
+    uint32_t freeSeen[(kMaximumTransformCacheIds + 31u) / 32u] = {};
+    for (uint32_t i = 0; i < header.freeIds.count; ++i) {
+        const uint32_t id = freeIds[i];
+        if (id >= header.currentId || refs[id] != 0)
+            return false;
+        const uint32_t mask = 1u << (id & 31u);
+        if (freeSeen[id >> 5] & mask) return false;
+        freeSeen[id >> 5] |= mask;
+    }
+    uint32_t value = 2166136261u;
+    value = AppendByteHash(value, &header.currentId,
+        sizeof(header.currentId));
+    value = AppendByteHash(value, freeIds,
+        header.freeIds.count * sizeof(uint32_t));
+    value = AppendByteHash(value, reinterpret_cast<const void*>(
+        header.transforms.data),
+        header.currentId * sizeof(PhysxTransform));
+    value = AppendByteHash(value, refs,
+        header.currentId * sizeof(uint32_t));
+    TransformCacheHeaderState check = {};
+    if (!ReadTransformCacheHeader(cache, check) ||
+        !SameTransformCacheHeader(header, check)) return false;
+    hash = value;
+    return true;
+}
+
+static bool HashInteractionGraphNoAllocation(uintptr_t ownerScene,
+    uintptr_t nphaseCore, uint32_t& hash) {
+    hash = 0;
+    if (!ownerScene || !nphaseCore ||
+        !Readable(reinterpret_cast<const void*>(ownerScene + 0x450), 0x68) ||
+        *reinterpret_cast<const uintptr_t*>(ownerScene + 0x450) != nphaseCore ||
+        *reinterpret_cast<const uintptr_t*>(nphaseCore) != ownerScene)
+        return false;
+    const uintptr_t interactionScene = *reinterpret_cast<const uintptr_t*>(
+        ownerScene + 0x4B4);
+    if (!interactionScene || !Readable(reinterpret_cast<const void*>(
+            interactionScene), 0x3F4) ||
+        *reinterpret_cast<const uintptr_t*>(interactionScene + 0x3F0) !=
+            ownerScene) return false;
+    uint32_t value = 2166136261u;
+    const uint32_t timestamp = *reinterpret_cast<const uint32_t*>(
+        interactionScene + 0x3EC);
+    value = AppendByteHash(value, &timestamp, sizeof(timestamp));
+    for (uint32_t array = 0; array < 7; ++array) {
+        const uintptr_t headerAddress = interactionScene +
+            (array == 0 ? 0u : 0x10u + (array - 1u) * 12u);
+        InteractionGraphArrayHeader header = {};
+        const uint32_t maximum = array == 0 ?
+            kMaximumInteractionGraphActors :
+            kMaximumInteractionGraphInteractions;
+        if (!ReadInteractionGraphArray(headerAddress, header, maximum))
+            return false;
+        value = AppendByteHash(value, &header, sizeof(header));
+        const uintptr_t* entries = reinterpret_cast<const uintptr_t*>(
+            header.data);
+        value = AppendByteHash(value, entries,
+            header.count * sizeof(uintptr_t));
+        if (array == 0) continue;
+        const uint32_t type = array - 1u;
+        const uint32_t active = *reinterpret_cast<const uint32_t*>(
+            interactionScene + 0x58 + type * 4u);
+        if (active > header.count) return false;
+        value = AppendByteHash(value, &active, sizeof(active));
+        for (uint32_t i = 0; i < header.count; ++i) {
+            const uint32_t bytes = (type == 0u || type == 2u ||
+                type == 3u || type == 4u) ? 0x20u : 0x18u;
+            if (!entries[i] || !Readable(reinterpret_cast<const void*>(
+                    entries[i]), bytes)) return false;
+            value = AppendByteHash(value, reinterpret_cast<const void*>(
+                entries[i]), bytes);
+        }
+    }
+    hash = value;
+    return true;
+}
+
+static bool ReadTransformCacheInteractionManager(
+    const InteractionGraphInteractionRecord& interaction,
+    uintptr_t& manager, uint32_t (&cacheIds)[2]) {
+    manager = 0;
+    cacheIds[0] = 0xFFFFFFFFu;
+    cacheIds[1] = 0xFFFFFFFFu;
+    if (interaction.interaction < 8u ||
+        !Readable(reinterpret_cast<const void*>(interaction.interaction),
+            0x34)) return false;
+    manager = *reinterpret_cast<const uintptr_t*>(
+        interaction.interaction + 0x30);
+    if (!manager) return true;
+    if (!Readable(reinterpret_cast<const void*>(manager),
+            kContactManagerSize) ||
+        *reinterpret_cast<const uintptr_t*>(manager + 0x0C) !=
+            interaction.interaction - 8u ||
+        *reinterpret_cast<const uintptr_t*>(manager + 0x58) !=
+            interaction.pxsShapeCore0 ||
+        *reinterpret_cast<const uintptr_t*>(manager + 0x5C) !=
+            interaction.pxsShapeCore1)
+        return false;
+    cacheIds[0] = *reinterpret_cast<const uint32_t*>(manager + 0x74);
+    cacheIds[1] = *reinterpret_cast<const uint32_t*>(manager + 0x78);
+    return cacheIds[0] == *reinterpret_cast<const uint32_t*>(
+            interaction.element0 + 0x18) &&
+        cacheIds[1] == *reinterpret_cast<const uint32_t*>(
+            interaction.element1 + 0x18);
+}
+
+static int CaptureTransformCache(uintptr_t unityBase, uintptr_t nphaseCore,
+    TransformCacheEntryRecord* entries, uint32_t entryCapacity,
+    uint32_t* freeIds, uint32_t freeCapacity,
+    TransformCacheBindingRecord* bindings, uint32_t bindingCapacity,
+    TransformCacheReceipt* receipt) {
+    if (!receipt) return 0;
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    if (!unityBase || !nphaseCore)
+        return FailTransformCache(receipt, TransformCacheBadArgument,
+            ERROR_INVALID_PARAMETER, 0, 0xFFFFFFFFu, 1);
+    if (!TransformCacheRevisionMatches(unityBase))
+        return FailTransformCache(receipt, TransformCacheRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 0, 0xFFFFFFFFu, 2);
+    if (!ResolveTransformCache(nphaseCore, receipt->ownerScene,
+            receipt->interactionScene, receipt->context,
+            receipt->transformCache))
+        return FailTransformCache(receipt, TransformCacheUnreadable,
+            ERROR_NOACCESS, 0, 0xFFFFFFFFu, 3);
+    receipt->validationFlags |= 0x03u;
+
+    TransformCacheHeaderState header = {};
+    if (!ReadTransformCacheHeader(receipt->transformCache, header))
+        return FailTransformCache(receipt, TransformCacheInvalidMetadata,
+            ERROR_INVALID_DATA, 1, 0xFFFFFFFFu, 4);
+    receipt->currentId = header.currentId;
+    receipt->freeData = header.freeIds.data;
+    receipt->freeCount = header.freeIds.count;
+    receipt->freeCapacityRaw = header.freeIds.capacityRaw;
+    receipt->transformsData = header.transforms.data;
+    receipt->transformsCount = header.transforms.count;
+    receipt->transformsCapacityRaw = header.transforms.capacityRaw;
+    receipt->refCountsData = header.refCounts.data;
+    receipt->refCountsCount = header.refCounts.count;
+    receipt->refCountsCapacityRaw = header.refCounts.capacityRaw;
+    receipt->entriesRequired = header.currentId;
+    receipt->freeRequired = header.freeIds.count;
+    receipt->validationFlags |= 0x04u;
+
+    InteractionGraphArrayHeader interactionHeader = {};
+    if (!ReadInteractionGraphArray(receipt->interactionScene + 0x10,
+            interactionHeader, kMaximumInteractionGraphInteractions) ||
+        interactionHeader.count > kMaximumTransformCacheBindings / 2u)
+        return FailTransformCache(receipt, TransformCacheInvalidMetadata,
+            ERROR_INVALID_DATA, 2, 0xFFFFFFFFu, 5);
+    const uint32_t activeCount = *reinterpret_cast<const uint32_t*>(
+        receipt->interactionScene + 0x58);
+    if (activeCount > interactionHeader.count)
+        return FailTransformCache(receipt, TransformCacheInvalidMetadata,
+            ERROR_INVALID_DATA, 2, 0xFFFFFFFFu, 18);
+    const uintptr_t* interactions = reinterpret_cast<const uintptr_t*>(
+        interactionHeader.data);
+    for (uint32_t i = 0; i < interactionHeader.count; ++i) {
+        InteractionGraphInteractionRecord interaction = {};
+        uintptr_t manager = 0;
+        uint32_t cacheIds[2] = {};
+        if (!FillInteractionGraphInteraction(interactions[i], 0u, i,
+                activeCount, interaction) ||
+            !ReadTransformCacheInteractionManager(interaction, manager,
+                cacheIds))
+            return FailTransformCache(receipt, TransformCacheInvalidBinding,
+                ERROR_INVALID_DATA, 5, i, 11);
+        if (manager) receipt->bindingsRequired += 2u;
+    }
+    if (entryCapacity < receipt->entriesRequired ||
+        freeCapacity < receipt->freeRequired ||
+        bindingCapacity < receipt->bindingsRequired)
+        return FailTransformCache(receipt, TransformCacheCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 0, 0xFFFFFFFFu, 6);
+    if ((receipt->entriesRequired && (!entries || !Writable(entries,
+            receipt->entriesRequired * sizeof(*entries)))) ||
+        (receipt->freeRequired && (!freeIds || !Writable(freeIds,
+            receipt->freeRequired * sizeof(*freeIds)))) ||
+        (receipt->bindingsRequired && (!bindings || !Writable(bindings,
+            receipt->bindingsRequired * sizeof(*bindings)))))
+        return FailTransformCache(receipt, TransformCacheBadArgument,
+            ERROR_NOACCESS, 0, 0xFFFFFFFFu, 7);
+
+    const PhysxTransform* sourceTransforms =
+        reinterpret_cast<const PhysxTransform*>(header.transforms.data);
+    const uint32_t* sourceRefs = reinterpret_cast<const uint32_t*>(
+        header.refCounts.data);
+    for (uint32_t id = 0; id < header.currentId; ++id) {
+        TransformCacheEntryRecord& record = entries[id];
+        ZeroMemory(&record, sizeof(record));
+        record.id = id;
+        record.refCount = sourceRefs[id];
+        CopyBytes(record.rotation, sourceTransforms[id].rotation,
+            sizeof(record.rotation));
+        CopyBytes(record.position, sourceTransforms[id].position,
+            sizeof(record.position));
+        record.poseHash = ByteHash(&sourceTransforms[id],
+            sizeof(PhysxTransform));
+        record.stateFlags = 0x01u;
+        if (record.refCount) {
+            RigidPose pose = ExportPose(sourceTransforms[id]);
+            if (!Finite(pose))
+                return FailTransformCache(receipt,
+                    TransformCacheInvalidMetadata, ERROR_INVALID_DATA,
+                    3, id, 8);
+            record.stateFlags |= 0x04u;
+            ++receipt->liveCount;
+            receipt->totalRefCount += record.refCount;
+        }
+    }
+    receipt->entriesWritten = header.currentId;
+
+    const uint32_t* sourceFree = reinterpret_cast<const uint32_t*>(
+        header.freeIds.data);
+    for (uint32_t i = 0; i < header.freeIds.count; ++i) {
+        const uint32_t id = sourceFree[i];
+        if (id >= header.currentId || entries[id].refCount != 0 ||
+            (entries[id].stateFlags & 0x02u) != 0)
+            return FailTransformCache(receipt, TransformCacheInvalidFreeId,
+                ERROR_INVALID_DATA, 4, i, 9);
+        entries[id].stateFlags |= 0x02u;
+        freeIds[i] = id;
+    }
+    receipt->freeWritten = header.freeIds.count;
+    for (uint32_t id = 0; id < header.currentId; ++id)
+        if ((entries[id].refCount == 0) !=
+                ((entries[id].stateFlags & 0x02u) != 0))
+            return FailTransformCache(receipt, TransformCacheInvalidFreeId,
+                ERROR_INVALID_DATA, 4, id, 10);
+    receipt->validationFlags |= 0x08u;
+
+    uint32_t bindingOutput = 0;
+    for (uint32_t i = 0; i < interactionHeader.count; ++i) {
+        InteractionGraphInteractionRecord interaction = {};
+        uintptr_t manager = 0;
+        uint32_t cacheIds[2] = {};
+        if (!FillInteractionGraphInteraction(interactions[i], 0u, i,
+                activeCount, interaction) ||
+            !ReadTransformCacheInteractionManager(interaction, manager,
+                cacheIds))
+            return FailTransformCache(receipt, TransformCacheUnstable,
+                ERROR_RETRY, 5, i, 19);
+        if (!manager) continue;
+        const uintptr_t shapeSims[2] = {
+            interaction.element0, interaction.element1
+        };
+        const uintptr_t shapeCores[2] = {
+            interaction.shapeCore0, interaction.shapeCore1
+        };
+        for (uint32_t endpoint = 0; endpoint < 2; ++endpoint) {
+            const uint32_t cacheId = cacheIds[endpoint];
+            if (cacheId >= header.currentId ||
+                (entries[cacheId].stateFlags & 0x02u) != 0 ||
+                entries[cacheId].refCount == 0)
+                return FailTransformCache(receipt,
+                    TransformCacheInvalidBinding, ERROR_INVALID_DATA,
+                    5, bindingOutput, 12);
+            TransformCacheBindingRecord& binding = bindings[bindingOutput++];
+            ZeroMemory(&binding, sizeof(binding));
+            binding.shapeSim = shapeSims[endpoint];
+            binding.shapeCore = shapeCores[endpoint];
+            binding.pxsShapeCore = shapeCores[endpoint] + 0x20;
+            binding.interaction = interactions[i];
+            binding.interactionIndex = i;
+            binding.endpointIndex = endpoint;
+            binding.cacheId = cacheId;
+            binding.refCount = entries[cacheId].refCount;
+            binding.poseHash = entries[cacheId].poseHash;
+            binding.validationFlags = 0x0Fu;
+            ++entries[cacheId].bindingCount;
+        }
+    }
+    receipt->bindingsWritten = bindingOutput;
+    receipt->validationFlags |= 0x30u;
+    if (bindingOutput != receipt->bindingsRequired)
+        return FailTransformCache(receipt,
+            TransformCacheUnstable, ERROR_RETRY,
+            6, 0xFFFFFFFFu, 20);
+    if (bindingOutput != receipt->totalRefCount)
+        return FailTransformCache(receipt,
+            TransformCacheReferenceMismatch, ERROR_INVALID_DATA,
+            6, 0xFFFFFFFFu, 13);
+    for (uint32_t id = 0; id < header.currentId; ++id)
+        if (entries[id].bindingCount != entries[id].refCount)
+            return FailTransformCache(receipt,
+                TransformCacheReferenceMismatch, ERROR_INVALID_DATA,
+                6, id, 14);
+    receipt->validationFlags |= 0x40u;
+
+    receipt->entryHash = ByteHash(entries,
+        receipt->entriesWritten * sizeof(*entries));
+    receipt->freeOrderHash = WordHash(freeIds, receipt->freeWritten);
+    receipt->bindingHash = ByteHash(bindings,
+        receipt->bindingsWritten * sizeof(*bindings));
+    uint32_t snapshotHash = 2166136261u;
+    snapshotHash = AppendByteHash(snapshotHash, &receipt->currentId,
+        sizeof(receipt->currentId));
+    snapshotHash = AppendByteHash(snapshotHash, &receipt->entryHash,
+        sizeof(receipt->entryHash));
+    snapshotHash = AppendByteHash(snapshotHash, &receipt->freeOrderHash,
+        sizeof(receipt->freeOrderHash));
+    snapshotHash = AppendByteHash(snapshotHash, &receipt->bindingHash,
+        sizeof(receipt->bindingHash));
+    receipt->snapshotHash = snapshotHash;
+
+    TransformCacheHeaderState check = {};
+    uintptr_t checkScene = 0;
+    uintptr_t checkInteractionScene = 0;
+    uintptr_t checkContext = 0;
+    uintptr_t checkCache = 0;
+    if (!ResolveTransformCache(nphaseCore, checkScene, checkInteractionScene,
+            checkContext, checkCache) || checkScene != receipt->ownerScene ||
+        checkInteractionScene != receipt->interactionScene ||
+        checkContext != receipt->context || checkCache != receipt->transformCache ||
+        !ReadTransformCacheHeader(checkCache, check) ||
+        !SameTransformCacheHeader(header, check) ||
+        WordHash(reinterpret_cast<const uint32_t*>(check.freeIds.data),
+            check.freeIds.count) != receipt->freeOrderHash)
+        return FailTransformCache(receipt, TransformCacheUnstable,
+            ERROR_RETRY, 0, 0xFFFFFFFFu, 15);
+    for (uint32_t id = 0; id < header.currentId; ++id)
+        if (sourceRefs[id] != entries[id].refCount ||
+            ByteHash(&sourceTransforms[id], sizeof(PhysxTransform)) !=
+                entries[id].poseHash)
+            return FailTransformCache(receipt, TransformCacheUnstable,
+                ERROR_RETRY, 3, id, 16);
+    for (uint32_t i = 0; i < bindingOutput; ++i)
+        if (!Readable(reinterpret_cast<const void*>(bindings[i].interaction),
+                0x34) ||
+            !Readable(reinterpret_cast<const void*>(bindings[i].shapeSim),
+                0x20) ||
+            *reinterpret_cast<const uintptr_t*>(bindings[i].shapeSim + 0x1C) !=
+                bindings[i].shapeCore ||
+            *reinterpret_cast<const uint32_t*>(bindings[i].shapeSim + 0x18) !=
+                bindings[i].cacheId ||
+            !*reinterpret_cast<const uintptr_t*>(bindings[i].interaction +
+                0x30) ||
+            !Readable(reinterpret_cast<const void*>(
+                *reinterpret_cast<const uintptr_t*>(bindings[i].interaction +
+                    0x30)), kContactManagerSize) ||
+            *reinterpret_cast<const uintptr_t*>(
+                *reinterpret_cast<const uintptr_t*>(bindings[i].interaction +
+                    0x30) + 0x0C) != bindings[i].interaction - 8u ||
+            *reinterpret_cast<const uintptr_t*>(
+                *reinterpret_cast<const uintptr_t*>(bindings[i].interaction +
+                    0x30) + 0x58 + bindings[i].endpointIndex * 4u) !=
+                bindings[i].pxsShapeCore ||
+            *reinterpret_cast<const uint32_t*>(
+                *reinterpret_cast<const uintptr_t*>(bindings[i].interaction +
+                    0x30) + 0x74 + bindings[i].endpointIndex * 4u) !=
+                bindings[i].cacheId)
+            return FailTransformCache(receipt, TransformCacheUnstable,
+                ERROR_RETRY, 5, i, 17);
+    receipt->validationFlags |= 0x80u;
+    receipt->result = TransformCacheOk;
+    receipt->lastError = ERROR_SUCCESS;
+    return 1;
+}
+
+static bool FinishBroadPhaseLayoutRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase || !TransformCacheRevisionMatches(unityBase)) return false;
+    const void* layout = reinterpret_cast<const void*>(unityBase +
+        kFinishBroadPhaseRva + 0x0Cu);
+    return Readable(layout, sizeof(kFinishBroadPhaseLayoutBytes)) &&
+        EqualBytes(layout, kFinishBroadPhaseLayoutBytes,
+            sizeof(kFinishBroadPhaseLayoutBytes));
+}
+
+static bool FinishBroadPhaseRevisionMatches(uintptr_t unityBase) {
+    const void* entry = reinterpret_cast<const void*>(unityBase +
+        kFinishBroadPhaseRva);
+    return FinishBroadPhaseLayoutRevisionMatches(unityBase) &&
+        Readable(entry, sizeof(kFinishBroadPhaseBytes)) &&
+        EqualBytes(entry, kFinishBroadPhaseBytes,
+            sizeof(kFinishBroadPhaseBytes));
+}
+
+static bool FillBroadPhaseOverlapRecord(uintptr_t userData0,
+    uintptr_t userData1, BroadPhaseOverlapRecord& record) {
+    ZeroMemory(&record, sizeof(record));
+    if (!userData0 || !userData1 || userData0 == userData1 ||
+        !Readable(reinterpret_cast<const void*>(userData0), 0x20) ||
+        !Readable(reinterpret_cast<const void*>(userData1), 0x20))
+        return false;
+    record.userData0 = userData0;
+    record.userData1 = userData1;
+    record.cacheId0 = *reinterpret_cast<const uint32_t*>(userData0 + 0x18);
+    record.cacheId1 = *reinterpret_cast<const uint32_t*>(userData1 + 0x18);
+    record.shapeCore0 = *reinterpret_cast<const uintptr_t*>(userData0 + 0x1C);
+    record.shapeCore1 = *reinterpret_cast<const uintptr_t*>(userData1 + 0x1C);
+    if (!record.shapeCore0 || !record.shapeCore1 ||
+        record.shapeCore0 == record.shapeCore1 ||
+        !Readable(reinterpret_cast<const void*>(record.shapeCore0 + 0x20),
+            sizeof(uintptr_t)) ||
+        !Readable(reinterpret_cast<const void*>(record.shapeCore1 + 0x20),
+            sizeof(uintptr_t))) return false;
+    record.pxsShapeCore0 = record.shapeCore0 + 0x20;
+    record.pxsShapeCore1 = record.shapeCore1 + 0x20;
+    record.pairHash = ByteHash(&record, 8u * sizeof(uint32_t));
+    record.validationFlags = 0x0Fu;
+    return true;
+}
+
+static void FailFinishBroadPhaseSlot(FinishBroadPhaseCaptureSlot& slot,
+    FinishBroadPhaseObserverResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    slot.receipt.result = result;
+    slot.receipt.lastError = error;
+    slot.receipt.invalidKind = kind;
+    slot.receipt.invalidIndex = index;
+    slot.receipt.detail = detail;
+}
+
+static uint32_t __cdecl ObserveFinishBroadPhaseEntry(uintptr_t scene,
+    uint32_t pass) {
+    if (InterlockedCompareExchange(&g_finishBroadPhaseState,
+            FinishBroadPhaseObserverCapturing,
+            FinishBroadPhaseObserverArmed) !=
+        FinishBroadPhaseObserverArmed) return 0;
+    if (scene != g_finishBroadPhaseExpectedScene ||
+        pass != g_finishBroadPhaseExpectedPass) {
+        InterlockedExchange(&g_finishBroadPhaseState,
+            FinishBroadPhaseObserverArmed);
+        return 0;
+    }
+
+    const LONG ordinal = InterlockedIncrement(&g_finishBroadPhaseOrdinal);
+    const uint32_t slotIndex = static_cast<uint32_t>(ordinal - 1) %
+        kFinishBroadPhaseRingCapacity;
+    FinishBroadPhaseCaptureSlot& slot = g_finishBroadPhaseSlots[slotIndex];
+    InterlockedExchange(&slot.committedOrdinal, 0);
+    ZeroMemory(&slot.receipt, sizeof(slot.receipt));
+    slot.receipt.apiVersion = kApiVersion;
+    slot.receipt.structSize = sizeof(slot.receipt);
+    slot.receipt.result = FinishBroadPhaseObserverNotReady;
+    slot.receipt.lastError = ERROR_IO_PENDING;
+    slot.receipt.unityBase = g_finishBroadPhaseUnityBase;
+    slot.receipt.expectedScene = g_finishBroadPhaseExpectedScene;
+    slot.receipt.expectedContext = g_finishBroadPhaseExpectedContext;
+    slot.receipt.expectedNPhaseCore = g_finishBroadPhaseExpectedNPhaseCore;
+    slot.receipt.observedScene = scene;
+    slot.receipt.expectedPass = g_finishBroadPhaseExpectedPass;
+    slot.receipt.armedThreadId = g_finishBroadPhaseArmedThreadId;
+    slot.receipt.armedOrdinal = g_finishBroadPhaseArmedOrdinal;
+    slot.receipt.observationOrdinal = static_cast<uint32_t>(ordinal);
+    slot.receipt.slotIndex = slotIndex;
+    slot.receipt.pass = pass;
+    slot.receipt.threadId = GetCurrentThreadId();
+    slot.receipt.state = FinishBroadPhaseObserverCapturing;
+    slot.receipt.installed = 1;
+    slot.receipt.invalidIndex = 0xFFFFFFFFu;
+    slot.receipt.droppedObservations = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseDropped, 0, 0));
+    g_finishBroadPhaseArmedOrdinal = static_cast<uint32_t>(ordinal);
+
+    if (!Readable(reinterpret_cast<const void*>(scene + 0x450), 0x68)) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidIdentity, ERROR_NOACCESS,
+            1, 0xFFFFFFFFu, 1);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.observedNPhaseCore =
+        *reinterpret_cast<const uintptr_t*>(scene + 0x450);
+    slot.receipt.interactionScene =
+        *reinterpret_cast<const uintptr_t*>(scene + 0x4B4);
+    if (slot.receipt.observedNPhaseCore !=
+            slot.receipt.expectedNPhaseCore ||
+        !slot.receipt.interactionScene ||
+        !Readable(reinterpret_cast<const void*>(
+            slot.receipt.interactionScene), 0x3F4) ||
+        *reinterpret_cast<const uintptr_t*>(
+            slot.receipt.interactionScene + 0x3F0) != scene) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidIdentity, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 2);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.observedContext = *reinterpret_cast<const uintptr_t*>(
+        slot.receipt.interactionScene + 0x3E8);
+    slot.receipt.transformCache = slot.receipt.observedContext + 0x1DBCu;
+    if (slot.receipt.observedContext != slot.receipt.expectedContext ||
+        *reinterpret_cast<const uintptr_t*>(
+            slot.receipt.observedNPhaseCore) != scene ||
+        !Readable(reinterpret_cast<const void*>(
+            slot.receipt.observedContext), 0x1DE4)) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidIdentity, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 3);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.aabbManager = *reinterpret_cast<const uintptr_t*>(
+        slot.receipt.observedContext + 0x08);
+    if (!slot.receipt.aabbManager ||
+        !Readable(reinterpret_cast<const void*>(slot.receipt.aabbManager),
+            0xC2BC)) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidMetadata, ERROR_NOACCESS,
+            2, 0xFFFFFFFFu, 4);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.validationFlags |= 0x103u;
+
+    const uintptr_t createdData = *reinterpret_cast<const uintptr_t*>(
+        slot.receipt.aabbManager + 0xC2A8);
+    slot.receipt.createdRequired = *reinterpret_cast<const uint32_t*>(
+        slot.receipt.aabbManager + 0xC2AC);
+    const uintptr_t deletedData = *reinterpret_cast<const uintptr_t*>(
+        slot.receipt.aabbManager + 0xC2B4);
+    slot.receipt.deletedRequired = *reinterpret_cast<const uint32_t*>(
+        slot.receipt.aabbManager + 0xC2B8);
+    if (slot.receipt.createdRequired > kMaximumBroadPhaseOverlaps ||
+        slot.receipt.deletedRequired > kMaximumBroadPhaseOverlaps ||
+        (slot.receipt.createdRequired && (!createdData || !Readable(
+            reinterpret_cast<const void*>(createdData),
+            slot.receipt.createdRequired * 2u * sizeof(uintptr_t)))) ||
+        (slot.receipt.deletedRequired && (!deletedData || !Readable(
+            reinterpret_cast<const void*>(deletedData),
+            slot.receipt.deletedRequired * 2u * sizeof(uintptr_t))))) {
+        InterlockedIncrement(&g_finishBroadPhaseDropped);
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 2, 0xFFFFFFFFu, 5);
+        return static_cast<uint32_t>(ordinal);
+    }
+    const uintptr_t* created = reinterpret_cast<const uintptr_t*>(createdData);
+    for (uint32_t i = 0; i < slot.receipt.createdRequired; ++i) {
+        if (!FillBroadPhaseOverlapRecord(created[i * 2u],
+                created[i * 2u + 1u], slot.created[i])) {
+            FailFinishBroadPhaseSlot(slot,
+                FinishBroadPhaseObserverInvalidMetadata, ERROR_INVALID_DATA,
+                3, i, 6);
+            return static_cast<uint32_t>(ordinal);
+        }
+    }
+    slot.receipt.createdWritten = slot.receipt.createdRequired;
+    const uintptr_t* deleted = reinterpret_cast<const uintptr_t*>(deletedData);
+    for (uint32_t i = 0; i < slot.receipt.deletedRequired; ++i) {
+        if (!FillBroadPhaseOverlapRecord(deleted[i * 2u],
+                deleted[i * 2u + 1u], slot.deleted[i])) {
+            FailFinishBroadPhaseSlot(slot,
+                FinishBroadPhaseObserverInvalidMetadata, ERROR_INVALID_DATA,
+                4, i, 7);
+            return static_cast<uint32_t>(ordinal);
+        }
+    }
+    slot.receipt.deletedWritten = slot.receipt.deletedRequired;
+    slot.receipt.createdHash = ByteHash(slot.created,
+        slot.receipt.createdWritten * sizeof(BroadPhaseOverlapRecord));
+    slot.receipt.deletedHash = ByteHash(slot.deleted,
+        slot.receipt.deletedWritten * sizeof(BroadPhaseOverlapRecord));
+    slot.receipt.validationFlags |= 0x0Cu;
+    if (!HashTransformCacheNoAllocation(slot.receipt.observedContext,
+            slot.receipt.preCacheHash)) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidMetadata, ERROR_INVALID_DATA,
+            5, 0xFFFFFFFFu, 8);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.validationFlags |= 0x10u;
+    if (!HashInteractionGraphNoAllocation(scene,
+            slot.receipt.observedNPhaseCore,
+            slot.receipt.preGraphHash)) {
+        FailFinishBroadPhaseSlot(slot,
+            FinishBroadPhaseObserverInvalidMetadata, ERROR_INVALID_DATA,
+            6, 0xFFFFFFFFu, 9);
+        return static_cast<uint32_t>(ordinal);
+    }
+    slot.receipt.validationFlags |= 0x20u;
+    return static_cast<uint32_t>(ordinal);
+}
+
+static void __cdecl ObserveFinishBroadPhaseExit(uintptr_t scene,
+    uint32_t pass, uint32_t ordinal) {
+    if (!ordinal ||
+        InterlockedCompareExchange(&g_finishBroadPhaseState, 0, 0) !=
+        FinishBroadPhaseObserverCapturing ||
+        scene != g_finishBroadPhaseExpectedScene ||
+        pass != g_finishBroadPhaseExpectedPass ||
+        ordinal != g_finishBroadPhaseArmedOrdinal) return;
+    const uint32_t slotIndex = (ordinal - 1u) %
+        kFinishBroadPhaseRingCapacity;
+    FinishBroadPhaseCaptureSlot& slot = g_finishBroadPhaseSlots[slotIndex];
+    if (slot.receipt.observationOrdinal != ordinal ||
+        slot.receipt.threadId != GetCurrentThreadId()) {
+        FailFinishBroadPhaseSlot(slot, FinishBroadPhaseObserverUnstable,
+            ERROR_RETRY, 7, 0xFFFFFFFFu, 10);
+    }
+    if (slot.receipt.result == FinishBroadPhaseObserverNotReady) {
+        if (!HashTransformCacheNoAllocation(slot.receipt.observedContext,
+                slot.receipt.postCacheHash))
+            FailFinishBroadPhaseSlot(slot,
+                FinishBroadPhaseObserverUnstable, ERROR_RETRY,
+                5, 0xFFFFFFFFu, 11);
+        else
+            slot.receipt.validationFlags |= 0x40u;
+    }
+    if (slot.receipt.result == FinishBroadPhaseObserverNotReady) {
+        if (!HashInteractionGraphNoAllocation(scene,
+                slot.receipt.observedNPhaseCore,
+                slot.receipt.postGraphHash))
+            FailFinishBroadPhaseSlot(slot,
+                FinishBroadPhaseObserverUnstable, ERROR_RETRY,
+                6, 0xFFFFFFFFu, 12);
+        else
+            slot.receipt.validationFlags |= 0x80u;
+    }
+    slot.receipt.validationFlags |= 0x200u;
+    if (slot.receipt.result == FinishBroadPhaseObserverNotReady) {
+        slot.receipt.result = FinishBroadPhaseObserverOk;
+        slot.receipt.lastError = ERROR_SUCCESS;
+        slot.receipt.state = FinishBroadPhaseObserverCaptured;
+    } else {
+        slot.receipt.state = FinishBroadPhaseObserverFailed;
+    }
+    slot.receipt.droppedObservations = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseDropped, 0, 0));
+    MemoryBarrier();
+    InterlockedExchange(&slot.committedOrdinal,
+        static_cast<LONG>(ordinal));
+    InterlockedExchange(&g_finishBroadPhaseState,
+        slot.receipt.state == FinishBroadPhaseObserverCaptured ?
+            FinishBroadPhaseObserverCaptured :
+            FinishBroadPhaseObserverFailed);
+}
+
+__declspec(naked) static void HookFinishBroadPhase() {
+    // The private token slot follows this wrapper invocation through the
+    // untouched original.  Nested/concurrent wrappers receive token zero and
+    // therefore cannot finalize the observation owned by another invocation.
+    __asm push 0
+    __asm pushfd
+    __asm pushad
+    __asm lock inc dword ptr [g_finishBroadPhaseInFlight]
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm mov edx, dword ptr [esp + 0x2C]
+    __asm push edx
+    __asm push eax
+    __asm call ObserveFinishBroadPhaseEntry
+    __asm add esp, 8
+    __asm mov dword ptr [esp + 0x24], eax
+    __asm popad
+    __asm popfd
+    // Preserve the Scene pointer across the untouched RET 4 function.  The
+    // private argument is consumed by the trampoline; the caller's original
+    // argument remains for this wrapper's final RET 4.
+    __asm push ecx
+    __asm push dword ptr [esp + 12]
+    __asm call dword ptr [g_finishBroadPhaseTrampoline]
+    __asm pop ecx
+    __asm pushfd
+    __asm pushad
+    __asm mov eax, dword ptr [esp + 0x18]
+    __asm mov edx, dword ptr [esp + 0x2C]
+    __asm mov ecx, dword ptr [esp + 0x24]
+    __asm push ecx
+    __asm push edx
+    __asm push eax
+    __asm call ObserveFinishBroadPhaseExit
+    __asm add esp, 12
+    __asm lock dec dword ptr [g_finishBroadPhaseInFlight]
+    __asm popad
+    __asm popfd
+    __asm lea esp, [esp + 4]
+    __asm ret 4
+}
+
+static bool HasFinishBroadPhaseJump(const void* source) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(source);
+    if (bytes[0] != 0xE9) return false;
+    for (uint32_t i = 5; i < sizeof(kFinishBroadPhaseBytes); ++i)
+        if (bytes[i] != 0x90) return false;
+    const int32_t displacement = *reinterpret_cast<const int32_t*>(bytes + 1);
+    return reinterpret_cast<uintptr_t>(source) + 5 + displacement ==
+        reinterpret_cast<uintptr_t>(HookFinishBroadPhase);
+}
+
+static void InitializeFinishBroadPhaseObserverReceipt(uintptr_t unityBase,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->result = FinishBroadPhaseObserverOk;
+    receipt->lastError = ERROR_SUCCESS;
+    receipt->unityBase = unityBase;
+    receipt->expectedScene = g_finishBroadPhaseExpectedScene;
+    receipt->expectedContext = g_finishBroadPhaseExpectedContext;
+    receipt->expectedNPhaseCore = g_finishBroadPhaseExpectedNPhaseCore;
+    receipt->expectedPass = g_finishBroadPhaseExpectedPass;
+    receipt->armedThreadId = g_finishBroadPhaseArmedThreadId;
+    receipt->armedOrdinal = g_finishBroadPhaseArmedOrdinal;
+    receipt->observationOrdinal = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseOrdinal, 0, 0));
+    receipt->installed = InterlockedCompareExchange(
+            &g_finishBroadPhaseInstalled, 0, 0) == 1 &&
+        g_finishBroadPhaseTrampoline &&
+        unityBase == g_finishBroadPhaseUnityBase ? 1u : 0u;
+    receipt->state = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_finishBroadPhaseState, 0, 0));
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    receipt->droppedObservations = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseDropped, 0, 0));
+}
+
+static int InstallFinishBroadPhaseObserver(uintptr_t unityBase,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    if (!unityBase)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverBadArgument, ERROR_INVALID_PARAMETER,
+            0, 0xFFFFFFFFu, 1);
+    const LONG lifecycle = InterlockedCompareExchange(
+        &g_finishBroadPhaseInstalled, -1, 0);
+    bool reuseResidentHook = false;
+    if (lifecycle == 1 && InterlockedCompareExchange(
+            &g_finishBroadPhaseState, 0, 0) ==
+            FinishBroadPhaseObserverUninstalled) {
+        reuseResidentHook = InterlockedCompareExchange(
+            &g_finishBroadPhaseInstalled, -1, 1) == 1;
+        if (!reuseResidentHook)
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverBusy, ERROR_BUSY,
+                0, 0xFFFFFFFFu, 2);
+    } else if (lifecycle != 0) {
+        return FailFinishBroadPhaseObserver(receipt,
+            lifecycle == 1 ? FinishBroadPhaseObserverAlreadyInstalled :
+                FinishBroadPhaseObserverBusy,
+            lifecycle == 1 ? ERROR_ALREADY_EXISTS : ERROR_BUSY,
+            0, 0xFFFFFFFFu, 2);
+    }
+    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase +
+        kFinishBroadPhaseRva);
+    if (reuseResidentHook) {
+        if (!g_finishBroadPhaseTrampoline ||
+            unityBase != g_finishBroadPhaseUnityBase ||
+            !FinishBroadPhaseLayoutRevisionMatches(unityBase) ||
+            !Readable(source, sizeof(kFinishBroadPhaseBytes)) ||
+            !HasFinishBroadPhaseJump(source)) {
+            InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+            return FailFinishBroadPhaseObserver(receipt,
+                !FinishBroadPhaseLayoutRevisionMatches(unityBase) ?
+                    FinishBroadPhaseObserverRevisionMismatch :
+                    FinishBroadPhaseObserverPatchChanged,
+                !FinishBroadPhaseLayoutRevisionMatches(unityBase) ?
+                    ERROR_REVISION_MISMATCH : ERROR_INVALID_STATE,
+                0, 0xFFFFFFFFu, 8);
+        }
+        g_finishBroadPhaseExpectedScene = 0;
+        g_finishBroadPhaseExpectedContext = 0;
+        g_finishBroadPhaseExpectedNPhaseCore = 0;
+        g_finishBroadPhaseExpectedPass = 0;
+        g_finishBroadPhaseArmedThreadId = 0;
+        g_finishBroadPhaseArmedOrdinal = 0;
+        InterlockedExchange(&g_finishBroadPhaseOrdinal, 0);
+        InterlockedExchange(&g_finishBroadPhaseDropped, 0);
+        for (uint32_t i = 0; i < kFinishBroadPhaseRingCapacity; ++i)
+            InterlockedExchange(
+                &g_finishBroadPhaseSlots[i].committedOrdinal, 0);
+        InterlockedExchange(&g_finishBroadPhaseState,
+            FinishBroadPhaseObserverIdle);
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+        return 1;
+    }
+    if (g_finishBroadPhaseTrampoline &&
+        unityBase != g_finishBroadPhaseUnityBase) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 0);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverPatchChanged, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 6);
+    }
+    if (!FinishBroadPhaseRevisionMatches(unityBase)) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 0);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 0, 0xFFFFFFFFu, 3);
+    }
+    uint8_t* trampoline = static_cast<uint8_t*>(
+        g_finishBroadPhaseTrampoline);
+    const bool allocated = trampoline == 0;
+    if (allocated) {
+        trampoline = static_cast<uint8_t*>(VirtualAlloc(0,
+            sizeof(kFinishBroadPhaseBytes) + 5u, MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE));
+        if (!trampoline) {
+            const DWORD error = GetLastError();
+            InterlockedExchange(&g_finishBroadPhaseInstalled, 0);
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverAllocationFailed, error,
+                0, 0xFFFFFFFFu, 4);
+        }
+        CopyBytes(g_finishBroadPhaseOriginal, source,
+            sizeof(kFinishBroadPhaseBytes));
+        CopyBytes(trampoline, source, sizeof(kFinishBroadPhaseBytes));
+        trampoline[sizeof(kFinishBroadPhaseBytes)] = 0xE9;
+        *reinterpret_cast<int32_t*>(trampoline +
+            sizeof(kFinishBroadPhaseBytes) + 1u) = static_cast<int32_t>(
+            reinterpret_cast<uintptr_t>(source +
+                sizeof(kFinishBroadPhaseBytes)) -
+            reinterpret_cast<uintptr_t>(trampoline +
+                sizeof(kFinishBroadPhaseBytes)) - 5);
+        FlushInstructionCache(GetCurrentProcess(), trampoline,
+            sizeof(kFinishBroadPhaseBytes) + 5u);
+        g_finishBroadPhaseTrampoline = trampoline;
+        g_finishBroadPhaseUnityBase = unityBase;
+    }
+    if (InterlockedCompareExchange(&g_finishBroadPhaseModulePinned,
+            0, 0) == 0) {
+        HMODULE pinnedModule = 0;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_PIN,
+                reinterpret_cast<LPCSTR>(&g_finishBroadPhaseModuleMarker),
+                &pinnedModule)) {
+            const DWORD error = GetLastError();
+            if (allocated) {
+                g_finishBroadPhaseTrampoline = 0;
+                g_finishBroadPhaseUnityBase = 0;
+                VirtualFree(trampoline, 0, MEM_RELEASE);
+            }
+            InterlockedExchange(&g_finishBroadPhaseInstalled, 0);
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverAllocationFailed, error,
+                0, 0xFFFFFFFFu, 7);
+        }
+        InterlockedExchange(&g_finishBroadPhaseModulePinned, 1);
+    }
+    g_finishBroadPhaseExpectedScene = 0;
+    g_finishBroadPhaseExpectedContext = 0;
+    g_finishBroadPhaseExpectedNPhaseCore = 0;
+    g_finishBroadPhaseExpectedPass = 0;
+    g_finishBroadPhaseArmedThreadId = 0;
+    g_finishBroadPhaseArmedOrdinal = 0;
+    InterlockedExchange(&g_finishBroadPhaseOrdinal, 0);
+    InterlockedExchange(&g_finishBroadPhaseDropped, 0);
+    for (uint32_t i = 0; i < kFinishBroadPhaseRingCapacity; ++i)
+        InterlockedExchange(&g_finishBroadPhaseSlots[i].committedOrdinal, 0);
+    InterlockedExchange(&g_finishBroadPhaseState,
+        FinishBroadPhaseObserverIdle);
+    if (!WriteJump(source, HookFinishBroadPhase,
+            sizeof(kFinishBroadPhaseBytes))) {
+        const DWORD error = GetLastError();
+        InterlockedExchange(&g_finishBroadPhaseState,
+            FinishBroadPhaseObserverUninstalled);
+        const bool jumpLanded = Readable(source,
+            sizeof(kFinishBroadPhaseBytes)) &&
+            HasFinishBroadPhaseJump(source);
+        if (!jumpLanded && allocated) {
+            g_finishBroadPhaseTrampoline = 0;
+            g_finishBroadPhaseUnityBase = 0;
+            VirtualFree(trampoline, 0, MEM_RELEASE);
+        }
+        // WriteJump can report failure only after it has already written and
+        // flushed the complete detour (for example, when restoring the old
+        // page protection fails).  A landed jump must keep its trampoline,
+        // pinned module, and logical resident state alive; freeing any of
+        // them would turn a diagnostic protection error into a crash.
+        InterlockedExchange(&g_finishBroadPhaseInstalled,
+            jumpLanded ? 1 : 0);
+        InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverProtectFailed, error,
+            0, 0xFFFFFFFFu, 5);
+    }
+    InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    return 1;
+}
+
+static int ReadFinishBroadPhaseObserverStatus(uintptr_t unityBase,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_finishBroadPhaseInstalled, 0, 0) != 1 ||
+        !g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    const LONG state = InterlockedCompareExchange(&g_finishBroadPhaseState,
+        0, 0);
+    if (state == FinishBroadPhaseObserverCaptured ||
+        state == FinishBroadPhaseObserverFailed) {
+        const uint32_t ordinal = static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_finishBroadPhaseOrdinal, 0, 0));
+        if (!ordinal)
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverNotReady, ERROR_IO_PENDING,
+                0, 0xFFFFFFFFu, 2);
+        FinishBroadPhaseCaptureSlot& slot = g_finishBroadPhaseSlots[
+            (ordinal - 1u) % kFinishBroadPhaseRingCapacity];
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverNotReady, ERROR_IO_PENDING,
+                0, ordinal, 3);
+        CopyBytes(receipt, &slot.receipt, sizeof(*receipt));
+        MemoryBarrier();
+        if (static_cast<uint32_t>(InterlockedCompareExchange(
+                &slot.committedOrdinal, 0, 0)) != ordinal)
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverStale, ERROR_RETRY,
+                0, ordinal, 4);
+        receipt->installed = 1;
+        receipt->state = static_cast<uint32_t>(state);
+        receipt->droppedObservations = static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_finishBroadPhaseDropped, 0, 0));
+        return receipt->result == FinishBroadPhaseObserverOk ? 1 : 0;
+    }
+    return 1;
+}
+
+static int ArmFinishBroadPhaseObserver(uintptr_t unityBase,
+    uintptr_t expectedScene, uintptr_t expectedContext,
+    uintptr_t expectedNPhaseCore, uint32_t expectedPass,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_finishBroadPhaseInstalled, 0, 0) != 1 ||
+        !g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    const LONG initialState = InterlockedCompareExchange(
+        &g_finishBroadPhaseState,
+        0, 0);
+    if (initialState == FinishBroadPhaseObserverUninstalled)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 2);
+    if (initialState == FinishBroadPhaseObserverArmed ||
+        initialState == FinishBroadPhaseObserverCapturing)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverBusy, ERROR_BUSY,
+            0, 0xFFFFFFFFu, 2);
+    if (!expectedScene || !expectedContext || !expectedNPhaseCore ||
+        expectedPass != 0u ||
+        !Readable(reinterpret_cast<const void*>(expectedScene + 0x450),
+            0x68) ||
+        *reinterpret_cast<const uintptr_t*>(expectedScene + 0x450) !=
+            expectedNPhaseCore ||
+        *reinterpret_cast<const uintptr_t*>(expectedNPhaseCore) !=
+            expectedScene) {
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverInvalidIdentity, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 3);
+    }
+    const uintptr_t interactionScene = *reinterpret_cast<const uintptr_t*>(
+        expectedScene + 0x4B4);
+    if (!interactionScene || !Readable(reinterpret_cast<const void*>(
+            interactionScene), 0x3F4) ||
+        *reinterpret_cast<const uintptr_t*>(interactionScene + 0x3E8) !=
+            expectedContext ||
+        *reinterpret_cast<const uintptr_t*>(interactionScene + 0x3F0) !=
+            expectedScene ||
+        !Readable(reinterpret_cast<const void*>(expectedContext), 0x1DE4) ||
+        !*reinterpret_cast<const uintptr_t*>(expectedContext + 0x08))
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverInvalidIdentity, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 4);
+    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase +
+        kFinishBroadPhaseRva);
+    if (!Readable(source, sizeof(kFinishBroadPhaseBytes)) ||
+        !HasFinishBroadPhaseJump(source))
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverPatchChanged, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 5);
+    const LONG lifecycle = InterlockedCompareExchange(
+        &g_finishBroadPhaseInstalled, -1, 1);
+    if (lifecycle != 1)
+        return FailFinishBroadPhaseObserver(receipt,
+            lifecycle == -1 ? FinishBroadPhaseObserverBusy :
+                FinishBroadPhaseObserverNotInstalled,
+            lifecycle == -1 ? ERROR_BUSY : ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 6);
+    if (!g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase ||
+        !Readable(source, sizeof(kFinishBroadPhaseBytes)) ||
+        !HasFinishBroadPhaseJump(source)) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverPatchChanged, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 7);
+    }
+    const LONG state = InterlockedCompareExchange(&g_finishBroadPhaseState,
+        0, 0);
+    if (state == FinishBroadPhaseObserverArmed ||
+        state == FinishBroadPhaseObserverCapturing ||
+        InterlockedCompareExchange(&g_finishBroadPhaseState,
+            FinishBroadPhaseObserverCapturing, state) != state) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverBusy, ERROR_BUSY,
+            0, 0xFFFFFFFFu, 8);
+    }
+    g_finishBroadPhaseExpectedScene = expectedScene;
+    g_finishBroadPhaseExpectedContext = expectedContext;
+    g_finishBroadPhaseExpectedNPhaseCore = expectedNPhaseCore;
+    g_finishBroadPhaseExpectedPass = expectedPass;
+    g_finishBroadPhaseArmedThreadId = GetCurrentThreadId();
+    g_finishBroadPhaseArmedOrdinal = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseOrdinal, 0, 0) + 1);
+    MemoryBarrier();
+    InterlockedExchange(&g_finishBroadPhaseState,
+        FinishBroadPhaseObserverArmed);
+    InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    return 1;
+}
+
+static int CopyFinishBroadPhaseObservation(uintptr_t unityBase,
+    uint32_t observationOrdinal, BroadPhaseOverlapRecord* created,
+    uint32_t createdCapacity, BroadPhaseOverlapRecord* deleted,
+    uint32_t deletedCapacity, FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    if (InterlockedCompareExchange(&g_finishBroadPhaseInstalled, 0, 0) != 1 ||
+        !g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    if (!observationOrdinal)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverBadArgument, ERROR_INVALID_PARAMETER,
+            0, 0xFFFFFFFFu, 2);
+    const uint32_t latest = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_finishBroadPhaseOrdinal, 0, 0));
+    if (observationOrdinal > latest)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotReady, ERROR_IO_PENDING,
+            0, observationOrdinal, 3);
+    if (latest - observationOrdinal >= kFinishBroadPhaseRingCapacity)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverStale, ERROR_INVALID_DATA,
+            0, observationOrdinal, 4);
+    const uint32_t slotIndex = (observationOrdinal - 1u) %
+        kFinishBroadPhaseRingCapacity;
+    FinishBroadPhaseCaptureSlot& slot = g_finishBroadPhaseSlots[slotIndex];
+    if (static_cast<uint32_t>(InterlockedCompareExchange(
+            &slot.committedOrdinal, 0, 0)) != observationOrdinal)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotReady, ERROR_IO_PENDING,
+            0, observationOrdinal, 5);
+    CopyBytes(receipt, &slot.receipt, sizeof(*receipt));
+    if (receipt->result != FinishBroadPhaseObserverOk) return 0;
+    if (createdCapacity < receipt->createdRequired ||
+        deletedCapacity < receipt->deletedRequired)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 0, observationOrdinal, 6);
+    if ((receipt->createdRequired && (!created || !Writable(created,
+            receipt->createdRequired * sizeof(*created)))) ||
+        (receipt->deletedRequired && (!deleted || !Writable(deleted,
+            receipt->deletedRequired * sizeof(*deleted)))))
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverBadArgument, ERROR_NOACCESS,
+            0, observationOrdinal, 7);
+    CopyBytes(created, slot.created,
+        receipt->createdRequired * sizeof(*created));
+    CopyBytes(deleted, slot.deleted,
+        receipt->deletedRequired * sizeof(*deleted));
+    MemoryBarrier();
+    if (static_cast<uint32_t>(InterlockedCompareExchange(
+            &slot.committedOrdinal, 0, 0)) != observationOrdinal)
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverStale, ERROR_RETRY,
+            0, observationOrdinal, 8);
+    receipt->createdWritten = receipt->createdRequired;
+    receipt->deletedWritten = receipt->deletedRequired;
+    return 1;
+}
+
+static int CancelFinishBroadPhaseObserver(uintptr_t unityBase,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    const LONG lifecycle = InterlockedCompareExchange(
+        &g_finishBroadPhaseInstalled, -1, 1);
+    if (lifecycle != 1)
+        return FailFinishBroadPhaseObserver(receipt,
+            lifecycle == -1 ? FinishBroadPhaseObserverBusy :
+                FinishBroadPhaseObserverNotInstalled,
+            lifecycle == -1 ? ERROR_BUSY : ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    if (!g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    }
+    for (;;) {
+        const LONG state = InterlockedCompareExchange(
+            &g_finishBroadPhaseState, 0, 0);
+        if (state == FinishBroadPhaseObserverUninstalled) break;
+        if (state == FinishBroadPhaseObserverCapturing) {
+            InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverBusy, ERROR_BUSY,
+                0, 0xFFFFFFFFu, 2);
+        }
+        if (InterlockedCompareExchange(&g_finishBroadPhaseState,
+                FinishBroadPhaseObserverIdle, state) == state)
+            break;
+    }
+    g_finishBroadPhaseExpectedScene = 0;
+    g_finishBroadPhaseExpectedContext = 0;
+    g_finishBroadPhaseExpectedNPhaseCore = 0;
+    g_finishBroadPhaseExpectedPass = 0;
+    g_finishBroadPhaseArmedThreadId = 0;
+    g_finishBroadPhaseArmedOrdinal = 0;
+    InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    return 1;
+}
+
+static int UninstallFinishBroadPhaseObserver(uintptr_t unityBase,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    const LONG lifecycle = InterlockedCompareExchange(
+        &g_finishBroadPhaseInstalled, -1, 1);
+    if (lifecycle != 1)
+        return FailFinishBroadPhaseObserver(receipt,
+            lifecycle == -1 ? FinishBroadPhaseObserverBusy :
+                FinishBroadPhaseObserverNotInstalled,
+            lifecycle == -1 ? ERROR_BUSY : ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    if (!g_finishBroadPhaseTrampoline ||
+        unityBase != g_finishBroadPhaseUnityBase) {
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverNotInstalled, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 1);
+    }
+    LONG priorState = FinishBroadPhaseObserverUninstalled;
+    for (;;) {
+        priorState = InterlockedCompareExchange(&g_finishBroadPhaseState,
+            0, 0);
+        if (priorState == FinishBroadPhaseObserverCapturing) {
+            InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+            return FailFinishBroadPhaseObserver(receipt,
+                FinishBroadPhaseObserverBusy, ERROR_BUSY,
+                0, 0xFFFFFFFFu, 2);
+        }
+        if (InterlockedCompareExchange(&g_finishBroadPhaseState,
+                FinishBroadPhaseObserverUninstalled, priorState) ==
+            priorState) break;
+    }
+    uint8_t* source = reinterpret_cast<uint8_t*>(unityBase +
+        kFinishBroadPhaseRva);
+    if (!Readable(source, sizeof(kFinishBroadPhaseBytes)) ||
+        !HasFinishBroadPhaseJump(source)) {
+        InterlockedCompareExchange(&g_finishBroadPhaseState, priorState,
+            FinishBroadPhaseObserverUninstalled);
+        InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+        return FailFinishBroadPhaseObserver(receipt,
+            FinishBroadPhaseObserverPatchChanged, ERROR_INVALID_STATE,
+            0, 0xFFFFFFFFu, 3);
+    }
+    g_finishBroadPhaseExpectedScene = 0;
+    g_finishBroadPhaseExpectedContext = 0;
+    g_finishBroadPhaseExpectedNPhaseCore = 0;
+    g_finishBroadPhaseExpectedPass = 0;
+    g_finishBroadPhaseArmedThreadId = 0;
+    g_finishBroadPhaseArmedOrdinal = 0;
+    // Logical uninstall only.  Rewriting a multi-byte x86 entry detour is not
+    // safe without suspending every possible caller, so keep the pinned hook
+    // resident and dormant until process exit.  A later install validates and
+    // reuses it without touching executable code.
+    InterlockedExchange(&g_finishBroadPhaseInstalled, 1);
+    InitializeFinishBroadPhaseObserverReceipt(unityBase, receipt);
+    receipt->result = FinishBroadPhaseObserverOk;
+    receipt->lastError = ERROR_SUCCESS;
+    return 1;
+}
+
 static int AuditContactRecreate(uintptr_t unityBase, uintptr_t context,
     uintptr_t nphaseCore, uintptr_t expectedSipPool,
     const uintptr_t* targetSip, uint32_t targetSipCount,
@@ -8857,6 +10418,61 @@ oc2_interaction_graph_capture_snapshot(
         activeBodies, activeBodyCapacity, actors, actorCapacity,
         interactions, interactionCapacity, actorSlots, actorSlotCapacity,
         poolSlabs, poolSlabCapacity, poolFree, poolFreeCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_transform_cache_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore,
+    TransformCacheEntryRecord* entries, uint32_t entryCapacity,
+    uint32_t* freeIds, uint32_t freeCapacity,
+    TransformCacheBindingRecord* bindings, uint32_t bindingCapacity,
+    TransformCacheReceipt* receipt) {
+    return CaptureTransformCache(unityBase, nphaseCore, entries,
+        entryCapacity, freeIds, freeCapacity, bindings, bindingCapacity,
+        receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_install(
+    uintptr_t unityBase, FinishBroadPhaseObserverReceipt* receipt) {
+    return InstallFinishBroadPhaseObserver(unityBase, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_status(
+    uintptr_t unityBase, FinishBroadPhaseObserverReceipt* receipt) {
+    return ReadFinishBroadPhaseObserverStatus(unityBase, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_arm(
+    uintptr_t unityBase, uintptr_t expectedScene,
+    uintptr_t expectedContext, uintptr_t expectedNPhaseCore,
+    uint32_t expectedPass, FinishBroadPhaseObserverReceipt* receipt) {
+    return ArmFinishBroadPhaseObserver(unityBase, expectedScene,
+        expectedContext, expectedNPhaseCore, expectedPass, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_copy(
+    uintptr_t unityBase, uint32_t observationOrdinal,
+    BroadPhaseOverlapRecord* created, uint32_t createdCapacity,
+    BroadPhaseOverlapRecord* deleted, uint32_t deletedCapacity,
+    FinishBroadPhaseObserverReceipt* receipt) {
+    return CopyFinishBroadPhaseObservation(unityBase, observationOrdinal,
+        created, createdCapacity, deleted, deletedCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_cancel(
+    uintptr_t unityBase, FinishBroadPhaseObserverReceipt* receipt) {
+    return CancelFinishBroadPhaseObserver(unityBase, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_finish_broad_phase_observer_uninstall(
+    uintptr_t unityBase, FinishBroadPhaseObserverReceipt* receipt) {
+    return UninstallFinishBroadPhaseObserver(unityBase, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(

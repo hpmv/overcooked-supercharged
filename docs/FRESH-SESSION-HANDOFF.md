@@ -1,5 +1,58 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Transform-cache and broadphase-transition capture milestone (2026-09-21,
+> managed r17g/native r34/API 16):** the bounded Story 1-1 f1048 -> f444
+> audit now seals the exact settled `PxsTransformCache` beside the existing
+> checkpoint graph, then passively observes the original pass-zero
+> `finishBroadPhase` call on the uninterrupted f444 -> f445 transition.
+> Fresh evidence is
+> `artifacts/readiness-plan-transform-broadphase-f1048-to-f444-r1/`:
+> source readiness is 34 pass / 0 fail / 41 deferred; restored-target
+> readiness is 74 pass / 0 fail / 31 deferred / 1 not-applicable.  The
+> top-level report remains intentionally incomplete, but the audit completed
+> with no blockers.  It stopped at restored f444 before f445; no route search
+> ran, and every advancing input lease remained minimized and non-foreground.
+>
+> The uninterrupted f444 cache has watermark 13, free-ID order `[12,11,10]`,
+> ten live IDs, 24 manager-backed endpoint bindings/references, active entry
+> hash `0xC5E9A0DD`, and snapshot hash `0x7B0406C8`.  At restored f444, two
+> fresh captures repeat exactly but show watermark 12, zero live IDs,
+> zero bindings/references, free-ID order
+> `[1,3,8,6,9,5,7,2,10,11,0,4]`, active entry hash `0x8D70C5C2`, and snapshot
+> hash `0xAF4E40AD`.  This is the cache-level image of the already-proven
+> missing interaction graph: the target's exact IDs, poses, references, and
+> allocator order must be projected atomically rather than patched per chef.
+>
+> The exact uninterrupted f445 pass-zero broadphase event has zero created
+> overlaps (`0x811C9DC5`) and six deleted overlaps in oriented native order
+> (`0x6D391CA5`).  The same original call changes cache hash
+> `0x17C4FCF7 -> 0x11C88313` and graph hash
+> `0x874C5254 -> 0xA564BE5E`.  Scene, Context, NPhaseCore, cache, interaction
+> scene, pass, thread, and ordinal all match; two copies of committed ordinal
+> 1 are byte-equivalent and no observation was dropped.
+>
+> API 16 is read-only, revision-guarded, caller-owned, and allocation-free in
+> the hook.  Its resident observer is pinned for process lifetime; logical
+> uninstall only disarms it, so teardown cannot race a multi-byte x86 patch.
+> The native harness passes 20 consecutive runs, including concurrent wrapper
+> ownership and an injected post-write protection failure.  Managed SHA-256
+> is `84940705C9696EB162B21A3A6692527E97831038270C311B37341B57014A5D26`;
+> native SHA-256 is
+> `F61461A570F816F64624257C221A8CD49C10E292750878B076CD5417CC7355E6`.
+> The target report SHA-256 is
+> `F90E43E2D48A3FFE58E6352CF1E3D28915638C00BBE5A44A435EC0CBA7EB4413`;
+> summary SHA-256 is
+> `26881307A5EB9BAC38527820532CED5EF5F3A640EB67DEC8F2C76151BCEAEF8C`.
+>
+> The next read-only unit is fully specified in
+> `docs/PHYSX-ISLAND-SNAPSHOT-CONTRACT.md`: capture the complete island
+> node/edge/island allocators, bitmaps, and ordered C/D/B/J queues around
+> `PxsIslandManager::updateIslands`, with passive add/remove-edge journals for
+> ownership that is erased before the update.  After that, implement one
+> atomic semantic restore in dependency order: cache IDs/poses, broadphase
+> overlap history, interaction graph, SIP/managers/ActorPairs, island graph,
+> and report history.  Preserve normal forward and plate-throw physics.
+
 > **Complete interaction-graph capture milestone (2026-09-21, managed
 > r16c/native r33):** the bounded Story 1-1 f1048 -> f444 audit now captures
 > the complete PhysX interaction graph in the same synchronous checkpoint

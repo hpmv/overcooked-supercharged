@@ -34,6 +34,9 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int MaximumInteractionGraphInteractions=16384;
         private const int MaximumInteractionGraphActorSlots=32768;
         private const int MaximumInteractionGraphPoolEntries=65536;
+        private const int MaximumTransformCacheIds=16384;
+        private const int MaximumTransformCacheBindings=MaximumInteractionGraphInteractions*2;
+        private const int MaximumBroadPhaseOverlaps=4096;
         private const uint DirtyInteractionRestoreExact=1;
         private const uint DirtyInteractionRestoreProjection=2;
         private const int MaximumCheckpointSidecars=20000;
@@ -274,6 +277,62 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeTransformCacheEntryRecord
+        {
+            public uint Id,RefCount;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=4)] public float[] Rotation;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=3)] public float[] Position;
+            public uint PoseHash,BindingCount,StateFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeTransformCacheBindingRecord
+        {
+            public UIntPtr ShapeSim,ShapeCore,PxsShapeCore,Interaction;
+            public uint InteractionIndex,EndpointIndex,CacheId,RefCount,PoseHash,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeTransformCacheReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,OwnerScene,InteractionScene,Context,TransformCache;
+            public uint CurrentId;
+            public UIntPtr FreeData;
+            public uint FreeCount,FreeCapacityRaw;
+            public UIntPtr TransformsData;
+            public uint TransformsCount,TransformsCapacityRaw;
+            public UIntPtr RefCountsData;
+            public uint RefCountsCount,RefCountsCapacityRaw;
+            public uint EntriesRequired,EntriesWritten,FreeRequired,FreeWritten;
+            public uint BindingsRequired,BindingsWritten,LiveCount,TotalRefCount;
+            public uint EntryHash,FreeOrderHash,BindingHash,SnapshotHash;
+            public uint ValidationFlags,InvalidKind,InvalidIndex,Detail;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeBroadPhaseOverlapRecord
+        {
+            public UIntPtr UserData0,UserData1,ShapeCore0,ShapeCore1,PxsShapeCore0,PxsShapeCore1;
+            public uint CacheId0,CacheId1,PairHash,ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeFinishBroadPhaseObserverReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,ExpectedScene,ExpectedContext,ExpectedNPhaseCore;
+            public UIntPtr ObservedScene,ObservedContext,ObservedNPhaseCore,AabbManager;
+            public UIntPtr InteractionScene,TransformCache;
+            public uint Installed,State,ExpectedPass,ArmedThreadId,ArmedOrdinal;
+            public uint ObservationOrdinal,SlotIndex,Pass,ThreadId;
+            public uint CreatedRequired,CreatedWritten,DeletedRequired,DeletedWritten;
+            public uint CreatedHash,DeletedHash,PreCacheHash,PostCacheHash;
+            public uint PreGraphHash,PostGraphHash,ValidationFlags,InvalidKind,InvalidIndex,Detail;
+            public uint DroppedObservations;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeDirtyInteractionKey
         {
             public UIntPtr ElementLow,ElementHigh,PrimaryVtable;
@@ -323,6 +382,17 @@ namespace SuperchargedPatch.Authoring.Modules
             IntPtr actors,uint actorCapacity,IntPtr interactions,uint interactionCapacity,
             IntPtr actorSlots,uint actorSlotCapacity,IntPtr poolSlabs,uint poolSlabCapacity,
             IntPtr poolFree,uint poolFreeCapacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeTransformCacheCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr entries,uint entryCapacity,
+            IntPtr freeIds,uint freeCapacity,IntPtr bindings,uint bindingCapacity,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeFinishBroadPhaseObserverAction(
+            UIntPtr unityBase,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeFinishBroadPhaseObserverArm(
+            UIntPtr unityBase,UIntPtr expectedScene,UIntPtr expectedContext,
+            UIntPtr expectedNPhaseCore,uint expectedPass,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeFinishBroadPhaseObserverCopy(
+            UIntPtr unityBase,uint exactObservationOrdinal,IntPtr created,uint createdCapacity,
+            IntPtr deleted,uint deletedCapacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateArm(
@@ -434,6 +504,20 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeInteractionGraphInteractionRecord[] Interactions;
         }
 
+        private sealed class TransformCacheState
+        {
+            internal NativeTransformCacheReceipt Receipt;
+            internal NativeTransformCacheEntryRecord[] Entries;
+            internal uint[] FreeIds;
+            internal NativeTransformCacheBindingRecord[] Bindings;
+        }
+
+        private sealed class FinishBroadPhaseState
+        {
+            internal NativeFinishBroadPhaseObserverReceipt Receipt;
+            internal NativeBroadPhaseOverlapRecord[] Created,Deleted;
+        }
+
         private sealed class ActorPairReuseScanState
         {
             internal uint ActorPair,Actor0,Actor1,ScannedActor,OtherActor;
@@ -480,6 +564,8 @@ namespace SuperchargedPatch.Authoring.Modules
             internal ActorPairReportPoolState ActorPairReportPool;
             internal NPhaseReportState NPhaseReports;
             internal InteractionGraphState InteractionGraph;
+            internal TransformCacheState TransformCache;
+            internal FinishBroadPhaseState FinishBroadPhase;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -487,6 +573,13 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         private static RigidbodyActorRebuildModule active;
+        // A finishBroadPhase caller can have followed the native JMP before
+        // uninstall restores the entry bytes but before the hook increments
+        // any observable in-flight counter.  Keep one loader reference for
+        // every DLL image that has ever owned this hook so such a caller can
+        // never resume into unmapped code.
+        private static readonly HashSet<IntPtr> processPinnedNativeLibraries=
+            new HashSet<IntPtr>();
         private readonly FieldInfo cachedPtr=typeof(UnityEngine.Object).GetField("m_CachedPtr",BindingFlags.Instance|BindingFlags.NonPublic);
         private readonly FieldInfo groundColliderField=typeof(GroundCast).GetField("m_groundCollider",BindingFlags.Instance|BindingFlags.NonPublic);
         private readonly List<object> receipts=new List<object>();
@@ -505,6 +598,13 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeActorPairReportPoolCaptureSnapshot captureActorPairReportPoolSnapshot;
         private NativeNPhaseReportStateCaptureSnapshot captureNPhaseReportStateSnapshot;
         private NativeInteractionGraphCaptureSnapshot captureInteractionGraphSnapshot;
+        private NativeTransformCacheCaptureSnapshot captureTransformCacheSnapshot;
+        private NativeFinishBroadPhaseObserverAction installFinishBroadPhaseObserver;
+        private NativeFinishBroadPhaseObserverAction statusFinishBroadPhaseObserver;
+        private NativeFinishBroadPhaseObserverArm armFinishBroadPhaseObserver;
+        private NativeFinishBroadPhaseObserverCopy copyFinishBroadPhaseObserver;
+        private NativeFinishBroadPhaseObserverAction cancelFinishBroadPhaseObserver;
+        private NativeFinishBroadPhaseObserverAction uninstallFinishBroadPhaseObserver;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
         private NativeApiVersion contactRecreateApiVersion;
         private NativeApiVersion contactRecreateAuditApiVersion;
@@ -524,7 +624,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private string nativePath,nativeSha256,failure;
         private bool automatic,automaticGroundCollider,observeContactManagerContext,contextObserverInstalled;
         private bool automaticContactPoolRestore,automaticTransformDispatchRestore,automaticRestorePending,warpInProgress,warpTargetRestoreEligible,disposed;
-        private bool dirtyInteractionHookInstalled,dirtyRestorePendingValidation;
+        private bool dirtyInteractionHookInstalled,finishBroadPhaseObserverInstalled;
+        private bool finishBroadPhaseObserverWasInstalled,dirtyRestorePendingValidation;
         private bool contactRecreatePendingValidation;
         private int pendingContactPoolAction;
         private int pendingContactPoolFrame=-1,warpTargetFrame=-1;
@@ -546,8 +647,11 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> transformDispatchReceipts=new List<object>();
         private object lastContextObserverReceipt,lastSceneOwnedReset;
         private readonly List<object> dirtyInteractionReceipts=new List<object>();
+        private readonly List<object> finishBroadPhaseReceipts=new List<object>();
         private readonly List<object> contactRecreateReceipts=new List<object>();
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
+        private long transformCacheCaptures,finishBroadPhaseCaptures;
+        private uint pendingFinishBroadPhaseOrdinal;
         private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
         public string Name { get { return "authoring-rigidbody-actor-rebuild-v1"; } }
@@ -624,6 +728,20 @@ namespace SuperchargedPatch.Authoring.Modules
                     "oc2_nphase_report_state_capture_snapshot");
                 captureInteractionGraphSnapshot=Export<NativeInteractionGraphCaptureSnapshot>(
                     "oc2_interaction_graph_capture_snapshot");
+                captureTransformCacheSnapshot=Export<NativeTransformCacheCaptureSnapshot>(
+                    "oc2_transform_cache_capture_snapshot");
+                installFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverAction>(
+                    "oc2_finish_broad_phase_observer_install");
+                statusFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverAction>(
+                    "oc2_finish_broad_phase_observer_status");
+                armFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverArm>(
+                    "oc2_finish_broad_phase_observer_arm");
+                copyFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverCopy>(
+                    "oc2_finish_broad_phase_observer_copy");
+                cancelFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverAction>(
+                    "oc2_finish_broad_phase_observer_cancel");
+                uninstallFinishBroadPhaseObserver=Export<NativeFinishBroadPhaseObserverAction>(
+                    "oc2_finish_broad_phase_observer_uninstall");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
@@ -641,7 +759,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
-                if(apiVersion()!=15)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(apiVersion()!=16)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 if(contactRecreateApiVersion()!=2)throw new InvalidOperationException("Native contact-recreate API version mismatch.");
                 if(contactRecreateAuditApiVersion()!=1)throw new InvalidOperationException("Native contact-recreate audit API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
@@ -661,6 +779,9 @@ namespace SuperchargedPatch.Authoring.Modules
                     NativeDirtyInteractionReceipt dirty=InstallDirtyInteractionHook();
                     if(dirty.Result!=1||dirty.Installed!=1)
                         throw new InvalidOperationException("Native dirty-interaction hook did not install.");
+                    NativeFinishBroadPhaseObserverReceipt broad=InstallFinishBroadPhaseObserver();
+                    if(broad.Result!=1||broad.Installed!=1||broad.State!=1)
+                        throw new InvalidOperationException("Native finishBroadPhase observer did not install.");
                 }
                 if(auto||autoPoolRestore||autoDispatchRestore)InstallAutomaticHook();
             }
@@ -761,7 +882,7 @@ namespace SuperchargedPatch.Authoring.Modules
             object core=CoreCheckpointSnapshot(module.warpTargetFrame);
             if(!module.warpTargetRestoreEligible||core==null||
                 !ReferenceEquals(module.warpTargetSidecar.CoreSnapshot,core))
-                throw new InvalidOperationException("No exact physics-pool/Transform-dispatch sidecar exists for output frame "+module.warpTargetFrame+".");
+                throw new InvalidOperationException("No exact physics/Transform/transition sidecar exists for output frame "+module.warpTargetFrame+".");
             ValidateDirtyInteractionState(module.warpTargetSidecar.DirtyInteractions);
         }
 
@@ -783,7 +904,7 @@ namespace SuperchargedPatch.Authoring.Modules
             module.automaticRestorePending=false;module.warpTargetRestoreEligible=false;
             module.warpTargetSidecar=null;
             module.CancelContactRecreateWork();
-            module.CancelDirtyInteractionWork();
+            module.CancelCheckpointObservationWork();
         }
 
         public static void AfterCaptureFrame(int __0)
@@ -869,7 +990,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new ArgumentOutOfRangeException("frame","Scheduled contact-pool capture frame is outside Int32 range.");
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
                 throw new InvalidOperationException("Scheduled contact-pool capture requires the authoring pause fence.");
-            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore||!dirtyInteractionHookInstalled)
+            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore||!dirtyInteractionHookInstalled||
+                !finishBroadPhaseObserverInstalled)
                 throw new InvalidOperationException("Scheduled contact-pool capture requires the active automatic contact-pool restore module.");
             ObserveSceneGeneration();
             ObserveCoreRoundIdentity();
@@ -878,7 +1000,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 throw new InvalidOperationException("Scheduled contact-pool capture requires an active observed or explicit context.");
             if(pendingContactPoolAction!=0||scheduledContactPoolCaptureFrame>=0||
                 pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar!=null||
-                pendingDirtyCaptureOrdinal!=0||dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||
+                pendingDirtyCaptureOrdinal!=0||pendingFinishBroadPhaseOrdinal!=0||
+                dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||
                 pendingDirtyRestoreState!=null||contactRecreatePendingValidation||
                 pendingContactRecreateSidecar!=null||automaticRestorePending||warpInProgress)
                 throw new InvalidOperationException("Another contact-pool capture, restore, or dirty-interaction action is pending or scheduled.");
@@ -904,6 +1027,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     "; next observed frame was "+observedFrame+".");
             if(pendingContactPoolAction!=0||pendingContactPoolFrame>=0||pendingCoreSnapshot!=null||
                 pendingDirtyCaptureSidecar!=null||pendingDirtyCaptureOrdinal!=0||
+                pendingFinishBroadPhaseOrdinal!=0||
                 dirtyRestorePendingValidation||pendingDirtyRestoreOrdinal!=0||pendingDirtyRestoreState!=null||
                 contactRecreatePendingValidation||pendingContactRecreateSidecar!=null||
                 automaticRestorePending||warpInProgress)
@@ -925,9 +1049,11 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 RunContactPoolAction(1,false,true);
                 if(pendingContactPoolFrame!=-1||pendingCoreSnapshot!=null||pendingDirtyCaptureSidecar==null||
+                    pendingDirtyCaptureOrdinal==0||pendingFinishBroadPhaseOrdinal==0||
                     pendingDirtyCaptureSidecar.Frame!=target||
                     !ReferenceEquals(pendingDirtyCaptureSidecar.CoreSnapshot,core)||
                     pendingDirtyCaptureSidecar.ShapeInstancePairPool==null||
+                    pendingDirtyCaptureSidecar.TransformCache==null||
                     pendingDirtyCaptureSidecar.TransformDispatch==null)
                     throw new InvalidOperationException("Scheduled contact-pool capture did not stage one complete exact-frame sidecar transaction.");
                 // Clear only after all synchronous read-only captures succeeded
@@ -942,7 +1068,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 // Admission guarantees no unrelated dirty work existed, so an
                 // arm that failed after touching native hook state is safe to
                 // cancel without disturbing another transaction.
-                CancelDirtyInteractionWork();
+                CancelCheckpointObservationWork();
                 throw;
             }
         }
@@ -1045,7 +1171,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
             RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
@@ -1061,6 +1187,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 NPhaseReportState nphaseReports=CaptureNPhaseReportState(captureNPhase,actionFrame);
                 InteractionGraphState interactionGraph=CaptureInteractionGraphState(
                     captureNPhase,actionFrame);
+                TransformCacheState transformCache=CaptureTransformCacheState(
+                    captureNPhase,actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -1074,6 +1202,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     ActorPairReportPool=actorPairReports,
                     NPhaseReports=nphaseReports,
                     InteractionGraph=interactionGraph,
+                    TransformCache=transformCache,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 uint afterObservation;
@@ -1082,11 +1211,12 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("A physics update crossed the synchronous checkpoint pool-capture interval.");
                 ValidateCheckpointPoolCoherence(captured);
                 // Do not publish a partially captured sidecar.  The native
-                // dirty-list sample completes on the next physics update and
-                // FinalizePendingDirtyInteractionCapture publishes the whole
-                // sidecar as one transaction.
-                ArmDirtyInteractionCapture(captured);
-                pendingContactPoolFrame=-1;pendingCoreSnapshot=null;contactPoolCaptures++;
+                // The dirty-list and finishBroadPhase samples both complete on
+                // the next physics update.  Publish only after the two native
+                // observers prove that they describe this same sealed sidecar.
+                ArmCheckpointObservationCapture(captured);
+                pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
+                contactPoolCaptures++;transformCacheCaptures++;
             }
             else
             {
@@ -1118,7 +1248,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=15||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=16||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeArray.ToUInt32()!=expected.FreeArray||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
@@ -1163,7 +1293,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=15||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=16||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
                     throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
@@ -1296,7 +1426,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {
                     // Dirty restoration is only an armed one-shot at this
                     // point, so cancel it before restoring its input queues.
-                    try{CancelDirtyInteractionWork();}catch{}
+                    try{CancelCheckpointObservationWork();}catch{}
                     if(automaticTransformDispatchRestore)
                         try{RunTransformDispatchAction(2,dispatchBefore);}catch{}
                     try{RunManifoldPoolAction(2,SphereManifoldPoolKind,sphereBefore,frame);}catch{}
@@ -1399,6 +1529,15 @@ namespace SuperchargedPatch.Authoring.Modules
                     delegate { ValidateInteractionGraphState(selected.InteractionGraph); },
                     "TARGET_INTERACTION_GRAPH_SIDECAR_VALID",
                     "The active-body, interaction, actor-slot, and pointer-pool graph is structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-transform-cache-sidecar",phase,
+                    delegate { ValidateTransformCacheState(selected.TransformCache);
+                        ValidateCheckpointPoolCoherence(selected); },
+                    "TARGET_TRANSFORM_CACHE_SIDECAR_VALID",
+                    "The transform-cache IDs, poses, free order, graph endpoints, and owner refcounts are structurally coherent.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-broadphase-transition-sidecar",phase,
+                    delegate { ValidateFinishBroadPhaseState(selected.FinishBroadPhase,selected); },
+                    "TARGET_BROADPHASE_TRANSITION_SIDECAR_VALID",
+                    "The exact subsequent pass-zero finishBroadPhase transition is linked to the target Scene transaction.");
                 AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-large-sidecar",phase,
                     delegate { ValidateManifoldPoolState(selected.LargeManifoldPool,
                         LargeManifoldPoolKind,"large"); },
@@ -1535,6 +1674,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 nativeAuditAvailable?nativeAudit:(NativeContactRecreateAuditReceipt?)null);
             AppendNPhaseReportReadiness(checks,blockers,deferred,phase,found?selected:null);
             AppendInteractionGraphReadiness(checks,blockers,deferred,phase,found?selected:null);
+            AppendTransformCacheReadiness(checks,blockers,deferred,phase,found?selected:null);
+            AppendFinishBroadPhaseReadiness(checks,blockers,deferred,phase,found?selected:null);
 
             if(found&&phase=="target-paused")
             {
@@ -1594,8 +1735,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     "Transform-dispatch live admission requires the restored target-paused state.",null);
             }
 
-            string[] futureFamilies={"island-edge-allocator-and-change-queues","transform-cache-id-pool",
-                "broadphase-created-overlap-order","dirty-interaction-live-projection",
+            string[] futureFamilies={"island-edge-allocator-and-change-queues",
+                "dirty-interaction-live-projection",
                 "first-output-owner-convergence"};
             foreach(string family in futureFamilies)
                 AddReadinessCheck(checks,blockers,deferred,"rigidbody."+family,phase,
@@ -1649,6 +1790,8 @@ namespace SuperchargedPatch.Authoring.Modules
             "rigidbody.target-contact-sidecar","rigidbody.target-sip-sidecar",
             "rigidbody.target-actor-pair-sidecar","rigidbody.target-actor-pair-report-sidecar",
             "rigidbody.target-nphase-report-sidecar","rigidbody.target-interaction-graph-sidecar",
+            "rigidbody.target-transform-cache-sidecar",
+            "rigidbody.target-broadphase-transition-sidecar",
             "rigidbody.target-large-sidecar","rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar","rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows","rigidbody.native-audit-repeatability",
@@ -1677,7 +1820,14 @@ namespace SuperchargedPatch.Authoring.Modules
             "rigidbody.interaction-graph.active-body-order","rigidbody.interaction-graph.global-order",
             "rigidbody.interaction-graph.actor-order-and-cached-indices",
             "rigidbody.interaction-graph.sip-semantic-keys",
-            "rigidbody.interaction-graph.pointer-pool-topology"
+            "rigidbody.interaction-graph.pointer-pool-topology",
+            "rigidbody.transform-cache.repeatability","rigidbody.transform-cache.layout-identity",
+            "rigidbody.transform-cache.free-id-order",
+            "rigidbody.transform-cache.binding-and-refcounts",
+            "rigidbody.transform-cache.active-transforms",
+            "rigidbody.broadphase.capture","rigidbody.broadphase.identity",
+            "rigidbody.broadphase.created-order","rigidbody.broadphase.deleted-order",
+            "rigidbody.broadphase.post-state"
         };
 
         private static object FinalizeReadinessCoverage(List<object> checks,List<object> blockers,
@@ -1702,11 +1852,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 duplicates.Length==0&&missing.Length==0?
                     "Every required readiness family is explicitly represented.":
                     "The provider omitted or duplicated required readiness identifiers.",
-                new Dictionary<string,object>{{"contractVersion",4},
+                new Dictionary<string,object>{{"contractVersion",5},
                     {"required",requiredIds.Cast<object>().ToArray()},
                     {"uncovered",missing.Cast<object>().ToArray()},
                     {"duplicates",duplicates.Cast<object>().ToArray()}});
-            return new Dictionary<string,object>{{"contractVersion",4},
+            return new Dictionary<string,object>{{"contractVersion",5},
                 {"required",requiredIds.Cast<object>().ToArray()},
                 {"uncovered",missing.Cast<object>().ToArray()},
                 {"duplicates",duplicates.Cast<object>().ToArray()}};
@@ -2315,6 +2465,174 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
+        private void AppendTransformCacheReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,CheckpointSidecar selected)
+        {
+            string[] ids={"rigidbody.transform-cache.repeatability",
+                "rigidbody.transform-cache.layout-identity",
+                "rigidbody.transform-cache.free-id-order",
+                "rigidbody.transform-cache.binding-and-refcounts",
+                "rigidbody.transform-cache.active-transforms",
+                "rigidbody.transform-cache-id-pool"};
+            if(phase!="target-paused"||selected==null)
+            {
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache-id-pool",phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",
+                    "Transform-cache live admission requires the restored target-paused state.",null);
+                return;
+            }
+            try
+            {
+                TransformCacheState target=selected.TransformCache;
+                ValidateTransformCacheState(target);
+                uint nphase=target.Receipt.NPhaseCore.ToUInt32();
+                TransformCacheState first=CaptureTransformCacheState(nphase,selected.Frame);
+                TransformCacheState second=CaptureTransformCacheState(nphase,selected.Frame);
+                bool repeatable=SameTransformCacheState(first,second);
+                NativeTransformCacheReceipt a=target.Receipt,b=first.Receipt;
+                bool layout=a.NPhaseCore==b.NPhaseCore&&a.OwnerScene==b.OwnerScene&&
+                    a.InteractionScene==b.InteractionScene&&a.Context==b.Context&&
+                    a.TransformCache==b.TransformCache&&a.FreeData==b.FreeData&&
+                    a.FreeCapacityRaw==b.FreeCapacityRaw&&a.TransformsData==b.TransformsData&&
+                    a.TransformsCapacityRaw==b.TransformsCapacityRaw&&
+                    a.RefCountsData==b.RefCountsData&&a.RefCountsCapacityRaw==b.RefCountsCapacityRaw;
+                bool freeExact=target.FreeIds.SequenceEqual(first.FreeIds)&&
+                    a.CurrentId==b.CurrentId;
+                bool bindingsExact=SameTransformCacheBindings(target.Bindings,first.Bindings)&&
+                    a.TotalRefCount==b.TotalRefCount;
+                bool transformsExact=SameActiveTransformCacheEntries(target.Entries,first.Entries);
+                // Free-slot pose words are stale forensic bytes and are
+                // overwritten before reuse.  Canonical equivalence therefore
+                // combines allocator order, live entries, and bindings rather
+                // than requiring stale free-slot transforms to match.
+                bool exact=freeExact&&bindingsExact&&transformsExact;
+
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache.repeatability",phase,
+                    repeatable?"pass":"fail","blocker",
+                    repeatable?"TRANSFORM_CACHE_CAPTURE_REPEATABLE":"TRANSFORM_CACHE_CAPTURE_CHANGED",
+                    repeatable?"Two complete transform-cache captures are raw-bit equivalent.":
+                        "Repeated transform-cache capture observed a changing physics phase.",
+                    new Dictionary<string,object>{{"firstSnapshotHash","0x"+b.SnapshotHash.ToString("X8")},
+                        {"secondSnapshotHash","0x"+second.Receipt.SnapshotHash.ToString("X8")}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache.layout-identity",phase,
+                    layout?"pass":"fail","blocker",
+                    layout?"TRANSFORM_CACHE_LAYOUT_STABLE":"TRANSFORM_CACHE_LAYOUT_CHANGED",
+                    layout?"Target and live cache share the exact Scene identities and backing allocations.":
+                        "The transform-cache allocation moved or changed capacity, so direct projection is unsafe.",
+                    new Dictionary<string,object>{{"target",DescribeTransformCacheState(target)},
+                        {"live",DescribeTransformCacheState(first)}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache.free-id-order",phase,
+                    freeExact?"pass":"deferred","blocker",
+                    freeExact?"TRANSFORM_CACHE_FREE_ORDER_EXACT":"TRANSFORM_CACHE_FREE_ORDER_PROJECTION_REQUIRED",
+                    freeExact?"The cache-ID watermark and LIFO free-ID order already match.":
+                        "The exact target cache-ID watermark and free-ID order are captured but not projected.",
+                    new Dictionary<string,object>{{"targetCurrentId",a.CurrentId},{"liveCurrentId",b.CurrentId},
+                        {"targetFreeIds",target.FreeIds.Cast<object>().ToArray()},
+                        {"liveFreeIds",first.FreeIds.Cast<object>().ToArray()}});
+                AddReadinessCheck(checks,blockers,deferred,
+                    "rigidbody.transform-cache.binding-and-refcounts",phase,
+                    bindingsExact?"pass":"deferred","blocker",
+                    bindingsExact?"TRANSFORM_CACHE_BINDINGS_EXACT":"TRANSFORM_CACHE_BINDING_PROJECTION_REQUIRED",
+                    bindingsExact?"Every ordered type-zero graph endpoint already has its exact cache ID and refcount.":
+                        "Graph endpoint-to-cache bindings and refcounts are exact in the sidecar but differ live.",
+                    new Dictionary<string,object>{{"targetBindings",target.Bindings.Length},
+                        {"liveBindings",first.Bindings.Length},{"targetRefs",a.TotalRefCount},
+                        {"liveRefs",b.TotalRefCount}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache.active-transforms",phase,
+                    transformsExact?"pass":"deferred","blocker",
+                    transformsExact?"TRANSFORM_CACHE_POSES_EXACT":"TRANSFORM_CACHE_POSE_PROJECTION_REQUIRED",
+                    transformsExact?"Every addressable cache entry already has exact raw pose bits, flags, and refcount.":
+                        "The exact target transform words are captured but differ in the live cache.",
+                    new Dictionary<string,object>{{"targetEntryHash","0x"+a.EntryHash.ToString("X8")},
+                        {"liveEntryHash","0x"+b.EntryHash.ToString("X8")},
+                        {"targetLiveCount",a.LiveCount},{"liveLiveCount",b.LiveCount},
+                        {"comparesLiveEntriesOnly",true}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.transform-cache-id-pool",phase,
+                    !repeatable||!layout?"fail":exact?"pass":"deferred","blocker",
+                    !repeatable||!layout?"TRANSFORM_CACHE_ADMISSION_FAILED":
+                        exact?"TRANSFORM_CACHE_EXACT":"TRANSFORM_CACHE_RECONSTRUCTION_REQUIRED",
+                    !repeatable||!layout?"Transform-cache history failed structural admission before replay.":
+                        exact?"The canonical transform-cache allocator, live poses, and bindings already match the target.":
+                            "The exact cache IDs, free order, bindings, refcounts, and pose words are captured; atomic projection remains.",
+                    new Dictionary<string,object>{{"exact",exact},
+                        {"targetSnapshotHash","0x"+a.SnapshotHash.ToString("X8")},
+                        {"liveSnapshotHash","0x"+b.SnapshotHash.ToString("X8")}});
+            }
+            catch(Exception error)
+            {
+                foreach(string id in ids)
+                    AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                        "TRANSFORM_CACHE_AUDIT_FAILED",error.GetType().Name+": "+error.Message,null);
+            }
+        }
+
+        private static void AppendFinishBroadPhaseReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,CheckpointSidecar selected)
+        {
+            string[] ids={"rigidbody.broadphase.capture","rigidbody.broadphase.identity",
+                "rigidbody.broadphase.created-order","rigidbody.broadphase.deleted-order",
+                "rigidbody.broadphase.post-state","rigidbody.broadphase-created-overlap-order"};
+            if(selected==null)
+            {
+                if(phase=="target-paused")foreach(string id in ids)
+                    AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                        "BROADPHASE_SIDECAR_MISSING","No exact subsequent finishBroadPhase observation is retained.",null);
+                else AddReadinessCheck(checks,blockers,deferred,
+                    "rigidbody.broadphase-created-overlap-order",phase,"deferred","blocker",
+                    "BROADPHASE_SIDECAR_REQUIRED",
+                    "The exact subsequent finishBroadPhase observation has not been published.",null);
+                return;
+            }
+            try
+            {
+                FinishBroadPhaseState state=selected.FinishBroadPhase;
+                ValidateFinishBroadPhaseState(state,selected);
+                NativeFinishBroadPhaseObserverReceipt receipt=state.Receipt;
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.broadphase.capture",phase,
+                    "pass","blocker","BROADPHASE_CAPTURE_EXACT_ORDINAL",
+                    "Two copies of the exact committed observation ordinal were byte-equivalent before publication.",
+                    new Dictionary<string,object>{{"observationOrdinal",receipt.ObservationOrdinal},
+                        {"slotIndex",receipt.SlotIndex},{"droppedObservations",receipt.DroppedObservations}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.broadphase.identity",phase,
+                    "pass","blocker","BROADPHASE_IDENTITY_EXACT",
+                    "The pass-zero observation belongs to the checkpoint Scene, Context, NPhaseCore, interaction graph, and transform cache.",
+                    new Dictionary<string,object>{{"scene",Hex(receipt.ObservedScene)},
+                        {"context",Hex(receipt.ObservedContext)},
+                        {"nphaseCore",Hex(receipt.ObservedNPhaseCore)},
+                        {"pass",receipt.Pass},{"threadId",receipt.ThreadId}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.broadphase.created-order",phase,
+                    "pass","blocker","BROADPHASE_CREATED_ORDER_CAPTURED",
+                    "The exact oriented created-overlap array is retained in native order.",
+                    new Dictionary<string,object>{{"count",state.Created.Length},
+                        {"hash","0x"+receipt.CreatedHash.ToString("X8")}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.broadphase.deleted-order",phase,
+                    "pass","blocker","BROADPHASE_DELETED_ORDER_CAPTURED",
+                    "The exact oriented deleted-overlap array is retained in native order.",
+                    new Dictionary<string,object>{{"count",state.Deleted.Length},
+                        {"hash","0x"+receipt.DeletedHash.ToString("X8")}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.broadphase.post-state",phase,
+                    "pass","blocker","BROADPHASE_PRE_POST_HASHES_CAPTURED",
+                    "Entry-time and post-call cache/graph hashes were captured around one original finishBroadPhase call.",
+                    new Dictionary<string,object>{{"preCacheHash","0x"+receipt.PreCacheHash.ToString("X8")},
+                        {"postCacheHash","0x"+receipt.PostCacheHash.ToString("X8")},
+                        {"preGraphHash","0x"+receipt.PreGraphHash.ToString("X8")},
+                        {"postGraphHash","0x"+receipt.PostGraphHash.ToString("X8")},
+                        {"settledF444HashCompared",false}});
+                AddReadinessCheck(checks,blockers,deferred,
+                    "rigidbody.broadphase-created-overlap-order",phase,
+                    "deferred","blocker","BROADPHASE_REPLAY_STEERING_REQUIRED",
+                    "The exact f444-to-f445 overlap event is source-proven, but replay steering/restoration is not implemented.",
+                    new Dictionary<string,object>{{"created",state.Created.Length},
+                        {"deleted",state.Deleted.Length},{"observationOrdinal",receipt.ObservationOrdinal}});
+            }
+            catch(Exception error)
+            {
+                foreach(string id in ids)
+                    AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                        "BROADPHASE_AUDIT_FAILED",error.GetType().Name+": "+error.Message,null);
+            }
+        }
+
         private NativeContactRecreateAuditReceipt CallContactRecreateAudit(
             CheckpointSidecar selected,NativeContactRecreatePlanRow[] rows)
         {
@@ -2410,13 +2728,16 @@ namespace SuperchargedPatch.Authoring.Modules
             return string.Join("|",new[]{contactPoolCaptures.ToString(),contactPoolRestores.ToString(),
                 manifoldPoolCaptures.ToString(),manifoldPoolRestores.ToString(),
                 transformDispatchCaptures.ToString(),transformDispatchRestores.ToString(),
+                transformCacheCaptures.ToString(),finishBroadPhaseCaptures.ToString(),
                 dirtyInteractionCaptures.ToString(),dirtyInteractionRestores.ToString(),
                 pendingContactPoolAction.ToString(),pendingContactPoolFrame.ToString(),
                 scheduledContactPoolCaptureFrame.ToString(),automaticRestorePending.ToString(),
                 warpInProgress.ToString(),warpTargetFrame.ToString(),warpTargetRestoreEligible.ToString(),
                 contactRecreatePendingValidation.ToString(),dirtyRestorePendingValidation.ToString(),
+                pendingFinishBroadPhaseOrdinal.ToString(),
                 contactPoolReceipts.Count.ToString(),manifoldPoolReceipts.Count.ToString(),
                 transformDispatchReceipts.Count.ToString(),dirtyInteractionReceipts.Count.ToString(),
+                finishBroadPhaseReceipts.Count.ToString(),
                 contactRecreateReceipts.Count.ToString(),checkpointSidecars.Count.ToString(),
                 failure??"<null>"});
         }
@@ -2498,7 +2819,7 @@ namespace SuperchargedPatch.Authoring.Modules
             }
             catch
             {
-                try{CancelDirtyInteractionWork();}catch{}
+                try{CancelCheckpointObservationWork();}catch{}
                 try{CancelContactRecreateWork();}catch{}
                 throw;
             }
@@ -2641,7 +2962,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native contact-manager owner capture failed: result="+
                         receipt.Result+", Win32/error="+receipt.LastError+", invalidSlot="+
                         receipt.InvalidSlot+", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.Context.ToUInt32()!=contactManagerContext||receipt.TotalSlots<1||
                     receipt.TotalSlots>MaximumContactManagers||receipt.RecordsRequired!=receipt.UsedCount||
@@ -2815,7 +3136,7 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);
             }
-            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                 receipt.Context.ToUInt32()!=contactManagerContext||receipt.PoolKind!=poolKind||
                 receipt.Pool==UIntPtr.Zero||receipt.FreeHeadBefore.ToUInt32()!=
@@ -2872,7 +3193,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ok==0||receipt.Result!=1)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
                     receipt.Result+", Win32/error="+receipt.LastError+".");
-            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
                 receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
@@ -2940,7 +3261,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native shape-pair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.TraversedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0x1Fu)
@@ -2987,7 +3308,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -3041,7 +3362,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair report-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -3103,7 +3424,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native NPhase report-state capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.ActorPairCount>MaximumShapeInstancePairs||
@@ -3169,7 +3490,7 @@ namespace SuperchargedPatch.Authoring.Modules
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+
                         ", kind="+receipt.InvalidKind+", index="+receipt.InvalidIndex+
                         ", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.InteractionScene==UIntPtr.Zero||receipt.LlContext==UIntPtr.Zero||
@@ -3211,6 +3532,72 @@ namespace SuperchargedPatch.Authoring.Modules
                 Actors=actors,Interactions=interactions,ActorSlots=actorSlots,
                 PoolSlabs=poolSlabs,PoolFree=poolFree};
             ValidateInteractionGraphState(state);
+            return state;
+        }
+
+        private TransformCacheState CaptureTransformCacheState(uint nphaseCore,int frame)
+        {
+            if(captureTransformCacheSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native transform-cache capture is unavailable.");
+            int receiptSize=Marshal.SizeOf(typeof(NativeTransformCacheReceipt));
+            int entrySize=Marshal.SizeOf(typeof(NativeTransformCacheEntryRecord));
+            int bindingSize=Marshal.SizeOf(typeof(NativeTransformCacheBindingRecord));
+            if(receiptSize!=144||entrySize!=48||bindingSize!=40)
+                throw new InvalidOperationException("Managed transform-cache ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr entryBuffer=Marshal.AllocHGlobal(MaximumTransformCacheIds*entrySize);
+            IntPtr freeBuffer=Marshal.AllocHGlobal(MaximumTransformCacheIds*sizeof(uint));
+            IntPtr bindingBuffer=Marshal.AllocHGlobal(MaximumTransformCacheBindings*bindingSize);
+            NativeTransformCacheReceipt receipt;
+            NativeTransformCacheEntryRecord[] entries=null;
+            NativeTransformCacheBindingRecord[] bindings=null;
+            uint[] freeIds=null;
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureTransformCacheSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),entryBuffer,MaximumTransformCacheIds,
+                    freeBuffer,MaximumTransformCacheIds,bindingBuffer,
+                    MaximumTransformCacheBindings,receiptBuffer);
+                receipt=(NativeTransformCacheReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeTransformCacheReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native transform-cache capture failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+
+                        ", kind="+receipt.InvalidKind+", index="+receipt.InvalidIndex+
+                        ", detail="+receipt.Detail+".");
+                if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)receiptSize||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
+                    receipt.InteractionScene==UIntPtr.Zero||receipt.Context==UIntPtr.Zero||
+                    receipt.TransformCache==UIntPtr.Zero||
+                    receipt.EntriesWritten!=receipt.EntriesRequired||
+                    receipt.FreeWritten!=receipt.FreeRequired||
+                    receipt.BindingsWritten!=receipt.BindingsRequired||
+                    receipt.EntriesWritten>MaximumTransformCacheIds||
+                    receipt.FreeWritten>MaximumTransformCacheIds||
+                    receipt.BindingsWritten>MaximumTransformCacheBindings)
+                    throw new InvalidOperationException("Native transform-cache receipt contract differs at frame "+frame+".");
+                entries=new NativeTransformCacheEntryRecord[receipt.EntriesWritten];
+                for(int i=0;i<entries.Length;i++)entries[i]=(NativeTransformCacheEntryRecord)
+                    Marshal.PtrToStructure(new IntPtr(entryBuffer.ToInt64()+i*entrySize),
+                        typeof(NativeTransformCacheEntryRecord));
+                freeIds=new uint[receipt.FreeWritten];
+                for(int i=0;i<freeIds.Length;i++)freeIds[i]=unchecked((uint)
+                    Marshal.ReadInt32(freeBuffer,i*sizeof(uint)));
+                bindings=new NativeTransformCacheBindingRecord[receipt.BindingsWritten];
+                for(int i=0;i<bindings.Length;i++)bindings[i]=(NativeTransformCacheBindingRecord)
+                    Marshal.PtrToStructure(new IntPtr(bindingBuffer.ToInt64()+i*bindingSize),
+                        typeof(NativeTransformCacheBindingRecord));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(bindingBuffer);Marshal.FreeHGlobal(freeBuffer);
+                Marshal.FreeHGlobal(entryBuffer);Marshal.FreeHGlobal(receiptBuffer);
+            }
+            var state=new TransformCacheState {Receipt=receipt,Entries=entries,
+                FreeIds=freeIds,Bindings=bindings};
+            ValidateTransformCacheState(state);
             return state;
         }
 
@@ -3411,6 +3798,110 @@ namespace SuperchargedPatch.Authoring.Modules
             return receipt;
         }
 
+        private NativeFinishBroadPhaseObserverReceipt CallFinishBroadPhaseObserverAction(
+            NativeFinishBroadPhaseObserverAction callback,string action)
+        {
+            if(callback==null)
+                throw new InvalidOperationException("Native finishBroadPhase observer export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
+            if(size!=152)throw new InvalidOperationException("Managed finishBroadPhase observer ABI size differs.");
+            IntPtr buffer=Marshal.AllocHGlobal(size);
+            NativeFinishBroadPhaseObserverReceipt receipt;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                int ok=callback(new UIntPtr(unityPlayerBase),buffer);
+                receipt=(NativeFinishBroadPhaseObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeFinishBroadPhaseObserverReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native finishBroadPhase observer "+action+
+                        " failed: result="+receipt.Result+", Win32/error="+receipt.LastError+
+                        ", state="+receipt.State+", detail="+receipt.Detail+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateFinishBroadPhaseReceiptContract(receipt,size);
+            RecordFinishBroadPhaseReceipt(action,receipt);
+            return receipt;
+        }
+
+        private NativeFinishBroadPhaseObserverReceipt InstallFinishBroadPhaseObserver()
+        {
+            if(installFinishBroadPhaseObserver==null)
+                throw new InvalidOperationException("Native finishBroadPhase observer install export is unavailable.");
+            int size=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
+            if(size!=152)throw new InvalidOperationException("Managed finishBroadPhase observer ABI size differs.");
+            IntPtr buffer=Marshal.AllocHGlobal(size);
+            NativeFinishBroadPhaseObserverReceipt receipt;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                int ok=installFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),buffer);
+                // As with the dirty hook, claim ownership before validating so
+                // activation cleanup cannot unload a still-patched DLL.
+                if(ok!=0)
+                {
+                    finishBroadPhaseObserverInstalled=true;
+                    finishBroadPhaseObserverWasInstalled=true;
+                }
+                receipt=(NativeFinishBroadPhaseObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeFinishBroadPhaseObserverReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native finishBroadPhase observer install failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+".");
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            ValidateFinishBroadPhaseReceiptContract(receipt,size);
+            RecordFinishBroadPhaseReceipt("install",receipt);
+            return receipt;
+        }
+
+        private void ArmCheckpointObservationCapture(CheckpointSidecar sidecar)
+        {
+            ValidateTransformCacheState(sidecar==null?null:sidecar.TransformCache);
+            if(!finishBroadPhaseObserverInstalled||sidecar.InteractionGraph==null)
+                throw new InvalidOperationException("Checkpoint observation requires the installed finishBroadPhase observer.");
+            NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
+            int size=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);
+            NativeFinishBroadPhaseObserverReceipt receipt=new NativeFinishBroadPhaseObserverReceipt();
+            int ok=0;
+            try
+            {
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                ok=armFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),graph.OwnerScene,
+                    graph.LlContext,graph.NPhaseCore,0,buffer);
+                receipt=(NativeFinishBroadPhaseObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeFinishBroadPhaseObserverReceipt));
+            }
+            catch
+            {
+                try{if(ok!=0)CancelCheckpointObservationWork();}
+                finally{pendingFinishBroadPhaseOrdinal=0;}
+                throw;
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            try
+            {
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native finishBroadPhase observer arm failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+", state="+receipt.State+".");
+                ValidateFinishBroadPhaseReceiptContract(receipt,size);
+                RecordFinishBroadPhaseReceipt("arm",receipt);
+                if(receipt.Installed!=1||receipt.State!=2||receipt.ExpectedPass!=0||
+                    receipt.ExpectedScene!=graph.OwnerScene||receipt.ExpectedContext!=graph.LlContext||
+                    receipt.ExpectedNPhaseCore!=graph.NPhaseCore||receipt.ArmedOrdinal==0)
+                    throw new InvalidOperationException("Native finishBroadPhase observer arm differs from the sealed checkpoint identities.");
+                pendingFinishBroadPhaseOrdinal=receipt.ArmedOrdinal;
+                ArmDirtyInteractionCapture(sidecar);
+            }
+            catch
+            {
+                try{if(ok!=0)CancelCheckpointObservationWork();}
+                finally{pendingFinishBroadPhaseOrdinal=0;}
+                throw;
+            }
+        }
+
         private void ArmDirtyInteractionCapture(CheckpointSidecar sidecar)
         {
             if(!dirtyInteractionHookInstalled||sidecar==null)
@@ -3438,6 +3929,8 @@ namespace SuperchargedPatch.Authoring.Modules
         private void FinalizePendingDirtyInteractionCapture()
         {
             if(pendingDirtyCaptureSidecar==null)return;
+            if(pendingFinishBroadPhaseOrdinal==0)
+                throw new InvalidOperationException("Pending checkpoint capture lost its finishBroadPhase observation ordinal.");
             NativeDirtyInteractionReceipt status=CallDirtyInteractionAction(
                 statusDirtyInteractionOrder,"capture-status");
             if(status.Result!=1||status.Armed!=0||status.Action!=0||
@@ -3446,6 +3939,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     status.Result+", armed="+status.Armed+", captures="+status.Captures+".");
             if(status.Count>MaximumDirtyInteractions)
                 throw new InvalidOperationException("Native dirty-interaction capture count exceeds the supported bound.");
+            FinishBroadPhaseState finishBroadPhase=CopyFinishBroadPhaseCapture(
+                pendingDirtyCaptureSidecar,pendingFinishBroadPhaseOrdinal);
             int keySize=Marshal.SizeOf(typeof(NativeDirtyInteractionKey));
             int receiptSize=Marshal.SizeOf(typeof(NativeDirtyInteractionReceipt));
             IntPtr keysBuffer=Marshal.AllocHGlobal(Math.Max(1,(int)status.Count)*keySize);
@@ -3477,9 +3972,76 @@ namespace SuperchargedPatch.Authoring.Modules
                 pendingDirtyCaptureSidecar.ShapeInstancePairPool.NPhaseCore!=state.NPhaseCore)
                 throw new InvalidOperationException("Dirty-interaction capture completed for a different NPhaseCore than the sealed checkpoint allocator state.");
             pendingDirtyCaptureSidecar.DirtyInteractions=state;
+            pendingDirtyCaptureSidecar.FinishBroadPhase=finishBroadPhase;
             StoreCheckpointSidecar(pendingDirtyCaptureSidecar);
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
-            dirtyInteractionCaptures++;
+            pendingFinishBroadPhaseOrdinal=0;
+            dirtyInteractionCaptures++;finishBroadPhaseCaptures++;
+        }
+
+        private FinishBroadPhaseState CopyFinishBroadPhaseCapture(
+            CheckpointSidecar sidecar,uint expectedOrdinal)
+        {
+            NativeFinishBroadPhaseObserverReceipt status=CallFinishBroadPhaseObserverAction(
+                statusFinishBroadPhaseObserver,"capture-status");
+            if(status.Installed!=1||status.State!=4||status.ExpectedPass!=0||status.Pass!=0||
+                status.ArmedOrdinal!=expectedOrdinal||status.ObservationOrdinal!=expectedOrdinal||
+                status.CreatedRequired>MaximumBroadPhaseOverlaps||
+                status.DeletedRequired>MaximumBroadPhaseOverlaps||
+                status.DroppedObservations!=0)
+                throw new InvalidOperationException("Native finishBroadPhase observation did not complete exactly once: state="+
+                    status.State+", armedOrdinal="+status.ArmedOrdinal+", observationOrdinal="+
+                    status.ObservationOrdinal+", dropped="+status.DroppedObservations+".");
+            FinishBroadPhaseState first=CopyFinishBroadPhaseCaptureOnce(sidecar,expectedOrdinal,
+                status.CreatedRequired,status.DeletedRequired,"capture-copy-first");
+            FinishBroadPhaseState second=CopyFinishBroadPhaseCaptureOnce(sidecar,expectedOrdinal,
+                status.CreatedRequired,status.DeletedRequired,"capture-copy-second");
+            if(!SameFinishBroadPhaseState(first,second))
+                throw new InvalidOperationException("Two exact-ordinal finishBroadPhase copies were not byte-equivalent.");
+            return first;
+        }
+
+        private FinishBroadPhaseState CopyFinishBroadPhaseCaptureOnce(
+            CheckpointSidecar sidecar,uint expectedOrdinal,uint createdCount,uint deletedCount,
+            string action)
+        {
+            int receiptSize=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
+            int overlapSize=Marshal.SizeOf(typeof(NativeBroadPhaseOverlapRecord));
+            if(receiptSize!=152||overlapSize!=40)
+                throw new InvalidOperationException("Managed finishBroadPhase capture ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr createdBuffer=Marshal.AllocHGlobal(Math.Max(1,(int)createdCount)*overlapSize);
+            IntPtr deletedBuffer=Marshal.AllocHGlobal(Math.Max(1,(int)deletedCount)*overlapSize);
+            NativeFinishBroadPhaseObserverReceipt receipt;
+            NativeBroadPhaseOverlapRecord[] created=new NativeBroadPhaseOverlapRecord[createdCount];
+            NativeBroadPhaseOverlapRecord[] deleted=new NativeBroadPhaseOverlapRecord[deletedCount];
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=copyFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),expectedOrdinal,
+                    createdBuffer,createdCount,deletedBuffer,deletedCount,receiptBuffer);
+                receipt=(NativeFinishBroadPhaseObserverReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeFinishBroadPhaseObserverReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native finishBroadPhase capture-copy failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+", state="+receipt.State+".");
+                for(int i=0;i<created.Length;i++)created[i]=(NativeBroadPhaseOverlapRecord)
+                    Marshal.PtrToStructure(new IntPtr(createdBuffer.ToInt64()+i*overlapSize),
+                        typeof(NativeBroadPhaseOverlapRecord));
+                for(int i=0;i<deleted.Length;i++)deleted[i]=(NativeBroadPhaseOverlapRecord)
+                    Marshal.PtrToStructure(new IntPtr(deletedBuffer.ToInt64()+i*overlapSize),
+                        typeof(NativeBroadPhaseOverlapRecord));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(deletedBuffer);Marshal.FreeHGlobal(createdBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            ValidateFinishBroadPhaseReceiptContract(receipt,receiptSize);
+            RecordFinishBroadPhaseReceipt(action,receipt);
+            var state=new FinishBroadPhaseState {Receipt=receipt,Created=created,Deleted=deleted};
+            ValidateFinishBroadPhaseState(state,sidecar);
+            return state;
         }
 
         private void ArmDirtyInteractionRestore(DirtyInteractionState state)
@@ -3541,7 +4103,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ValidateDirtyInteractionReceiptContract(NativeDirtyInteractionReceipt receipt,int size)
         {
-            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native dirty-interaction receipt contract differs.");
         }
 
@@ -3574,7 +4136,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -3624,7 +4186,7 @@ namespace SuperchargedPatch.Authoring.Modules
             try{ReadObservedNPhaseCore(out ignored);dirtyNPhaseObservationFloor=ignored;}
             catch{dirtyNPhaseObservationFloor=0;}
             CancelContactRecreateWork();
-            CancelDirtyInteractionWork();
+            CancelCheckpointObservationWork();
             pendingContactPoolAction=0;pendingContactPoolFrame=-1;pendingCoreSnapshot=null;
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
@@ -3641,6 +4203,20 @@ namespace SuperchargedPatch.Authoring.Modules
                 CallDirtyInteractionAction(cancelDirtyInteractionOrder,"cancel");
             pendingDirtyCaptureSidecar=null;pendingDirtyCaptureOrdinal=0;
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
+        }
+
+        private void CancelCheckpointObservationWork()
+        {
+            try
+            {
+                if(finishBroadPhaseObserverInstalled)
+                    CallFinishBroadPhaseObserverAction(cancelFinishBroadPhaseObserver,"cancel");
+            }
+            finally
+            {
+                pendingFinishBroadPhaseOrdinal=0;
+                CancelDirtyInteractionWork();
+            }
         }
 
         private static int CurrentCheckpointFrame()
@@ -3686,6 +4262,18 @@ namespace SuperchargedPatch.Authoring.Modules
             uint hash=2166136261u;
             for(int i=0;i<count;i++){hash^=values[i];hash*=16777619u;}
             return hash;
+        }
+
+        private static uint FloatBits(float value)
+        {
+            return unchecked((uint)BitConverter.ToInt32(BitConverter.GetBytes(value),0));
+        }
+
+        private static bool SameFloatBits(float[] left,float[] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)if(FloatBits(left[i])!=FloatBits(right[i]))return false;
+            return true;
         }
 
         private static void ValidateManifoldPoolState(ManifoldPoolState value,uint poolKind,string poolName)
@@ -3761,7 +4349,7 @@ namespace SuperchargedPatch.Authoring.Modules
             uint actorCapacity=receipt.ActorPairCapacityRaw&0x7FFFFFFFu;
             uint persistentCapacity=receipt.PersistentCapacityRaw&0x7FFFFFFFu;
             uint forceCapacity=receipt.ForceThresholdCapacityRaw&0x7FFFFFFFu;
-            if(receipt.Result!=1||receipt.ApiVersion!=15||receipt.StructSize!=116u||
+            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=116u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.ReportBuffer==UIntPtr.Zero||
                 receipt.ValidationFlags!=0x7Fu||
@@ -3805,7 +4393,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.PoolSlabs==null||value.PoolFree==null)
                 throw new InvalidOperationException("The interaction-graph checkpoint sidecar is incomplete.");
             NativeInteractionGraphReceipt receipt=value.Receipt;
-            if(receipt.Result!=1||receipt.ApiVersion!=15||receipt.StructSize!=500u||
+            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=500u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
                 receipt.LlContext==UIntPtr.Zero||receipt.ActiveBodiesData==UIntPtr.Zero||
@@ -3900,6 +4488,218 @@ namespace SuperchargedPatch.Authoring.Modules
                     pool.ValidationFlags!=0x7Fu)
                     throw new InvalidOperationException("An interaction pointer-pool receipt is incomplete.");
             }
+        }
+
+        private static void ValidateTransformCacheState(TransformCacheState value)
+        {
+            if(value==null||value.Entries==null||value.FreeIds==null||value.Bindings==null)
+                throw new InvalidOperationException("The transform-cache checkpoint sidecar is incomplete.");
+            NativeTransformCacheReceipt receipt=value.Receipt;
+            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=144u||
+                receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
+                receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
+                receipt.Context==UIntPtr.Zero||receipt.TransformCache==UIntPtr.Zero||
+                receipt.TransformsData==UIntPtr.Zero||receipt.RefCountsData==UIntPtr.Zero||
+                receipt.CurrentId>MaximumTransformCacheIds||
+                receipt.EntriesRequired!=receipt.CurrentId||
+                receipt.EntriesWritten!=(uint)value.Entries.Length||
+                receipt.EntriesRequired!=receipt.EntriesWritten||
+                receipt.FreeWritten!=(uint)value.FreeIds.Length||
+                receipt.FreeRequired!=receipt.FreeWritten||
+                receipt.BindingsWritten!=(uint)value.Bindings.Length||
+                receipt.BindingsRequired!=receipt.BindingsWritten||
+                receipt.TransformsCount<receipt.CurrentId||receipt.RefCountsCount<receipt.CurrentId||
+                receipt.FreeCount!=(uint)value.FreeIds.Length||
+                receipt.LiveCount>receipt.CurrentId||
+                value.Entries.Any(entry=>entry.Rotation==null||entry.Rotation.Length!=4||
+                    entry.Position==null||entry.Position.Length!=3)||
+                receipt.EntryHash!=TransformCacheEntryHash(value.Entries)||
+                receipt.FreeOrderHash!=ContactPoolOrderHash(value.FreeIds)||
+                receipt.BindingHash!=TransformCacheBindingHash(value.Bindings)||
+                receipt.SnapshotHash!=TransformCacheSnapshotHash(receipt)||
+                receipt.ValidationFlags!=0xFFu)
+                throw new InvalidOperationException("The transform-cache checkpoint receipt is incomplete.");
+            var free=new HashSet<uint>(value.FreeIds);
+            if(free.Count!=value.FreeIds.Length||value.FreeIds.Any(id=>id>=receipt.CurrentId))
+                throw new InvalidOperationException("The transform-cache free-ID order contains a duplicate or out-of-range ID.");
+            ulong totalRefs=0,totalBindings=0;
+            for(int i=0;i<value.Entries.Length;i++)
+            {
+                NativeTransformCacheEntryRecord entry=value.Entries[i];
+                bool isFree=free.Contains(entry.Id);
+                bool live=entry.RefCount!=0;
+                if(entry.Id!=(uint)i||entry.Rotation==null||entry.Rotation.Length!=4||
+                    entry.Position==null||entry.Position.Length!=3||(entry.StateFlags&1u)==0||
+                    (((entry.StateFlags&2u)!=0)!=isFree)||
+                    (((entry.StateFlags&4u)!=0)!=live)||isFree==live||
+                    (isFree&&(entry.BindingCount!=0||entry.RefCount!=0)))
+                    throw new InvalidOperationException("A transform-cache entry contradicts its ID partition or native flags.");
+                totalRefs+=entry.RefCount;totalBindings+=entry.BindingCount;
+            }
+            if(value.Entries.Count(entry=>entry.RefCount!=0)!=(int)receipt.LiveCount||
+                totalRefs!=receipt.TotalRefCount||totalBindings!=(ulong)value.Bindings.Length)
+                throw new InvalidOperationException("Transform-cache refcount or binding totals disagree with its receipt.");
+            var bindingCounts=new uint[value.Entries.Length];
+            foreach(NativeTransformCacheBindingRecord binding in value.Bindings)
+            {
+                if(binding.ShapeSim==UIntPtr.Zero||binding.ShapeCore==UIntPtr.Zero||
+                    binding.PxsShapeCore==UIntPtr.Zero||binding.Interaction==UIntPtr.Zero||
+                    binding.EndpointIndex>1u||binding.CacheId>=receipt.CurrentId||
+                    binding.ValidationFlags!=0xFu||free.Contains(binding.CacheId))
+                    throw new InvalidOperationException("A transform-cache binding row is null, free, or invalid.");
+                NativeTransformCacheEntryRecord entry=value.Entries[binding.CacheId];
+                if(binding.RefCount!=entry.RefCount||binding.PoseHash!=entry.PoseHash)
+                    throw new InvalidOperationException("A transform-cache binding disagrees with its referenced entry.");
+                bindingCounts[binding.CacheId]++;
+            }
+            for(int i=0;i<bindingCounts.Length;i++)
+                if(bindingCounts[i]!=value.Entries[i].BindingCount)
+                    throw new InvalidOperationException("Transform-cache binding multiplicity differs from its entry metadata.");
+        }
+
+        private static uint TransformCacheEntryHash(NativeTransformCacheEntryRecord[] values)
+        {
+            uint hash=2166136261u;
+            foreach(NativeTransformCacheEntryRecord value in values)
+                foreach(uint word in new[]{value.Id,value.RefCount,
+                    FloatBits(value.Rotation[0]),FloatBits(value.Rotation[1]),
+                    FloatBits(value.Rotation[2]),FloatBits(value.Rotation[3]),
+                    FloatBits(value.Position[0]),FloatBits(value.Position[1]),
+                    FloatBits(value.Position[2]),value.PoseHash,value.BindingCount,value.StateFlags})
+                    foreach(byte item in BitConverter.GetBytes(word)){hash^=item;hash*=16777619u;}
+            return hash;
+        }
+
+        private static uint TransformCacheBindingHash(NativeTransformCacheBindingRecord[] values)
+        {
+            uint hash=2166136261u;
+            foreach(NativeTransformCacheBindingRecord value in values)
+                foreach(uint word in new[]{value.ShapeSim.ToUInt32(),value.ShapeCore.ToUInt32(),
+                    value.PxsShapeCore.ToUInt32(),value.Interaction.ToUInt32(),
+                    value.InteractionIndex,value.EndpointIndex,value.CacheId,value.RefCount,
+                    value.PoseHash,value.ValidationFlags})
+                    foreach(byte item in BitConverter.GetBytes(word)){hash^=item;hash*=16777619u;}
+            return hash;
+        }
+
+        private static uint TransformCacheSnapshotHash(NativeTransformCacheReceipt value)
+        {
+            uint hash=2166136261u;
+            foreach(uint word in new[]{value.CurrentId,value.EntryHash,value.FreeOrderHash,value.BindingHash})
+                foreach(byte item in BitConverter.GetBytes(word)){hash^=item;hash*=16777619u;}
+            return hash;
+        }
+
+        private void ValidateFinishBroadPhaseReceiptContract(
+            NativeFinishBroadPhaseObserverReceipt receipt,int size)
+        {
+            if(receipt.ApiVersion!=16||receipt.StructSize!=(uint)size||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+                throw new InvalidOperationException("Native finishBroadPhase observer receipt contract differs.");
+        }
+
+        private static void ValidateFinishBroadPhaseState(
+            FinishBroadPhaseState value,CheckpointSidecar sidecar)
+        {
+            if(value==null||value.Created==null||value.Deleted==null||sidecar==null||
+                sidecar.InteractionGraph==null||sidecar.TransformCache==null)
+                throw new InvalidOperationException("The finishBroadPhase checkpoint observation is incomplete.");
+            NativeFinishBroadPhaseObserverReceipt receipt=value.Receipt;
+            NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
+            NativeTransformCacheReceipt cache=sidecar.TransformCache.Receipt;
+            if(receipt.Result!=1||receipt.ApiVersion!=16||receipt.StructSize!=152u||
+                receipt.UnityBase==UIntPtr.Zero||receipt.Installed!=1||receipt.State!=4||
+                receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedOrdinal==0||
+                receipt.ArmedOrdinal!=receipt.ObservationOrdinal||
+                receipt.SlotIndex!=(receipt.ObservationOrdinal-1u)%4u||
+                receipt.ArmedThreadId==0||receipt.ArmedThreadId!=receipt.ThreadId||
+                receipt.ExpectedScene!=receipt.ObservedScene||
+                receipt.ExpectedContext!=receipt.ObservedContext||
+                receipt.ExpectedNPhaseCore!=receipt.ObservedNPhaseCore||
+                receipt.AabbManager==UIntPtr.Zero||
+                receipt.ExpectedScene!=graph.OwnerScene||receipt.ExpectedContext!=graph.LlContext||
+                receipt.ExpectedNPhaseCore!=graph.NPhaseCore||
+                receipt.InteractionScene!=graph.InteractionScene||
+                receipt.TransformCache!=cache.TransformCache||
+                receipt.CreatedRequired!=(uint)value.Created.Length||
+                receipt.CreatedWritten!=receipt.CreatedRequired||
+                receipt.DeletedRequired!=(uint)value.Deleted.Length||
+                receipt.DeletedWritten!=receipt.DeletedRequired||
+                receipt.CreatedRequired>MaximumBroadPhaseOverlaps||
+                receipt.DeletedRequired>MaximumBroadPhaseOverlaps||
+                receipt.CreatedHash!=BroadPhaseOverlapOrderHash(value.Created)||
+                receipt.DeletedHash!=BroadPhaseOverlapOrderHash(value.Deleted)||
+                receipt.ValidationFlags!=0x3FFu||receipt.InvalidKind!=0||
+                receipt.Detail!=0||receipt.DroppedObservations!=0)
+                throw new InvalidOperationException("The finishBroadPhase observation receipt is incomplete or belongs to another physics transaction.");
+            foreach(NativeBroadPhaseOverlapRecord overlap in value.Created.Concat(value.Deleted))
+                if(overlap.UserData0==UIntPtr.Zero||overlap.UserData1==UIntPtr.Zero||
+                    overlap.UserData0==overlap.UserData1||
+                    overlap.ShapeCore0==UIntPtr.Zero||overlap.ShapeCore1==UIntPtr.Zero||
+                    overlap.ShapeCore0==overlap.ShapeCore1||
+                    overlap.PxsShapeCore0==UIntPtr.Zero||overlap.PxsShapeCore1==UIntPtr.Zero||
+                    overlap.PxsShapeCore0.ToUInt32()!=unchecked(overlap.ShapeCore0.ToUInt32()+0x20u)||
+                    overlap.PxsShapeCore1.ToUInt32()!=unchecked(overlap.ShapeCore1.ToUInt32()+0x20u)||
+                    overlap.PairHash!=BroadPhasePairHash(overlap)||
+                    overlap.ValidationFlags!=0xFu)
+                    throw new InvalidOperationException("A finishBroadPhase overlap row is null or invalid.");
+            // preCacheHash/preGraphHash are entry-time f445 observations.  The
+            // sidecar is a settled f444 capture, so equality is intentionally
+            // neither required nor inferred here.
+        }
+
+        private static uint BroadPhasePairHash(NativeBroadPhaseOverlapRecord value)
+        {
+            uint hash=2166136261u;
+            foreach(uint word in new[]{value.UserData0.ToUInt32(),value.UserData1.ToUInt32(),
+                value.ShapeCore0.ToUInt32(),value.ShapeCore1.ToUInt32(),
+                value.PxsShapeCore0.ToUInt32(),value.PxsShapeCore1.ToUInt32(),
+                value.CacheId0,value.CacheId1})
+                foreach(byte item in BitConverter.GetBytes(word)){hash^=item;hash*=16777619u;}
+            return hash;
+        }
+
+        private static uint BroadPhaseOverlapOrderHash(NativeBroadPhaseOverlapRecord[] values)
+        {
+            if(values==null)throw new ArgumentNullException("values");
+            uint hash=2166136261u;
+            foreach(NativeBroadPhaseOverlapRecord value in values)
+                foreach(uint word in new[]{value.UserData0.ToUInt32(),value.UserData1.ToUInt32(),
+                    value.ShapeCore0.ToUInt32(),value.ShapeCore1.ToUInt32(),
+                    value.PxsShapeCore0.ToUInt32(),value.PxsShapeCore1.ToUInt32(),
+                    value.CacheId0,value.CacheId1,value.PairHash,value.ValidationFlags})
+                    foreach(byte item in BitConverter.GetBytes(word)){hash^=item;hash*=16777619u;}
+            return hash;
+        }
+
+        private void RecordFinishBroadPhaseReceipt(string action,
+            NativeFinishBroadPhaseObserverReceipt receipt)
+        {
+            finishBroadPhaseReceipts.Add(new Dictionary<string,object>{{"action",action},
+                {"result",receipt.Result},{"lastError",receipt.LastError},{"state",receipt.State},
+                {"installed",receipt.Installed!=0},{"expectedScene",Hex(receipt.ExpectedScene)},
+                {"expectedContext",Hex(receipt.ExpectedContext)},
+                {"expectedNPhaseCore",Hex(receipt.ExpectedNPhaseCore)},
+                {"observedScene",Hex(receipt.ObservedScene)},
+                {"observedContext",Hex(receipt.ObservedContext)},
+                {"observedNPhaseCore",Hex(receipt.ObservedNPhaseCore)},
+                {"aabbManager",Hex(receipt.AabbManager)},
+                {"interactionScene",Hex(receipt.InteractionScene)},
+                {"transformCache",Hex(receipt.TransformCache)},
+                {"expectedPass",receipt.ExpectedPass},{"pass",receipt.Pass},
+                {"armedThreadId",receipt.ArmedThreadId},{"threadId",receipt.ThreadId},
+                {"armedOrdinal",receipt.ArmedOrdinal},{"observationOrdinal",receipt.ObservationOrdinal},
+                {"slotIndex",receipt.SlotIndex},{"createdCount",receipt.CreatedWritten},
+                {"deletedCount",receipt.DeletedWritten},
+                {"createdHash","0x"+receipt.CreatedHash.ToString("X8")},
+                {"deletedHash","0x"+receipt.DeletedHash.ToString("X8")},
+                {"preCacheHash","0x"+receipt.PreCacheHash.ToString("X8")},
+                {"postCacheHash","0x"+receipt.PostCacheHash.ToString("X8")},
+                {"preGraphHash","0x"+receipt.PreGraphHash.ToString("X8")},
+                {"postGraphHash","0x"+receipt.PostGraphHash.ToString("X8")},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")},
+                {"droppedObservations",receipt.DroppedObservations}});
+            if(finishBroadPhaseReceipts.Count>24)finishBroadPhaseReceipts.RemoveAt(0);
         }
 
         private static void ValidateContactManagerOwnerState(ContactManagerOwnerState value)
@@ -4065,6 +4865,73 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")}};
         }
 
+        private static object DescribeTransformCacheState(TransformCacheState value)
+        {
+            if(value==null)return null;
+            NativeTransformCacheReceipt receipt=value.Receipt;
+            object[] entries=value.Entries.Select(entry=>(object)new Dictionary<string,object>{
+                {"id",entry.Id},{"refCount",entry.RefCount},{"bindingCount",entry.BindingCount},
+                {"poseHash","0x"+entry.PoseHash.ToString("X8")},
+                {"stateFlags","0x"+entry.StateFlags.ToString("X2")},
+                {"rotationBits",entry.Rotation.Select(item=>(object)
+                    ("0x"+FloatBits(item).ToString("X8"))).ToArray()},
+                {"positionBits",entry.Position.Select(item=>(object)
+                    ("0x"+FloatBits(item).ToString("X8"))).ToArray()}}).ToArray();
+            object[] bindings=value.Bindings.Select(binding=>(object)new Dictionary<string,object>{
+                {"interaction",Hex(binding.Interaction)},{"interactionIndex",binding.InteractionIndex},
+                {"endpointIndex",binding.EndpointIndex},{"shapeSim",Hex(binding.ShapeSim)},
+                {"shapeCore",Hex(binding.ShapeCore)},{"pxsShapeCore",Hex(binding.PxsShapeCore)},
+                {"cacheId",binding.CacheId},{"refCount",binding.RefCount},
+                {"poseHash","0x"+binding.PoseHash.ToString("X8")}}).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore",Hex(receipt.NPhaseCore)},
+                {"ownerScene",Hex(receipt.OwnerScene)},{"interactionScene",Hex(receipt.InteractionScene)},
+                {"context",Hex(receipt.Context)},{"transformCache",Hex(receipt.TransformCache)},
+                {"currentId",receipt.CurrentId},{"liveCount",receipt.LiveCount},
+                {"totalRefCount",receipt.TotalRefCount},{"freeIds",value.FreeIds.Cast<object>().ToArray()},
+                {"entryHash","0x"+receipt.EntryHash.ToString("X8")},
+                {"freeOrderHash","0x"+receipt.FreeOrderHash.ToString("X8")},
+                {"bindingHash","0x"+receipt.BindingHash.ToString("X8")},
+                {"snapshotHash","0x"+receipt.SnapshotHash.ToString("X8")},
+                {"entries",entries},{"bindings",bindings},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")}};
+        }
+
+        private static object DescribeFinishBroadPhaseState(FinishBroadPhaseState value)
+        {
+            if(value==null)return null;
+            NativeFinishBroadPhaseObserverReceipt receipt=value.Receipt;
+            Func<NativeBroadPhaseOverlapRecord,object> describe=overlap=>
+                new Dictionary<string,object>{{"userData0",Hex(overlap.UserData0)},
+                    {"userData1",Hex(overlap.UserData1)},{"shapeCore0",Hex(overlap.ShapeCore0)},
+                    {"shapeCore1",Hex(overlap.ShapeCore1)},
+                    {"pxsShapeCore0",Hex(overlap.PxsShapeCore0)},
+                    {"pxsShapeCore1",Hex(overlap.PxsShapeCore1)},
+                    {"cacheId0",overlap.CacheId0},{"cacheId1",overlap.CacheId1},
+                    {"pairHash","0x"+overlap.PairHash.ToString("X8")}};
+            return new Dictionary<string,object>{{"expectedScene",Hex(receipt.ExpectedScene)},
+                {"expectedContext",Hex(receipt.ExpectedContext)},
+                {"expectedNPhaseCore",Hex(receipt.ExpectedNPhaseCore)},
+                {"observedScene",Hex(receipt.ObservedScene)},
+                {"observedContext",Hex(receipt.ObservedContext)},
+                {"observedNPhaseCore",Hex(receipt.ObservedNPhaseCore)},
+                {"aabbManager",Hex(receipt.AabbManager)},
+                {"interactionScene",Hex(receipt.InteractionScene)},
+                {"transformCache",Hex(receipt.TransformCache)},
+                {"expectedPass",receipt.ExpectedPass},{"pass",receipt.Pass},
+                {"armedThreadId",receipt.ArmedThreadId},{"threadId",receipt.ThreadId},
+                {"armedOrdinal",receipt.ArmedOrdinal},{"observationOrdinal",receipt.ObservationOrdinal},
+                {"slotIndex",receipt.SlotIndex},{"createdHash","0x"+receipt.CreatedHash.ToString("X8")},
+                {"deletedHash","0x"+receipt.DeletedHash.ToString("X8")},
+                {"preCacheHash","0x"+receipt.PreCacheHash.ToString("X8")},
+                {"postCacheHash","0x"+receipt.PostCacheHash.ToString("X8")},
+                {"preGraphHash","0x"+receipt.PreGraphHash.ToString("X8")},
+                {"postGraphHash","0x"+receipt.PostGraphHash.ToString("X8")},
+                {"created",value.Created.Select(describe).ToArray()},
+                {"deleted",value.Deleted.Select(describe).ToArray()},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")},
+                {"droppedObservations",receipt.DroppedObservations}};
+        }
+
         private static uint DirtyInteractionOrderHash(NativeDirtyInteractionKey[] values)
         {
             if(values==null)throw new ArgumentNullException("values");
@@ -4125,13 +4992,17 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateActorPairReportPoolState(value.ActorPairReportPool);
             ValidateNPhaseReportState(value.NPhaseReports);
             ValidateInteractionGraphState(value.InteractionGraph);
+            ValidateTransformCacheState(value.TransformCache);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
+            ValidateFinishBroadPhaseState(value.FinishBroadPhase,value);
             if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.NPhaseReports.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
-                value.InteractionGraph.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore)
+                value.InteractionGraph.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
+                value.TransformCache.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
+                value.FinishBroadPhase.Receipt.ExpectedNPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore)
                 throw new InvalidOperationException("Checkpoint SIP and dirty-interaction state belong to different NPhaseCore instances.");
             ValidateCheckpointPoolCoherence(value);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
@@ -4149,11 +5020,13 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameActorPairReportPoolSnapshot(previous.ActorPairReportPool,value.ActorPairReportPool)&&
                     SameNPhaseReportState(previous.NPhaseReports,value.NPhaseReports)&&
                     SameInteractionGraphState(previous.InteractionGraph,value.InteractionGraph)&&
+                    SameTransformCacheState(previous.TransformCache,value.TransformCache)&&
+                    SameFinishBroadPhaseState(previous.FinishBroadPhase,value.FinishBroadPhase)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
                     SameDirtyInteractionSnapshot(previous.DirtyInteractions,value.DirtyInteractions);
-                if(!same)throw new InvalidOperationException("A differing physics-pool/Transform-dispatch sidecar already owns output frame "+value.Frame+".");
+                if(!same)throw new InvalidOperationException("A differing physics-pool/Transform/transition sidecar already owns output frame "+value.Frame+".");
                 return;
             }
             if(checkpointSidecars.Count>=MaximumCheckpointSidecars)
@@ -4172,6 +5045,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ActorPairReportPool.AllocatedOrder==null||
                 value.NPhaseReports==null||
                 value.InteractionGraph==null||value.InteractionGraph.Interactions==null||
+                value.TransformCache==null||value.TransformCache.Entries==null||
+                value.TransformCache.FreeIds==null||value.TransformCache.Bindings==null||
                 value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
                 value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
                 throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
@@ -4237,6 +5112,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 reportListIndices&&owners.Where(owner=>(owner.SipFlags&0x00A00000u)==0)
                     .All(owner=>owner.ReportPairIndex==0xFFFFFFFFu);
             ValidateInteractionGraphState(value.InteractionGraph);
+            ValidateTransformCacheState(value.TransformCache);
             NativeInteractionGraphReceipt graphReceipt=value.InteractionGraph.Receipt;
             var graphByPointer=value.InteractionGraph.Interactions.ToDictionary(
                 item=>item.Interaction.ToUInt32());
@@ -4256,6 +5132,50 @@ namespace SuperchargedPatch.Authoring.Modules
                     uint item1=item.PxsShapeCore1.ToUInt32();
                     return (owner0==item0&&owner1==item1)||(owner0==item1&&owner1==item0);
                 });
+            NativeTransformCacheReceipt cacheReceipt=value.TransformCache.Receipt;
+            uint typeZeroCount=graphReceipt.GlobalCount[0];
+            bool transformCacheCoherent=cacheReceipt.NPhaseCore==graphReceipt.NPhaseCore&&
+                cacheReceipt.OwnerScene==graphReceipt.OwnerScene&&
+                cacheReceipt.InteractionScene==graphReceipt.InteractionScene&&
+                cacheReceipt.Context==graphReceipt.LlContext&&
+                cacheReceipt.Context.ToUInt32()==value.Context&&
+                value.TransformCache.Bindings.Length==checked(owners.Length*2)&&
+                value.TransformCache.Bindings.All(binding=>binding.InteractionIndex<typeZeroCount);
+            if(transformCacheCoherent)foreach(IGrouping<uint,NativeTransformCacheBindingRecord> group in
+                value.TransformCache.Bindings.GroupBy(binding=>binding.InteractionIndex))
+            {
+                uint index=group.Key;
+                NativeInteractionGraphInteractionRecord item=value.InteractionGraph.Interactions[index];
+                NativeTransformCacheBindingRecord[] pair=group.OrderBy(binding=>binding.EndpointIndex).ToArray();
+                if(pair.Length!=2||pair[0].EndpointIndex!=0||pair[1].EndpointIndex!=1)
+                    transformCacheCoherent=false;
+                foreach(NativeTransformCacheBindingRecord binding in pair)
+                {
+                    uint endpoint=binding.EndpointIndex;
+                    UIntPtr shapeSim=endpoint==0?item.Element0:item.Element1;
+                    UIntPtr shapeCore=endpoint==0?item.ShapeCore0:item.ShapeCore1;
+                    UIntPtr pxsShapeCore=endpoint==0?item.PxsShapeCore0:item.PxsShapeCore1;
+                    if(binding.Interaction!=item.Interaction||binding.InteractionIndex!=index||
+                        binding.EndpointIndex!=endpoint||binding.ShapeSim!=shapeSim||
+                        binding.ShapeCore!=shapeCore||binding.PxsShapeCore!=pxsShapeCore)
+                        transformCacheCoherent=false;
+                }
+            }
+            if(transformCacheCoherent)foreach(NativeContactManagerOwnerRecord owner in owners)
+            {
+                uint interaction=unchecked(owner.Sip.ToUInt32()+8u);
+                NativeTransformCacheBindingRecord[] pair=value.TransformCache.Bindings
+                    .Where(binding=>binding.Interaction.ToUInt32()==interaction).ToArray();
+                if(pair.Length!=2)transformCacheCoherent=false;
+                else foreach(NativeTransformCacheBindingRecord binding in pair)
+                {
+                    bool endpoint0=binding.PxsShapeCore==owner.PxsShapeCore0&&
+                        binding.CacheId==owner.TransformCache0;
+                    bool endpoint1=binding.PxsShapeCore==owner.PxsShapeCore1&&
+                        binding.CacheId==owner.TransformCache1;
+                    if(!endpoint0&&!endpoint1)transformCacheCoherent=false;
+                }
+            }
             NativeContactManagerOwnerReceipt receipt=value.ContactManagerOwners.Receipt;
             if(receipt.Context.ToUInt32()!=value.Context||receipt.FreeArray.ToUInt32()!=value.FreeArray||
                 receipt.FreeCount!=(uint)value.ContactPoolOrder.Length||receipt.FreeOrderHash!=value.OrderHash||
@@ -4271,6 +5191,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ShapeInstancePairPool.Used<(uint)sips.Length||
                 value.ActorPairPool.Used!=(uint)actorPairs.Length||
                 !actorPairRowsCoherent||!nphaseReportCoherent||!interactionGraphCoherent||
+                !transformCacheCoherent||
                 value.LargeManifoldPool.Used<(uint)large.Length||
                 value.SphereManifoldPool.Used<(uint)sphere.Length)
                 throw new InvalidOperationException("Checkpoint contact owners and allocator partitions were not captured at one coherent physics boundary.");
@@ -4426,6 +5347,94 @@ namespace SuperchargedPatch.Authoring.Modules
             return true;
         }
 
+        private static bool SameTransformCacheState(TransformCacheState left,
+            TransformCacheState right)
+        {
+            if(left==null||right==null)return left==right;
+            if(!left.Receipt.Equals(right.Receipt)||left.Entries==null||right.Entries==null||
+                left.FreeIds==null||right.FreeIds==null||left.Bindings==null||right.Bindings==null||
+                left.Entries.Length!=right.Entries.Length||
+                left.Bindings.Length!=right.Bindings.Length||
+                !left.FreeIds.SequenceEqual(right.FreeIds))return false;
+            return SameTransformCacheEntries(left.Entries,right.Entries)&&
+                SameTransformCacheBindings(left.Bindings,right.Bindings);
+        }
+
+        private static bool SameTransformCacheEntries(NativeTransformCacheEntryRecord[] left,
+            NativeTransformCacheEntryRecord[] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)
+            {
+                NativeTransformCacheEntryRecord a=left[i],b=right[i];
+                if(a.Id!=b.Id||a.RefCount!=b.RefCount||a.PoseHash!=b.PoseHash||
+                    a.BindingCount!=b.BindingCount||a.StateFlags!=b.StateFlags||
+                    !SameFloatBits(a.Rotation,b.Rotation)||!SameFloatBits(a.Position,b.Position))
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool SameActiveTransformCacheEntries(
+            NativeTransformCacheEntryRecord[] left,NativeTransformCacheEntryRecord[] right)
+        {
+            if(left==null||right==null)return left==right;
+            uint[] leftIds=left.Where(entry=>entry.RefCount!=0).Select(entry=>entry.Id).ToArray();
+            uint[] rightIds=right.Where(entry=>entry.RefCount!=0).Select(entry=>entry.Id).ToArray();
+            if(!leftIds.SequenceEqual(rightIds))return false;
+            foreach(uint id in leftIds)
+            {
+                if(id>=(uint)right.Length)return false;
+                NativeTransformCacheEntryRecord a=left[id],b=right[id];
+                if(a.Id!=b.Id||a.RefCount!=b.RefCount||a.PoseHash!=b.PoseHash||
+                    a.BindingCount!=b.BindingCount||a.StateFlags!=b.StateFlags||
+                    !SameFloatBits(a.Rotation,b.Rotation)||!SameFloatBits(a.Position,b.Position))
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool SameTransformCacheBindings(NativeTransformCacheBindingRecord[] left,
+            NativeTransformCacheBindingRecord[] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)
+            {
+                NativeTransformCacheBindingRecord a=left[i],b=right[i];
+                if(a.ShapeSim!=b.ShapeSim||a.ShapeCore!=b.ShapeCore||
+                    a.PxsShapeCore!=b.PxsShapeCore||a.Interaction!=b.Interaction||
+                    a.InteractionIndex!=b.InteractionIndex||a.EndpointIndex!=b.EndpointIndex||
+                    a.CacheId!=b.CacheId||a.RefCount!=b.RefCount||a.PoseHash!=b.PoseHash||
+                    a.ValidationFlags!=b.ValidationFlags)return false;
+            }
+            return true;
+        }
+
+        private static bool SameFinishBroadPhaseState(FinishBroadPhaseState left,
+            FinishBroadPhaseState right)
+        {
+            if(left==null||right==null)return left==right;
+            if(!left.Receipt.Equals(right.Receipt)||left.Created==null||right.Created==null||
+                left.Deleted==null||right.Deleted==null||
+                left.Created.Length!=right.Created.Length||left.Deleted.Length!=right.Deleted.Length)
+                return false;
+            for(int i=0;i<left.Created.Length;i++)
+                if(!SameBroadPhaseOverlap(left.Created[i],right.Created[i]))return false;
+            for(int i=0;i<left.Deleted.Length;i++)
+                if(!SameBroadPhaseOverlap(left.Deleted[i],right.Deleted[i]))return false;
+            return true;
+        }
+
+        private static bool SameBroadPhaseOverlap(NativeBroadPhaseOverlapRecord a,
+            NativeBroadPhaseOverlapRecord b)
+        {
+            return a.UserData0==b.UserData0&&a.UserData1==b.UserData1&&
+                a.ShapeCore0==b.ShapeCore0&&a.ShapeCore1==b.ShapeCore1&&
+                a.PxsShapeCore0==b.PxsShapeCore0&&a.PxsShapeCore1==b.PxsShapeCore1&&
+                a.CacheId0==b.CacheId0&&a.CacheId1==b.CacheId1&&
+                a.PairHash==b.PairHash&&a.ValidationFlags==b.ValidationFlags;
+        }
+
         private static bool SameContactManagerOwnerSnapshot(ContactManagerOwnerState left,ContactManagerOwnerState right)
         {
             if(left==null||right==null)return left==right;
@@ -4506,6 +5515,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"actorPairReportPool",found?DescribeActorPairReportPoolState(value.ActorPairReportPool):null},
                 {"nphaseReports",found?DescribeNPhaseReportState(value.NPhaseReports):null},
                 {"interactionGraph",found?DescribeInteractionGraphState(value.InteractionGraph):null},
+                {"transformCache",found?DescribeTransformCacheState(value.TransformCache):null},
+                {"finishBroadPhase",found?DescribeFinishBroadPhaseState(value.FinishBroadPhase):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -4664,7 +5675,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:15},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:16},
                 {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
@@ -4688,6 +5699,20 @@ namespace SuperchargedPatch.Authoring.Modules
                     DescribeNPhaseReportState(latest.NPhaseReports)},
                 {"interactionGraphSnapshot",latest==null?null:
                     DescribeInteractionGraphState(latest.InteractionGraph)},
+                {"transformCacheSnapshotCaptured",latest!=null&&latest.TransformCache!=null},
+                {"transformCacheSnapshot",latest==null?null:
+                    DescribeTransformCacheState(latest.TransformCache)},
+                {"transformCacheCaptures",transformCacheCaptures},
+                {"finishBroadPhaseObserverInstalled",finishBroadPhaseObserverInstalled},
+                {"nativeLibraryUnloadSuppressedForHookSafety",finishBroadPhaseObserverWasInstalled||
+                    IsNativeLibraryPinned(library)},
+                {"finishBroadPhaseSnapshotCaptured",latest!=null&&latest.FinishBroadPhase!=null},
+                {"finishBroadPhaseSnapshot",latest==null?null:
+                    DescribeFinishBroadPhaseState(latest.FinishBroadPhase)},
+                {"finishBroadPhaseCapturePending",pendingFinishBroadPhaseOrdinal!=0},
+                {"pendingFinishBroadPhaseOrdinal",pendingFinishBroadPhaseOrdinal},
+                {"finishBroadPhaseCaptures",finishBroadPhaseCaptures},
+                {"finishBroadPhaseReceipts",finishBroadPhaseReceipts.ToArray()},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -4720,13 +5745,19 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"contactPoolReceipts",contactPoolReceipts.ToArray()},
                 {"manifoldPoolCaptures",manifoldPoolCaptures},{"manifoldPoolRestores",manifoldPoolRestores},
                 {"manifoldPoolReceipts",manifoldPoolReceipts.ToArray()},
-                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. The pass-through native observer records only the current PxsContext. Caller-owned, bounded sidecars retain the complete contact-manager, large-manifold and sphere-manifold free-list orders plus TransformChangeDispatch and PhysX dirty-interaction order for each exact core checkpoint object. One pause-fenced command may schedule the same read-only capture transaction at an exact future NativeKitchenCheckpoint output boundary without splitting input; it binds the already-published exact core snapshot, never runs early or late, and fails closed if that output frame is skipped. A successful rewind prunes only future sidecars; the next replay unpause restores the selected pool state and projects surviving dirty interactions into checkpoint-relative order while preserving current-only slots when explicitly enabled. Forward game data, score and input are not rewritten."}};
+                {"scope","Optional batched Unity Create(false)/Create(true) actor replacement plus exact capsule re-registration, restricted to explicit paused one-shot targets or, only when automaticChefs is enabled, five canonical cycles for the four local chefs during a checkpoint restore's internal main-physics unfreeze. Ordinary forward and replay unpauses never rebuild actors. Pass-through native observers identify the current PxsContext and capture one exact subsequent pass-zero finishBroadPhase transition without replacing the original call. Caller-owned, bounded sidecars retain the complete contact-manager, manifold, ShapeInstancePair, ActorPair, report, InteractionScene, PxsTransformCache, TransformChangeDispatch, dirty-interaction, and created/deleted-overlap orders for each exact core checkpoint object. One pause-fenced command may schedule the read-only capture transaction at an exact future NativeKitchenCheckpoint output boundary without splitting input; it binds the already-published exact core snapshot, never runs early or late, and fails closed if that output frame is skipped or either next-update observation is missing. A successful rewind prunes only future sidecars; implemented restore paths remain limited to the selected pool/dispatch/dirty state, while the new cache and broadphase state are planner evidence only. Forward game data, score and input are not rewritten."}};
             if(result!=null)value.Add("result",result);return value;
         }
 
         private void Deactivate()
         {
             CancelContactRecreateWork();
+            CancelCheckpointObservationWork();
+            if(finishBroadPhaseObserverInstalled)
+            {
+                CallFinishBroadPhaseObserverAction(uninstallFinishBroadPhaseObserver,"uninstall");
+                finishBroadPhaseObserverInstalled=false;
+            }
             if(dirtyInteractionHookInstalled)
             {
                 CallDirtyInteractionAction(uninstallDirtyInteractionOrder,"uninstall",1);
@@ -4754,6 +5785,10 @@ namespace SuperchargedPatch.Authoring.Modules
             captureActorPairReportPoolSnapshot=null;
             captureNPhaseReportStateSnapshot=null;
             captureInteractionGraphSnapshot=null;
+            captureTransformCacheSnapshot=null;
+            installFinishBroadPhaseObserver=null;statusFinishBroadPhaseObserver=null;
+            armFinishBroadPhaseObserver=null;copyFinishBroadPhaseObserver=null;
+            cancelFinishBroadPhaseObserver=null;uninstallFinishBroadPhaseObserver=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
             contactRecreateApiVersion=null;contactRecreateAuditApiVersion=null;auditContactRecreate=null;
             armContactRecreate=null;statusContactRecreate=null;cancelContactRecreate=null;
@@ -4761,7 +5796,18 @@ namespace SuperchargedPatch.Authoring.Modules
             lastObservedDirtyNPhase=null;dirtyNPhaseObservationFloor=0;
             copyDirtyInteractionCapture=null;armDirtyInteractionRestore=null;cancelDirtyInteractionOrder=null;
             uninstallDirtyInteractionOrder=null;
-            if(library!=IntPtr.Zero){FreeLibrary(library);library=IntPtr.Zero;}
+            if(library!=IntPtr.Zero)
+            {
+                bool retain=false;
+                if(finishBroadPhaseObserverWasInstalled)
+                    lock(processPinnedNativeLibraries)
+                        retain=processPinnedNativeLibraries.Add(library);
+                // If this exact image was pinned by an earlier activation,
+                // release only the current activation's additional reference.
+                if(!retain)FreeLibrary(library);
+                library=IntPtr.Zero;
+            }
+            finishBroadPhaseObserverWasInstalled=false;
             if(ReferenceEquals(active,this))active=null;
         }
 
@@ -4785,6 +5831,11 @@ namespace SuperchargedPatch.Authoring.Modules
             return result;
         }
         private static string Hash(string path){using(var sha=SHA256.Create())using(var stream=File.OpenRead(path))return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","");}
+        private static bool IsNativeLibraryPinned(IntPtr handle)
+        {
+            if(handle==IntPtr.Zero)return false;
+            lock(processPinnedNativeLibraries)return processPinnedNativeLibraries.Contains(handle);
+        }
         private static uint ReadWord(uint address)
         {
             byte[] bytes=new byte[4];UIntPtr read=UIntPtr.Zero;

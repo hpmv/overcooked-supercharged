@@ -20,6 +20,13 @@ EXPORTS
     oc2_manifold_pool_capture_snapshot
     oc2_manifold_pool_restore_snapshot
     oc2_interaction_graph_capture_snapshot
+    oc2_transform_cache_capture_snapshot
+    oc2_finish_broad_phase_observer_install
+    oc2_finish_broad_phase_observer_status
+    oc2_finish_broad_phase_observer_arm
+    oc2_finish_broad_phase_observer_copy
+    oc2_finish_broad_phase_observer_cancel
+    oc2_finish_broad_phase_observer_uninstall
     oc2_contact_manager_context_observer_install
     oc2_contact_manager_context_observer_status
     oc2_contact_manager_context_observer_uninstall

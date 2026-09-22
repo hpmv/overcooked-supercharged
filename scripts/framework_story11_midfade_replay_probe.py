@@ -156,6 +156,8 @@ def main():
     args = parser.parse_args()
     if args.restore_transform_dispatch and not args.restore_contact_manager_free_stack:
         parser.error("--restore-transform-dispatch requires --restore-contact-manager-free-stack")
+    if args.readiness_audit_only and not args.restore_contact_manager_free_stack:
+        parser.error("--readiness-audit-only requires --restore-contact-manager-free-stack")
     if not 1 <= args.settle_timeout <= 600:
         parser.error("--settle-timeout must be 1..600 seconds")
     if args.target_frame != 444:
@@ -360,6 +362,8 @@ def main():
             "rigidbody.target-actor-pair-report-sidecar",
             "rigidbody.target-nphase-report-sidecar",
             "rigidbody.target-interaction-graph-sidecar",
+            "rigidbody.target-transform-cache-sidecar",
+            "rigidbody.target-broadphase-transition-sidecar",
             "rigidbody.target-large-sidecar", "rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar", "rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows", "rigidbody.native-audit-repeatability",
@@ -395,6 +399,14 @@ def main():
             "rigidbody.interaction-graph.actor-order-and-cached-indices",
             "rigidbody.interaction-graph.sip-semantic-keys",
             "rigidbody.interaction-graph.pointer-pool-topology",
+            "rigidbody.transform-cache.repeatability",
+            "rigidbody.transform-cache.layout-identity",
+            "rigidbody.transform-cache.free-id-order",
+            "rigidbody.transform-cache.binding-and-refcounts",
+            "rigidbody.transform-cache.active-transforms",
+            "rigidbody.broadphase.capture", "rigidbody.broadphase.identity",
+            "rigidbody.broadphase.created-order", "rigidbody.broadphase.deleted-order",
+            "rigidbody.broadphase.post-state",
         )
         rigidbody_required = list(rigidbody_base_required)
         if phase == "target-paused":
@@ -414,7 +426,7 @@ def main():
             actor.get("provider") == "authoring-rigidbody-actor-rebuild-v1" and
             actor.get("phase") == phase and actor.get("sourceFrame") == 1048 and
             actor.get("targetFrame") == args.target_frame and
-            provider_coverage.get("contractVersion") == 4 and
+            provider_coverage.get("contractVersion") == 5 and
             set(provider_coverage.get("required", [])) == set(rigidbody_required) and
             provider_coverage.get("uncovered") == [] and
             provider_coverage.get("duplicates") == [] and
@@ -568,7 +580,7 @@ def main():
                         "The aggregate omitted required readiness check identifiers."
                         if missing_ids else
                         "Every required aggregate readiness check is explicitly represented."),
-            "evidence": {"contractVersion": 4, "required": required_ids,
+            "evidence": {"contractVersion": 5, "required": required_ids,
                          "uncovered": missing_ids, "duplicates": duplicate_ids},
             "mutation": {"gameState": False, "moduleState": False,
                          "nativeState": False},
@@ -592,7 +604,7 @@ def main():
             "blockers": blockers,
             "deferred": deferred,
             "coverage": {
-                "contractVersion": 4,
+                "contractVersion": 5,
                 "required": required_ids,
                 "uncovered": missing_ids,
                 "duplicates": duplicate_ids,
@@ -617,6 +629,7 @@ def main():
         fresh_bridge = call("bridge", {"command": "status"}, start_label + "-bridge")
         frame = 1
         prefix_boundaries = []
+        target_actor_observation_f488 = None
         for index in range(args.resume_prefix_index):
             start = frame
             frame += prefix_lengths[index] + 2
@@ -702,6 +715,51 @@ def main():
                         "The exact f444 Animator resume-ready capture failed: " +
                         json.dumps({"failure": animator_capture.get("scheduledResumeReadyCaptureFailure"),
                                     "receipt": capture_receipt}))
+                if args.restore_contact_manager_free_stack:
+                    target_actor_observation_f488 = call(
+                        "bridge", {"command": "hot-call", "slot": args.actor_rebuild_slot,
+                                   "operation": "checkpoint-status",
+                                   "args": {"frame": args.target_frame}},
+                        "target-physics-observation-f488")["detail"]["result"]
+                    target_checkpoint = target_actor_observation_f488.get("result", {})
+                    transform_cache = target_checkpoint.get("transformCache", {})
+                    broadphase = target_checkpoint.get("finishBroadPhase", {})
+                    require(state.get("frame") == 488 and
+                            target_actor_observation_f488.get("active") is True and
+                            target_actor_observation_f488.get("finishBroadPhaseObserverInstalled") is True and
+                            target_actor_observation_f488.get("finishBroadPhaseCapturePending") is False and
+                            target_actor_observation_f488.get("finishBroadPhaseCaptures") == 1 and
+                            target_checkpoint.get("captured") is True and
+                            target_checkpoint.get("coreSnapshotMatches") is True and
+                            isinstance(transform_cache, dict) and
+                            isinstance(broadphase, dict) and
+                            broadphase.get("expectedPass") == broadphase.get("pass") == 0 and
+                            broadphase.get("armedOrdinal") == broadphase.get("observationOrdinal") and
+                            isinstance(broadphase.get("observationOrdinal"), int) and
+                            broadphase.get("observationOrdinal") > 0 and
+                            broadphase.get("armedThreadId") == broadphase.get("threadId") and
+                            isinstance(broadphase.get("threadId"), int) and
+                            broadphase.get("threadId") > 0 and
+                            broadphase.get("droppedObservations") == 0 and
+                            broadphase.get("expectedScene") == broadphase.get("observedScene") ==
+                            transform_cache.get("ownerScene") and
+                            broadphase.get("expectedContext") == broadphase.get("observedContext") ==
+                            transform_cache.get("context") and
+                            broadphase.get("expectedNPhaseCore") == broadphase.get("observedNPhaseCore") ==
+                            transform_cache.get("nphaseCore") and
+                            broadphase.get("interactionScene") == transform_cache.get("interactionScene") and
+                            broadphase.get("transformCache") == transform_cache.get("transformCache") and
+                            isinstance(broadphase.get("created"), list) and
+                            isinstance(broadphase.get("deleted"), list),
+                            "The f444 snapshot and exact subsequent f445 pass-zero observation were not "
+                            "published as one coherent transaction by f488.")
+                    summary["capturedPhysicsObservationF488"] = {
+                        "transformCacheSnapshotHash": transform_cache.get("snapshotHash"),
+                        "broadphaseObservationOrdinal": broadphase.get("observationOrdinal"),
+                        "createdCount": len(broadphase.get("created", [])),
+                        "deletedCount": len(broadphase.get("deleted", [])),
+                    }
+                    save("target-physics-observation-f488.json", target_actor_observation_f488)
             if registry_evidence is not None:
                 native = native_observation(f"prefix-{index}-native")
                 require_native_boundary(native)
@@ -765,6 +823,14 @@ def main():
                     (not args.restore_transform_dispatch or
                      actor.get("automaticTransformDispatchRestore") is True),
                     "Requested contact/Transform restoration is not active.")
+            require(isinstance(target_actor_observation_f488, dict) and
+                    actor.get("finishBroadPhaseCapturePending") is False and
+                    actor.get("finishBroadPhaseCaptures") == 1 and
+                    actor.get("finishBroadPhaseSnapshot") ==
+                    target_actor_observation_f488.get("finishBroadPhaseSnapshot") and
+                    actor.get("transformCacheSnapshot") ==
+                    target_actor_observation_f488.get("transformCacheSnapshot"),
+                    "The exact f445 observation changed or was replaced between f488 and f1048.")
             checkpoint = call("bridge", {"command": "hot-call", "slot": args.actor_rebuild_slot,
                                "operation": "checkpoint-status", "args": {"frame": args.target_frame}},
                               "target-contact-sidecar")["detail"]["result"].get("result", {})
