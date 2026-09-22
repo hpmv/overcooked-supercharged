@@ -21,6 +21,7 @@
 #include "../nphase/NPhaseTopology.h"
 #include "../island/IslandImage.h"
 #include "../memblock/MemBlockImage.h"
+#include "../memblock_restore/MemBlockRestore.h"
 #include "../interaction/InteractionImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
@@ -516,6 +517,7 @@ int main(int argc, char** argv)
     bool nphaseReverseProbe = false;
     bool interactionOrderProbe = false;
     bool interactionMetadataProbe = false;
+    bool joinedPayloadProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
@@ -523,11 +525,12 @@ int main(int argc, char** argv)
         else if (std::string(argv[i]) == "--nphase-reverse-probe") nphaseReverseProbe = true;
         else if (std::string(argv[i]) == "--interaction-order-probe") interactionOrderProbe = true;
         else if (std::string(argv[i]) == "--interaction-metadata-probe") interactionMetadataProbe = true;
+        else if (std::string(argv[i]) == "--joined-payload-probe") joinedPayloadProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
     }
 
     if (nphaseTopologyProbe || nphaseReverseProbe || interactionOrderProbe ||
-        interactionMetadataProbe)
+        interactionMetadataProbe || joinedPayloadProbe)
     {
         if (publicProbe) die("NPhase topology probe is a separate process mode");
         Runtime runtime;
@@ -564,10 +567,16 @@ int main(int argc, char** argv)
                                                      checkpointTopology, error))
             die("NPhase checkpoint topology capture: " + error);
         physx333_offline::InteractionImage checkpointInteraction;
-        if ((interactionOrderProbe || interactionMetadataProbe) &&
+        if ((interactionOrderProbe || interactionMetadataProbe || joinedPayloadProbe) &&
             !physx333_offline::CaptureInteractionImage(*source->scene,
                                                         checkpointInteraction, error))
             die("interaction checkpoint capture: " + error);
+        physx333_offline::MemBlockIdentityRegistry memBlockIds;
+        physx333_offline::MemBlockRestoreImage checkpointMemBlocks;
+        if (joinedPayloadProbe &&
+            !physx333_offline::CaptureMemBlockRestore(*source->scene,
+                memBlockIds, checkpointMemBlocks, error))
+            die("joined checkpoint memory-block capture: " + error);
         physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
         if (nphaseReverseProbe)
             std::reverse(requestedTopology.pairs.begin(), requestedTopology.pairs.end());
@@ -588,7 +597,7 @@ int main(int argc, char** argv)
             !deletedTopology.equals(afterReject, error))
             die("NPhase bridge preflight rejection changed the scene: " + error);
         std::cout << "PASS NPhase filter mismatch rejected before mutation\n";
-        if (interactionOrderProbe || interactionMetadataProbe)
+        if (interactionOrderProbe || interactionMetadataProbe || joinedPayloadProbe)
         {
             if (!physx333_offline::RestoreInteractionOrder(*source->scene,
                                                            checkpointInteraction, error))
@@ -599,7 +608,7 @@ int main(int argc, char** argv)
                 !checkpointInteraction.sameSlotsAndOrder(recreatedInteraction, error))
                 die("interaction slot/order comparison: " + error);
             std::cout << "PASS interaction scene/actor and physical slot order restored\n";
-            if (interactionMetadataProbe)
+            if (interactionMetadataProbe || joinedPayloadProbe)
             {
                 if (!physx333_offline::RestoreInteractionMetadata(*source->scene,
                                                                     checkpointInteraction, error))
@@ -617,7 +626,7 @@ int main(int argc, char** argv)
         if (!requestedTopology.sameShapePairs(recreated, error))
             die("NPhase reconstructed pair identities: " + error);
         const bool topologyExact = requestedTopology.equals(recreated, error);
-        if (interactionMetadataProbe)
+        if (interactionMetadataProbe || joinedPayloadProbe)
         {
             if (!topologyExact)
                 die("interaction metadata did not restore topology/touch state: " + error);
@@ -630,6 +639,72 @@ int main(int argc, char** argv)
             std::cout << "PASS NPhase lifecycle restores six requested shape pairs"
                       << (nphaseReverseProbe ? " (reverse order)" : "")
                       << "; touch/contact history remains different (" << error << ")\n";
+        }
+        if (joinedPayloadProbe)
+        {
+            physx333_offline::MemBlockRestoreImage recreatedMemBlocks;
+            if (!physx333_offline::CaptureMemBlockRestore(*source->scene,
+                    memBlockIds, recreatedMemBlocks, error))
+                die("joined recreated memory-block capture: " + error);
+            std::string difference;
+            const bool poolEqual = checkpointMemBlocks.pool.equals(
+                recreatedMemBlocks.pool, difference);
+            std::cout << "JOINED_MEMBLOCK equal=" << poolEqual
+                      << " first_difference=" << difference << "\n";
+            for (size_t i = 0; i < checkpointMemBlocks.pool.arrays.size(); ++i)
+                std::cout << "JOINED_ARRAY " << checkpointMemBlocks.pool.arrays[i].name
+                          << " checkpoint=" << checkpointMemBlocks.pool.arrays[i].size
+                          << "/" << checkpointMemBlocks.pool.arrays[i].capacity
+                          << " recreated=" << recreatedMemBlocks.pool.arrays[i].size
+                          << "/" << recreatedMemBlocks.pool.arrays[i].capacity
+                          << " same_storage=" <<
+                              (checkpointMemBlocks.pool.arrays[i].address ==
+                               recreatedMemBlocks.pool.arrays[i].address)
+                          << "\n";
+            if (!physx333_offline::InstallInteractionContactBindings(
+                    *source->scene, checkpointInteraction, error))
+                die("joined contact binding installation: " + error);
+            std::cout << "PASS joined contact binding installation\n";
+            physx333_offline::MemBlockRestoreImage installedMemBlocks;
+            if (!physx333_offline::CaptureMemBlockRestore(*source->scene,
+                    memBlockIds, installedMemBlocks, error))
+                die("joined installed memory-block capture: " + error);
+            std::cout << "JOINED_BINDINGS equal=" <<
+                (checkpointMemBlocks.contactBindings ==
+                 installedMemBlocks.contactBindings) << "\n";
+            for (size_t i = 0; i < checkpointMemBlocks.contactBindings.size(); ++i)
+            {
+                const auto& saved = checkpointMemBlocks.contactBindings[i];
+                const auto& installed = installedMemBlocks.contactBindings[i];
+                if (!(saved == installed))
+                    std::cout << "JOINED_BINDING_DIFF slot=" << i
+                              << " manager=" << saved.managerAddress << "/"
+                              << installed.managerAddress
+                              << " manifold=" << saved.manifold << "/"
+                              << installed.manifold << "\n";
+            }
+            if (!physx333_offline::RestoreMemBlockPoolForJoin(*source->scene,
+                    memBlockIds, checkpointMemBlocks, error))
+                die("joined memory-block restore: " + error);
+            std::cout << "PASS joined memory-block restore\n";
+            if (!physx333_offline::RestoreInteractionContactPayload(
+                    *source->scene, checkpointInteraction, error))
+                die("joined contact-manager payload restore: " + error);
+            std::cout << "PASS joined contact-manager payload restore\n";
+            for (unsigned iteration = 0; iteration < 100; ++iteration)
+            {
+                if (!physx333_offline::InstallInteractionContactBindings(
+                        *source->scene, checkpointInteraction, error))
+                    die("repeat contact binding installation: " + error);
+                if (!physx333_offline::RestoreMemBlockPoolForJoin(
+                        *source->scene, memBlockIds, checkpointMemBlocks,
+                        error))
+                    die("repeat memory-block restore: " + error);
+                if (!physx333_offline::RestoreInteractionContactPayload(
+                        *source->scene, checkpointInteraction, error))
+                    die("repeat contact payload restore: " + error);
+            }
+            std::cout << "PASS joined contact/allocator idempotence x100\n";
         }
         const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
         if (checkpointOracle.equals(recreatedOracle, error))

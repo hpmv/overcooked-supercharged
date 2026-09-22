@@ -129,7 +129,7 @@ bool registriesEqual(const MemBlockIdentityRegistry& a,
 }
 
 bool sameStorage(const MemBlockImage& a, const MemBlockImage& b,
-                 std::string& error)
+                 std::string& error, bool allowOwnerTransfer = false)
 {
     if (a.sceneAddress != b.sceneAddress ||
         a.poolAddress != b.poolAddress ||
@@ -147,7 +147,8 @@ bool sameStorage(const MemBlockImage& a, const MemBlockImage& b,
         const MemBlockImage::Array& x = a.arrays[i];
         const MemBlockImage::Array& y = b.arrays[i];
         if (x.address != y.address || x.capacity != y.capacity ||
-            x.size != y.size || x.name != y.name)
+            (!allowOwnerTransfer && x.size != y.size) || x.name != y.name ||
+            x.size > x.capacity || y.size > y.capacity)
         {
             error = std::string("array storage or size changed: ") + x.name;
             return false;
@@ -158,7 +159,7 @@ bool sameStorage(const MemBlockImage& a, const MemBlockImage& b,
 
 bool validateImage(const MemBlockRestoreImage& target,
                    const MemBlockRestoreImage& current,
-                   std::string& error)
+                   std::string& error, bool allowOwnerTransfer)
 {
     const MemBlockImage& saved = target.pool;
     const MemBlockImage& live = current.pool;
@@ -172,7 +173,7 @@ bool validateImage(const MemBlockRestoreImage& target,
         error = "memory-block capture contains unsupported ownership state";
         return false;
     }
-    if (!sameStorage(saved, live, error)) return false;
+    if (!sameStorage(saved, live, error, allowOwnerTransfer)) return false;
     if (saved.arrays.size() != kArrayCount ||
         saved.maxBlocks != live.maxBlocks ||
         saved.initialBlocks != live.initialBlocks ||
@@ -264,7 +265,8 @@ bool validateImage(const MemBlockRestoreImage& target,
     }
     std::set<std::uintptr_t> targetSeen;
     std::set<std::uintptr_t> liveSeen;
-    std::size_t activeBlockCount = 0;
+    std::size_t targetActiveBlockCount = 0;
+    std::size_t liveActiveBlockCount = 0;
     for (std::size_t arrayIndex = 0; arrayIndex < kArrayCount; ++arrayIndex)
     {
         const MemBlockImage::Array& a = saved.arrays[arrayIndex];
@@ -307,18 +309,24 @@ bool validateImage(const MemBlockRestoreImage& target,
             }
             liveMembership.insert(block.address);
         }
-        if (targetMembership != liveMembership)
+        if (!allowOwnerTransfer && targetMembership != liveMembership)
         {
             error = std::string("block ownership changed in ") + a.name;
             return false;
         }
-        if (arrayIndex < 8) activeBlockCount += a.size;
+        if (arrayIndex < 8)
+        {
+            targetActiveBlockCount += a.size;
+            liveActiveBlockCount += b.size;
+        }
     }
     if (targetSeen.size() != targetBlocks.size() ||
         liveSeen.size() != liveBlocks.size() ||
-        activeBlockCount != saved.usedBlocks ||
-        activeBlockCount != live.usedBlocks ||
+        targetSeen != liveSeen ||
+        targetActiveBlockCount != saved.usedBlocks ||
+        liveActiveBlockCount != live.usedBlocks ||
         saved.maxUsedBlocks < saved.usedBlocks ||
+        live.maxUsedBlocks < live.usedBlocks ||
         saved.constraintAllocations != 0 || live.constraintAllocations != 0)
     {
         error = "block partition or used-block counter is inconsistent";
@@ -396,6 +404,7 @@ void writeImage(PxcNpMemBlockPool& pool, const MemBlockImage& image)
     std::size_t offset = 0;
     for (std::size_t a = 0; a < kArrayCount; ++a)
     {
+        arrays.array[a]->forceSize_Unsafe(image.arrays[a].size);
         for (std::size_t i = 0; i < image.arrays[a].size; ++i)
             (*arrays.array[a])[static_cast<PxU32>(i)] =
                 reinterpret_cast<PxcNpMemBlock*>(
@@ -486,16 +495,17 @@ bool CaptureMemBlockRestore(PxScene& scene,
     return true;
 }
 
-bool RestoreMemBlockPool(PxScene& scene,
-                         const MemBlockIdentityRegistry& currentRegistry,
-                         const MemBlockRestoreImage& target,
-                         std::string& error)
+bool restorePoolImpl(PxScene& scene,
+                     const MemBlockIdentityRegistry& currentRegistry,
+                     const MemBlockRestoreImage& target,
+                     bool allowOwnerTransfer,
+                     std::string& error)
 {
     error.clear();
     MemBlockIdentityRegistry ids = currentRegistry;
     MemBlockRestoreImage before;
     if (!CaptureMemBlockRestore(scene, ids, before, error)) return false;
-    if (!validateImage(target, before, error) ||
+    if (!validateImage(target, before, error, allowOwnerTransfer) ||
         !validateContactRanges(target, error) ||
         !validateContactRanges(before, error))
         return false;
@@ -534,6 +544,22 @@ bool RestoreMemBlockPool(PxScene& scene,
     error = "memory-block verification failed; previous state restored: " +
             verificationError;
     return false;
+}
+
+bool RestoreMemBlockPool(PxScene& scene,
+                         const MemBlockIdentityRegistry& currentRegistry,
+                         const MemBlockRestoreImage& target,
+                         std::string& error)
+{
+    return restorePoolImpl(scene, currentRegistry, target, false, error);
+}
+
+bool RestoreMemBlockPoolForJoin(PxScene& scene,
+                                const MemBlockIdentityRegistry& currentRegistry,
+                                const MemBlockRestoreImage& target,
+                                std::string& error)
+{
+    return restorePoolImpl(scene, currentRegistry, target, true, error);
 }
 
 } // namespace physx333_offline

@@ -49,6 +49,11 @@ struct InteractionPairImage {
 };
 
 struct InteractionImage {
+    struct Bitmap {
+        std::uintptr_t address = 0;
+        std::vector<std::uint32_t> words;
+    };
+
     std::uintptr_t scene = 0;
     NPhaseTopologyImage topology;
     // A row is keyed by moverShape; these vectors preserve each container's
@@ -74,6 +79,10 @@ struct InteractionImage {
     std::uint32_t reportBufferLastIndex = 0;
     std::uint32_t reportBufferAllocationLocked = 0;
     std::vector<unsigned char> reportBufferBytes;
+    Bitmap managerPoolUseBitmap;
+    Bitmap activeManagerBitmap;
+    Bitmap modifiableManagerBitmap;
+    Bitmap touchEventBitmap;
 
     bool sameSlotsAndOrder(const InteractionImage& other,
                            std::string& firstDifference) const;
@@ -102,10 +111,16 @@ bool RestoreInteractionMetadata(physx::PxScene& scene,
                                 const InteractionImage& target,
                                 std::string& error);
 
-// Requires interaction metadata and the source-equivalent NpMemBlockPool
-// backing to be restored first. Restores the six contact work units and
-// owned single PCM manifolds, preserving each newly allocated manifold's
-// self-pointer. Rejects stream pointers outside live pool blocks.
+// Stage 1: install source WorkUnit pointer/size bindings and owned PCM data
+// before moving/restoring the NpMemBlockPool backing. The source bytes at
+// those pointers are not expected to match yet. Never simulate in this state.
+bool InstallInteractionContactBindings(physx::PxScene& scene,
+                                       const InteractionImage& target,
+                                       std::string& error);
+
+// Stage 2: after the NpMemBlockPool backing has been restored, repeat the
+// guarded install and verify contact/cache bytes. Each newly allocated PCM
+// manifold keeps its own internal contact-array self-pointer.
 bool RestoreInteractionContactPayload(physx::PxScene& scene,
                                       const InteractionImage& target,
                                       std::string& error);

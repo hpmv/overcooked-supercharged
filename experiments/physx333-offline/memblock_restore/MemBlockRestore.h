@@ -63,4 +63,15 @@ bool RestoreMemBlockPool(physx::PxScene& scene,
                          const MemBlockRestoreImage& target,
                          std::string& error);
 
+// Joined-transaction variant for a recreated NPhase topology. The caller
+// must first install the checkpoint's contact-manager WorkUnit bindings and
+// must not simulate between this call and the companion contact/scene/island
+// restores. Existing block allocations and array backing/capacities must
+// still match, but blocks may have moved between active stream arrays and
+// the unused LIFO stack. This call does not create blocks or managers.
+bool RestoreMemBlockPoolForJoin(physx::PxScene& scene,
+                                const MemBlockIdentityRegistry& currentRegistry,
+                                const MemBlockRestoreImage& target,
+                                std::string& error);
+
 } // namespace physx333_offline

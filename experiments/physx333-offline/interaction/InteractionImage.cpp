@@ -20,6 +20,7 @@
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
 #include "PxsContactManager.h"
+#include "PxcNpMemBlockPool.h"
 #undef protected
 #undef private
 
@@ -33,6 +34,31 @@ static_assert(sizeof(PxsIslandManagerEdgeHook) == sizeof(PxU32),
               "Unexpected island edge hook layout");
 
 typedef std::array<Sc::ShapeInstancePairLL*, 6> PairPointers;
+
+InteractionImage::Bitmap captureBitmap(const Cm::BitMap& bitmap)
+{
+    InteractionImage::Bitmap result;
+    result.address = reinterpret_cast<uintptr_t>(bitmap.getWords());
+    if (bitmap.getWordCount())
+        result.words.assign(bitmap.getWords(),
+                            bitmap.getWords() + bitmap.getWordCount());
+    return result;
+}
+
+bool bitmapStorageSame(const Cm::BitMap& bitmap,
+                       const InteractionImage::Bitmap& image)
+{
+    return reinterpret_cast<uintptr_t>(bitmap.getWords()) == image.address &&
+           bitmap.getWordCount() == image.words.size();
+}
+
+void writeBitmap(Cm::BitMap& bitmap,
+                 const InteractionImage::Bitmap& image)
+{
+    if (!image.words.empty())
+        std::memcpy(bitmap.getWords(), image.words.data(),
+                    image.words.size() * sizeof(PxU32));
+}
 
 template<class T, class Alloc>
 bool poolSlot(const Ps::Pool<T, Alloc>& pool, const void* pointer,
@@ -355,6 +381,14 @@ bool fixtureRows(PxScene& scene, InteractionImage& next,
     }
 
     const auto& pool = interactions.getLowLevelContext()->mContactManagerPool;
+    const PxsContext& context = *interactions.getLowLevelContext();
+    next.managerPoolUseBitmap = captureBitmap(pool.mUseBitmap);
+    next.activeManagerBitmap =
+        captureBitmap(context.mActiveContactManager);
+    next.modifiableManagerBitmap =
+        captureBitmap(context.mModifiableContactManager);
+    next.touchEventBitmap =
+        captureBitmap(context.mContactManagerTouchEvent);
     next.managerSlabCount = pool.mSlabCount;
     next.managerFreeCount = pool.mFreeCount;
     const PxU32 capacity = pool.mSlabCount * pool.mEltsPerSlab;
@@ -401,6 +435,53 @@ bool sixDistinct(const std::vector<std::uint32_t>& order)
     std::set<std::uint32_t> values(order.begin(), order.end());
     return values.size() == 6 && *values.begin() == 0 &&
            *values.rbegin() == 5;
+}
+
+void appendBlocks(const PxcNpMemBlockArray& array,
+                  std::set<uintptr_t>& blocks)
+{
+    for (PxU32 i = 0; i < array.size(); ++i)
+        if (array[i])
+            blocks.insert(reinterpret_cast<uintptr_t>(array[i]));
+}
+
+bool liveBlockSpan(const std::set<uintptr_t>& blocks,
+                   const void* pointer, size_t size)
+{
+    if (!pointer) return size == 0;
+    const uintptr_t address = reinterpret_cast<uintptr_t>(pointer);
+    for (const uintptr_t block : blocks)
+    {
+        if (address >= block &&
+            address < block + PxcNpMemBlock::SIZE &&
+            size <= block + PxcNpMemBlock::SIZE - address)
+            return true;
+    }
+    return false;
+}
+
+bool allocatedMemBlocks(PxsContext& context,
+                        std::set<uintptr_t>& blocks,
+                        std::string& error)
+{
+    PxcNpMemBlockPool& pool = context.mNpMemBlockPool;
+    appendBlocks(pool.mConstraints, blocks);
+    for (PxU32 i = 0; i < 2; ++i)
+    {
+        appendBlocks(pool.mContacts[i], blocks);
+        appendBlocks(pool.mFriction[i], blocks);
+        appendBlocks(pool.mNpCache[i], blocks);
+    }
+    appendBlocks(pool.mScratchBlocks, blocks);
+    // Post-fetch contact streams in this fixture still point into blocks
+    // retained on the allocated-but-unused LIFO list.
+    appendBlocks(pool.mUnused, blocks);
+    if (blocks.size() != pool.mAllocatedBlocks)
+    {
+        error = "NpMemBlockPool allocated-block partition is inconsistent";
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -574,6 +655,22 @@ bool RestoreInteractionMetadata(PxScene& scene,
         error = "ActorPair report pool allocation topology changed";
         return false;
     }
+    PxsContext& lowLevel = *static_cast<NpScene&>(scene).getScene()
+        .getScScene().getInteractionScene().getLowLevelContext();
+    if (!bitmapStorageSame(lowLevel.mContactManagerPool.mUseBitmap,
+                           target.managerPoolUseBitmap) ||
+        !bitmapStorageSame(lowLevel.mActiveContactManager,
+                           target.activeManagerBitmap) ||
+        !bitmapStorageSame(lowLevel.mModifiableContactManager,
+                           target.modifiableManagerBitmap) ||
+        !bitmapStorageSame(lowLevel.mContactManagerTouchEvent,
+                           target.touchEventBitmap) ||
+        current.managerPoolUseBitmap.words !=
+            target.managerPoolUseBitmap.words)
+    {
+        error = "Contact-manager bitmap allocation or pool use changed";
+        return false;
+    }
     std::map<PxU32, PxU32> shapeByReportSlot;
     for (PxU32 shape = 0; shape < 6; ++shape)
     {
@@ -717,6 +814,12 @@ bool RestoreInteractionMetadata(PxScene& scene,
         return false;
     }
     reports.mLastBufferIndex = target.reportBufferLastIndex;
+    writeBitmap(lowLevel.mActiveContactManager,
+                target.activeManagerBitmap);
+    writeBitmap(lowLevel.mModifiableContactManager,
+                target.modifiableManagerBitmap);
+    writeBitmap(lowLevel.mContactManagerTouchEvent,
+                target.touchEventBitmap);
 
     InteractionImage restored;
     if (!CaptureInteractionImage(scene, restored, error))
@@ -729,6 +832,18 @@ bool RestoreInteractionMetadata(PxScene& scene,
         restored.reportBufferLastIndex != target.reportBufferLastIndex)
     {
         error = "Interaction metadata readback differs; dispose it";
+        return false;
+    }
+    if (restored.managerPoolUseBitmap.words !=
+            target.managerPoolUseBitmap.words ||
+        restored.activeManagerBitmap.words !=
+            target.activeManagerBitmap.words ||
+        restored.modifiableManagerBitmap.words !=
+            target.modifiableManagerBitmap.words ||
+        restored.touchEventBitmap.words !=
+            target.touchEventBitmap.words)
+    {
+        error = "Contact-manager bitmap readback differs; dispose it";
         return false;
     }
     for (PxU32 shape = 0; shape < 6; ++shape)
@@ -753,6 +868,204 @@ bool RestoreInteractionMetadata(PxScene& scene,
     }
     error.clear();
     return true;
+}
+
+static bool restoreInteractionContactPayload(PxScene& scene,
+                                             const InteractionImage& target,
+                                             std::string& error,
+                                             bool requireBackingBytes)
+{
+    InteractionImage current;
+    if (!CaptureInteractionImage(scene, current, error)) return false;
+    if (!target.sameSlotsAndOrder(current, error) ||
+        target.persistentEventOrder != current.persistentEventOrder ||
+        target.nextPersistentPair != current.nextPersistentPair ||
+        target.reportPoolFreeOrder != current.reportPoolFreeOrder)
+    {
+        error = "Interaction metadata stage is not complete: " + error;
+        return false;
+    }
+
+    NpScene& np = static_cast<NpScene&>(scene);
+    Sc::InteractionScene& interactions =
+        np.getScene().getScScene().getInteractionScene();
+    PxsContext& context = *interactions.getLowLevelContext();
+    std::set<uintptr_t> blocks;
+    if (!allocatedMemBlocks(context, blocks, error)) return false;
+
+    PairPointers byShape;
+    byShape.fill(NULL);
+    for (PxU32 i = 0; i < 6; ++i)
+        byShape[current.sceneOrder[i]] =
+            static_cast<Sc::ShapeInstancePairLL*>(
+                interactions.mInteractions[Sc::PX_INTERACTION_TYPE_OVERLAP][i]);
+
+    struct RestorePlan {
+        PxsContactManager* manager;
+        PxcNpWorkUnit work;
+        Gu::PersistentContactManifold* manifold;
+    };
+    RestorePlan plan[6];
+    for (PxU32 shape = 0; shape < 6; ++shape)
+    {
+        const InteractionPairImage& source = target.pairs[shape];
+        const InteractionPairImage& liveRow = current.pairs[shape];
+        PxsContactManager& cm = *byShape[shape]->mManager;
+        const PxcNpWorkUnit& live = cm.getWorkUnit();
+        if (source.workUnitBytes.size() != sizeof(PxcNpWorkUnit) ||
+            source.managerStatusFlags != liveRow.managerStatusFlags ||
+            source.sipFlags != liveRow.sipFlags ||
+            source.actorPairTouchCount != liveRow.actorPairTouchCount ||
+            source.reportPoolSlot != liveRow.reportPoolSlot)
+        {
+            error = "Contact payload prerequisites or work-unit size differ";
+            return false;
+        }
+        PxcNpWorkUnit saved;
+        std::memcpy(&saved, source.workUnitBytes.data(), sizeof(saved));
+        if (saved.index != source.managerSlot ||
+            saved.geomType0 != PxGeometryType::eBOX ||
+            saved.geomType1 != PxGeometryType::eBOX ||
+            saved.rigidCore0 != live.rigidCore0 ||
+            saved.rigidCore1 != live.rigidCore1 ||
+            saved.shapeCore0 != live.shapeCore0 ||
+            saved.shapeCore1 != live.shapeCore1 ||
+            saved.materialManager != live.materialManager ||
+            saved.compressedContactSize !=
+                source.compressedContactBytes.size() ||
+            saved.pairCache.size != source.pairCacheBytes.size() ||
+            saved.statusFlags != source.managerStatusFlags ||
+            saved.ccdContacts)
+        {
+            error = "Saved contact work unit is unsupported or owner bindings changed";
+            return false;
+        }
+        if (!liveBlockSpan(blocks, saved.compressedContacts,
+                           saved.compressedContactSize) ||
+            !liveBlockSpan(blocks, saved.pairCache.ptr,
+                           saved.pairCache.size) ||
+            !liveBlockSpan(blocks, saved.solverConstraintPointer,
+                           saved.solverConstraintPointer ?
+                               std::max<PxU32>(saved.solverConstraintSize, 1u) :
+                               0u) ||
+            !liveBlockSpan(blocks, saved.frictionDataPtr,
+                           saved.frictionDataPtr ? 1u : 0u))
+        {
+            error = "Saved stream, solver, or friction pointer is outside live NpMemBlockPool blocks";
+            return false;
+        }
+        if (requireBackingBytes &&
+            ((!source.compressedContactBytes.empty() &&
+              std::memcmp(saved.compressedContacts,
+                          source.compressedContactBytes.data(),
+                          source.compressedContactBytes.size()) != 0) ||
+             (!source.pairCacheBytes.empty() &&
+              std::memcmp(saved.pairCache.ptr,
+                          source.pairCacheBytes.data(),
+                          source.pairCacheBytes.size()) != 0)))
+        {
+            error = "Saved contact/cache stream backing differs; restore NpMemBlockPool first";
+            return false;
+        }
+        const uintptr_t freshManifold = live.pairCache.manifold;
+        if ((source.manifoldKind == 0 &&
+             (saved.pairCache.manifold || freshManifold)) ||
+            (source.manifoldKind == 1 &&
+             (!saved.pairCache.manifold ||
+              (saved.pairCache.manifold & 15u) ||
+              !freshManifold || (freshManifold & 15u) ||
+              source.manifoldContactCount > GU_MANIFOLD_CACHE_SIZE ||
+              source.manifoldWarmStartCount > GU_MANIFOLD_CACHE_SIZE ||
+              source.manifoldTransformBytes.size() !=
+                  sizeof(Gu::PersistentContactManifold::mRelativeTransform) ||
+              source.manifoldIndexBytes.size() != 8 ||
+              source.manifoldContactBytes.size() !=
+                  source.manifoldContactCount *
+                      sizeof(Gu::PersistentContact))) ||
+            source.manifoldKind > 1)
+        {
+            error = "Single box/box PCM manifold allocation or image is invalid";
+            return false;
+        }
+        plan[shape].manager = &cm;
+        plan[shape].manifold = source.manifoldKind ?
+            reinterpret_cast<Gu::PersistentContactManifold*>(freshManifold) :
+            NULL;
+        saved.pairCache.manifold = freshManifold;
+        plan[shape].work = saved;
+    }
+
+    // Every pointer is validated before the first write. Stage 2 also
+    // verifies that the memory-block restore installed the saved bytes.
+    // The manifold object was allocated by PhysX's lifecycle path. Its
+    // mContactPoints self-pointer must stay bound to that new object.
+    for (PxU32 shape = 0; shape < 6; ++shape)
+    {
+        const InteractionPairImage& source = target.pairs[shape];
+        RestorePlan& item = plan[shape];
+        std::memcpy(&item.manager->getWorkUnit(), &item.work,
+                    sizeof(PxcNpWorkUnit));
+        if (!item.manifold) continue;
+        Gu::PersistentContactManifold& manifold = *item.manifold;
+        std::memcpy(&manifold.mRelativeTransform,
+                    source.manifoldTransformBytes.data(),
+                    source.manifoldTransformBytes.size());
+        manifold.mNumContacts =
+            static_cast<PxU8>(source.manifoldContactCount);
+        manifold.mNumWarmStartPoints =
+            static_cast<PxU8>(source.manifoldWarmStartCount);
+        std::memcpy(manifold.mAIndice,
+                    source.manifoldIndexBytes.data(), 4);
+        std::memcpy(manifold.mBIndice,
+                    source.manifoldIndexBytes.data() + 4, 4);
+        if (!source.manifoldContactBytes.empty())
+            std::memcpy(manifold.mContactPoints,
+                        source.manifoldContactBytes.data(),
+                        source.manifoldContactBytes.size());
+    }
+    InteractionImage restored;
+    if (!CaptureInteractionImage(scene, restored, error))
+    {
+        error = "Contact payload changed scene; dispose it: " + error;
+        return false;
+    }
+    for (PxU32 shape = 0; shape < 6; ++shape)
+    {
+        const InteractionPairImage& a = target.pairs[shape];
+        const InteractionPairImage& b = restored.pairs[shape];
+        if (a.manifoldKind != b.manifoldKind ||
+            a.manifoldContactCount != b.manifoldContactCount ||
+            a.manifoldWarmStartCount != b.manifoldWarmStartCount ||
+            a.manifoldTransformBytes != b.manifoldTransformBytes ||
+            a.manifoldIndexBytes != b.manifoldIndexBytes ||
+            a.manifoldContactBytes != b.manifoldContactBytes ||
+            (requireBackingBytes &&
+             (a.compressedContactBytes != b.compressedContactBytes ||
+              a.pairCacheBytes != b.pairCacheBytes)) ||
+            std::memcmp(&plan[shape].manager->getWorkUnit(),
+                        &plan[shape].work,
+                        sizeof(PxcNpWorkUnit)) != 0)
+        {
+            error = "Contact payload readback differs; dispose it";
+            return false;
+        }
+    }
+    error.clear();
+    return true;
+}
+
+bool InstallInteractionContactBindings(PxScene& scene,
+                                       const InteractionImage& target,
+                                       std::string& error)
+{
+    return restoreInteractionContactPayload(scene, target, error, false);
+}
+
+bool RestoreInteractionContactPayload(PxScene& scene,
+                                      const InteractionImage& target,
+                                      std::string& error)
+{
+    return restoreInteractionContactPayload(scene, target, error, true);
 }
 
 } // namespace physx333_offline

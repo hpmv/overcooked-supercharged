@@ -36,6 +36,24 @@ changes no array capacity. A post-write readback must match the target. On
 failure it writes the saved predecessor back and verifies that rollback;
 unverifiable rollback terminates the process.
 
+`RestoreMemBlockPoolForJoin` is the companion for a larger NPhase transaction.
+It requires the same scene, allocations, array storage/capacities, complete
+block inventory, and contact-manager bindings, but permits an existing block
+to move between active stream arrays and the unused LIFO stack. Every target
+array must fit its unchanged capacity. The caller must first install the
+checkpoint WorkUnit bindings and must finish contact, island, body, and scene
+restoration before simulating. A synthetic active/unused ownership transfer
+round-trips 100 times, and duplicate-block corruption is rejected before
+writing. In the joined six-contact probe, the deletion successor has two
+additional unused blocks; this variant restores their friction/cache owners
+and full payload, after which the contact-manager payload stage passes.
+
+The joined variant is **not** yet a standalone safe scene restore: while its
+array contents are verified and rolled back on a failed postcheck, it does
+not repair pair topology or manifold ownership. It rejects allocation
+growth, changed manager identities, scratch/exceptional blocks, CCD contact
+streams, and any target whose blocks or arrays are incompletely accounted for.
+
 The source reason for the owner-array guard is
 `PxcNpMemBlockPool.cpp`: `acquire()` pops `mUnused`, `release()` pushes
 blocks there in LIFO order, and `releaseContacts()` and the friction/cache
@@ -58,3 +76,5 @@ byte in an intentionally edited active contact stream.
 source-built 32-bit SDK. The test changes the unused-block LIFO order, one
 stale byte and a statistic, then round-trips 100 times; corrupt array storage
 and a checkpoint-to-deletion topology change must be rejected atomically.
+It also exercises 100 ownership-transfer round trips and corrupt-transfer
+rejection through the joined variant.
