@@ -120,8 +120,18 @@ Check(FamilyCallCount("CaptureContactManagerOwners","ReadBytes")==5,
     "contact-owner capture reads every opaque native image exactly once per row");
 Check(Calls("SameContactManagerOwnerSnapshot").Count(value=>value=="SameByteMatrix")==5,
     "contact-owner equality includes every opaque native image");
-Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot"),
-    "activation requires the API18 stateless dirty-interaction snapshot export");
+var graphState=type.NestedTypes.Single(value=>value.Name=="InteractionGraphState");
+Check(graphState.Fields.Any(value=>value.Name=="PrimaryBytes"&&
+        value.FieldType.FullName=="System.Byte[][]"),
+    "interaction-graph checkpoint retains bounded primary-object images");
+Check(Calls("CaptureInteractionGraphState").Contains("CaptureInteractionPrimaryBytes")&&
+    Calls("CaptureInteractionPrimaryBytes").Contains("ReadBytes"),
+    "interaction-graph capture reads rigid primary objects at the checkpoint boundary");
+Check(Calls("SameInteractionGraphState").Contains("SameByteMatrix"),
+    "interaction-graph equality includes rigid primary-object history");
+Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot")&&
+    Strings("Activate").Contains("oc2_island_restore_snapshot_v1"),
+    "activation requires the API19 stateless capture and island-restore exports");
 Check(Calls("CaptureDirtyInteractionStateReadOnly").Contains("Equals")&&
     Strings("CaptureDirtyInteractionStateReadOnly").Any(value=>
         value.Contains("changed the pending hook transaction receipt")),

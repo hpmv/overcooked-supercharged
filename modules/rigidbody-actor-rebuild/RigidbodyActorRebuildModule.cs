@@ -21,7 +21,7 @@ namespace SuperchargedPatch.Authoring.Modules
     // chefs during the checkpoint restore's internal main-physics unfreeze.
     public sealed class RigidbodyActorRebuildModule : IAuthoringModule
     {
-        private const uint NativeAbiVersion=18;
+        private const uint NativeAbiVersion=19;
         // Four active chef actors plus Unity's one replacement allocation form
         // the observed five-address cycle. Rebuilding five times removes every
         // chef actor/contact set while restoring the incoming chef/address map.
@@ -527,6 +527,8 @@ namespace SuperchargedPatch.Authoring.Modules
             IntPtr deleted,uint deletedCapacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandCaptureSnapshot(
             UIntPtr unityBase,UIntPtr nphaseCore,uint expectedPhase,IntPtr buffers,IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandRestoreSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr request,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverInstall(
             UIntPtr unityBase,UIntPtr expectedManager,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeIslandObserverAction(
@@ -650,6 +652,11 @@ namespace SuperchargedPatch.Authoring.Modules
             internal uint[] ActiveBodies,ActorSlots,PoolSlabs,PoolFree;
             internal NativeInteractionGraphActorRecord[] Actors;
             internal NativeInteractionGraphInteractionRecord[] Interactions;
+            // InteractionScene stores the secondary Interaction base for rigid
+            // element pairs.  Retain each primary object's bounded image so a
+            // predecessor restore has the dirty/core words, trigger cache, and
+            // marker history that the public graph fields do not expose.
+            internal byte[][] PrimaryBytes;
         }
 
         private sealed class TransformCacheState
@@ -925,6 +932,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeFinishBroadPhaseObserverAction cancelFinishBroadPhaseObserver;
         private NativeFinishBroadPhaseObserverAction uninstallFinishBroadPhaseObserver;
         private NativeIslandCaptureSnapshot captureIslandSnapshot;
+        private NativeIslandRestoreSnapshot restoreIslandSnapshot;
         private NativeIslandObserverInstall installIslandObserver;
         private NativeIslandObserverAction statusIslandObserver,cancelIslandObserver,uninstallIslandObserver;
         private NativeIslandObserverArm armIslandObserver;
@@ -1085,6 +1093,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     "oc2_finish_broad_phase_observer_uninstall");
                 captureIslandSnapshot=Export<NativeIslandCaptureSnapshot>(
                     "oc2_island_capture_snapshot_v1");
+                restoreIslandSnapshot=Export<NativeIslandRestoreSnapshot>(
+                    "oc2_island_restore_snapshot_v1");
                 installIslandObserver=Export<NativeIslandObserverInstall>(
                     "oc2_island_update_observer_install");
                 statusIslandObserver=Export<NativeIslandObserverAction>(
@@ -4441,11 +4451,24 @@ namespace SuperchargedPatch.Authoring.Modules
                 Marshal.FreeHGlobal(actorBuffer);Marshal.FreeHGlobal(activeBuffer);
                 Marshal.FreeHGlobal(receiptBuffer);
             }
+            byte[][] primaryBytes=interactions.Select(CaptureInteractionPrimaryBytes).ToArray();
             var state=new InteractionGraphState {Receipt=receipt,ActiveBodies=activeBodies,
                 Actors=actors,Interactions=interactions,ActorSlots=actorSlots,
-                PoolSlabs=poolSlabs,PoolFree=poolFree};
+                PoolSlabs=poolSlabs,PoolFree=poolFree,PrimaryBytes=primaryBytes};
             ValidateInteractionGraphState(state);
             return state;
+        }
+
+        private static byte[] CaptureInteractionPrimaryBytes(
+            NativeInteractionGraphInteractionRecord value)
+        {
+            int bytes=value.InteractionType==0?0x44:value.InteractionType==2?0x3C:
+                value.InteractionType==3?0x28:0;
+            if(bytes==0)return new byte[0];
+            uint interaction=value.Interaction.ToUInt32();
+            if(interaction<8u)throw new InvalidOperationException(
+                "A rigid interaction has no valid primary-object base.");
+            return ReadBytes(interaction-8u,bytes);
         }
 
         private TransformCacheState CaptureTransformCacheState(uint nphaseCore,int frame)
@@ -5881,7 +5904,8 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(value==null||value.ActiveBodies==null||value.Actors==null||
                 value.Interactions==null||value.ActorSlots==null||
-                value.PoolSlabs==null||value.PoolFree==null)
+                value.PoolSlabs==null||value.PoolFree==null||value.PrimaryBytes==null||
+                value.PrimaryBytes.Length!=value.Interactions.Length)
                 throw new InvalidOperationException("The interaction-graph checkpoint sidecar is incomplete.");
             NativeInteractionGraphReceipt receipt=value.Receipt;
             if(receipt.Result!=1||receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=500u||
@@ -5949,6 +5973,27 @@ namespace SuperchargedPatch.Authoring.Modules
                     value.ActorSlots[actor0.InteractionOutputStart+item.ActorId0]!=item.Interaction.ToUInt32()||
                     value.ActorSlots[actor1.InteractionOutputStart+item.ActorId1]!=item.Interaction.ToUInt32())
                     throw new InvalidOperationException("An interaction row disagrees with a cached per-actor slot.");
+            }
+            for(int i=0;i<value.Interactions.Length;i++)
+            {
+                NativeInteractionGraphInteractionRecord item=value.Interactions[i];
+                int expectedBytes=item.InteractionType==0?0x44:item.InteractionType==2?0x3C:
+                    item.InteractionType==3?0x28:0;
+                byte[] primary=value.PrimaryBytes[i];
+                if(primary==null||primary.Length!=expectedBytes)
+                    throw new InvalidOperationException(
+                        "An interaction primary-object image has the wrong bounded size.");
+                if(expectedBytes!=0)
+                {
+                    uint shape0=item.ShapeCore0.ToUInt32(),shape1=item.ShapeCore1.ToUInt32();
+                    uint pxs0=item.PxsShapeCore0.ToUInt32(),pxs1=item.PxsShapeCore1.ToUInt32();
+                    if(shape0==0||shape1==0||pxs0!=unchecked(shape0+0x20u)||
+                        pxs1!=unchecked(shape1+0x20u)||pxs0==pxs1||
+                        item.SemanticLow.ToUInt32()!=Math.Min(pxs0,pxs1)||
+                        item.SemanticHigh.ToUInt32()!=Math.Max(pxs0,pxs1))
+                        throw new InvalidOperationException(
+                            "A rigid interaction row has no exact semantic ShapeCore identity.");
+                }
             }
             foreach(uint slot in value.ActorSlots)
                 if(slot==0||!interactionByPointer.ContainsKey(slot))
@@ -6709,6 +6754,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"activeBodiesCapacityRaw","0x"+receipt.ActiveBodiesCapacityRaw.ToString("X8")},
                 {"activeTwoWayStart",receipt.ActiveTwoWayStart},{"activeBodies",HexArray(value.ActiveBodies)},
                 {"global",global},{"actors",actors},{"interactions",interactions},{"pools",pools},
+                {"primaryContentSha256",value.PrimaryBytes.Select(ContentSha256).ToArray()},
                 {"actorSlots",HexArray(value.ActorSlots)},{"poolSlabs",HexArray(value.PoolSlabs)},
                 {"poolFree",HexArray(value.PoolFree)},
                 {"actorHash","0x"+receipt.ActorHash.ToString("X8")},
@@ -7296,6 +7342,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 !left.ActorSlots.SequenceEqual(right.ActorSlots)||
                 !left.PoolSlabs.SequenceEqual(right.PoolSlabs)||
                 !left.PoolFree.SequenceEqual(right.PoolFree)||
+                !SameByteMatrix(left.PrimaryBytes,right.PrimaryBytes)||
                 left.Actors.Length!=right.Actors.Length||
                 left.Interactions.Length!=right.Interactions.Length)return false;
             for(int i=0;i<left.Actors.Length;i++)
@@ -7979,7 +8026,8 @@ namespace SuperchargedPatch.Authoring.Modules
             captureNPhaseReportStateSnapshot=null;
             captureInteractionGraphSnapshot=null;
             captureTransformCacheSnapshot=null;
-            captureIslandSnapshot=null;installIslandObserver=null;statusIslandObserver=null;
+            captureIslandSnapshot=null;restoreIslandSnapshot=null;
+            installIslandObserver=null;statusIslandObserver=null;
             armIslandObserver=null;copyIslandObserver=null;copyIslandJournal=null;
             cancelIslandObserver=null;uninstallIslandObserver=null;
             installFinishBroadPhaseObserver=null;statusFinishBroadPhaseObserver=null;

@@ -6,6 +6,48 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest implementation — atomic rebased island restore primitive
+
+Native RigidbodyActorRebuild r37/API 19 now contains a caller-owned,
+fail-closed primitive for restoring the settled Story 1-1 PhysX island image.
+It is deliberately not wired into the live rewind transaction yet.  The
+managed module only resolves the export, so this milestone cannot alter game
+behaviour by itself.
+
+The primitive accepts the captured 256-node, 256-edge, 256-island, 32-root
+image plus explicit semantic node and contact-edge bindings.  It rebases
+historical node, BodySim/BodyCore, edge, SIP, and contact-manager addresses to
+the current incarnation before publishing the image.  Target and live native
+addresses and IDs are distinct in the harness, so its successful path is a
+real rebase rather than an accidental same-address copy.
+
+Restoration is one guarded transaction: acquire the hook admission gate,
+prove the bridge-owned quiescent phase, capture a rollback image, validate all
+bindings and live capacities, publish, and reread the complete image.  Any
+pre-mutation failure leaves memory untouched.  A post-mutation mismatch rolls
+back and rereads the prior image; if either image cannot be proved, the
+component keeps the gate closed, the epoch odd, and the observer in a terminal
+failure state so physics cannot continue through ambiguous topology.  Request,
+receipt, binding, target, rollback, and verification storage must be pairwise
+disjoint, including partial overlaps.  Install, arm, cancel, and restore also
+exclude each other's in-flight states.
+
+The native `/W4 /WX` harness passes the normal rebase, distinct historical and
+live BodyCore identities, permuted node and edge IDs, invalid semantic
+bindings, aliased receipts, and partially overlapping storage.  The managed
+checker passes 59 contracts; its current DLL SHA-256 is
+`5BBEB13127C0DFC15D38AEEC9CFF0896F9D5C229CBB1EB580B901858B398F849`.
+
+This closes only the island sub-transaction.  Full predecessor parity still
+requires semantic projection of the NPhase ActorPair/report and interaction
+pools, their complete slab/free history, TransformCache, and the conditional
+six-row broadphase deletion input.  Raw captured object bytes are useful
+evidence but contain native pointers (and a self-relative manifold pointer),
+so final equality and restore must normalize/rewrite those fields rather than
+treat historical virtual addresses as gameplay state.  Island publication
+must be last, immediately before the canonical broadphase/island transition.
+Search remains disabled.
+
 ## Latest result — the complete f445 post image is captured
 
 Managed RigidbodyActorRebuild r21 and native r37/API 18 complete the

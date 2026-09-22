@@ -990,6 +990,106 @@ struct IslandEdgeJournalReceipt {
     uint32_t invalidIndex;
     uint32_t detail;
 };
+
+// A restore never copies checkpoint process pointers into the live manager.
+// The managed layer resolves each checkpoint object to its current native
+// incarnation and supplies that relationship explicitly.  The native side
+// then proves all low-level backlinks, hooks, memberships and endpoint
+// topology before it writes a byte.
+struct IslandNodeRebindV1 {
+    uint32_t targetNodeId;
+    uint32_t targetOwnerRaw;
+    uint32_t targetBodyCore;
+    uint32_t liveBodySim;
+    uint32_t liveBodyCore;
+    uint32_t liveHookAddress;
+    uint32_t currentNodeId;
+    uint32_t semanticKey;
+    uint32_t validationFlags;
+};
+
+struct IslandContactEdgeRebindV1 {
+    uint32_t targetBindingIndex;
+    uint32_t targetEdgeId;
+    uint32_t targetPxsShapeCoreLow;
+    uint32_t targetPxsShapeCoreHigh;
+    uint32_t liveSip;
+    uint32_t liveHookAddress;
+    uint32_t liveShapeSim0;
+    uint32_t liveShapeSim1;
+    uint32_t livePxsShapeCoreLow;
+    uint32_t livePxsShapeCoreHigh;
+    uint32_t liveContactManager;
+    uint32_t currentEdgeId;
+    uint32_t semanticKey;
+    uint32_t validationFlags;
+};
+
+struct IslandRestoreRequestV1 {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t flags;
+    uint32_t expectedThreadId;
+    uint32_t expectedManager;
+    uint32_t expectedContext;
+    const IslandSnapshotBuffersV1* targetBuffers;
+    const IslandSnapshotReceiptV1* targetReceipt;
+    const IslandNodeRebindV1* nodeRebinds;
+    uint32_t nodeRebindCount;
+    const IslandContactEdgeRebindV1* edgeRebinds;
+    uint32_t edgeRebindCount;
+    const IslandSnapshotBuffersV1* rollbackBuffers;
+    IslandSnapshotReceiptV1* rollbackReceipt;
+    const IslandSnapshotBuffersV1* verifyBuffers;
+    IslandSnapshotReceiptV1* verifyReceipt;
+};
+
+struct IslandRestoreReceiptV1 {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uint32_t unityBase;
+    uint32_t nphaseCore;
+    uint32_t ownerScene;
+    uint32_t interactionScene;
+    uint32_t context;
+    uint32_t islandManager;
+    uint32_t threadId;
+    uint32_t stage;
+    uint32_t requestFlags;
+    uint32_t observerStateBefore;
+    uint32_t observerStateAfter;
+    uint32_t epochBefore;
+    uint32_t epochAfter;
+    uint32_t inFlightBefore;
+    uint32_t inFlightAfter;
+    uint32_t sceneFlagsBefore;
+    uint32_t sceneFlagsAfter;
+    uint32_t journalOrdinalBefore;
+    uint32_t journalOrdinalAfter;
+    uint32_t targetRawHash;
+    uint32_t targetRebasedHash;
+    uint32_t beforeHash;
+    uint32_t afterHash;
+    uint32_t rollbackHash;
+    uint32_t nodeBindingsRequired;
+    uint32_t nodeBindingsValidated;
+    uint32_t nodeHooksWritten;
+    uint32_t edgeBindingsRequired;
+    uint32_t edgeBindingsValidated;
+    uint32_t edgeHooksWritten;
+    uint32_t bytesWritten;
+    uint32_t mutationStarted;
+    uint32_t mutationCommitted;
+    uint32_t rollbackAttempted;
+    uint32_t rollbackSucceeded;
+    uint32_t failStopped;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+};
 #pragma pack(pop)
 
 struct ManifoldPoolReceipt {
@@ -1386,6 +1486,14 @@ static_assert(sizeof(IslandUpdateObserverReceipt) == 128,
     "Unexpected Win32 island update-observer receipt ABI");
 static_assert(sizeof(IslandEdgeJournalReceipt) == 84,
     "Unexpected Win32 island edge-journal receipt ABI");
+static_assert(sizeof(IslandNodeRebindV1) == 36,
+    "Unexpected Win32 island node-rebind ABI");
+static_assert(sizeof(IslandContactEdgeRebindV1) == 56,
+    "Unexpected Win32 island contact-edge-rebind ABI");
+static_assert(sizeof(IslandRestoreRequestV1) == 64,
+    "Unexpected Win32 island restore-request ABI");
+static_assert(sizeof(IslandRestoreReceiptV1) == 176,
+    "Unexpected Win32 island restore-receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1642,6 +1750,44 @@ enum IslandSnapshotResult : uint32_t {
     IslandSnapshotJournalOverflow = 14
 };
 
+enum IslandRestoreResult : uint32_t {
+    IslandRestoreOk = 1,
+    IslandRestoreBadArgument = 2,
+    IslandRestoreRevisionMismatch = 3,
+    IslandRestoreNotInstalled = 4,
+    IslandRestoreBusy = 5,
+    IslandRestoreInvalidPhase = 6,
+    IslandRestoreInvalidIdentity = 7,
+    IslandRestoreUnsupportedTarget = 8,
+    IslandRestoreInvalidTargetImage = 9,
+    IslandRestoreCapacityMismatch = 10,
+    IslandRestoreInvalidNodeBinding = 11,
+    IslandRestoreInvalidEdgeBinding = 12,
+    IslandRestoreLiveTopologyMismatch = 13,
+    IslandRestoreBufferTooSmall = 14,
+    IslandRestoreUnstable = 15,
+    IslandRestoreWriteFault = 16,
+    IslandRestoreVerificationMismatch = 17,
+    IslandRestoreRollbackFailed = 18
+};
+
+enum IslandRestoreStage : uint32_t {
+    IslandRestoreStageInitialize = 0,
+    IslandRestoreStageGate = 1,
+    IslandRestoreStageTarget = 2,
+    IslandRestoreStageRollbackCapture = 3,
+    IslandRestoreStageBindings = 4,
+    IslandRestoreStageMutation = 5,
+    IslandRestoreStageVerification = 6,
+    IslandRestoreStageRollback = 7,
+    IslandRestoreStageCommitted = 8,
+    IslandRestoreStageFailStopped = 9
+};
+
+enum IslandRestoreFlags : uint32_t {
+    IslandRestoreSettledRegularContactV1 = 1
+};
+
 enum IslandObserverResult : uint32_t {
     IslandObserverOk = 1,
     IslandObserverBadArgument = 2,
@@ -1667,7 +1813,9 @@ enum IslandObserverState : uint32_t {
     IslandObserverArmed = 2,
     IslandObserverCapturing = 3,
     IslandObserverCaptured = 4,
-    IslandObserverFailed = 5
+    IslandObserverFailed = 5,
+    IslandObserverRestoring = 6,
+    IslandObserverRestoreFailed = 7
 };
 
 enum IslandJournalResult : uint32_t {
@@ -1789,7 +1937,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 18;
+static const uint32_t kApiVersion = 19;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -2367,6 +2515,11 @@ static volatile LONG g_islandModulePinned = 0;
 static volatile LONG g_islandInstalled = 0;
 static volatile LONG g_islandState = IslandObserverDormant;
 static volatile LONG g_islandInFlight = 0;
+// Writer gate for the caller-owned raw restore transaction.  Every resident
+// add/remove/update detour acquires a shared admission before entering the
+// original PhysX function; restore closes admission and waits for readers to
+// drain before touching PxsIslandManager storage.
+static volatile LONG g_islandRestoreGate = 0;
 static volatile LONG g_islandEpoch = 0;
 static volatile LONG g_islandCapturePhase = IslandSnapshotSettled;
 static volatile LONG g_islandObserverSequence = 0;
@@ -6845,9 +6998,10 @@ static bool FillInteractionGraphInteraction(uintptr_t interaction,
                 record.actor1)
             return false;
     }
-    if (expectedType == 0u) {
-        if ((record.interactionFlags & 0x10u) == 0 ||
-            !Readable(reinterpret_cast<const void*>(record.element0), 0x20) ||
+    if (expectedType == 0u && (record.interactionFlags & 0x10u) == 0)
+        return false;
+    if (expectedType == 0u || expectedType == 2u || expectedType == 3u) {
+        if (!Readable(reinterpret_cast<const void*>(record.element0), 0x20) ||
             !Readable(reinterpret_cast<const void*>(record.element1), 0x20))
             return false;
         record.shapeCore0 = *reinterpret_cast<const uintptr_t*>(
@@ -8032,6 +8186,7 @@ struct IslandHeaderState {
 static void HookIslandAddEdge();
 static void HookIslandRemoveEdge();
 static void HookIslandUpdate();
+static bool AllIslandHooksLanded(uintptr_t unityBase);
 
 static bool HasIslandJump(const void* source, const void* destination,
     uint32_t patchSize) {
@@ -8262,6 +8417,41 @@ static bool SameIslandHeader(const IslandHeaderState& left,
     const IslandHeaderState& right) {
     return EqualBytes(&left, reinterpret_cast<const uint8_t*>(&right),
         sizeof(left));
+}
+
+static bool SameIslandStorageIdentity(const IslandHeaderState& left,
+    const IslandHeaderState& right) {
+    if (left.ownerScene != right.ownerScene ||
+        left.interactionScene != right.interactionScene ||
+        left.context != right.context || left.manager != right.manager)
+        return false;
+    const IslandElementHeader* leftElements[] = {&left.node,&left.edge,
+        &left.island,&left.root};
+    const IslandElementHeader* rightElements[] = {&right.node,&right.edge,
+        &right.island,&right.root};
+    for (uint32_t i = 0; i < 4u; ++i)
+        if (leftElements[i]->vtable != rightElements[i]->vtable ||
+            leftElements[i]->elements != rightElements[i]->elements ||
+            leftElements[i]->freeNext != rightElements[i]->freeNext ||
+            leftElements[i]->nextList != rightElements[i]->nextList ||
+            leftElements[i]->capacity != rightElements[i]->capacity)
+            return false;
+    const IslandQueueHeader* leftQueues[] = {&left.nodeCreated,
+        &left.nodeDeleted,&left.edgeCreated,&left.edgeDeleted,
+        &left.edgeBroken,&left.edgeJoined};
+    const IslandQueueHeader* rightQueues[] = {&right.nodeCreated,
+        &right.nodeDeleted,&right.edgeCreated,&right.edgeDeleted,
+        &right.edgeBroken,&right.edgeJoined};
+    for (uint32_t i = 0; i < 6u; ++i)
+        if (leftQueues[i]->data != rightQueues[i]->data ||
+            leftQueues[i]->capacity != rightQueues[i]->capacity ||
+            leftQueues[i]->defaultCapacity !=
+                rightQueues[i]->defaultCapacity) return false;
+    for (uint32_t i = 0; i < 5u; ++i)
+        if (left.bitmaps[i].data != right.bitmaps[i].data ||
+            left.bitmaps[i].wordCount != right.bitmaps[i].wordCount)
+            return false;
+    return true;
 }
 
 static bool IslandBufferWritable(const void* pointer, uint32_t capacity,
@@ -9181,6 +9371,1451 @@ static int CaptureIslandSnapshot(uintptr_t unityBase, uintptr_t nphaseCore,
     return 1;
 }
 
+static void InitializeIslandRestoreReceipt(uintptr_t unityBase,
+    uintptr_t nphaseCore, IslandRestoreReceiptV1* receipt) {
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = static_cast<uint32_t>(unityBase);
+    receipt->nphaseCore = static_cast<uint32_t>(nphaseCore);
+    receipt->threadId = GetCurrentThreadId();
+    receipt->invalidIndex = 0xFFFFFFFFu;
+}
+
+static int FailIslandRestore(IslandRestoreReceiptV1* receipt,
+    IslandRestoreResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+        receipt->invalidKind = kind;
+        receipt->invalidIndex = index;
+        receipt->detail = detail;
+    }
+    return 0;
+}
+
+static bool IslandBufferReadable(const void* pointer, uint32_t capacity,
+    uint32_t required, uint32_t stride) {
+    if (capacity < required) return false;
+    return required == 0u || (pointer && Readable(pointer,
+        required * stride));
+}
+
+static bool ValidateIslandImageStorage(const IslandSnapshotBuffersV1* buffers,
+    const IslandSnapshotReceiptV1& receipt, bool writable) {
+    if (!buffers || !Readable(buffers, sizeof(*buffers))) return false;
+#define OC2_ISLAND_STORAGE(field, cap, required, type) \
+    if (!(writable ? IslandBufferWritable(buffers->field, buffers->cap, \
+        required, sizeof(type)) : IslandBufferReadable(buffers->field, \
+        buffers->cap, required, sizeof(type)))) return false
+    OC2_ISLAND_STORAGE(nodes, nodeCapacity, receipt.node.required,
+        IslandNodeSlotRecord);
+    OC2_ISLAND_STORAGE(edges, edgeCapacity, receipt.edge.required,
+        IslandEdgeSlotRecord);
+    OC2_ISLAND_STORAGE(islands, islandCapacity, receipt.island.required,
+        IslandSlotRecord);
+    OC2_ISLAND_STORAGE(roots, rootCapacity, receipt.root.required,
+        IslandArticulationRootSlotRecord);
+    OC2_ISLAND_STORAGE(kinematicWords, kinematicWordCapacity,
+        receipt.kinematic.required, uint32_t);
+    OC2_ISLAND_STORAGE(kinematicChangeWords, kinematicChangeWordCapacity,
+        receipt.kinematicChange.required, uint32_t);
+    OC2_ISLAND_STORAGE(notReadyWords, notReadyWordCapacity,
+        receipt.notReady.required, uint32_t);
+    OC2_ISLAND_STORAGE(notReadyChangeWords, notReadyChangeWordCapacity,
+        receipt.notReadyChange.required, uint32_t);
+    OC2_ISLAND_STORAGE(islandWords, islandWordCapacity,
+        receipt.islandBitmap.required, uint32_t);
+    OC2_ISLAND_STORAGE(nodeCreated, nodeCreatedCapacity,
+        receipt.nodeCreated.required, uint32_t);
+    OC2_ISLAND_STORAGE(nodeDeleted, nodeDeletedCapacity,
+        receipt.nodeDeleted.required, uint32_t);
+    OC2_ISLAND_STORAGE(edgeCreated, edgeCreatedCapacity,
+        receipt.edgeCreated.required, uint32_t);
+    OC2_ISLAND_STORAGE(edgeDeleted, edgeDeletedCapacity,
+        receipt.edgeDeleted.required, uint32_t);
+    OC2_ISLAND_STORAGE(edgeBroken, edgeBrokenCapacity,
+        receipt.edgeBroken.required, uint32_t);
+    OC2_ISLAND_STORAGE(edgeJoined, edgeJoinedCapacity,
+        receipt.edgeJoined.required, uint32_t);
+    OC2_ISLAND_STORAGE(bindings, bindingCapacity, receipt.bindingsRequired,
+        IslandSipEdgeBinding);
+#undef OC2_ISLAND_STORAGE
+    return true;
+}
+
+static uint32_t HashIslandImage(const IslandSnapshotBuffersV1& buffers,
+    const IslandSnapshotReceiptV1& receipt) {
+    const uint32_t scalars[11] = {
+        receipt.numAddedRBodies, receipt.numAddedArtics,
+        receipt.numAddedKinematics, receipt.numAddedEdgesContact,
+        receipt.numAddedEdgesConstraint,
+        receipt.numAddedEdgesArticulation,
+        receipt.numEdgeReferencesToKinematic,
+        receipt.numRequiredKinematicDuplicates, receipt.everythingAsleep,
+        receipt.hasAnythingChanged, receipt.performIslandUpdate
+    };
+    uint32_t hash = 2166136261u;
+    hash = AppendByteHash(hash, buffers.nodes,
+        receipt.node.required * sizeof(IslandNodeSlotRecord));
+    hash = AppendByteHash(hash, buffers.edges,
+        receipt.edge.required * sizeof(IslandEdgeSlotRecord));
+    hash = AppendByteHash(hash, buffers.islands,
+        receipt.island.required * sizeof(IslandSlotRecord));
+    hash = AppendByteHash(hash, buffers.roots,
+        receipt.root.required * sizeof(IslandArticulationRootSlotRecord));
+    hash = AppendByteHash(hash, buffers.kinematicWords,
+        receipt.kinematic.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.kinematicChangeWords,
+        receipt.kinematicChange.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.notReadyWords,
+        receipt.notReady.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.notReadyChangeWords,
+        receipt.notReadyChange.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.islandWords,
+        receipt.islandBitmap.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.nodeCreated,
+        receipt.nodeCreated.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.nodeDeleted,
+        receipt.nodeDeleted.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.edgeCreated,
+        receipt.edgeCreated.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.edgeDeleted,
+        receipt.edgeDeleted.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.edgeBroken,
+        receipt.edgeBroken.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.edgeJoined,
+        receipt.edgeJoined.required * sizeof(uint32_t));
+    hash = AppendByteHash(hash, buffers.bindings,
+        receipt.bindingsRequired * sizeof(IslandSipEdgeBinding));
+    return AppendByteHash(hash, scalars, sizeof(scalars));
+}
+
+static bool IslandRestorePointersSettled(uintptr_t manager) {
+    // freeBuffers() clears precisely these ProcessSleepingIslandsComputeData
+    // and IslandManagerUpdateWorkBuffers pointers.  Sizes, capacities,
+    // PxsIslandObjects and the reusable mBuffer are deliberately retained.
+    static const uint16_t offsets[] = {
+        0x1E0u, 0x1E8u, 0x1F8u, 0x204u, 0x20Cu, 0x218u,
+        0x224u, 0x228u, 0x234u, 0x240u, 0x24Cu,
+        0x278u, 0x27Cu, 0x280u, 0x284u, 0x288u, 0x28Cu,
+        0x2CCu, 0x2D0u, 0x2D4u
+    };
+    for (uint32_t i = 0; i < sizeof(offsets) / sizeof(offsets[0]); ++i)
+        if (*reinterpret_cast<const uintptr_t*>(manager + offsets[i]) != 0u)
+            return false;
+    return true;
+}
+
+struct IslandRestoreMemoryRange {
+    uintptr_t begin;
+    uintptr_t end;
+};
+
+static bool AppendIslandRestoreRange(const void* pointer, uint32_t count,
+    uint32_t stride, IslandRestoreMemoryRange* ranges,
+    uint32_t& rangeCount) {
+    if (!count) return true;
+    if (!pointer || !stride || rangeCount >= 64u) return false;
+    const unsigned __int64 bytes = static_cast<unsigned __int64>(count) *
+        stride;
+    const uintptr_t begin = reinterpret_cast<uintptr_t>(pointer);
+    const uintptr_t maximum = ~static_cast<uintptr_t>(0);
+    if (bytes > maximum || begin > maximum - static_cast<uintptr_t>(bytes))
+        return false;
+    ranges[rangeCount].begin = begin;
+    ranges[rangeCount].end = begin + static_cast<uintptr_t>(bytes);
+    ++rangeCount;
+    return true;
+}
+
+static bool AppendIslandRestoreBufferRanges(
+    const IslandSnapshotBuffersV1& buffers, bool scratch,
+    IslandRestoreMemoryRange* ranges, uint32_t& rangeCount) {
+#define OC2_RESTORE_RANGE(field, count, type) \
+    if (!AppendIslandRestoreRange(buffers.field, count, sizeof(type), \
+            ranges, rangeCount)) return false
+    OC2_RESTORE_RANGE(nodes, 256u, IslandNodeSlotRecord);
+    OC2_RESTORE_RANGE(edges, 256u, IslandEdgeSlotRecord);
+    OC2_RESTORE_RANGE(islands, 256u, IslandSlotRecord);
+    OC2_RESTORE_RANGE(roots, 32u, IslandArticulationRootSlotRecord);
+    OC2_RESTORE_RANGE(kinematicWords, 8u, uint32_t);
+    OC2_RESTORE_RANGE(kinematicChangeWords, 8u, uint32_t);
+    OC2_RESTORE_RANGE(notReadyWords, 8u, uint32_t);
+    OC2_RESTORE_RANGE(notReadyChangeWords, 8u, uint32_t);
+    OC2_RESTORE_RANGE(islandWords, 8u, uint32_t);
+    OC2_RESTORE_RANGE(nodeCreated, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(nodeDeleted, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(edgeCreated, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(edgeDeleted, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(edgeBroken, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(edgeJoined, scratch ? 256u : 0u, uint32_t);
+    OC2_RESTORE_RANGE(bindings, 12u, IslandSipEdgeBinding);
+#undef OC2_RESTORE_RANGE
+    return true;
+}
+
+static bool IslandRestoreStorageDisjoint(
+    const IslandRestoreRequestV1& request,
+    const IslandRestoreReceiptV1* output) {
+    IslandRestoreMemoryRange ranges[64] = {};
+    uint32_t count = 0u;
+#define OC2_RESTORE_OBJECT(pointer, type) \
+    if (!AppendIslandRestoreRange(pointer, 1u, sizeof(type), ranges, count)) \
+        return false
+    OC2_RESTORE_OBJECT(&request, IslandRestoreRequestV1);
+    OC2_RESTORE_OBJECT(output, IslandRestoreReceiptV1);
+    OC2_RESTORE_OBJECT(request.targetBuffers, IslandSnapshotBuffersV1);
+    OC2_RESTORE_OBJECT(request.rollbackBuffers, IslandSnapshotBuffersV1);
+    OC2_RESTORE_OBJECT(request.verifyBuffers, IslandSnapshotBuffersV1);
+    OC2_RESTORE_OBJECT(request.targetReceipt, IslandSnapshotReceiptV1);
+    OC2_RESTORE_OBJECT(request.rollbackReceipt, IslandSnapshotReceiptV1);
+    OC2_RESTORE_OBJECT(request.verifyReceipt, IslandSnapshotReceiptV1);
+    if (request.nodeRebindCount)
+        if (!AppendIslandRestoreRange(request.nodeRebinds,
+                request.nodeRebindCount, sizeof(IslandNodeRebindV1), ranges,
+                count)) return false;
+    if (request.edgeRebindCount)
+        if (!AppendIslandRestoreRange(request.edgeRebinds,
+                request.edgeRebindCount,
+                sizeof(IslandContactEdgeRebindV1), ranges, count))
+            return false;
+#undef OC2_RESTORE_OBJECT
+    if (!AppendIslandRestoreBufferRanges(*request.targetBuffers, false,
+            ranges, count) ||
+        !AppendIslandRestoreBufferRanges(*request.rollbackBuffers, true,
+            ranges, count) ||
+        !AppendIslandRestoreBufferRanges(*request.verifyBuffers, true,
+            ranges, count)) return false;
+    for (uint32_t i = 0; i < count; ++i)
+        for (uint32_t j = i + 1u; j < count; ++j)
+            if (ranges[i].begin < ranges[j].end &&
+                ranges[j].begin < ranges[i].end) return false;
+    return true;
+}
+
+static bool CopyIslandImage(const IslandSnapshotBuffersV1& source,
+    const IslandSnapshotReceiptV1& receipt,
+    const IslandSnapshotBuffersV1& destination) {
+#define OC2_COPY_RESTORE(field, required, type) \
+    if (required) CopyBytes(destination.field, source.field, \
+        required * sizeof(type))
+    OC2_COPY_RESTORE(nodes, receipt.node.required, IslandNodeSlotRecord);
+    OC2_COPY_RESTORE(edges, receipt.edge.required, IslandEdgeSlotRecord);
+    OC2_COPY_RESTORE(islands, receipt.island.required, IslandSlotRecord);
+    OC2_COPY_RESTORE(roots, receipt.root.required,
+        IslandArticulationRootSlotRecord);
+    OC2_COPY_RESTORE(kinematicWords, receipt.kinematic.required, uint32_t);
+    OC2_COPY_RESTORE(kinematicChangeWords,
+        receipt.kinematicChange.required, uint32_t);
+    OC2_COPY_RESTORE(notReadyWords, receipt.notReady.required, uint32_t);
+    OC2_COPY_RESTORE(notReadyChangeWords,
+        receipt.notReadyChange.required, uint32_t);
+    OC2_COPY_RESTORE(islandWords, receipt.islandBitmap.required, uint32_t);
+    OC2_COPY_RESTORE(nodeCreated, receipt.nodeCreated.required, uint32_t);
+    OC2_COPY_RESTORE(nodeDeleted, receipt.nodeDeleted.required, uint32_t);
+    OC2_COPY_RESTORE(edgeCreated, receipt.edgeCreated.required, uint32_t);
+    OC2_COPY_RESTORE(edgeDeleted, receipt.edgeDeleted.required, uint32_t);
+    OC2_COPY_RESTORE(edgeBroken, receipt.edgeBroken.required, uint32_t);
+    OC2_COPY_RESTORE(edgeJoined, receipt.edgeJoined.required, uint32_t);
+    OC2_COPY_RESTORE(bindings, receipt.bindingsRequired,
+        IslandSipEdgeBinding);
+#undef OC2_COPY_RESTORE
+    return true;
+}
+
+static bool ValidateIslandRestoreTargetV1(
+    const IslandSnapshotBuffersV1& buffers,
+    const IslandSnapshotReceiptV1& receipt,
+    IslandRestoreReceiptV1* output) {
+    if ((receipt.apiVersion != 18u && receipt.apiVersion != kApiVersion) ||
+        receipt.structSize != sizeof(receipt) ||
+        receipt.result != IslandSnapshotOk ||
+        receipt.phase != IslandSnapshotSettled ||
+        receipt.validationFlags != 0x3FFu ||
+        receipt.node.capacity != 256u || receipt.node.required != 256u ||
+        receipt.node.written != 256u || receipt.node.freeCount != 247u ||
+        receipt.edge.capacity != 256u || receipt.edge.required != 256u ||
+        receipt.edge.written != 256u || receipt.edge.freeCount != 244u ||
+        receipt.island.capacity != 256u ||
+        receipt.island.required != 256u || receipt.island.written != 256u ||
+        receipt.island.freeCount != 247u || receipt.root.capacity != 32u ||
+        receipt.root.required != 32u || receipt.root.written != 32u ||
+        receipt.root.freeCount != 32u || receipt.liveContactEdges != 12u ||
+        receipt.liveConstraintEdges != 0u ||
+        receipt.liveArticulationEdges != 0u ||
+        receipt.bindingsRequired != 12u || receipt.bindingsWritten != 12u ||
+        receipt.nodeCreated.count || receipt.nodeCreated.required ||
+        receipt.nodeCreated.written || receipt.nodeDeleted.count ||
+        receipt.nodeDeleted.required || receipt.nodeDeleted.written ||
+        receipt.edgeCreated.count || receipt.edgeCreated.required ||
+        receipt.edgeCreated.written || receipt.edgeDeleted.count ||
+        receipt.edgeDeleted.required || receipt.edgeDeleted.written ||
+        receipt.edgeBroken.count || receipt.edgeBroken.required ||
+        receipt.edgeBroken.written || receipt.edgeJoined.count ||
+        receipt.edgeJoined.required || receipt.edgeJoined.written ||
+        receipt.numAddedArtics != 0u ||
+        receipt.numAddedEdgesContact != 12u ||
+        receipt.numAddedEdgesConstraint != 0u ||
+        receipt.numAddedEdgesArticulation != 0u ||
+        receipt.performIslandUpdate != 0u)
+        return false;
+    if (receipt.bindingHash != ByteHash(buffers.bindings,
+            receipt.bindingsRequired * sizeof(IslandSipEdgeBinding)) ||
+        receipt.snapshotHash != HashIslandImage(buffers, receipt))
+        return false;
+    if (receipt.kinematic.required != 8u ||
+        receipt.kinematic.written != 8u ||
+        receipt.kinematicChange.required != 8u ||
+        receipt.kinematicChange.written != 8u ||
+        receipt.notReady.required != 8u ||
+        receipt.notReady.written != 8u ||
+        receipt.notReadyChange.required != 8u ||
+        receipt.notReadyChange.written != 8u ||
+        receipt.islandBitmap.required != 8u ||
+        receipt.islandBitmap.written != 8u ||
+        receipt.kinematic.hash != WordHash(buffers.kinematicWords, 8u) ||
+        receipt.kinematicChange.hash != WordHash(
+            buffers.kinematicChangeWords, 8u) ||
+        receipt.notReady.hash != WordHash(buffers.notReadyWords, 8u) ||
+        receipt.notReadyChange.hash != WordHash(
+            buffers.notReadyChangeWords, 8u) ||
+        receipt.islandBitmap.hash != WordHash(buffers.islandWords, 8u) ||
+        receipt.nodeCreated.hash != WordHash(buffers.nodeCreated, 0u) ||
+        receipt.nodeDeleted.hash != WordHash(buffers.nodeDeleted, 0u) ||
+        receipt.edgeCreated.hash != WordHash(buffers.edgeCreated, 0u) ||
+        receipt.edgeDeleted.hash != WordHash(buffers.edgeDeleted, 0u) ||
+        receipt.edgeBroken.hash != WordHash(buffers.edgeBroken, 0u) ||
+        receipt.edgeJoined.hash != WordHash(buffers.edgeJoined, 0u))
+        return false;
+    for (uint32_t i = 0; i < 8u; ++i)
+        if (buffers.kinematicChangeWords[i] ||
+            buffers.notReadyChangeWords[i]) return false;
+
+    uint32_t usedNodes = 0, usedEdges = 0, usedIslands = 0;
+    for (uint32_t i = 0; i < 256u; ++i) {
+        const IslandNodeSlotRecord& node = buffers.nodes[i];
+        const IslandEdgeSlotRecord& edge = buffers.edges[i];
+        const IslandSlotRecord& island = buffers.islands[i];
+        if (node.id != i || edge.id != i || island.id != i) return false;
+        if ((node.slotFlags & 2u) == 0u) {
+            ++usedNodes;
+            if ((node.slotFlags & 5u) != 5u ||
+                (node.slotFlags & ~(1u | 4u | 16u | 64u)) != 0u ||
+                node.validationFlags != 0x1Fu ||
+                (node.rawFlagsWord & (2u | 0x20u | 0x40u)) != 0u ||
+                !node.ownerOrArticulationRaw) return false;
+        } else if (node.slotFlags != 2u ||
+            node.validationFlags != 0x1Fu) {
+            return false;
+        }
+        if ((edge.slotFlags & 2u) == 0u) {
+            ++usedEdges;
+            if (edge.slotFlags != 5u || edge.validationFlags != 0x1Fu ||
+                (edge.taggedObjectRaw & ~0xFu) == 0u ||
+                (edge.taggedObjectRaw & (1u | 4u | 8u)) != 0u ||
+                edge.semanticBindingIndex >= 12u ||
+                edge.node0 >= 256u || edge.node1 >= 256u)
+                return false;
+        } else if (edge.slotFlags != 2u ||
+            edge.validationFlags != 0x1Fu) {
+            return false;
+        }
+        if ((island.slotFlags & 2u) == 0u) {
+            ++usedIslands;
+            if (island.slotFlags != 5u ||
+                island.validationFlags != 0x0Fu) return false;
+        } else if (island.slotFlags != 2u ||
+            island.validationFlags != 0x0Fu) {
+            return false;
+        }
+        const uint32_t bit = 1u << (i & 31u);
+        if (((buffers.kinematicWords[i >> 5] & bit) != 0u) !=
+                ((node.slotFlags & 16u) != 0u) ||
+            ((buffers.notReadyWords[i >> 5] & bit) != 0u) !=
+                ((node.slotFlags & 64u) != 0u) ||
+            ((buffers.islandWords[i >> 5] & bit) != 0u) !=
+                ((island.slotFlags & 4u) != 0u)) return false;
+    }
+    for (uint32_t i = 0; i < 32u; ++i)
+        if (buffers.roots[i].id != i ||
+            buffers.roots[i].slotFlags != 2u ||
+            buffers.roots[i].validationFlags != 0x07u) return false;
+    if (usedNodes != 9u || usedEdges != 12u || usedIslands != 9u ||
+        receipt.numAddedRBodies + receipt.numAddedKinematics != 9u)
+        return false;
+    for (uint32_t i = 0; i < 12u; ++i) {
+        const IslandSipEdgeBinding& binding = buffers.bindings[i];
+        if (binding.edgeType != 0u || binding.edgeId >= 256u ||
+            binding.validationFlags != 0x1Fu ||
+            binding.pxsShapeCoreLow == 0u ||
+            binding.pxsShapeCoreLow >= binding.pxsShapeCoreHigh ||
+            buffers.edges[binding.edgeId].semanticBindingIndex != i)
+            return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (buffers.bindings[j].edgeId == binding.edgeId ||
+                (buffers.bindings[j].pxsShapeCoreLow ==
+                    binding.pxsShapeCoreLow &&
+                 buffers.bindings[j].pxsShapeCoreHigh ==
+                    binding.pxsShapeCoreHigh)) return false;
+    }
+
+    uint8_t nodeFreeSeen[256] = {}, edgeFreeSeen[256] = {},
+        islandFreeSeen[256] = {}, rootFreeSeen[32] = {};
+    uint32_t freeHashes[4] = {2166136261u,2166136261u,
+        2166136261u,2166136261u};
+    uint32_t freeIds[4] = {receipt.node.freeHead,receipt.edge.freeHead,
+        receipt.island.freeHead,receipt.root.freeHead};
+    const uint32_t freeCounts[4] = {receipt.node.freeCount,
+        receipt.edge.freeCount,receipt.island.freeCount,
+        receipt.root.freeCount};
+    for (uint32_t kind = 0; kind < 4u; ++kind) {
+        for (uint32_t visited = 0; visited < freeCounts[kind]; ++visited) {
+            const uint32_t id = freeIds[kind];
+            const uint32_t capacity = kind == 3u ? 32u : 256u;
+            if (id >= capacity) return false;
+            uint8_t* seen = kind == 0u ? nodeFreeSeen :
+                kind == 1u ? edgeFreeSeen :
+                kind == 2u ? islandFreeSeen : rootFreeSeen;
+            if (seen[id]) return false;
+            seen[id] = 1u;
+            freeHashes[kind] = AppendByteHash(freeHashes[kind], &id,
+                sizeof(id));
+            freeIds[kind] = kind == 0u ? buffers.nodes[id].freeNext :
+                kind == 1u ? buffers.edges[id].freeNext :
+                kind == 2u ? buffers.islands[id].freeNext :
+                    buffers.roots[id].freeNext;
+        }
+        if (freeIds[kind] != 0xFFFFFFFFu) return false;
+    }
+    if (freeHashes[0] != receipt.node.freeChainHash ||
+        freeHashes[1] != receipt.edge.freeChainHash ||
+        freeHashes[2] != receipt.island.freeChainHash ||
+        freeHashes[3] != receipt.root.freeChainHash) return false;
+    for (uint32_t i = 0; i < 256u; ++i)
+        if (nodeFreeSeen[i] != ((buffers.nodes[i].slotFlags & 2u) != 0u) ||
+            edgeFreeSeen[i] != ((buffers.edges[i].slotFlags & 2u) != 0u) ||
+            islandFreeSeen[i] !=
+                ((buffers.islands[i].slotFlags & 2u) != 0u)) return false;
+    for (uint32_t i = 0; i < 32u; ++i)
+        if (!rootFreeSeen[i]) return false;
+
+    uint8_t nodeTopologySeen[256] = {}, edgeTopologySeen[256] = {};
+    for (uint32_t islandId = 0; islandId < 256u; ++islandId) {
+        const IslandSlotRecord& island = buffers.islands[islandId];
+        if ((island.slotFlags & 2u) != 0u) continue;
+        uint32_t nodeId = island.startNode, lastNode = 0xFFFFFFFFu;
+        uint32_t walked = 0u;
+        while (nodeId != 0xFFFFFFFFu && walked++ < 256u) {
+            if (nodeId >= 256u || nodeTopologySeen[nodeId] ||
+                (buffers.nodes[nodeId].slotFlags & 2u) != 0u ||
+                buffers.nodes[nodeId].islandId != islandId) return false;
+            nodeTopologySeen[nodeId] = 1u;
+            lastNode = nodeId;
+            nodeId = buffers.nodes[nodeId].nextNode;
+        }
+        if (nodeId != 0xFFFFFFFFu || lastNode != island.endNode)
+            return false;
+        uint32_t edgeId = island.startEdge, lastEdge = 0xFFFFFFFFu;
+        walked = 0u;
+        while (edgeId != 0xFFFFFFFFu && walked++ < 256u) {
+            if (edgeId >= 256u || edgeTopologySeen[edgeId] ||
+                (buffers.edges[edgeId].slotFlags & 2u) != 0u ||
+                (buffers.nodes[buffers.edges[edgeId].node0].slotFlags & 2u) !=
+                    0u ||
+                (buffers.nodes[buffers.edges[edgeId].node1].slotFlags & 2u) !=
+                    0u) return false;
+            edgeTopologySeen[edgeId] = 1u;
+            lastEdge = edgeId;
+            edgeId = buffers.edges[edgeId].nextEdge;
+        }
+        if (edgeId != 0xFFFFFFFFu || lastEdge != island.endEdge)
+            return false;
+    }
+    for (uint32_t i = 0; i < 256u; ++i)
+        if (nodeTopologySeen[i] !=
+                ((buffers.nodes[i].slotFlags & 2u) == 0u) ||
+            edgeTopologySeen[i] !=
+                ((buffers.edges[i].slotFlags & 2u) == 0u)) return false;
+    if (receipt.node.elementHash != HashIslandNodeRaw(buffers.nodes, 256u) ||
+        receipt.node.nextHash != HashIslandRecordWord(buffers.nodes, 256u,
+            sizeof(IslandNodeSlotRecord), 20u) ||
+        receipt.edge.elementHash != HashIslandEdgeRaw(buffers.edges, 256u) ||
+        receipt.edge.nextHash != HashIslandRecordWord(buffers.edges, 256u,
+            sizeof(IslandEdgeSlotRecord), 20u) ||
+        receipt.island.elementHash != HashIslandRaw(buffers.islands, 256u) ||
+        receipt.root.elementHash != HashIslandRootRaw(buffers.roots, 32u))
+        return false;
+    output->nodeBindingsRequired = usedNodes;
+    output->edgeBindingsRequired = usedEdges;
+    return true;
+}
+
+static bool ValidateIslandRestoreScratch(
+    const IslandSnapshotBuffersV1* buffers) {
+    if (!buffers || !Readable(buffers, sizeof(*buffers))) return false;
+    return IslandBufferWritable(buffers->nodes, buffers->nodeCapacity,
+            256u, sizeof(IslandNodeSlotRecord)) &&
+        IslandBufferWritable(buffers->edges, buffers->edgeCapacity,
+            256u, sizeof(IslandEdgeSlotRecord)) &&
+        IslandBufferWritable(buffers->islands, buffers->islandCapacity,
+            256u, sizeof(IslandSlotRecord)) &&
+        IslandBufferWritable(buffers->roots, buffers->rootCapacity,
+            32u, sizeof(IslandArticulationRootSlotRecord)) &&
+        IslandBufferWritable(buffers->kinematicWords,
+            buffers->kinematicWordCapacity, 8u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->kinematicChangeWords,
+            buffers->kinematicChangeWordCapacity, 8u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->notReadyWords,
+            buffers->notReadyWordCapacity, 8u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->notReadyChangeWords,
+            buffers->notReadyChangeWordCapacity, 8u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->islandWords,
+            buffers->islandWordCapacity, 8u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->nodeCreated,
+            buffers->nodeCreatedCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->nodeDeleted,
+            buffers->nodeDeletedCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->edgeCreated,
+            buffers->edgeCreatedCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->edgeDeleted,
+            buffers->edgeDeletedCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->edgeBroken,
+            buffers->edgeBrokenCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->edgeJoined,
+            buffers->edgeJoinedCapacity, 256u, sizeof(uint32_t)) &&
+        IslandBufferWritable(buffers->bindings, buffers->bindingCapacity,
+            12u, sizeof(IslandSipEdgeBinding));
+}
+
+static bool SameQueueLayout(const IslandQueueHeader& live,
+    const IslandQueueReceipt& target) {
+    return live.capacity == target.capacity &&
+        live.defaultCapacity == target.defaultCapacity;
+}
+
+static bool IslandRestoreLiveStorageWritable(const IslandHeaderState& header,
+    const IslandSnapshotReceiptV1& target,
+    const IslandSnapshotReceiptV1& rollback) {
+    if (header.node.capacity != target.node.capacity ||
+        header.edge.capacity != target.edge.capacity ||
+        header.island.capacity != target.island.capacity ||
+        header.root.capacity != target.root.capacity ||
+        !SameQueueLayout(header.nodeCreated, target.nodeCreated) ||
+        !SameQueueLayout(header.nodeDeleted, target.nodeDeleted) ||
+        !SameQueueLayout(header.edgeCreated, target.edgeCreated) ||
+        !SameQueueLayout(header.edgeDeleted, target.edgeDeleted) ||
+        !SameQueueLayout(header.edgeBroken, target.edgeBroken) ||
+        !SameQueueLayout(header.edgeJoined, target.edgeJoined) ||
+        !SameQueueLayout(header.nodeCreated, rollback.nodeCreated) ||
+        !SameQueueLayout(header.nodeDeleted, rollback.nodeDeleted) ||
+        !SameQueueLayout(header.edgeCreated, rollback.edgeCreated) ||
+        !SameQueueLayout(header.edgeDeleted, rollback.edgeDeleted) ||
+        !SameQueueLayout(header.edgeBroken, rollback.edgeBroken) ||
+        !SameQueueLayout(header.edgeJoined, rollback.edgeJoined) ||
+        header.bitmaps[0].wordCount != target.kinematic.required ||
+        header.bitmaps[1].wordCount != target.kinematicChange.required ||
+        header.bitmaps[2].wordCount != target.notReady.required ||
+        header.bitmaps[3].wordCount != target.notReadyChange.required ||
+        header.bitmaps[4].wordCount != target.islandBitmap.required ||
+        header.bitmaps[0].wordCount != rollback.kinematic.required ||
+        header.bitmaps[1].wordCount != rollback.kinematicChange.required ||
+        header.bitmaps[2].wordCount != rollback.notReady.required ||
+        header.bitmaps[3].wordCount != rollback.notReadyChange.required ||
+        header.bitmaps[4].wordCount != rollback.islandBitmap.required)
+        return false;
+    if (!Writable(reinterpret_cast<void*>(header.manager + 0x01Cu), 8u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x128u), 8u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x138u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x140u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x150u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x158u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x160u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x168u), 4u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x184u), 8u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x1B4u), 8u) ||
+        !Writable(reinterpret_cast<void*>(header.manager + 0x1BCu), 0x23u) ||
+        !Writable(reinterpret_cast<void*>(header.node.elements),
+            header.node.capacity * 12u) ||
+        !Writable(reinterpret_cast<void*>(header.node.freeNext),
+            header.node.capacity * 4u) ||
+        !Writable(reinterpret_cast<void*>(header.node.nextList),
+            header.node.capacity * 4u) ||
+        !Writable(reinterpret_cast<void*>(header.edge.elements),
+            header.edge.capacity * 12u) ||
+        !Writable(reinterpret_cast<void*>(header.edge.freeNext),
+            header.edge.capacity * 4u) ||
+        !Writable(reinterpret_cast<void*>(header.edge.nextList),
+            header.edge.capacity * 4u) ||
+        !Writable(reinterpret_cast<void*>(header.island.elements),
+            header.island.capacity * 16u) ||
+        !Writable(reinterpret_cast<void*>(header.island.freeNext),
+            header.island.capacity * 4u) ||
+        !Writable(reinterpret_cast<void*>(header.root.elements),
+            header.root.capacity * 8u) ||
+        !Writable(reinterpret_cast<void*>(header.root.freeNext),
+            header.root.capacity * 4u)) return false;
+    for (uint32_t i = 0; i < 5u; ++i)
+        if (!Writable(reinterpret_cast<void*>(header.bitmaps[i].data),
+                header.bitmaps[i].wordCount * 4u)) return false;
+    const IslandQueueHeader* queues[] = {&header.nodeCreated,
+        &header.nodeDeleted,&header.edgeCreated,&header.edgeDeleted,
+        &header.edgeBroken,&header.edgeJoined};
+    const uint32_t rollbackCounts[] = {rollback.nodeCreated.required,
+        rollback.nodeDeleted.required,rollback.edgeCreated.required,
+        rollback.edgeDeleted.required,rollback.edgeBroken.required,
+        rollback.edgeJoined.required};
+    for (uint32_t i = 0; i < 6u; ++i)
+        if (rollbackCounts[i] && !Writable(
+                reinterpret_cast<void*>(queues[i]->data),
+                rollbackCounts[i] * 4u)) return false;
+    return true;
+}
+
+static uint32_t TranslateCurrentNodeToTarget(uint32_t current,
+    const IslandNodeRebindV1* bindings, uint32_t count) {
+    if (current == 0xFFFFFFFFu) return current;
+    for (uint32_t i = 0; i < count; ++i)
+        if (bindings[i].currentNodeId == current)
+            return bindings[i].targetNodeId;
+    return 0xFFFFFFFEu;
+}
+
+static bool ValidateAndStageIslandRebindings(
+    const IslandSnapshotBuffersV1& target,
+    const IslandSnapshotReceiptV1& targetReceipt,
+    const IslandSnapshotBuffersV1& rollback,
+    const IslandSnapshotReceiptV1& rollbackReceipt,
+    const IslandRestoreRequestV1& request,
+    const IslandSnapshotBuffersV1& staged,
+    IslandRestoreReceiptV1* output) {
+    if (request.nodeRebindCount != 9u || request.edgeRebindCount != 12u ||
+        !request.nodeRebinds || !request.edgeRebinds ||
+        !Readable(request.nodeRebinds,
+            9u * sizeof(IslandNodeRebindV1)) ||
+        !Readable(request.edgeRebinds,
+            12u * sizeof(IslandContactEdgeRebindV1))) return false;
+    if (rollbackReceipt.node.capacity != 256u ||
+        rollbackReceipt.node.freeCount != 247u ||
+        rollbackReceipt.edge.capacity != 256u ||
+        rollbackReceipt.edge.freeCount != 244u ||
+        rollbackReceipt.island.capacity != 256u ||
+        rollbackReceipt.island.freeCount != 247u ||
+        rollbackReceipt.root.capacity != 32u ||
+        rollbackReceipt.root.freeCount != 32u ||
+        rollbackReceipt.liveContactEdges != 12u ||
+        rollbackReceipt.liveConstraintEdges ||
+        rollbackReceipt.liveArticulationEdges ||
+        rollbackReceipt.bindingsRequired != 12u ||
+        rollbackReceipt.bindingsWritten != 12u) return false;
+
+    for (uint32_t i = 0; i < 9u; ++i) {
+        const IslandNodeRebindV1& binding = request.nodeRebinds[i];
+        if (binding.validationFlags != 0x3Fu || !binding.semanticKey ||
+            binding.targetNodeId >= 256u || binding.currentNodeId >= 256u ||
+            !binding.targetBodyCore ||
+            !binding.liveBodySim || !binding.liveBodyCore ||
+            !binding.targetOwnerRaw ||
+            binding.liveHookAddress != binding.liveBodySim + 0xBCu ||
+            !Readable(reinterpret_cast<const void*>(binding.liveBodySim),
+                0xC0u) ||
+            !Readable(reinterpret_cast<const void*>(binding.liveBodyCore),
+                8u) ||
+            !Writable(reinterpret_cast<void*>(binding.liveHookAddress), 4u) ||
+            // targetOwnerRaw and targetBodyCore are historical addresses.
+            // semanticKey is a stable managed Rigidbody identity, while the
+            // two BodyCore fields deliberately describe different native
+            // incarnations.  Never dereference or equate the target pointers.
+            *reinterpret_cast<const uintptr_t*>(binding.liveBodySim +
+                0x34u) != binding.liveBodyCore ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveBodyCore + 4u) !=
+                binding.liveBodySim ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveBodySim + 0x24u) !=
+                targetReceipt.interactionScene ||
+            *reinterpret_cast<const uint32_t*>(binding.liveHookAddress) !=
+                binding.currentNodeId ||
+            target.nodes[binding.targetNodeId].ownerOrArticulationRaw !=
+                binding.targetOwnerRaw ||
+            (target.nodes[binding.targetNodeId].slotFlags & 2u) != 0u ||
+            (rollback.nodes[binding.currentNodeId].slotFlags & 2u) != 0u ||
+            rollback.nodes[binding.currentNodeId].ownerOrArticulationRaw !=
+                binding.liveBodySim)
+            return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (request.nodeRebinds[j].targetNodeId == binding.targetNodeId ||
+                request.nodeRebinds[j].currentNodeId == binding.currentNodeId ||
+                request.nodeRebinds[j].liveBodySim == binding.liveBodySim ||
+                request.nodeRebinds[j].targetBodyCore ==
+                    binding.targetBodyCore ||
+                request.nodeRebinds[j].semanticKey == binding.semanticKey)
+                return false;
+        staged.nodes[binding.targetNodeId].ownerOrArticulationRaw =
+            binding.liveBodySim;
+        ++output->nodeBindingsValidated;
+    }
+    for (uint32_t nodeId = 0; nodeId < 256u; ++nodeId) {
+        if ((target.nodes[nodeId].slotFlags & 2u) != 0u) continue;
+        bool found = false;
+        for (uint32_t i = 0; i < 9u; ++i)
+            found |= request.nodeRebinds[i].targetNodeId == nodeId;
+        if (!found) return false;
+    }
+
+    for (uint32_t i = 0; i < 12u; ++i) {
+        const IslandContactEdgeRebindV1& binding = request.edgeRebinds[i];
+        if (binding.validationFlags != 0x3Fu || !binding.semanticKey ||
+            binding.targetBindingIndex != i || binding.targetEdgeId >= 256u ||
+            binding.currentEdgeId >= 256u || !binding.liveSip ||
+            binding.liveHookAddress != binding.liveSip + 0x3Cu ||
+            !binding.liveShapeSim0 || !binding.liveShapeSim1 ||
+            !binding.liveContactManager ||
+            (binding.liveContactManager & 0xFu) != 0u ||
+            !Readable(reinterpret_cast<const void*>(binding.liveSip), 0x40u) ||
+            !Readable(reinterpret_cast<const void*>(binding.liveContactManager),
+                0x10u) ||
+            !Writable(reinterpret_cast<void*>(binding.liveHookAddress), 4u) ||
+            *reinterpret_cast<const uint32_t*>(binding.liveHookAddress) !=
+                binding.currentEdgeId ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveSip + 0x20u) !=
+                binding.liveShapeSim0 ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveSip + 0x24u) !=
+                binding.liveShapeSim1 ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveSip + 0x38u) !=
+                binding.liveContactManager ||
+            *reinterpret_cast<const uintptr_t*>(binding.liveContactManager +
+                0x0Cu) != binding.liveSip)
+            return false;
+        uintptr_t pxs0 = 0, pxs1 = 0;
+        if (!ReadShapeSimPxsShapeCore(binding.liveShapeSim0, pxs0) ||
+            !ReadShapeSimPxsShapeCore(binding.liveShapeSim1, pxs1))
+            return false;
+        const uint32_t liveLow = static_cast<uint32_t>(pxs0 < pxs1 ?
+            pxs0 : pxs1);
+        const uint32_t liveHigh = static_cast<uint32_t>(pxs0 < pxs1 ?
+            pxs1 : pxs0);
+        const IslandSipEdgeBinding& targetBinding = target.bindings[i];
+        const IslandSipEdgeBinding* liveBinding = 0;
+        for (uint32_t j = 0; j < rollbackReceipt.bindingsRequired; ++j)
+            if (rollback.bindings[j].sip == binding.liveSip &&
+                rollback.bindings[j].edgeId == binding.currentEdgeId) {
+                if (liveBinding) return false;
+                liveBinding = &rollback.bindings[j];
+            }
+        if (binding.targetEdgeId != targetBinding.edgeId ||
+            binding.targetPxsShapeCoreLow != targetBinding.pxsShapeCoreLow ||
+            binding.targetPxsShapeCoreHigh != targetBinding.pxsShapeCoreHigh ||
+            binding.livePxsShapeCoreLow != liveLow ||
+            binding.livePxsShapeCoreHigh != liveHigh ||
+            liveLow != binding.targetPxsShapeCoreLow ||
+            liveHigh != binding.targetPxsShapeCoreHigh ||
+            !liveBinding ||
+            liveBinding->contactManager != binding.liveContactManager ||
+            (rollback.edges[binding.currentEdgeId].slotFlags & 2u) != 0u ||
+            TranslateCurrentNodeToTarget(
+                rollback.edges[binding.currentEdgeId].node0,
+                request.nodeRebinds, 9u) !=
+                    target.edges[binding.targetEdgeId].node0 ||
+            TranslateCurrentNodeToTarget(
+                rollback.edges[binding.currentEdgeId].node1,
+                request.nodeRebinds, 9u) !=
+                    target.edges[binding.targetEdgeId].node1)
+            return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (request.edgeRebinds[j].targetEdgeId == binding.targetEdgeId ||
+                request.edgeRebinds[j].currentEdgeId == binding.currentEdgeId ||
+                request.edgeRebinds[j].liveSip == binding.liveSip ||
+                request.edgeRebinds[j].liveContactManager ==
+                    binding.liveContactManager ||
+                request.edgeRebinds[j].semanticKey == binding.semanticKey)
+                return false;
+
+        staged.edges[binding.targetEdgeId].taggedObjectRaw =
+            binding.liveContactManager |
+            (target.edges[binding.targetEdgeId].taggedObjectRaw & 0xFu);
+        IslandSipEdgeBinding& stagedBinding = staged.bindings[i];
+        stagedBinding.sip = binding.liveSip;
+        stagedBinding.hookAddress = binding.liveHookAddress;
+        stagedBinding.shapeSim0 = binding.liveShapeSim0;
+        stagedBinding.shapeSim1 = binding.liveShapeSim1;
+        stagedBinding.pxsShapeCoreLow = liveLow;
+        stagedBinding.pxsShapeCoreHigh = liveHigh;
+        stagedBinding.contactManager = binding.liveContactManager;
+        stagedBinding.taggedObjectRaw =
+            staged.edges[binding.targetEdgeId].taggedObjectRaw;
+        ++output->edgeBindingsValidated;
+    }
+    return true;
+}
+
+static void RetargetIslandReceipt(const IslandSnapshotReceiptV1& source,
+    const IslandSnapshotBuffersV1& image, const IslandHeaderState& header,
+    uintptr_t unityBase, uintptr_t nphaseCore,
+    IslandSnapshotReceiptV1& destination) {
+    destination = source;
+    destination.apiVersion = kApiVersion;
+    destination.unityBase = static_cast<uint32_t>(unityBase);
+    destination.nphaseCore = static_cast<uint32_t>(nphaseCore);
+    destination.ownerScene = static_cast<uint32_t>(header.ownerScene);
+    destination.interactionScene = static_cast<uint32_t>(
+        header.interactionScene);
+    destination.context = static_cast<uint32_t>(header.context);
+    destination.islandManager = static_cast<uint32_t>(header.manager);
+    destination.captureThreadId = GetCurrentThreadId();
+    destination.epoch = static_cast<uint32_t>(InterlockedCompareExchange(
+        &g_islandEpoch, 0, 0));
+    IslandElementHeader const* elementHeaders[] = {&header.node,
+        &header.edge,&header.island,&header.root};
+    IslandElementManagerReceipt* elementReceipts[] = {&destination.node,
+        &destination.edge,&destination.island,&destination.root};
+    for (uint32_t i = 0; i < 4u; ++i) {
+        elementReceipts[i]->vtable = static_cast<uint32_t>(
+            elementHeaders[i]->vtable);
+        elementReceipts[i]->elements = static_cast<uint32_t>(
+            elementHeaders[i]->elements);
+        elementReceipts[i]->freeNext = static_cast<uint32_t>(
+            elementHeaders[i]->freeNext);
+        elementReceipts[i]->nextList = static_cast<uint32_t>(
+            elementHeaders[i]->nextList);
+    }
+    IslandQueueHeader const* queueHeaders[] = {&header.nodeCreated,
+        &header.nodeDeleted,&header.edgeCreated,&header.edgeDeleted,
+        &header.edgeBroken,&header.edgeJoined};
+    IslandQueueReceipt* queueReceipts[] = {&destination.nodeCreated,
+        &destination.nodeDeleted,&destination.edgeCreated,
+        &destination.edgeDeleted,&destination.edgeBroken,
+        &destination.edgeJoined};
+    for (uint32_t i = 0; i < 6u; ++i)
+        queueReceipts[i]->data = static_cast<uint32_t>(
+            queueHeaders[i]->data);
+    IslandBitmapReceipt* bitmapReceipts[] = {&destination.kinematic,
+        &destination.kinematicChange,&destination.notReady,
+        &destination.notReadyChange,&destination.islandBitmap};
+    for (uint32_t i = 0; i < 5u; ++i)
+        bitmapReceipts[i]->data = static_cast<uint32_t>(
+            header.bitmaps[i].data);
+
+    destination.node.elementHash = HashIslandNodeRaw(image.nodes,
+        destination.node.required);
+    destination.edge.elementHash = HashIslandEdgeRaw(image.edges,
+        destination.edge.required);
+    destination.island.elementHash = HashIslandRaw(image.islands,
+        destination.island.required);
+    destination.root.elementHash = HashIslandRootRaw(image.roots,
+        destination.root.required);
+    destination.bindingHash = ByteHash(image.bindings,
+        destination.bindingsRequired * sizeof(IslandSipEdgeBinding));
+    destination.snapshotHash = HashIslandImage(image, destination);
+}
+
+static bool WriteIslandPersistentImageData(const IslandHeaderState& header,
+    const IslandSnapshotBuffersV1& image,
+    const IslandSnapshotReceiptV1& receipt, uint32_t& bytesWritten) {
+    bytesWritten = 0u;
+    if (header.node.capacity != receipt.node.required ||
+        header.edge.capacity != receipt.edge.required ||
+        header.island.capacity != receipt.island.required ||
+        header.root.capacity != receipt.root.required) return false;
+    for (uint32_t i = 0; i < receipt.node.required; ++i) {
+        const IslandNodeSlotRecord& record = image.nodes[i];
+        uint32_t* element = reinterpret_cast<uint32_t*>(
+            header.node.elements + i * 12u);
+        element[0] = record.ownerOrArticulationRaw;
+        element[1] = record.islandId;
+        element[2] = record.rawFlagsWord;
+        *reinterpret_cast<uint32_t*>(header.node.freeNext + i * 4u) =
+            record.freeNext;
+        *reinterpret_cast<uint32_t*>(header.node.nextList + i * 4u) =
+            record.nextNode;
+        bytesWritten += 20u;
+    }
+    for (uint32_t i = 0; i < receipt.edge.required; ++i) {
+        const IslandEdgeSlotRecord& record = image.edges[i];
+        uint32_t* element = reinterpret_cast<uint32_t*>(
+            header.edge.elements + i * 12u);
+        element[0] = record.node0;
+        element[1] = record.node1;
+        element[2] = record.taggedObjectRaw;
+        *reinterpret_cast<uint32_t*>(header.edge.freeNext + i * 4u) =
+            record.freeNext;
+        *reinterpret_cast<uint32_t*>(header.edge.nextList + i * 4u) =
+            record.nextEdge;
+        bytesWritten += 20u;
+    }
+    for (uint32_t i = 0; i < receipt.island.required; ++i) {
+        const IslandSlotRecord& record = image.islands[i];
+        uint32_t* element = reinterpret_cast<uint32_t*>(
+            header.island.elements + i * 16u);
+        element[0] = record.startNode;
+        element[1] = record.startEdge;
+        element[2] = record.endNode;
+        element[3] = record.endEdge;
+        *reinterpret_cast<uint32_t*>(header.island.freeNext + i * 4u) =
+            record.freeNext;
+        bytesWritten += 20u;
+    }
+    for (uint32_t i = 0; i < receipt.root.required; ++i) {
+        const IslandArticulationRootSlotRecord& record = image.roots[i];
+        uint32_t* element = reinterpret_cast<uint32_t*>(
+            header.root.elements + i * 8u);
+        element[0] = record.articulationLinkHandle;
+        element[1] = record.articulationOwner;
+        *reinterpret_cast<uint32_t*>(header.root.freeNext + i * 4u) =
+            record.freeNext;
+        bytesWritten += 12u;
+    }
+    const uint32_t* bitmapSources[] = {image.kinematicWords,
+        image.kinematicChangeWords,image.notReadyWords,
+        image.notReadyChangeWords,image.islandWords};
+    const IslandBitmapReceipt* bitmapReceipts[] = {&receipt.kinematic,
+        &receipt.kinematicChange,&receipt.notReady,
+        &receipt.notReadyChange,&receipt.islandBitmap};
+    for (uint32_t i = 0; i < 5u; ++i) {
+        if (header.bitmaps[i].wordCount != bitmapReceipts[i]->required)
+            return false;
+        if (bitmapReceipts[i]->required) CopyBytes(
+            reinterpret_cast<void*>(header.bitmaps[i].data),
+            bitmapSources[i], bitmapReceipts[i]->required * 4u);
+        bytesWritten += bitmapReceipts[i]->required * 4u;
+    }
+    const uint32_t* queueSources[] = {image.nodeCreated,image.nodeDeleted,
+        image.edgeCreated,image.edgeDeleted,image.edgeBroken,
+        image.edgeJoined};
+    const IslandQueueHeader* queueHeaders[] = {&header.nodeCreated,
+        &header.nodeDeleted,&header.edgeCreated,&header.edgeDeleted,
+        &header.edgeBroken,&header.edgeJoined};
+    const IslandQueueReceipt* queueReceipts[] = {&receipt.nodeCreated,
+        &receipt.nodeDeleted,&receipt.edgeCreated,&receipt.edgeDeleted,
+        &receipt.edgeBroken,&receipt.edgeJoined};
+    for (uint32_t i = 0; i < 6u; ++i) {
+        if (!SameQueueLayout(*queueHeaders[i], *queueReceipts[i]) ||
+            queueReceipts[i]->required > queueHeaders[i]->capacity)
+            return false;
+        if (queueReceipts[i]->required) CopyBytes(
+            reinterpret_cast<void*>(queueHeaders[i]->data),
+            queueSources[i], queueReceipts[i]->required * 4u);
+        bytesWritten += queueReceipts[i]->required * 4u;
+    }
+
+    MemoryBarrier();
+    return true;
+}
+
+static bool PublishIslandPersistentImageMetadata(
+    const IslandHeaderState& header,
+    const IslandSnapshotReceiptV1& receipt, uint32_t& bytesWritten) {
+    // Publish allocator heads and event counts only after their backing
+    // arrays and all external owner hooks are complete.  Publish logical
+    // counters and update booleans last so no partial image advertises itself
+    // as settled even within the closed admission gate.
+    *reinterpret_cast<uint32_t*>(header.manager + 0x1Cu) =
+        receipt.node.freeHead;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x20u) =
+        receipt.node.freeCount;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x128u) =
+        receipt.edge.freeHead;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x12Cu) =
+        receipt.edge.freeCount;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x184u) =
+        receipt.island.freeHead;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x188u) =
+        receipt.island.freeCount;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x1B4u) =
+        receipt.root.freeHead;
+    *reinterpret_cast<uint32_t*>(header.manager + 0x1B8u) =
+        receipt.root.freeCount;
+    const uint16_t queueCountOffsets[] = {0x138u,0x140u,0x150u,0x158u,
+        0x160u,0x168u};
+    const IslandQueueReceipt* queueReceipts[] = {&receipt.nodeCreated,
+        &receipt.nodeDeleted,&receipt.edgeCreated,&receipt.edgeDeleted,
+        &receipt.edgeBroken,&receipt.edgeJoined};
+    for (uint32_t i = 0; i < 6u; ++i)
+        *reinterpret_cast<uint32_t*>(header.manager + queueCountOffsets[i]) =
+            queueReceipts[i]->required;
+    const uint32_t scalars[] = {receipt.numAddedRBodies,
+        receipt.numAddedArtics,receipt.numAddedKinematics,
+        receipt.numAddedEdgesContact,receipt.numAddedEdgesConstraint,
+        receipt.numAddedEdgesArticulation,
+        receipt.numEdgeReferencesToKinematic,
+        receipt.numRequiredKinematicDuplicates};
+    CopyBytes(reinterpret_cast<void*>(header.manager + 0x1BCu), scalars,
+        sizeof(scalars));
+    *reinterpret_cast<uint8_t*>(header.manager + 0x1DCu) =
+        static_cast<uint8_t>(receipt.everythingAsleep);
+    *reinterpret_cast<uint8_t*>(header.manager + 0x1DDu) =
+        static_cast<uint8_t>(receipt.hasAnythingChanged);
+    *reinterpret_cast<uint8_t*>(header.manager + 0x1DEu) =
+        static_cast<uint8_t>(receipt.performIslandUpdate);
+    bytesWritten = 8u * 4u + 8u * 4u + 6u * 4u + 3u;
+    MemoryBarrier();
+    return true;
+}
+
+static bool WriteIslandRebindHooks(const IslandRestoreRequestV1& request,
+    IslandRestoreReceiptV1* output) {
+    for (uint32_t i = 0; i < request.nodeRebindCount; ++i) {
+        const IslandNodeRebindV1& binding = request.nodeRebinds[i];
+        *reinterpret_cast<uint32_t*>(binding.liveHookAddress) =
+            binding.targetNodeId;
+        ++output->nodeHooksWritten;
+        output->bytesWritten += 4u;
+    }
+    for (uint32_t i = 0; i < request.edgeRebindCount; ++i) {
+        const IslandContactEdgeRebindV1& binding = request.edgeRebinds[i];
+        *reinterpret_cast<uint32_t*>(binding.liveHookAddress) =
+            binding.targetEdgeId;
+        ++output->edgeHooksWritten;
+        output->bytesWritten += 4u;
+    }
+    MemoryBarrier();
+    return true;
+}
+
+static bool WriteIslandSnapshotHooks(const IslandSnapshotBuffersV1& image,
+    const IslandSnapshotReceiptV1& receipt, uint32_t& bytesWritten) {
+    bytesWritten = 0u;
+    for (uint32_t i = 0; i < receipt.node.required; ++i) {
+        const IslandNodeSlotRecord& node = image.nodes[i];
+        if ((node.slotFlags & 2u) != 0u) continue;
+        const uintptr_t owner = node.ownerOrArticulationRaw;
+        if (!owner || !Writable(reinterpret_cast<void*>(owner + 0xBCu), 4u))
+            return false;
+        *reinterpret_cast<uint32_t*>(owner + 0xBCu) = i;
+        bytesWritten += 4u;
+    }
+    for (uint32_t i = 0; i < receipt.bindingsRequired; ++i) {
+        const IslandSipEdgeBinding& binding = image.bindings[i];
+        if (!binding.hookAddress || !Writable(
+                reinterpret_cast<void*>(binding.hookAddress), 4u))
+            return false;
+        *reinterpret_cast<uint32_t*>(binding.hookAddress) = binding.edgeId;
+        bytesWritten += 4u;
+    }
+    MemoryBarrier();
+    return true;
+}
+
+static bool CompareIslandPersistentImage(const IslandHeaderState& header,
+    const IslandSnapshotBuffersV1& image,
+    const IslandSnapshotReceiptV1& receipt) {
+    if (header.node.capacity != receipt.node.required ||
+        header.node.freeHead != receipt.node.freeHead ||
+        header.node.freeCount != receipt.node.freeCount ||
+        header.edge.capacity != receipt.edge.required ||
+        header.edge.freeHead != receipt.edge.freeHead ||
+        header.edge.freeCount != receipt.edge.freeCount ||
+        header.island.capacity != receipt.island.required ||
+        header.island.freeHead != receipt.island.freeHead ||
+        header.island.freeCount != receipt.island.freeCount ||
+        header.root.capacity != receipt.root.required ||
+        header.root.freeHead != receipt.root.freeHead ||
+        header.root.freeCount != receipt.root.freeCount)
+        return false;
+    for (uint32_t i = 0; i < receipt.node.required; ++i) {
+        const IslandNodeSlotRecord& record = image.nodes[i];
+        const uint32_t* element = reinterpret_cast<const uint32_t*>(
+            header.node.elements + i * 12u);
+        if (element[0] != record.ownerOrArticulationRaw ||
+            element[1] != record.islandId ||
+            element[2] != record.rawFlagsWord ||
+            *reinterpret_cast<const uint32_t*>(header.node.freeNext +
+                i * 4u) != record.freeNext ||
+            *reinterpret_cast<const uint32_t*>(header.node.nextList +
+                i * 4u) != record.nextNode ||
+            ((record.slotFlags & 2u) == 0u &&
+                *reinterpret_cast<const uint32_t*>(
+                    record.ownerOrArticulationRaw + 0xBCu) != i))
+            return false;
+    }
+    for (uint32_t i = 0; i < receipt.edge.required; ++i) {
+        const IslandEdgeSlotRecord& record = image.edges[i];
+        const uint32_t* element = reinterpret_cast<const uint32_t*>(
+            header.edge.elements + i * 12u);
+        if (element[0] != record.node0 || element[1] != record.node1 ||
+            element[2] != record.taggedObjectRaw ||
+            *reinterpret_cast<const uint32_t*>(header.edge.freeNext +
+                i * 4u) != record.freeNext ||
+            *reinterpret_cast<const uint32_t*>(header.edge.nextList +
+                i * 4u) != record.nextEdge) return false;
+    }
+    for (uint32_t i = 0; i < receipt.island.required; ++i) {
+        const IslandSlotRecord& record = image.islands[i];
+        const uint32_t* element = reinterpret_cast<const uint32_t*>(
+            header.island.elements + i * 16u);
+        if (element[0] != record.startNode ||
+            element[1] != record.startEdge ||
+            element[2] != record.endNode || element[3] != record.endEdge ||
+            *reinterpret_cast<const uint32_t*>(header.island.freeNext +
+                i * 4u) != record.freeNext) return false;
+    }
+    for (uint32_t i = 0; i < receipt.root.required; ++i) {
+        const IslandArticulationRootSlotRecord& record = image.roots[i];
+        const uint32_t* element = reinterpret_cast<const uint32_t*>(
+            header.root.elements + i * 8u);
+        if (element[0] != record.articulationLinkHandle ||
+            element[1] != record.articulationOwner ||
+            *reinterpret_cast<const uint32_t*>(header.root.freeNext +
+                i * 4u) != record.freeNext) return false;
+    }
+    const uint32_t* bitmapSources[] = {image.kinematicWords,
+        image.kinematicChangeWords,image.notReadyWords,
+        image.notReadyChangeWords,image.islandWords};
+    const IslandBitmapReceipt* bitmapReceipts[] = {&receipt.kinematic,
+        &receipt.kinematicChange,&receipt.notReady,
+        &receipt.notReadyChange,&receipt.islandBitmap};
+    for (uint32_t i = 0; i < 5u; ++i)
+        if (header.bitmaps[i].wordCount != bitmapReceipts[i]->required ||
+            (bitmapReceipts[i]->required && !EqualBytes(
+                reinterpret_cast<const void*>(header.bitmaps[i].data),
+                reinterpret_cast<const uint8_t*>(bitmapSources[i]),
+                bitmapReceipts[i]->required * 4u))) return false;
+    const uint32_t* queueSources[] = {image.nodeCreated,image.nodeDeleted,
+        image.edgeCreated,image.edgeDeleted,image.edgeBroken,
+        image.edgeJoined};
+    const IslandQueueHeader* queueHeaders[] = {&header.nodeCreated,
+        &header.nodeDeleted,&header.edgeCreated,&header.edgeDeleted,
+        &header.edgeBroken,&header.edgeJoined};
+    const IslandQueueReceipt* queueReceipts[] = {&receipt.nodeCreated,
+        &receipt.nodeDeleted,&receipt.edgeCreated,&receipt.edgeDeleted,
+        &receipt.edgeBroken,&receipt.edgeJoined};
+    for (uint32_t i = 0; i < 6u; ++i)
+        if (!SameQueueLayout(*queueHeaders[i], *queueReceipts[i]) ||
+            queueHeaders[i]->count != queueReceipts[i]->required ||
+            (queueReceipts[i]->required && !EqualBytes(
+                reinterpret_cast<const void*>(queueHeaders[i]->data),
+                reinterpret_cast<const uint8_t*>(queueSources[i]),
+                queueReceipts[i]->required * 4u))) return false;
+    for (uint32_t i = 0; i < receipt.bindingsRequired; ++i) {
+        const IslandSipEdgeBinding& binding = image.bindings[i];
+        if (*reinterpret_cast<const uint32_t*>(binding.hookAddress) !=
+                binding.edgeId ||
+            *reinterpret_cast<const uintptr_t*>(binding.sip + 0x38u) !=
+                binding.contactManager ||
+            *reinterpret_cast<const uintptr_t*>(binding.contactManager +
+                0x0Cu) != binding.sip) return false;
+    }
+    const uint32_t scalars[] = {receipt.numAddedRBodies,
+        receipt.numAddedArtics,receipt.numAddedKinematics,
+        receipt.numAddedEdgesContact,receipt.numAddedEdgesConstraint,
+        receipt.numAddedEdgesArticulation,
+        receipt.numEdgeReferencesToKinematic,
+        receipt.numRequiredKinematicDuplicates};
+    return EqualBytes(reinterpret_cast<const void*>(header.manager + 0x1BCu),
+            reinterpret_cast<const uint8_t*>(scalars), sizeof(scalars)) &&
+        *reinterpret_cast<const uint8_t*>(header.manager + 0x1DCu) ==
+            receipt.everythingAsleep &&
+        *reinterpret_cast<const uint8_t*>(header.manager + 0x1DDu) ==
+            receipt.hasAnythingChanged &&
+        *reinterpret_cast<const uint8_t*>(header.manager + 0x1DEu) ==
+            receipt.performIslandUpdate;
+}
+
+static int RestoreIslandSnapshot(uintptr_t unityBase, uintptr_t nphaseCore,
+    const IslandRestoreRequestV1* request,
+    IslandRestoreReceiptV1* output) {
+    if (!output || !Writable(output, sizeof(*output))) return 0;
+    InitializeIslandRestoreReceipt(unityBase, nphaseCore, output);
+    if (!unityBase || !nphaseCore || !request ||
+        !Readable(request, sizeof(*request)) ||
+        request->apiVersion != kApiVersion ||
+        request->structSize != sizeof(*request) ||
+        request->flags != IslandRestoreSettledRegularContactV1 ||
+        (request->expectedThreadId && request->expectedThreadId !=
+            GetCurrentThreadId()) || !request->targetBuffers ||
+        !request->targetReceipt || !request->rollbackBuffers ||
+        !request->rollbackReceipt || !request->verifyBuffers ||
+        !request->verifyReceipt ||
+        !Readable(request->targetBuffers,
+            sizeof(IslandSnapshotBuffersV1)) ||
+        !Readable(request->rollbackBuffers,
+            sizeof(IslandSnapshotBuffersV1)) ||
+        !Readable(request->verifyBuffers,
+            sizeof(IslandSnapshotBuffersV1)) ||
+        !Readable(request->targetReceipt,
+            sizeof(IslandSnapshotReceiptV1)) ||
+        !Writable(request->rollbackReceipt,
+            sizeof(IslandSnapshotReceiptV1)) ||
+        !Writable(request->verifyReceipt,
+            sizeof(IslandSnapshotReceiptV1)))
+        return FailIslandRestore(output, IslandRestoreBadArgument,
+            ERROR_INVALID_PARAMETER, 0u, 0xFFFFFFFFu, 1u);
+    output->requestFlags = request->flags;
+    if (!IslandRevisionMatches(unityBase))
+        return FailIslandRestore(output, IslandRestoreRevisionMismatch,
+            ERROR_REVISION_MISMATCH, 1u, 0xFFFFFFFFu, 2u);
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase || !AllIslandHooksLanded(unityBase))
+        return FailIslandRestore(output, IslandRestoreNotInstalled,
+            ERROR_INVALID_STATE, 1u, 0xFFFFFFFFu, 3u);
+    if (!ValidateIslandImageStorage(request->targetBuffers,
+            *request->targetReceipt, false) ||
+        !ValidateIslandRestoreScratch(request->rollbackBuffers) ||
+        !ValidateIslandRestoreScratch(request->verifyBuffers) ||
+        !IslandRestoreStorageDisjoint(*request, output))
+        return FailIslandRestore(output, IslandRestoreBufferTooSmall,
+            ERROR_INSUFFICIENT_BUFFER, 2u, 0xFFFFFFFFu, 4u);
+    output->targetRawHash = request->targetReceipt->snapshotHash;
+    output->stage = IslandRestoreStageTarget;
+    if (!ValidateIslandRestoreTargetV1(*request->targetBuffers,
+            *request->targetReceipt, output))
+        return FailIslandRestore(output, IslandRestoreUnsupportedTarget,
+            ERROR_NOT_SUPPORTED, 2u, 0xFFFFFFFFu, 5u);
+    output->validationFlags |= 0x02u;
+
+    if (InterlockedCompareExchange(&g_islandRestoreGate, 1, 0) != 0)
+        return FailIslandRestore(output, IslandRestoreBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 6u);
+    output->stage = IslandRestoreStageGate;
+    output->inFlightBefore = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0));
+    const DWORD waitBegin = GetTickCount();
+    while (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0 &&
+        GetTickCount() - waitBegin < 1000u) SwitchToThread();
+    if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0) {
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return FailIslandRestore(output, IslandRestoreBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 7u);
+    }
+    if (InterlockedCompareExchange(&g_islandInstalled, 0, 0) != 1 ||
+        unityBase != g_islandUnityBase || !AllIslandHooksLanded(unityBase)) {
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return FailIslandRestore(output, IslandRestoreNotInstalled,
+            ERROR_INVALID_STATE, 1u, 0xFFFFFFFFu, 8u);
+    }
+    LONG priorState = InterlockedCompareExchange(&g_islandState,
+        IslandObserverRestoring, IslandObserverIdle);
+    output->observerStateBefore = static_cast<uint32_t>(priorState);
+    if (priorState != IslandObserverIdle) {
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return FailIslandRestore(output, IslandRestoreInvalidPhase,
+            ERROR_INVALID_STATE, 9u, 0xFFFFFFFFu, 9u);
+    }
+    auto failOpen = [&](IslandRestoreResult result, uint32_t error,
+            uint32_t kind, uint32_t index, uint32_t detail) -> int {
+        output->epochAfter = static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_islandEpoch, 0, 0));
+        output->inFlightAfter = static_cast<uint32_t>(
+            InterlockedCompareExchange(&g_islandInFlight, 0, 0));
+        output->observerStateAfter = IslandObserverIdle;
+        InterlockedExchange(&g_islandState, IslandObserverIdle);
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return FailIslandRestore(output, result, error, kind, index, detail);
+    };
+
+    output->epochBefore = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandEpoch, 0, 0));
+    if ((output->epochBefore & 1u) != 0u ||
+        InterlockedCompareExchange(&g_islandCapturePhase, 0, 0) !=
+            IslandSnapshotSettled ||
+        InterlockedCompareExchange(&g_finishBroadPhaseInFlight, 0, 0) != 0)
+        return failOpen(IslandRestoreInvalidPhase, ERROR_INVALID_STATE,
+            9u, 0xFFFFFFFFu, 9u);
+    IslandHeaderState header = {};
+    if (!ReadIslandHeader(unityBase, nphaseCore,
+            request->expectedManager, header) ||
+        header.context != request->expectedContext ||
+        request->expectedManager != g_islandExpectedManager ||
+        request->expectedContext != g_islandExpectedContext ||
+        (g_islandExpectedNphase && nphaseCore != g_islandExpectedNphase) ||
+        request->targetReceipt->nphaseCore != nphaseCore ||
+        request->targetReceipt->ownerScene != header.ownerScene ||
+        request->targetReceipt->interactionScene != header.interactionScene ||
+        request->targetReceipt->context != header.context ||
+        request->targetReceipt->islandManager != header.manager)
+        return failOpen(IslandRestoreInvalidIdentity, ERROR_INVALID_DATA,
+            1u, 0xFFFFFFFFu, 10u);
+    output->ownerScene = static_cast<uint32_t>(header.ownerScene);
+    output->interactionScene = static_cast<uint32_t>(
+        header.interactionScene);
+    output->context = static_cast<uint32_t>(header.context);
+    output->islandManager = static_cast<uint32_t>(header.manager);
+    if (!Readable(reinterpret_cast<const void*>(header.ownerScene + 0x4A4u),
+            1u))
+        return failOpen(IslandRestoreInvalidIdentity, ERROR_NOACCESS,
+            1u, 0xFFFFFFFFu, 11u);
+    output->sceneFlagsBefore = *reinterpret_cast<const uint8_t*>(
+        header.ownerScene + 0x4A4u);
+    if ((output->sceneFlagsBefore & 6u) != 0u ||
+        !IslandRestorePointersSettled(header.manager))
+        return failOpen(IslandRestoreInvalidPhase, ERROR_INVALID_STATE,
+            9u, 0xFFFFFFFFu, 12u);
+    output->validationFlags |= 0x81u;
+    output->journalOrdinalBefore = IslandJournalCurrentNext();
+
+    output->stage = IslandRestoreStageRollbackCapture;
+    if (!CaptureIslandSnapshot(unityBase, nphaseCore,
+            IslandSnapshotSettled, request->rollbackBuffers,
+            request->rollbackReceipt))
+        return failOpen(IslandRestoreLiveTopologyMismatch,
+            request->rollbackReceipt->lastError, 3u,
+            request->rollbackReceipt->invalidIndex, 13u);
+    output->beforeHash = request->rollbackReceipt->snapshotHash;
+    if (!IslandRestoreLiveStorageWritable(header, *request->targetReceipt,
+            *request->rollbackReceipt))
+        return failOpen(IslandRestoreCapacityMismatch,
+            ERROR_INSUFFICIENT_BUFFER, 3u, 0xFFFFFFFFu, 14u);
+    output->validationFlags |= 0x04u;
+
+    CopyIslandImage(*request->targetBuffers, *request->targetReceipt,
+        *request->verifyBuffers);
+    output->stage = IslandRestoreStageBindings;
+    if (!ValidateAndStageIslandRebindings(*request->targetBuffers,
+            *request->targetReceipt, *request->rollbackBuffers,
+            *request->rollbackReceipt, *request, *request->verifyBuffers,
+            output))
+        return failOpen(output->nodeBindingsValidated <
+                output->nodeBindingsRequired ?
+                    IslandRestoreInvalidNodeBinding :
+                    IslandRestoreInvalidEdgeBinding,
+            ERROR_INVALID_DATA, 4u,
+            output->nodeBindingsValidated < output->nodeBindingsRequired ?
+                output->nodeBindingsValidated : output->edgeBindingsValidated,
+            15u);
+    RetargetIslandReceipt(*request->targetReceipt, *request->verifyBuffers,
+        header, unityBase, nphaseCore, *request->verifyReceipt);
+    output->targetRebasedHash = request->verifyReceipt->snapshotHash;
+    output->validationFlags |= 0x08u;
+    if (output->journalOrdinalBefore != IslandJournalCurrentNext() ||
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0 ||
+        static_cast<uint32_t>(InterlockedCompareExchange(
+            &g_islandEpoch, 0, 0)) != output->epochBefore ||
+        !IslandRestorePointersSettled(header.manager))
+        return failOpen(IslandRestoreUnstable, ERROR_RETRY, 10u,
+            0xFFFFFFFFu, 16u);
+
+    const LONG oddEpoch = InterlockedIncrement(&g_islandEpoch);
+    if ((oddEpoch & 1) == 0)
+        return failOpen(IslandRestoreUnstable, ERROR_INVALID_STATE, 10u,
+            0xFFFFFFFFu, 17u);
+    output->mutationStarted = 1u;
+    output->stage = IslandRestoreStageMutation;
+    uint32_t managerBytes = 0u, publishBytes = 0u;
+    const bool writeOk = WriteIslandPersistentImageData(header,
+        *request->verifyBuffers, *request->verifyReceipt, managerBytes) &&
+        WriteIslandRebindHooks(*request, output) &&
+        PublishIslandPersistentImageMetadata(header,
+            *request->verifyReceipt, publishBytes);
+    output->bytesWritten += managerBytes + publishBytes;
+    output->stage = IslandRestoreStageVerification;
+    IslandHeaderState after = {};
+    const bool afterHeaderOk = ReadIslandHeader(unityBase, nphaseCore,
+        header.manager, after);
+    output->sceneFlagsAfter = afterHeaderOk ?
+        *reinterpret_cast<const uint8_t*>(after.ownerScene + 0x4A4u) : 0u;
+    output->journalOrdinalAfter = IslandJournalCurrentNext();
+    const bool verified = writeOk && afterHeaderOk &&
+        SameIslandStorageIdentity(header, after) &&
+        (output->sceneFlagsAfter & 6u) == 0u &&
+        output->journalOrdinalAfter == output->journalOrdinalBefore &&
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0) == 0 &&
+        InterlockedCompareExchange(&g_islandState, 0, 0) ==
+            IslandObserverRestoring &&
+        InterlockedCompareExchange(&g_islandEpoch, 0, 0) == oddEpoch &&
+        IslandRestorePointersSettled(after.manager) &&
+        CompareIslandPersistentImage(after, *request->verifyBuffers,
+            *request->verifyReceipt) &&
+        HashIslandImage(*request->verifyBuffers,
+            *request->verifyReceipt) == output->targetRebasedHash;
+    if (verified) {
+        output->afterHash = output->targetRebasedHash;
+        output->validationFlags |= 0x70u;
+        const LONG evenEpoch = InterlockedIncrement(&g_islandEpoch);
+        output->epochAfter = static_cast<uint32_t>(evenEpoch);
+        if ((evenEpoch & 1) != 0) {
+            output->failStopped = 1u;
+            output->stage = IslandRestoreStageFailStopped;
+            output->observerStateAfter = IslandObserverRestoreFailed;
+            InterlockedExchange(&g_islandState,
+                IslandObserverRestoreFailed);
+            return FailIslandRestore(output, IslandRestoreRollbackFailed,
+                ERROR_INVALID_STATE, 7u, 0xFFFFFFFFu, 20u);
+        }
+        output->mutationCommitted = 1u;
+        output->stage = IslandRestoreStageCommitted;
+        output->result = IslandRestoreOk;
+        output->lastError = ERROR_SUCCESS;
+        output->observerStateAfter = IslandObserverIdle;
+        output->inFlightAfter = 0u;
+        InterlockedExchange(&g_islandState, IslandObserverIdle);
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return 1;
+    }
+
+    output->stage = IslandRestoreStageRollback;
+    uint32_t rollbackBytes = 0u, rollbackHookBytes = 0u,
+        rollbackPublishBytes = 0u;
+    const bool rollbackPhaseSafe = afterHeaderOk &&
+        SameIslandStorageIdentity(header, after) &&
+        (output->sceneFlagsAfter & 6u) == 0u &&
+        output->journalOrdinalAfter == output->journalOrdinalBefore &&
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0) == 0 &&
+        InterlockedCompareExchange(&g_islandState, 0, 0) ==
+            IslandObserverRestoring &&
+        InterlockedCompareExchange(&g_islandEpoch, 0, 0) == oddEpoch &&
+        IslandRestorePointersSettled(after.manager);
+    output->rollbackAttempted = rollbackPhaseSafe ? 1u : 0u;
+    const bool rollbackWrite = rollbackPhaseSafe &&
+        WriteIslandPersistentImageData(header, *request->rollbackBuffers,
+            *request->rollbackReceipt, rollbackBytes) &&
+        WriteIslandSnapshotHooks(*request->rollbackBuffers,
+            *request->rollbackReceipt, rollbackHookBytes) &&
+        PublishIslandPersistentImageMetadata(header,
+            *request->rollbackReceipt, rollbackPublishBytes);
+    output->bytesWritten += rollbackBytes + rollbackHookBytes +
+        rollbackPublishBytes;
+    IslandHeaderState rollbackHeader = {};
+    const bool rollbackOk = rollbackWrite && ReadIslandHeader(unityBase,
+            nphaseCore, header.manager, rollbackHeader) &&
+        SameIslandStorageIdentity(header, rollbackHeader) &&
+        (*reinterpret_cast<const uint8_t*>(rollbackHeader.ownerScene +
+            0x4A4u) & 6u) == 0u &&
+        IslandRestorePointersSettled(rollbackHeader.manager) &&
+        InterlockedCompareExchange(&g_islandInFlight, 0, 0) == 0 &&
+        InterlockedCompareExchange(&g_islandState, 0, 0) ==
+            IslandObserverRestoring &&
+        InterlockedCompareExchange(&g_islandEpoch, 0, 0) == oddEpoch &&
+        CompareIslandPersistentImage(rollbackHeader,
+            *request->rollbackBuffers, *request->rollbackReceipt) &&
+        output->journalOrdinalBefore == IslandJournalCurrentNext();
+    if (rollbackOk) {
+        output->rollbackSucceeded = 1u;
+        output->rollbackHash = request->rollbackReceipt->snapshotHash;
+        const LONG evenEpoch = InterlockedIncrement(&g_islandEpoch);
+        output->epochAfter = static_cast<uint32_t>(evenEpoch);
+        if ((evenEpoch & 1) != 0) {
+            output->rollbackSucceeded = 0u;
+            output->failStopped = 1u;
+            output->stage = IslandRestoreStageFailStopped;
+            output->observerStateAfter = IslandObserverRestoreFailed;
+            InterlockedExchange(&g_islandState,
+                IslandObserverRestoreFailed);
+            return FailIslandRestore(output, IslandRestoreRollbackFailed,
+                ERROR_INVALID_STATE, 7u, 0xFFFFFFFFu, 21u);
+        }
+        output->observerStateAfter = IslandObserverIdle;
+        output->inFlightAfter = 0u;
+        InterlockedExchange(&g_islandState, IslandObserverIdle);
+        InterlockedExchange(&g_islandRestoreGate, 0);
+        return FailIslandRestore(output,
+            writeOk ? IslandRestoreVerificationMismatch :
+                IslandRestoreWriteFault,
+            writeOk ? ERROR_CRC : ERROR_WRITE_FAULT, 6u, 0xFFFFFFFFu, 18u);
+    }
+
+    // The component cannot prove either image after a failed rollback.  Keep
+    // the hook admission gate closed and the epoch odd so no PhysX island
+    // operation can observe or advance the ambiguous state.
+    output->failStopped = 1u;
+    output->stage = IslandRestoreStageFailStopped;
+    output->observerStateAfter = IslandObserverRestoreFailed;
+    output->epochAfter = static_cast<uint32_t>(
+        InterlockedCompareExchange(&g_islandEpoch, 0, 0));
+    output->inFlightAfter = 0u;
+    InterlockedExchange(&g_islandState, IslandObserverRestoreFailed);
+    return FailIslandRestore(output, IslandRestoreRollbackFailed,
+        ERROR_WRITE_FAULT, 7u, 0xFFFFFFFFu, 19u);
+}
+
 static uint32_t ReserveIslandJournal(uintptr_t self, uint32_t eventKind,
     uint32_t edgeType, uint32_t node0, uint32_t node1,
     uintptr_t hookAddress) {
@@ -9472,11 +11107,23 @@ static void __cdecl ObserveIslandUpdateExit(uintptr_t self, uint32_t pass,
             IslandObserverDormant : finalState);
 }
 
+static void __cdecl EnterIslandHookGate() {
+    for (;;) {
+        while (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) != 0)
+            SwitchToThread();
+        InterlockedIncrement(&g_islandInFlight);
+        MemoryBarrier();
+        if (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) == 0)
+            return;
+        InterlockedDecrement(&g_islandInFlight);
+    }
+}
+
 __declspec(naked) static void HookIslandAddEdge() {
     __asm push 0
     __asm pushfd
     __asm pushad
-    __asm lock inc dword ptr [g_islandInFlight]
+    __asm call EnterIslandHookGate
     __asm mov eax, dword ptr [esp + 0x18]
     __asm push dword ptr [esp + 0x38]
     __asm push dword ptr [esp + 0x38]
@@ -9512,7 +11159,7 @@ __declspec(naked) static void HookIslandRemoveEdge() {
     __asm push 0
     __asm pushfd
     __asm pushad
-    __asm lock inc dword ptr [g_islandInFlight]
+    __asm call EnterIslandHookGate
     __asm mov eax, dword ptr [esp + 0x18]
     __asm push dword ptr [esp + 0x30]
     __asm push dword ptr [esp + 0x30]
@@ -9544,7 +11191,7 @@ __declspec(naked) static void HookIslandUpdate() {
     __asm push 0
     __asm pushfd
     __asm pushad
-    __asm lock inc dword ptr [g_islandInFlight]
+    __asm call EnterIslandHookGate
     __asm mov eax, dword ptr [esp + 0x18]
     __asm push dword ptr [esp + 0x30]
     __asm push dword ptr [esp + 0x30]
@@ -9647,6 +11294,9 @@ static int InstallIslandObserver(uintptr_t unityBase,
     if (!unityBase || !expectedManager)
         return FailIslandObserver(receipt, IslandObserverBadArgument,
             ERROR_INVALID_PARAMETER, 0u, 0xFFFFFFFFu, 1u);
+    if (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 2u);
     const LONG lifecycle = InterlockedCompareExchange(&g_islandInstalled,
         -1, 0);
     if (lifecycle == 1) {
@@ -9661,6 +11311,11 @@ static int InstallIslandObserver(uintptr_t unityBase,
     } else if (lifecycle != 0) {
         return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
             0u, 0xFFFFFFFFu, 2u);
+    }
+    if (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) != 0) {
+        InterlockedExchange(&g_islandInstalled, lifecycle == 1 ? 1 : 0);
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 3u);
     }
     if (InterlockedCompareExchange(&g_islandInFlight, 0, 0) != 0) {
         InterlockedExchange(&g_islandInstalled, lifecycle == 1 ? 1 : 0);
@@ -9790,6 +11445,9 @@ static int ArmIslandObserver(uintptr_t unityBase, uintptr_t expectedManager,
         unityBase != g_islandUnityBase || !AllIslandHooksLanded(unityBase))
         return FailIslandObserver(receipt, IslandObserverNotInstalled,
             ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    if (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 2u);
     if (expectedManager != g_islandExpectedManager || !expectedNphase ||
         expectedPass != 0u || !preBuffers || !postBuffers ||
         !Readable(preBuffers, sizeof(*preBuffers)) ||
@@ -9809,7 +11467,8 @@ static int ArmIslandObserver(uintptr_t unityBase, uintptr_t expectedManager,
             0u, 0xFFFFFFFFu, 4u);
     LONG state = InterlockedCompareExchange(&g_islandState, 0, 0);
     if (state == IslandObserverArmed || state == IslandObserverCapturing ||
-        state == IslandObserverDormant ||
+        state == IslandObserverDormant || state == IslandObserverRestoring ||
+        state == IslandObserverRestoreFailed ||
         InterlockedCompareExchange(&g_islandState,
             IslandObserverCapturing, state) != state)
         return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
@@ -9937,9 +11596,14 @@ static int CancelIslandObserver(uintptr_t unityBase,
         unityBase != g_islandUnityBase)
         return FailIslandObserver(receipt, IslandObserverNotInstalled,
             ERROR_INVALID_STATE, 0u, 0xFFFFFFFFu, 1u);
+    if (InterlockedCompareExchange(&g_islandRestoreGate, 0, 0) != 0)
+        return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
+            0u, 0xFFFFFFFFu, 2u);
     for (;;) {
         const LONG state = InterlockedCompareExchange(&g_islandState, 0, 0);
-        if (state == IslandObserverCapturing) {
+        if (state == IslandObserverCapturing ||
+            state == IslandObserverRestoring ||
+            state == IslandObserverRestoreFailed) {
             if (dormant) InterlockedExchange(&g_islandDeferredDormant, 1);
             return FailIslandObserver(receipt, IslandObserverBusy, ERROR_BUSY,
                 0u, 0xFFFFFFFFu, 2u);
@@ -12900,6 +14564,13 @@ extern "C" __declspec(dllexport) int __cdecl oc2_island_capture_snapshot_v1(
     IslandSnapshotReceiptV1* receipt) {
     return CaptureIslandSnapshot(unityBase, nphaseCore, expectedPhase,
         buffers, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl oc2_island_restore_snapshot_v1(
+    uintptr_t unityBase, uintptr_t nphaseCore,
+    const IslandRestoreRequestV1* request,
+    IslandRestoreReceiptV1* receipt) {
+    return RestoreIslandSnapshot(unityBase, nphaseCore, request, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl
