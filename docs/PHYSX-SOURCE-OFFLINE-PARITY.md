@@ -28,7 +28,11 @@ narrative below records how the experiment reached this point.
 This is not complete PhysX-only parity for the level. The fixture still uses
 box/box rather than the observed capsule/box contacts, deletes only four
 contact pairs rather than the level's four contact plus two trigger pairs,
-and has no trigger/marker interactions. Actor and
+and has no trigger/marker interactions. A separate
+[trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)
+now reproduces the level's 12/4/2→8/2/2 interaction-count pattern and
+ordered four-contact/two-trigger losses in a fresh-scene source-built test;
+it does **not** rewind those interactions yet. Actor and
 shape lifetime, CCD, and several other native-state families remain gated.
 Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and

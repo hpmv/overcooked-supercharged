@@ -59,6 +59,10 @@ A separate [raw-arena diagnostic](../experiments/physx333-offline/arena_snapshot
 also replays five-step suffixes for its two cold layouts over 100 cycles,
 but it does not capture OS
 state or imply direct use in the statically linked Unity binary.
+The separate [trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)
+reproduces 12/4/2→8/2/2 source-built interaction and pool counts plus ordered
+four-contact/two-trigger losses, but it is a fresh-scene reference only, not
+a trigger or marker rewind result.
 
 ## Retained-state inventory
 
