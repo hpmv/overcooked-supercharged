@@ -1,0 +1,95 @@
+# PhysX 3.3.3 offline rewind parity
+
+This is the active development track for the Story 1-1 physics predecessor.
+The objective is to make an instrumented, source-built Win32 PhysX scene rewind
+to a settled checkpoint and produce the same subsequent internal states and
+outputs when given the same calls. Game execution is deferred during this
+track. A source-built result is not yet a claim about Unity's shipped binary.
+
+## Source and existing evidence
+
+The local upstream source is the `3.3.3-1.3.3` tag of
+`https://github.com/daxiazh/PhysX-3.3.git`, commit
+`efd57d99e04a1b017df06a3495ec8a326988abe3`. It provides the Win32
+PhysX SDK projects and the private SAP, AABB, NPhase, interaction, and island
+implementations. The source is an external checkout; this repository contains
+our build and test code, not a copy of NVIDIA's source.
+
+The shipped Story 1-1 runtime uses SAP. At the observed `finishBroadPhase`
+entry its broadphase object has the SAP vtable at `UnityPlayer + 0xF00080`.
+The uninterrupted `f444 -> f445` transaction reports zero created and six
+deleted overlaps and changes twelve contact edges to eight. The restored
+transaction currently reports zero and zero, starting from no contact edges.
+The full-scene Unity reproduction rewound exactly, so a scene containing only
+the visible colliders is not a sufficient test fixture for this failure.
+
+The existing native history harness uses a synthetic UnityPlayer image. It
+tests several capture, rebasing, and rollback primitives but does not execute
+PhysX. The source-backed harness must add that execution path while retaining
+precise comparisons of private state.
+
+PhysX's public `PxCollection` serializer cannot capture this history: a live
+`PxScene` is not a serializable `PxBase` collection member, and the private
+SAP/NPhase/island allocations are not public scene objects. The offline build
+therefore needs test-only typed access to those internals. Any source change
+for such access is applied to an ignored build copy, with a pinned source
+revision; the external source checkout remains unmodified.
+
+## Rewind contract
+
+The checkpoint is taken only after `fetchResults` has finished and no PhysX
+task is active. A test records a deterministic sequence of API calls and their
+order, advances the same scene, restores the checkpoint in that scene, repeats
+the calls, and compares the two continuations. Multiple rewinds to the same
+checkpoint and non-adjacent checkpoints must also work.
+
+The comparison covers both public body output and the private state that can
+affect the next step: SAP pairs/endpoints and element handles, AABB change
+lists, NPhase interactions and pools, reports and manifold history, transform
+cache, island graph and queues, sleep/wake lists, and allocator/free-list order.
+Pointer-bearing structures are compared through explicit object identities
+and rebasing rules. Raw addresses are diagnostics, not equality criteria.
+Opaque capacity tails are retained bytewise where subsequent allocation can
+observe them.
+
+An accepted restore first validates every identity, capacity, phase, and
+free/active partition. Any prewrite rejection leaves the scene unchanged.
+After a write, verification either proves the target image, proves rollback to
+the prior image, or stops the test before another simulation step. The same
+restoration code should be shared with the Unity helper wherever the two
+builds have compatible semantics; binary-specific field access stays in
+separate adapters.
+
+## Development gates
+
+1. Build the 32-bit source with a reproducible external-checkout setup and run
+   a deterministic SAP scene with typed internal observations.
+2. Prove that independent runs from the same initial scene and call trace have
+   identical internal and public outputs. This validates the oracle only.
+3. Add settled SAP/AABB checkpoint restore; force overlap creation, removal,
+   handle reuse, capacity growth, and repeated rewind. Require pair order,
+   free lists, and next-step state to match.
+4. Add the NPhase interaction graph, five pools, reports, manifold data,
+   transform cache, and island history as one dependency-ordered transaction.
+   Start with one dynamic actor whose six separated shapes overlap six static
+   colliders. Checkpoint after all six contacts exist, move it away, and
+   require the same six ordered deletions and complete next-step image after
+   several divergent frames and repeated restores. Then exercise the
+   twelve-contact to eight-contact deletion as a required case.
+5. Extend the matrix to actor and shape lifetime changes, static/dynamic and
+   trigger pairs, kinematic targets, sleeping/waking bodies, and plate-like
+   dash/drop collisions. Require repeated and non-adjacent replays to remain
+   exact.
+6. Run fault-injected preflight and postwrite tests for rejection, rollback,
+   and fail-stop. Then compare the complete first step and a longer replay
+   suffix for every supported case.
+
+These gates establish PhysX-only parity for the exercised Story 1-1 feature
+set. Unity's build flags, private layout, scene integration, and exact game
+input history still require later calibration against the shipped binary.
+
+## Current status
+
+The source-backed build and harness are being developed. None of the gates
+above has yet been passed. The current production helper remains read-only
+for SAP/BPElem and does not apply the full predecessor restoration transaction.
