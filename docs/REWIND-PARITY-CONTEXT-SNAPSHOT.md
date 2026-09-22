@@ -6,6 +6,40 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — the restored first transition has no contact-edge predecessor
+
+Managed RigidbodyActorRebuild r20 preserves the replay's broadphase and island
+observer results at advancing output f445 and exposes them later at the normal
+settled f446 pause.  The read path explicitly acquires the bridge-owned input
+fence; the controller's ordinary pause alone is deliberately insufficient for
+an authoring call.  This changes observation lifetime only, not simulation.
+
+Fresh minimized evidence is
+`artifacts/island-first-replay-transition-audit-story11-v84-r1/`.  The original
+f444 -> f445 transition is broadphase created/deleted `0/6`, island live
+contact edges `12 -> 8`, with four ordered removal records for edges
+`8,9,10,11`.  After rewind, the exact same output boundary is broadphase
+`0/0`, island `0 -> 0`, with no journal.  Replay island pre and post hashes are
+both `0x1A30BC29`; the canonical hashes are `0xB11894AC` and `0x1AC0AACE`.
+
+The allocator observation remains useful but is now correctly classified as
+a consequence rather than the root symptom.  At replay f445 and f446, PhysX
+has allocated eight checkpoint manager/SIP rows and reports exact manager and
+SIP masks `0x000000FF`; rows 8--11 are the four contacts the canonical
+transition would remove.  But no checkpoint contact edge existed before the
+update, so there is nothing for the shipped broadphase/island transition to
+delete.  Accepting 8/12 would therefore certify the wrong phase.
+
+The next restore must model semantic contact lifetimes across three artifacts:
+the settled f444 entry snapshot, the f444 -> f445 transition contract, and a
+complete f445 post snapshot.  Restore the twelve-entry predecessor topology,
+allow the native transition to produce the eight survivors and four removals,
+then validate against the post snapshot.  Search remains disabled.
+
+Managed/native SHA-256 values are respectively
+`AF835E3D03B5A913E3F71FF7C4DA5BC37B1273E8ED282538726D83EBA403ED9C` and
+`A03C0BC3A80FEFDD8346E7CDDD1A58575DAE35D4F0BE36A991ED2BEB7D3CD8D1`.
+
 ## Latest result — native observers accept real PhysX dispatcher workers
 
 Managed RigidbodyActorRebuild r19 and native r36/API 17 preserve the exact

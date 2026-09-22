@@ -940,7 +940,10 @@ namespace SuperchargedPatch.Authoring.Modules
         private PendingIslandObservation pendingIslandObservation;
         private CheckpointSidecar pendingIslandTransitionAuditSidecar;
         private IslandTransitionState lastIslandTransitionAudit;
-        private int lastIslandTransitionAuditFrame=-1;
+        private FinishBroadPhaseState lastFinishBroadPhaseTransitionAudit;
+        private int lastIslandTransitionAuditCheckpointFrame=-1;
+        private int lastIslandTransitionAuditTransitionFrame=-1;
+        private int lastIslandTransitionAuditCapturedAtOutputFrame=-1;
         private DirtyInteractionState pendingDirtyRestoreState;
         private uint pendingDirtyCaptureOrdinal,pendingDirtyRestoreOrdinal;
         private long transformDispatchCaptures,transformDispatchRestores;
@@ -1242,7 +1245,8 @@ namespace SuperchargedPatch.Authoring.Modules
             var module=active;
             if(module==null||!module.automaticContactPoolRestore)return;
             bool pendingLifecycle=module.contactRecreatePendingValidation||
-                module.scheduledContactPoolCaptureFrame>=0;
+                module.scheduledContactPoolCaptureFrame>=0||
+                module.pendingIslandTransitionAuditSidecar!=null;
             try
             {
                 module.ObserveSceneGeneration();
@@ -1256,6 +1260,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(module.contactManagerContext!=0)
                     module.EnsureIslandObserverForCurrentContext();
                 if(!pendingLifecycle)return;
+                // Persist the first replay's native transition before contact
+                // validation or the later pause fence can cancel its one-shot
+                // observer state.  This is read-only and remains bound to the
+                // exact checkpoint-to-next-output transaction.
+                if(module.pendingIslandTransitionAuditSidecar!=null)
+                    module.CaptureFirstReplayTransitionAuditAtOutput(__0);
                 // Either observer may have recognized a new scene/round and
                 // transactionally cancelled scene-owned work.  Contact owners
                 // are an advancing-output property: the recreation hook runs
@@ -1447,13 +1457,18 @@ namespace SuperchargedPatch.Authoring.Modules
             EnsureIslandObserverForCurrentContext();
             CheckpointSidecar selected=warpTargetSidecar;
             ValidateIslandSnapshotState(selected.IslandSnapshot,IslandPhaseSettled);
-            lastIslandTransitionAudit=null;lastIslandTransitionAuditFrame=-1;
+            lastIslandTransitionAudit=null;
+            lastFinishBroadPhaseTransitionAudit=null;
+            lastIslandTransitionAuditCheckpointFrame=-1;
+            lastIslandTransitionAuditTransitionFrame=-1;
+            lastIslandTransitionAuditCapturedAtOutputFrame=-1;
             pendingIslandTransitionAuditSidecar=selected;
-            try{ArmIslandObservationCapture(selected,false);}
+            try{ArmFirstReplayTransitionObservers(selected);}
             catch{pendingIslandTransitionAuditSidecar=null;throw;}
             islandTransitionAuditArms++;
             return new Dictionary<string,object>{{"armed",true},{"frame",selected.Frame},
-                {"observationOrdinal",pendingIslandObservation.ArmedOrdinal},
+                {"islandObservationOrdinal",pendingIslandObservation.ArmedOrdinal},
+                {"finishBroadPhaseObservationOrdinal",pendingFinishBroadPhaseOrdinal},
                 {"observerSequence",pendingIslandObservation.ObserverSequence}};
         }
 
@@ -1462,26 +1477,101 @@ namespace SuperchargedPatch.Authoring.Modules
             RequireNoArgs(args);
             if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
                 throw new InvalidOperationException("First-replay island audit copy requires the authoring pause fence.");
-            CheckpointSidecar selected=pendingIslandTransitionAuditSidecar;
-            if(selected==null||pendingIslandObservation==null||
-                !ReferenceEquals(pendingIslandObservation.Sidecar,selected))
-                throw new InvalidOperationException("No first-replay island audit is pending.");
-            IslandTransitionState captured=null;
+            if(lastIslandTransitionAudit==null||lastFinishBroadPhaseTransitionAudit==null||
+                lastIslandTransitionAuditCheckpointFrame<0||
+                lastIslandTransitionAuditTransitionFrame<0||
+                lastIslandTransitionAuditCapturedAtOutputFrame<0)
+                throw new InvalidOperationException("No completed first-replay transition audit is available.");
+            return DescribeFirstReplayTransitionAudit(CurrentCheckpointFrame());
+        }
+
+        private void ArmFirstReplayTransitionObservers(CheckpointSidecar sidecar)
+        {
+            ValidateTransformCacheState(sidecar==null?null:sidecar.TransformCache);
+            ValidateIslandSnapshotState(sidecar==null?null:sidecar.IslandSnapshot,IslandPhaseSettled);
+            if(!finishBroadPhaseObserverInstalled||!islandObserverInstalled||sidecar.InteractionGraph==null)
+                throw new InvalidOperationException("First-replay transition audit requires both installed native observers.");
+            NativeInteractionGraphReceipt graph=sidecar.InteractionGraph.Receipt;
+            int size=Marshal.SizeOf(typeof(NativeFinishBroadPhaseObserverReceipt));
+            IntPtr buffer=Marshal.AllocHGlobal(size);
+            NativeFinishBroadPhaseObserverReceipt receipt=new NativeFinishBroadPhaseObserverReceipt();
+            int ok=0;
             try
             {
-                captured=CopyIslandTransitionAudit(selected);
-                lastIslandTransitionAudit=captured;
-                lastIslandTransitionAuditFrame=CurrentCheckpointFrame();
+                ArmIslandObservationCapture(sidecar,false);
+                for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
+                ok=armFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),graph.OwnerScene,
+                    graph.LlContext,graph.NPhaseCore,0,buffer);
+                receipt=(NativeFinishBroadPhaseObserverReceipt)Marshal.PtrToStructure(
+                    buffer,typeof(NativeFinishBroadPhaseObserverReceipt));
+            }
+            catch
+            {
+                try{if(ok!=0||pendingIslandObservation!=null)CancelFirstReplayTransitionObservationWork();}
+                finally{pendingFinishBroadPhaseOrdinal=0;}
+                throw;
+            }
+            finally{Marshal.FreeHGlobal(buffer);}
+            try
+            {
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native first-replay finishBroadPhase observer arm failed: result="+
+                        receipt.Result+", Win32/error="+receipt.LastError+", state="+receipt.State+".");
+                ValidateFinishBroadPhaseReceiptContract(receipt,size);
+                RecordFinishBroadPhaseReceipt("audit-arm",receipt);
+                if(receipt.Installed!=1||receipt.State!=2||receipt.ExpectedPass!=0||
+                    receipt.ExpectedScene!=graph.OwnerScene||receipt.ExpectedContext!=graph.LlContext||
+                    receipt.ExpectedNPhaseCore!=graph.NPhaseCore||receipt.ArmedOrdinal==0)
+                    throw new InvalidOperationException(
+                        "Native first-replay finishBroadPhase observer arm differs from the sealed checkpoint identities.");
+                pendingFinishBroadPhaseOrdinal=receipt.ArmedOrdinal;
+            }
+            catch
+            {
+                try{if(ok!=0||pendingIslandObservation!=null)CancelFirstReplayTransitionObservationWork();}
+                finally{pendingFinishBroadPhaseOrdinal=0;}
+                throw;
+            }
+        }
+
+        private void CaptureFirstReplayTransitionAuditAtOutput(int observedFrame)
+        {
+            CheckpointSidecar selected=pendingIslandTransitionAuditSidecar;
+            if(selected==null)return;
+            int transitionFrame=checked(selected.Frame+1);
+            if(observedFrame<transitionFrame)return;
+            if(observedFrame!=transitionFrame)
+                throw new InvalidOperationException("First-replay transition audit skipped exact output frame "+
+                    transitionFrame+"; next observed frame was "+observedFrame+".");
+            FinishBroadPhaseState broadPhase=null;
+            IslandTransitionState island=null;
+            try
+            {
+                broadPhase=CopyFinishBroadPhaseCapture(selected,pendingFinishBroadPhaseOrdinal);
+                island=CopyIslandTransitionAudit(selected);
+                lastFinishBroadPhaseTransitionAudit=broadPhase;
+                lastIslandTransitionAudit=island;
+                lastIslandTransitionAuditCheckpointFrame=selected.Frame;
+                lastIslandTransitionAuditTransitionFrame=transitionFrame;
+                lastIslandTransitionAuditCapturedAtOutputFrame=observedFrame;
                 islandTransitionAuditCaptures++;
-                return new Dictionary<string,object>{{"captured",true},
-                    {"checkpointFrame",selected.Frame},{"observedFrame",lastIslandTransitionAuditFrame},
-                    {"transition",DescribeIslandTransitionState(captured)}};
             }
             finally
             {
-                CompleteIslandObservationWork();
+                CancelFirstReplayTransitionObservationWork();
                 pendingIslandTransitionAuditSidecar=null;
             }
+        }
+
+        private object DescribeFirstReplayTransitionAudit(int readAtFrame)
+        {
+            return new Dictionary<string,object>{{"captured",true},
+                {"checkpointFrame",lastIslandTransitionAuditCheckpointFrame},
+                {"transitionFrame",lastIslandTransitionAuditTransitionFrame},
+                {"capturedAtOutputFrame",lastIslandTransitionAuditCapturedAtOutputFrame},
+                {"readAtFrame",readAtFrame},
+                {"broadPhase",DescribeFinishBroadPhaseState(lastFinishBroadPhaseTransitionAudit)},
+                {"transition",DescribeIslandTransitionState(lastIslandTransitionAudit)}};
         }
 
         private void RunContactPoolAction(int action,bool automaticAction,bool requireTransformCapture=false)
@@ -3536,6 +3626,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"result",receipt.Result},{"lastError",receipt.LastError},{"state",receipt.State},
                 {"rowCount",receipt.RowCount},{"matchedCount",receipt.MatchedCount},
                 {"remainingCount",receipt.RemainingCount},{"invalidRow",receipt.InvalidRow},{"detail",receipt.Detail},
+                {"matchedMask","0x"+receipt.MatchedMask.ToString("X8")},{"threadId",receipt.ThreadId},
                 {"contactCountCurrent",receipt.ContactCountCurrent},{"contactHashCurrent","0x"+receipt.ContactHashCurrent.ToString("X8")},
                 {"largeCountCurrent",receipt.LargeCountCurrent},{"largeHashCurrent","0x"+receipt.LargeHashCurrent.ToString("X8")},
                 {"largeUsedCurrent",receipt.LargeUsedCurrent},{"largeUnreleasedCurrent",receipt.LargeUnreleasedCurrent},
@@ -5268,7 +5359,11 @@ namespace SuperchargedPatch.Authoring.Modules
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
-            lastIslandTransitionAudit=null;lastIslandTransitionAuditFrame=-1;
+            lastIslandTransitionAudit=null;
+            lastFinishBroadPhaseTransitionAudit=null;
+            lastIslandTransitionAuditCheckpointFrame=-1;
+            lastIslandTransitionAuditTransitionFrame=-1;
+            lastIslandTransitionAuditCapturedAtOutputFrame=-1;
             if(clearFailure)failure=null;
             sceneOwnedResets++;
             lastSceneOwnedReset=new Dictionary<string,object>{{"reason",reason},
@@ -5290,6 +5385,20 @@ namespace SuperchargedPatch.Authoring.Modules
             // Reuse the cancellation fence so HGlobal memory is released only
             // after Idle/inFlight=0 is proven.
             CancelIslandObservationWork();
+        }
+
+        private void CancelFirstReplayTransitionObservationWork()
+        {
+            try
+            {
+                if(finishBroadPhaseObserverInstalled)
+                    CallFinishBroadPhaseObserverAction(cancelFinishBroadPhaseObserver,"audit-cancel");
+            }
+            finally
+            {
+                pendingFinishBroadPhaseOrdinal=0;
+                CancelIslandObservationWork();
+            }
         }
 
         private void CancelIslandObservationWork()
@@ -7302,9 +7411,12 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"islandSnapshotCaptures",islandSnapshotCaptures},
                 {"islandTransitionCaptures",islandTransitionCaptures},
                 {"firstReplayIslandAuditPending",pendingIslandTransitionAuditSidecar!=null},
-                {"firstReplayIslandAuditFrame",lastIslandTransitionAuditFrame},
+                {"firstReplayIslandAuditCheckpointFrame",lastIslandTransitionAuditCheckpointFrame},
+                {"firstReplayIslandAuditTransitionFrame",lastIslandTransitionAuditTransitionFrame},
+                {"firstReplayIslandAuditCapturedAtOutputFrame",lastIslandTransitionAuditCapturedAtOutputFrame},
                 {"firstReplayIslandAuditArms",islandTransitionAuditArms},
                 {"firstReplayIslandAuditCaptures",islandTransitionAuditCaptures},
+                {"firstReplayBroadPhaseAudit",DescribeFinishBroadPhaseState(lastFinishBroadPhaseTransitionAudit)},
                 {"firstReplayIslandAudit",DescribeIslandTransitionState(lastIslandTransitionAudit)},
                 {"retainedIslandBufferTransactions",processRetainedIslandBuffers.Count},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
@@ -7399,7 +7511,10 @@ namespace SuperchargedPatch.Authoring.Modules
             contactRecreatePendingValidation=false;pendingContactRecreateSidecar=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
             pendingIslandTransitionAuditSidecar=null;lastIslandTransitionAudit=null;
-            lastIslandTransitionAuditFrame=-1;
+            lastFinishBroadPhaseTransitionAudit=null;
+            lastIslandTransitionAuditCheckpointFrame=-1;
+            lastIslandTransitionAuditTransitionFrame=-1;
+            lastIslandTransitionAuditCapturedAtOutputFrame=-1;
             contextObservationFloor=0;
             islandObserverManager=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;

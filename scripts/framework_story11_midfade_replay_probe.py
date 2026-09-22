@@ -45,6 +45,30 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def first_replay_island_audit_plan(checkpoint_frame):
+    """Frame contract for a one-shot transition preserved during a normal step."""
+    require(type(checkpoint_frame) is int and checkpoint_frame >= 0,
+            "The first-replay island audit requires a nonnegative checkpoint frame.")
+    return {
+        "checkpointFrame": checkpoint_frame,
+        "transitionFrame": checkpoint_frame + 1,
+        "capturedAtOutputFrame": checkpoint_frame + 1,
+        "readAtFrame": checkpoint_frame + 2,
+        "stepFrames": 2,
+    }
+
+
+def require_first_replay_authoring_boundary(response):
+    """Validate the bridge-owned fence used to read a persisted transition."""
+    boundary = response.get("bridge", {}) if isinstance(response, dict) else {}
+    require(boundary.get("paused") is True and
+            boundary.get("holdPause") is True and
+            boundary.get("inputBlocked") is True and
+            boundary.get("loading") is False,
+            "The first-replay transition read lacks the bridge authoring fence.")
+    return boundary
+
+
 def request_frames(request):
     segments = request.get("segments") if isinstance(request, dict) else None
     require(request.get("command") == "raw-input" and isinstance(segments, list) and segments,
@@ -1029,6 +1053,7 @@ def main():
                 summary["classification"] = "bounded Story11 f444 read-only rewind readiness audit"
                 raise ReadinessAuditComplete()
             if args.first_replay_island_audit:
+                audit_plan = first_replay_island_audit_plan(args.target_frame)
                 armed = call(
                     "bridge",
                     {"command": "hot-call", "slot": args.actor_rebuild_slot,
@@ -1039,11 +1064,25 @@ def main():
                         armed_result.get("frame") == args.target_frame,
                         "The first-replay island observer did not arm at restored f444.")
                 arm_advancing("first-replay-island-audit-step-arm")
-                call("controller", {"command": "step", "frames": 1},
+                # The normal host deliberately requires two callbacks so its
+                # release/pause handshake remains identical to every other
+                # bounded advance.  The one-shot native observer captures the
+                # first transition (f444 -> f445); the second callback only
+                # lets the unchanged host settle and copy it safely at f446.
+                call("controller", {"command": "step", "frames": audit_plan["stepFrames"]},
                      "first-replay-island-audit-step")
-                first_replay = settled("first-replay-island-audit-f445")
-                require(first_replay.get("frame") == args.target_frame + 1,
-                        "The first-replay island audit did not stop at exact f445.")
+                first_replay = settled("first-replay-island-audit-read-f446")
+                require(first_replay.get("frame") == audit_plan["readAtFrame"],
+                        "The first-replay island audit did not settle at exact f446.")
+                # A settled controller owns its ordinary pause handshake, but
+                # hot authoring calls additionally require the bridge's input
+                # fence.  The observers were already copied at output f445,
+                # so acquiring that fence at f446 cannot alter the captured
+                # transition.
+                read_boundary = call(
+                    "bridge", {"command": "pause"},
+                    "first-replay-island-audit-authoring-fence")
+                require_first_replay_authoring_boundary(read_boundary)
                 copied = call(
                     "bridge",
                     {"command": "hot-call", "slot": args.actor_rebuild_slot,
@@ -1051,16 +1090,26 @@ def main():
                     "first-replay-island-audit-copy")
                 copied_result = copied.get("detail", {}).get("result", {}).get("result", {})
                 restored_transition = copied_result.get("transition")
+                restored_broad_phase = copied_result.get("broadPhase")
                 target_transition = target_actor_observation_f488.get("islandTransition")
+                target_broad_phase = target_actor_observation_f488.get("finishBroadPhaseSnapshot")
                 require(copied_result.get("captured") is True and
-                        copied_result.get("checkpointFrame") == args.target_frame and
-                        copied_result.get("observedFrame") == args.target_frame + 1 and
+                        copied_result.get("checkpointFrame") == audit_plan["checkpointFrame"] and
+                        copied_result.get("transitionFrame") == audit_plan["transitionFrame"] and
+                        copied_result.get("capturedAtOutputFrame") ==
+                        audit_plan["capturedAtOutputFrame"] and
+                        copied_result.get("readAtFrame") == audit_plan["readAtFrame"] and
                         isinstance(restored_transition, dict) and
-                        isinstance(target_transition, dict),
-                        "The exact first-replay island transition was not copied at f445.")
+                        isinstance(target_transition, dict) and
+                        isinstance(restored_broad_phase, dict) and
+                        isinstance(target_broad_phase, dict),
+                        "The exact f445 native transition was not preserved for settled f446.")
                 audit = {
+                    **audit_plan,
                     "target": target_transition,
                     "restored": restored_transition,
+                    "targetBroadPhase": target_broad_phase,
+                    "restoredBroadPhase": restored_broad_phase,
                     "targetPreSnapshotHash": target_transition.get("preSnapshotHash"),
                     "restoredPreSnapshotHash": restored_transition.get("preSnapshotHash"),
                     "targetPostSnapshotHash": target_transition.get("postSnapshotHash"),
@@ -1075,6 +1124,10 @@ def main():
                         "liveContactEdges"),
                     "targetJournalRecords": len(target_transition.get("journal", [])),
                     "restoredJournalRecords": len(restored_transition.get("journal", [])),
+                    "targetBroadPhaseCreated": len(target_broad_phase.get("created", [])),
+                    "restoredBroadPhaseCreated": len(restored_broad_phase.get("created", [])),
+                    "targetBroadPhaseDeleted": len(target_broad_phase.get("deleted", [])),
+                    "restoredBroadPhaseDeleted": len(restored_broad_phase.get("deleted", [])),
                 }
                 save("first-replay-island-transition-audit.json", audit)
                 summary["firstReplayIslandTransition"] = {
@@ -1083,7 +1136,7 @@ def main():
                 }
                 summary["auditCompleted"] = True
                 summary["classification"] = (
-                    "bounded Story11 f444-to-f445 read-only first-replay island transition audit")
+                    "bounded Story11 f444-to-f445 read-only native transition audit, preserved at f445 and read while paused at f446")
                 raise ReadinessAuditComplete()
 
         arm_advancing("replay-604-arm")

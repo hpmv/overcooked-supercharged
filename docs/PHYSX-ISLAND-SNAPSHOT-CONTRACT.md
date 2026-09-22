@@ -420,6 +420,32 @@ PhysX mutator, or change an argument or return path.  Under those conditions a
 single `a65530` hook can passively capture the byte-exact pre/post island
 transition without changing gameplay state.
 
+The observer owns the **transition boundary**, not the later managed read
+boundary.  If it is armed at checkpoint frame `N`, its one-shot pre/post bytes
+describe `N -> N+1` even when the controller must advance farther before it
+can re-establish the ordinary pause fence.  The module copies both the island
+and `finishBroadPhase` observations at the `N+1` output callback, before a
+later validator or pause can cancel their one-shot native state.  A managed
+receipt therefore reports `checkpointFrame=N`, `transitionFrame=N+1`,
+`capturedAtOutputFrame=N+1`, and `readAtFrame=current paused frame`.  The Story
+1-1 audit uses the normal two-frame release/pause handshake, settles at f446,
+and reads the already-preserved f444 -> f445 transition.  It does not add a
+special one-frame simulation path or reinterpret f446 as the observed
+transition.
+
+The fresh v84 Story 1-1 capture proves why this distinction matters.  The
+uninterrupted f444 -> f445 transition reports broadphase created/deleted
+`0/6`, island live contact edges `12 -> 8`, and ordered removals
+`8,9,10,11`.  The restored transition reports `0/0`, island `0 -> 0`, and no
+journal.  Although eight manager and SIP allocation hooks match checkpoint
+rows during f445, those output-time allocations do not recreate the settled
+pre-transition contact edges.  A correct restore therefore needs three
+phase-linked objects: an exact settled entry snapshot at `N`, the native
+transition contract for `N -> N+1`, and an exact post snapshot at `N+1`.
+Validation at `N+1` must compare with the post snapshot, not require every
+entry object to remain allocated.  In this case rows 8--11 are ordinary
+historical removals, not failed survivor allocations.
+
 That single hook is **not** sufficient to recover semantic ownership for every
 deferred-deleted edge.  `removeEdge` writes `ffffffff` to the caller's edge
 hook immediately, before the island update consumes D.  For contact edges the

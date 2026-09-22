@@ -1,5 +1,43 @@
 # Fresh-session handoff — 2026-09-08
 
+> **First restored-transition capture milestone (2026-09-22, managed r20 /
+> native r36 / API 17):** the first replay audit now preserves both the exact
+> `finishBroadPhase` result and the island pre/post transaction at advancing
+> output f445, before contact validation or the ordinary f446 pause can cancel
+> either native one-shot observer.  The managed read happens later under a
+> bridge-owned authoring fence and reports separate checkpoint, transition,
+> capture, and read frames.  Contact recreation receipts also expose the
+> native manager `matchedMask` and callback thread.
+>
+> Fresh minimized, no-search evidence is
+> `artifacts/island-first-replay-transition-audit-story11-v84-r1/`.  The
+> original f444 -> f445 transition has zero created and six deleted broadphase
+> overlaps, then 12 -> 8 live island contact edges with ordered removals
+> 8, 9, 10, and 11.  The restored transition instead has zero created and zero
+> deleted overlaps, 0 -> 0 live contact edges, and no island journal records.
+> Its pre/post snapshot is the same `0x1A30BC29`.  This proves that the earlier
+> 8-of-12 recreation failure is downstream: the rewind entered f445 without
+> the checkpoint's twelve contact-edge topology at all.  During f445 PhysX
+> still allocated the eight survivor managers/SIPs (`matchedMask=0xFF` for
+> both), but those allocations cannot reconstruct the missing pre-transition
+> island graph or emit the four canonical deletions.
+>
+> The first automated read initially failed only because a controller-owned
+> pause is not the bridge's authoring fence.  The preserved in-memory capture
+> was read successfully after an explicit bridge pause, and the driver now
+> acquires and validates that fence before copying.  No replay or level reload
+> was needed to recover the evidence.  Managed DLL SHA-256 is
+> `AF835E3D03B5A913E3F71FF7C4DA5BC37B1273E8ED282538726D83EBA403ED9C`;
+> native r36 remains
+> `A03C0BC3A80FEFDD8346E7CDDD1A58575DAE35D4F0BE36A991ED2BEB7D3CD8D1`.
+> Focused Python tests pass 7 checks and the managed checker passes 29.
+>
+> The next implementation must be phase-aware rather than count-aware:
+> restore the complete settled f444 contact/island predecessor image, let the
+> shipped f445 transition remove its four historical contacts, and validate
+> against a captured f445 post image.  Do not accept 8/12 as complete, invent
+> or suppress broadphase events, reload-loop, or search.
+
 > **Dispatcher-worker observer milestone (2026-09-22, managed r19 / native
 > r36 / API 17):** the passive broadphase and island observers no longer
 > mistake PhysX task dispatch for corrupt capture provenance.  Arming still

@@ -81,6 +81,25 @@ Check(Calls("RunContactPoolAction").Contains("ArmCheckpointObservationCapture")&
     Calls("RunContactPoolAction").Contains("RunTransformDispatchAction"),
     "shared capture path stages the complete observation transaction and Transform-dispatch state");
 
+var outputCalls=Calls("AfterCaptureFrame");
+Check(outputCalls.Contains("CaptureFirstReplayTransitionAuditAtOutput")&&
+    outputCalls.IndexOf("CaptureFirstReplayTransitionAuditAtOutput")<
+        outputCalls.IndexOf("ValidatePendingContactRecreate"),
+    "first-replay native transition is persisted at the output boundary before contact validation can cancel it");
+var transitionCaptureCalls=Calls("CaptureFirstReplayTransitionAuditAtOutput");
+Check(transitionCaptureCalls.Contains("CopyFinishBroadPhaseCapture")&&
+    transitionCaptureCalls.Contains("CopyIslandTransitionAudit")&&
+    transitionCaptureCalls.Contains("CancelFirstReplayTransitionObservationWork"),
+    "first-replay audit captures and fences both broadphase and island observations");
+var auditReceiptStrings=Strings("DescribeFirstReplayTransitionAudit");
+Check(auditReceiptStrings.Contains("checkpointFrame")&&
+    auditReceiptStrings.Contains("transitionFrame")&&
+    auditReceiptStrings.Contains("capturedAtOutputFrame")&&
+    auditReceiptStrings.Contains("readAtFrame")&&
+    auditReceiptStrings.Contains("broadPhase")&&
+    auditReceiptStrings.Contains("transition"),
+    "first-replay receipt separates checkpoint, transition, output capture, and later read boundaries");
+
 Check(Strings("InstallAutomaticHook").Contains("CaptureFrame")&&
     Calls("InstallAutomaticHook").Contains("Patch"),
     "automatic hook patches NativeKitchenCheckpoint.CaptureFrame");
@@ -104,6 +123,15 @@ Check(statusStrings.Contains("scheduledContactPoolCapturePending")&&
     statusStrings.Contains("scheduledContactPoolLastObservedFrame")&&
     statusStrings.Contains("scheduledContactPoolCaptureTriggers"),
     "status exposes scheduled target, observation, and trigger state");
+Check(statusStrings.Contains("firstReplayIslandAuditCheckpointFrame")&&
+    statusStrings.Contains("firstReplayIslandAuditTransitionFrame")&&
+    statusStrings.Contains("firstReplayIslandAuditCapturedAtOutputFrame")&&
+    statusStrings.Contains("firstReplayBroadPhaseAudit")&&
+    !statusStrings.Contains("firstReplayIslandAuditFrame"),
+    "status exposes distinct first-replay checkpoint, transition, capture, and broadphase evidence");
+Check(Strings("RecordContactRecreateReceipt").Contains("matchedMask")&&
+    Strings("RecordContactRecreateReceipt").Contains("threadId"),
+    "contact recreation receipts expose the actual current manager mask and callback thread");
 
 string hash=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(args[0])));
 Console.WriteLine(JsonSerializer.Serialize(new{ok=true,checks=checks.Count,names=checks,
