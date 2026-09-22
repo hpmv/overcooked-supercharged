@@ -150,6 +150,9 @@ def main():
     parser.add_argument("--readiness-audit-only", action="store_true",
                         help=("Stop at restored f444 after writing source-paused and target-paused "
                               "readiness reports; do not arm or run the suffix."))
+    parser.add_argument("--first-replay-island-audit", action="store_true",
+                        help=("After restoring f444, passively capture the exact first f445 "
+                              "PhysX island pre/post transition, then stop without replaying the suffix."))
     parser.add_argument("--resume-prefix-index", type=int, choices=(0, 8), default=0,
                         help=("Resume the same bounded route at the exact f436 boundary before "
                               "prefix-8; intended only after a pause-fenced tooling failure."))
@@ -158,6 +161,10 @@ def main():
         parser.error("--restore-transform-dispatch requires --restore-contact-manager-free-stack")
     if args.readiness_audit_only and not args.restore_contact_manager_free_stack:
         parser.error("--readiness-audit-only requires --restore-contact-manager-free-stack")
+    if args.first_replay_island_audit and not args.restore_contact_manager_free_stack:
+        parser.error("--first-replay-island-audit requires --restore-contact-manager-free-stack")
+    if args.readiness_audit_only and args.first_replay_island_audit:
+        parser.error("Choose either --readiness-audit-only or --first-replay-island-audit")
     if not 1 <= args.settle_timeout <= 600:
         parser.error("--settle-timeout must be 1..600 seconds")
     if args.target_frame != 444:
@@ -193,6 +200,7 @@ def main():
         "registryReconciliation": args.reconcile_dynamic_registry,
         "resumePrefixIndex": args.resume_prefix_index,
         "readinessAuditOnly": args.readiness_audit_only,
+        "firstReplayIslandAudit": args.first_replay_island_audit,
     }
     bridge = host = None
     advancing_lease = None
@@ -658,6 +666,8 @@ def main():
                 initial.get("freshLevelLoadObserved") is True and
                 "Story11" in str(initial.get("setupSource")),
                 "Probe requires the exact paused Story11 route boundary for its selected prefix.")
+        require(initial.get("resumePhaseMetadataVersion") == 1,
+                "Probe requires a controller host that advertises native resume-phase metadata v1.")
         require(fresh_bridge.get("bridge", {}).get("session", {}).get("scene") == "s_sushi_1_1",
                 "Bridge is not in the Story 1-1 scene.")
         if args.resume_prefix_index:
@@ -992,6 +1002,63 @@ def main():
             if args.readiness_audit_only:
                 summary["auditCompleted"] = True
                 summary["classification"] = "bounded Story11 f444 read-only rewind readiness audit"
+                raise ReadinessAuditComplete()
+            if args.first_replay_island_audit:
+                armed = call(
+                    "bridge",
+                    {"command": "hot-call", "slot": args.actor_rebuild_slot,
+                     "operation": "arm-first-replay-island-audit", "args": {}},
+                    "first-replay-island-audit-arm")
+                armed_result = armed.get("detail", {}).get("result", {}).get("result", {})
+                require(armed_result.get("armed") is True and
+                        armed_result.get("frame") == args.target_frame,
+                        "The first-replay island observer did not arm at restored f444.")
+                arm_advancing("first-replay-island-audit-step-arm")
+                call("controller", {"command": "step", "frames": 1},
+                     "first-replay-island-audit-step")
+                first_replay = settled("first-replay-island-audit-f445")
+                require(first_replay.get("frame") == args.target_frame + 1,
+                        "The first-replay island audit did not stop at exact f445.")
+                copied = call(
+                    "bridge",
+                    {"command": "hot-call", "slot": args.actor_rebuild_slot,
+                     "operation": "copy-first-replay-island-audit", "args": {}},
+                    "first-replay-island-audit-copy")
+                copied_result = copied.get("detail", {}).get("result", {}).get("result", {})
+                restored_transition = copied_result.get("transition")
+                target_transition = target_actor_observation_f488.get("islandTransition")
+                require(copied_result.get("captured") is True and
+                        copied_result.get("checkpointFrame") == args.target_frame and
+                        copied_result.get("observedFrame") == args.target_frame + 1 and
+                        isinstance(restored_transition, dict) and
+                        isinstance(target_transition, dict),
+                        "The exact first-replay island transition was not copied at f445.")
+                audit = {
+                    "target": target_transition,
+                    "restored": restored_transition,
+                    "targetPreSnapshotHash": target_transition.get("preSnapshotHash"),
+                    "restoredPreSnapshotHash": restored_transition.get("preSnapshotHash"),
+                    "targetPostSnapshotHash": target_transition.get("postSnapshotHash"),
+                    "restoredPostSnapshotHash": restored_transition.get("postSnapshotHash"),
+                    "targetPreLiveContactEdges": target_transition.get("pre", {}).get(
+                        "liveContactEdges"),
+                    "restoredPreLiveContactEdges": restored_transition.get("pre", {}).get(
+                        "liveContactEdges"),
+                    "targetPostLiveContactEdges": target_transition.get("post", {}).get(
+                        "liveContactEdges"),
+                    "restoredPostLiveContactEdges": restored_transition.get("post", {}).get(
+                        "liveContactEdges"),
+                    "targetJournalRecords": len(target_transition.get("journal", [])),
+                    "restoredJournalRecords": len(restored_transition.get("journal", [])),
+                }
+                save("first-replay-island-transition-audit.json", audit)
+                summary["firstReplayIslandTransition"] = {
+                    key: value for key, value in audit.items()
+                    if key not in ("target", "restored")
+                }
+                summary["auditCompleted"] = True
+                summary["classification"] = (
+                    "bounded Story11 f444-to-f445 read-only first-replay island transition audit")
                 raise ReadinessAuditComplete()
 
         arm_advancing("replay-604-arm")

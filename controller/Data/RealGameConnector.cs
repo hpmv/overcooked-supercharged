@@ -34,6 +34,7 @@ namespace Hpmv
         private ConcurrentQueue<RealGameStateRequest> requests = new ConcurrentQueue<RealGameStateRequest>();
         // Current request that is being processed by the RPC handling thread; only used by RPC handling thread.
         private RealGameStateRequest currentRequest;
+        internal const int ResumePhaseMetadataProtocolVersion = 1;
         private const double NativeResumePhaseMetadataBase = 1000.0;
         public long ResumePhaseMetadataEmissions { get; private set; }
 

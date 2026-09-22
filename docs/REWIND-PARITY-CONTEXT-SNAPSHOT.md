@@ -6,6 +6,51 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — exact resume protocol and bounded pause ownership work live
+
+The persistent frame-1 resume failure was a stale-controller mismatch, not a
+tutorial owner, Animator restore, or PhysX continuation result.  The v12d host
+sent a plain resume without the native phase metadata now required by
+ResumePhase r1bc, so the module correctly failed closed at target phase -1.
+Headless v12r now advertises `resumePhaseMetadataVersion=1` in lightweight and
+full status.  Setup and replay drivers reject any host without that capability
+before loading modules or advancing the game.  Its DLL SHA-256 is
+`04FEE1016726FB882B228040CC1419AA197855C29454F9324188E6A7956F9DF8`.
+
+PauseOwnerGuard r1 also removes the bridge's performance-only owner-list leak.
+The native pause acquisition appends duplicate copies of the framework's exact
+stable owner, while release removes all equal copies.  At one fenced activation
+the module replaces N copies with one, preserving unrelated owners and every
+other layer.  Later equal acquisitions skip only that append and still notify
+the authoring clock.  Release is unchanged; failure falls through to native
+Pause.  SHA-256 is
+`76C4BD8BEF309555CE632785DD3E4B608A66F4FB9AA480DCB0ED08FA12D1BE52`;
+the focused source fixture passes 12 contracts.
+
+Fresh minimized v81 evidence is
+`artifacts/framework-migration/island-first-replay-audit-story11-v81-r2/stack-load.json`.
+It normalized 1,844 duplicates to exactly one stable Main owner, with zero
+unrelated Main or non-Main owners.  The bounded route then completed all 17
+phase-tagged resumes; ResumePhase accepted and committed 17/17, while the guard
+suppressed 27,312 redundant acquisitions and retained one owner.  The old
+immediate controller error is therefore closed.
+
+The first-replay audit has not yet run past restored f444.  Its fresh original
+branch reached f1048 but stopped before rewind because the legacy delivery tail
+was recorded under the older resume behavior and no longer reaches the serving
+trigger.  At f1045 chef 46 / held plate are about 0.84 world units left of the
+older successful fixture, leaving the ledger at one delivery and 28 points.
+Evidence is `artifacts/first-replay-island-f1048-to-f445-r5/`.
+No search or reload loop ran.  The next bounded task is to record one stable
+suffix under protocol-v1 timing and then execute the already-instrumented exact
+f444 -> f445 island comparison.
+
+For a clean process, first start v12r as `carnival34` and run
+`framework_bootstrap_carnival.py` from StartScreen; then rotate the same game to
+v12r `story11` with `-SkipLevelRestart` and run the v81 loader.  Hot modules
+cannot be installed at StartScreen.  The first bootstrap must use bridge
+`load`, not the restart helper's ordinary `restart` path.
+
 ## Latest setup result — sashimi tutorial wait is skipped safely
 
 LevelSession r4b now shortens only the sashimi popup's native 15-second wait.
@@ -23,9 +68,10 @@ owner.  Evidence is
 `artifacts/framework-migration/island-first-replay-audit-story11-v80-r1/stack-load.json`;
 LevelSession DLL SHA-256 is
 `D4A78568C320BDAA0A73B18F2C539D06D06C32B06E26B2519C00ABC86A2D0508`.
-This fixes the premature frame-1 resume failure and removes roughly 900 Unity
-frames from each fresh Story 1-1 setup.  It does not establish rewind parity
-and search remains disabled.
+This removes roughly 900 Unity frames from each fresh Story 1-1 setup.  It did
+not cause or fix the later frame-1 resume failure; that was the stale host
+described above.  It does not establish rewind parity and search remains
+disabled.
 
 ## Latest result — complete island state and first update are exact
 

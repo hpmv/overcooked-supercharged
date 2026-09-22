@@ -1,5 +1,59 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Resume-capability and bounded pause-owner milestone (2026-09-22,
+> headless v12r / PauseOwnerGuard r1):** the long frame-1 resume failure was
+> not a surviving tutorial pause owner or a PhysX fault.  The live controller
+> was the stale v12d DLL, which emitted `RequestResume=true` without the
+> phase-metadata `GameSpeed` field required by ResumePhase r1bc.  ResumePhase
+> correctly rejected that unproven origin as target phase -1 before calling
+> the native resume.  The replacement host now advertises explicit
+> `resumePhaseMetadataVersion=1` in both status schemas; every parity loader
+> and the replay probe refuses an older host before loading or advancing.
+> Headless v12r SHA-256 is
+> `04FEE1016726FB882B228040CC1419AA197855C29454F9324188E6A7956F9DF8`.
+>
+> Native `TimeManager.SetPaused(true, stableOwner)` appends blindly while its
+> matching release removes all equal entries.  The bridge's held-boundary
+> callback had therefore accumulated tens of thousands of copies of the same
+> framework owner.  PauseOwnerGuard r1 normalizes that exact stable Main key
+> once, preserves every unrelated owner and layer, and suppresses only
+> redundant reacquisition while retaining the independent authoring-clock
+> notification.  Resume/release is untouched, and any diagnostic failure
+> falls back to the original Pause call.  DLL SHA-256 is
+> `76C4BD8BEF309555CE632785DD3E4B608A66F4FB9AA480DCB0ED08FA12D1BE52`.
+> The focused offline fixture passes 12 contracts.
+>
+> Clean minimized live evidence is
+> `artifacts/framework-migration/island-first-replay-audit-story11-v81-r2/stack-load.json`.
+> Activation reduced 1,844 duplicate stable owners to exactly one; final
+> Story 1-1 setup had one stable Main owner, zero other Main owners, and zero
+> non-Main owners.  During the bounded original branch the guard suppressed
+> 27,312 redundant acquisitions, passed through all 18 real reacquisitions,
+> and retained exactly one stable owner with no failure.  ResumePhase accepted
+> and committed all 17/17 exact phase-tagged resumes.  Thus the former
+> immediate controller error is closed, with no foreground focus.
+>
+> The subsequent no-search audit
+> `artifacts/first-replay-island-f1048-to-f445-r5/` reached and
+> paused at original f1048 but intentionally stopped before rewind because
+> the old final delivery input no longer delivered under the corrected resume
+> timing.  At f1045 chef 46 was `(19.304,-2.291)` and its held plate was
+> `(19.919,-2.071)`, versus `(20.147,-2.504)` and `(20.764,-2.293)` in the
+> older successful fixture.  The ledger therefore stayed at one delivery / 28
+> points instead of reaching two / 56.  This is now a bounded route-fixture
+> mismatch, not a resume, tutorial, pause-owner, rewind, or search result.
+>
+> A clean process must be bootstrapped in this order: launch the minimized
+> game; start v12r as `carnival34`; run
+> `framework_bootstrap_carnival.py` (the first kitchen needs bridge `load`,
+> not `restart`); rotate the same game to a v12r `story11` host with
+> `Restart-FrameworkHost.ps1 -SkipLevelRestart`; then run the v81 loader.
+> Live-module installation at StartScreen is invalid and the loader now says
+> so before touching the stack.  Next, replace the stale fixed delivery tail
+> with one deterministic suffix recorded under protocol-v1 resume timing,
+> then rerun the first-replay f444 -> f445 island audit.  Search remains
+> disabled.
+
 > **Native-lifecycle Story 1-1 tutorial skip milestone (2026-09-22,
 > LevelSession r4b):** the sashimi tutorial no longer consumes its native
 > 15-second auto-dismiss wait in local TAS setup.  A narrowly armed Harmony

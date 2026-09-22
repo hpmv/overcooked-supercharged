@@ -938,6 +938,9 @@ namespace SuperchargedPatch.Authoring.Modules
         private CheckpointSidecar pendingContactRecreateSidecar;
         private CheckpointSidecar pendingDirtyCaptureSidecar;
         private PendingIslandObservation pendingIslandObservation;
+        private CheckpointSidecar pendingIslandTransitionAuditSidecar;
+        private IslandTransitionState lastIslandTransitionAudit;
+        private int lastIslandTransitionAuditFrame=-1;
         private DirtyInteractionState pendingDirtyRestoreState;
         private uint pendingDirtyCaptureOrdinal,pendingDirtyRestoreOrdinal;
         private long transformDispatchCaptures,transformDispatchRestores;
@@ -948,6 +951,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private readonly List<object> contactRecreateReceipts=new List<object>();
         private long dirtyInteractionCaptures,dirtyInteractionRestores;
         private long transformCacheCaptures,finishBroadPhaseCaptures,islandSnapshotCaptures,islandTransitionCaptures;
+        private long islandTransitionAuditArms,islandTransitionAuditCaptures;
         private uint pendingFinishBroadPhaseOrdinal;
         private long scheduledContactPoolCaptureArms,scheduledContactPoolCaptureTriggers;
 
@@ -970,8 +974,10 @@ namespace SuperchargedPatch.Authoring.Modules
             else if(operation=="restore-contact-pool-next")result=ArmContactPoolAction(args,2);
             else if(operation=="cancel-contact-pool-next")result=CancelContactPoolAction(args);
             else if(operation=="checkpoint-status")result=CheckpointStatus(args);
+            else if(operation=="arm-first-replay-island-audit")result=ArmFirstReplayIslandAudit(args);
+            else if(operation=="copy-first-replay-island-audit")result=CopyFirstReplayIslandAudit(args);
             else if(operation=="deactivate")Deactivate();
-            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, capture-contact-pool-at-frame, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, audit-restore-readiness, status or deactivate.");
+            else if(operation!="status")throw new ArgumentException("Use activate, rebuild, capture-contact-pool-next, capture-contact-pool-at-frame, restore-contact-pool-next, cancel-contact-pool-next, checkpoint-status, audit-restore-readiness, arm-first-replay-island-audit, copy-first-replay-island-audit, status or deactivate.");
             else RequireNoArgs(args);
             return Status(operation,result);
         }
@@ -1419,6 +1425,63 @@ namespace SuperchargedPatch.Authoring.Modules
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             return new Dictionary<string,object>{{"cancelled",scheduled>=0?"scheduled-capture":prior==0?"none":prior==1?"capture":"restore"},
                 {"frame",scheduled>=0?(object)scheduled:null}};
+        }
+
+        private object ArmFirstReplayIslandAudit(Dictionary<string,object> args)
+        {
+            RequireNoArgs(args);
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("First-replay island audit requires the authoring pause fence.");
+            if(!ReferenceEquals(active,this)||!automaticContactPoolRestore||!automaticRestorePending||
+                warpTargetSidecar==null||warpTargetSidecar.Frame!=CurrentCheckpointFrame())
+                throw new InvalidOperationException(
+                    "First-replay island audit must be armed at the exact restored checkpoint before its automatic physics restore.");
+            if(pendingIslandObservation!=null||pendingIslandTransitionAuditSidecar!=null||
+                pendingDirtyCaptureSidecar!=null||pendingDirtyCaptureOrdinal!=0||
+                pendingFinishBroadPhaseOrdinal!=0||contactRecreatePendingValidation||
+                pendingContactRecreateSidecar!=null)
+                throw new InvalidOperationException("Another checkpoint observation or contact recreation is pending.");
+            ObserveSceneGeneration();
+            ObserveCoreRoundIdentity();
+            RefreshObservedContactManagerContext();
+            EnsureIslandObserverForCurrentContext();
+            CheckpointSidecar selected=warpTargetSidecar;
+            ValidateIslandSnapshotState(selected.IslandSnapshot,IslandPhaseSettled);
+            lastIslandTransitionAudit=null;lastIslandTransitionAuditFrame=-1;
+            pendingIslandTransitionAuditSidecar=selected;
+            try{ArmIslandObservationCapture(selected,false);}
+            catch{pendingIslandTransitionAuditSidecar=null;throw;}
+            islandTransitionAuditArms++;
+            return new Dictionary<string,object>{{"armed",true},{"frame",selected.Frame},
+                {"observationOrdinal",pendingIslandObservation.ArmedOrdinal},
+                {"observerSequence",pendingIslandObservation.ObserverSequence}};
+        }
+
+        private object CopyFirstReplayIslandAudit(Dictionary<string,object> args)
+        {
+            RequireNoArgs(args);
+            if(!TimeManager.IsPaused(TimeManager.PauseLayer.Main)||!NativeSessionBridge.InputBlocked)
+                throw new InvalidOperationException("First-replay island audit copy requires the authoring pause fence.");
+            CheckpointSidecar selected=pendingIslandTransitionAuditSidecar;
+            if(selected==null||pendingIslandObservation==null||
+                !ReferenceEquals(pendingIslandObservation.Sidecar,selected))
+                throw new InvalidOperationException("No first-replay island audit is pending.");
+            IslandTransitionState captured=null;
+            try
+            {
+                captured=CopyIslandTransitionAudit(selected);
+                lastIslandTransitionAudit=captured;
+                lastIslandTransitionAuditFrame=CurrentCheckpointFrame();
+                islandTransitionAuditCaptures++;
+                return new Dictionary<string,object>{{"captured",true},
+                    {"checkpointFrame",selected.Frame},{"observedFrame",lastIslandTransitionAuditFrame},
+                    {"transition",DescribeIslandTransitionState(captured)}};
+            }
+            finally
+            {
+                CompleteIslandObservationWork();
+                pendingIslandTransitionAuditSidecar=null;
+            }
         }
 
         private void RunContactPoolAction(int action,bool automaticAction,bool requireTransformCapture=false)
@@ -4582,7 +4645,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int ok=0;
             try
             {
-                ArmIslandObservationCapture(sidecar);
+                ArmIslandObservationCapture(sidecar,true);
                 for(int i=0;i<size;i++)Marshal.WriteByte(buffer,i,0);
                 ok=armFinishBroadPhaseObserver(new UIntPtr(unityPlayerBase),graph.OwnerScene,
                     graph.LlContext,graph.NPhaseCore,0,buffer);
@@ -4618,7 +4681,7 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
-        private void ArmIslandObservationCapture(CheckpointSidecar sidecar)
+        private void ArmIslandObservationCapture(CheckpointSidecar sidecar,bool requireAdjacentSequence)
         {
             if(pendingIslandObservation!=null||armIslandObserver==null)
                 throw new InvalidOperationException("Another island observation is pending or the arm export is unavailable.");
@@ -4651,7 +4714,9 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(receipt.Installed!=1||receipt.State!=2||receipt.ExpectedPass!=0||
                     receipt.ExpectedManager!=settled.IslandManager||receipt.ExpectedContext!=settled.Context||
                     receipt.ExpectedNPhase!=settled.NPhaseCore||receipt.ArmedOrdinal==0||
-                    receipt.ArmedThreadId==0||receipt.ObserverSequence!=expectedSequence||receipt.InFlight!=0)
+                    receipt.ArmedThreadId==0||
+                    (requireAdjacentSequence?receipt.ObserverSequence!=expectedSequence:
+                        receipt.ObserverSequence<=settled.ObserverSequence)||receipt.InFlight!=0)
                     throw new InvalidOperationException("Native island observer arm differs from the settled checkpoint identities.");
                 pending.ArmedOrdinal=receipt.ArmedOrdinal;
                 pending.ObserverSequence=receipt.ObserverSequence;
@@ -4824,6 +4889,76 @@ namespace SuperchargedPatch.Authoring.Modules
                     receipt.JournalBeginOrdinal,receipt.JournalEndOrdinal,pending.ExpectedManager,
                     out journalReceipt,out journalRaw);
                 ValidateIslandJournalBindingCoherence(sidecar,preState,postState,journal);
+                return new IslandTransitionState {Receipt=receipt,Pre=preState,Post=postState,
+                    JournalReceipt=journalReceipt,Journal=journal,JournalRawBytes=journalRaw};
+            }
+        }
+
+        private IslandTransitionState CopyIslandTransitionAudit(CheckpointSidecar sidecar)
+        {
+            PendingIslandObservation pending=pendingIslandObservation;
+            if(pending==null||!ReferenceEquals(pending.Sidecar,sidecar))
+                throw new InvalidOperationException("Pending island audit does not belong to the restored checkpoint.");
+            NativeIslandObserverReceipt status=CallIslandObserverAction(
+                statusIslandObserver,"audit-status",1);
+            if(status.Installed!=1||status.State!=4||status.ExpectedPass!=0||status.Pass!=0||
+                status.ArmedOrdinal!=pending.ArmedOrdinal||status.ObservationOrdinal!=pending.ArmedOrdinal||
+                status.ObserverSequence!=pending.ObserverSequence||status.ArmedThreadId!=pending.ArmedThreadId||
+                status.ThreadId!=pending.ArmedThreadId||status.InFlight!=0||status.ValidationFlags!=0x7Fu)
+                throw new InvalidOperationException("Native first-replay island audit did not complete exactly once: state="+
+                    status.State+", armedOrdinal="+status.ArmedOrdinal+", observationOrdinal="+
+                    status.ObservationOrdinal+", inFlight="+status.InFlight+".");
+            IslandTransitionState first=null,second=null;
+            try
+            {
+                first=CopyIslandTransitionAuditOnce(sidecar,pending,"audit-copy-first");
+                second=CopyIslandTransitionAuditOnce(sidecar,pending,"audit-copy-second");
+                if(!SameIslandTransitionState(first,second))
+                    throw new InvalidOperationException("Two first-replay island audit copies were not byte-equivalent.");
+                return first;
+            }
+            catch
+            {
+                CancelIslandObservationWork();
+                throw;
+            }
+        }
+
+        private IslandTransitionState CopyIslandTransitionAuditOnce(CheckpointSidecar sidecar,
+            PendingIslandObservation pending,string action)
+        {
+            using(IslandSnapshotBufferOwner pre=IslandSnapshotBufferOwner.Create())
+            using(IslandSnapshotBufferOwner post=IslandSnapshotBufferOwner.Create())
+            {
+                int size=Marshal.SizeOf(typeof(NativeIslandObserverReceipt));
+                IntPtr receiptBuffer=Marshal.AllocHGlobal(size);NativeIslandObserverReceipt receipt;
+                try
+                {
+                    IslandSnapshotBufferOwner.Zero(receiptBuffer,size);
+                    int ok=copyIslandObserver(new UIntPtr(unityPlayerBase),pending.ArmedOrdinal,
+                        pre.BuffersPointer,pre.ReceiptPointer,post.BuffersPointer,post.ReceiptPointer,
+                        receiptBuffer);
+                    receipt=(NativeIslandObserverReceipt)Marshal.PtrToStructure(
+                        receiptBuffer,typeof(NativeIslandObserverReceipt));
+                    if(ok==0||receipt.Result!=1)
+                        throw new InvalidOperationException("Native first-replay island audit "+action+
+                            " failed: result="+receipt.Result+", Win32/error="+receipt.LastError+
+                            ", state="+receipt.State+".");
+                }
+                finally{Marshal.FreeHGlobal(receiptBuffer);}
+                ValidateIslandObserverReceiptContract(receipt);
+                NativeIslandSnapshotReceipt preReceipt=(NativeIslandSnapshotReceipt)Marshal.PtrToStructure(
+                    pre.ReceiptPointer,typeof(NativeIslandSnapshotReceipt));
+                NativeIslandSnapshotReceipt postReceipt=(NativeIslandSnapshotReceipt)Marshal.PtrToStructure(
+                    post.ReceiptPointer,typeof(NativeIslandSnapshotReceipt));
+                IslandSnapshotState preState=ReadIslandSnapshotState(pre,preReceipt);
+                IslandSnapshotState postState=ReadIslandSnapshotState(post,postReceipt);
+                ValidateIslandTransitionAuditReceipts(sidecar,pending,receipt,preState,postState);
+                NativeIslandJournalReceipt journalReceipt;
+                byte[] journalRaw;
+                NativeIslandJournalRecord[] journal=CopyIslandJournalOnce(
+                    receipt.JournalBeginOrdinal,receipt.JournalEndOrdinal,pending.ExpectedManager,
+                    out journalReceipt,out journalRaw);
                 return new IslandTransitionState {Receipt=receipt,Pre=preState,Post=postState,
                     JournalReceipt=journalReceipt,Journal=journal,JournalRawBytes=journalRaw};
             }
@@ -5129,6 +5264,7 @@ namespace SuperchargedPatch.Authoring.Modules
             scheduledContactPoolCaptureFrame=-1;scheduledContactPoolLastObservedFrame=-1;
             checkpointSidecars.Clear();warpTargetSidecar=null;automaticRestorePending=false;
             warpInProgress=false;warpTargetRestoreEligible=false;warpTargetFrame=-1;
+            lastIslandTransitionAudit=null;lastIslandTransitionAuditFrame=-1;
             if(clearFailure)failure=null;
             sceneOwnedResets++;
             lastSceneOwnedReset=new Dictionary<string,object>{{"reason",reason},
@@ -5173,6 +5309,7 @@ namespace SuperchargedPatch.Authoring.Modules
             finally
             {
                 pendingIslandObservation=null;
+                pendingIslandTransitionAuditSidecar=null;
                 if(safe){pending.Pre.Dispose();pending.Post.Dispose();}
                 else lock(processRetainedIslandBuffers)processRetainedIslandBuffers.Add(pending);
             }
@@ -5679,6 +5816,42 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Island pre/post snapshot identity differs from the settled sidecar transaction.");
             ValidateIslandSnapshotCoherence(sidecar,pre);
             ValidateIslandSnapshotCoherence(sidecar,post);
+        }
+
+        private void ValidateIslandTransitionAuditReceipts(CheckpointSidecar sidecar,
+            PendingIslandObservation pending,NativeIslandObserverReceipt receipt,
+            IslandSnapshotState pre,IslandSnapshotState post)
+        {
+            ValidateIslandSnapshotState(pre,IslandPhasePreUpdate);
+            ValidateIslandSnapshotState(post,IslandPhasePostUpdate);
+            NativeIslandSnapshotReceipt settled=sidecar.IslandSnapshot.Receipt;
+            NativeIslandSnapshotReceipt a=pre.Receipt,b=post.Receipt;
+            if(receipt.ApiVersion!=NativeAbiVersion||receipt.StructSize!=128u||receipt.Result!=1||
+                receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Installed!=1||receipt.State!=4||
+                receipt.ExpectedManager.ToUInt32()!=pending.ExpectedManager||
+                receipt.ExpectedContext.ToUInt32()!=pending.ExpectedContext||
+                receipt.ExpectedNPhase.ToUInt32()!=pending.ExpectedNphase||
+                receipt.ObservedManager!=receipt.ExpectedManager||
+                receipt.ObservedContext!=receipt.ExpectedContext||receipt.ObservedNPhase!=receipt.ExpectedNPhase||
+                receipt.ExpectedPass!=0||receipt.Pass!=0||receipt.ArmedThreadId!=pending.ArmedThreadId||
+                receipt.ThreadId!=pending.ArmedThreadId||receipt.ObserverSequence!=pending.ObserverSequence||
+                receipt.ArmedOrdinal!=pending.ArmedOrdinal||receipt.ObservationOrdinal!=pending.ArmedOrdinal||
+                receipt.SlotIndex!=0||receipt.PreResult!=1||receipt.PostResult!=1||
+                receipt.PreSnapshotHash!=a.SnapshotHash||receipt.PostSnapshotHash!=b.SnapshotHash||
+                receipt.JournalEndOrdinal!=b.JournalEndOrdinal||
+                receipt.JournalEndOrdinal<receipt.JournalBeginOrdinal||
+                receipt.ValidationFlags!=0x7Fu||receipt.InvalidKind!=0||receipt.Detail!=0||receipt.InFlight!=0)
+                throw new InvalidOperationException(
+                    "First-replay island observer receipt does not identify one exact pass-zero transition.");
+            foreach(NativeIslandSnapshotReceipt item in new[]{a,b})
+                if(item.UnityBase!=settled.UnityBase||item.NPhaseCore!=settled.NPhaseCore||
+                    item.OwnerScene!=settled.OwnerScene||item.InteractionScene!=settled.InteractionScene||
+                    item.Context!=settled.Context||item.IslandManager!=settled.IslandManager||
+                    item.ObserverSequence!=receipt.ObserverSequence||
+                    item.ObservationOrdinal!=receipt.ObservationOrdinal||
+                    item.CaptureThreadId!=receipt.ThreadId)
+                    throw new InvalidOperationException(
+                        "First-replay island pre/post identity differs from the restored checkpoint scene.");
         }
 
         private void ValidateIslandTransitionState(CheckpointSidecar sidecar)
@@ -7120,6 +7293,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"pendingIslandObservationOrdinal",pendingIslandObservation==null?0:pendingIslandObservation.ArmedOrdinal},
                 {"islandSnapshotCaptures",islandSnapshotCaptures},
                 {"islandTransitionCaptures",islandTransitionCaptures},
+                {"firstReplayIslandAuditPending",pendingIslandTransitionAuditSidecar!=null},
+                {"firstReplayIslandAuditFrame",lastIslandTransitionAuditFrame},
+                {"firstReplayIslandAuditArms",islandTransitionAuditArms},
+                {"firstReplayIslandAuditCaptures",islandTransitionAuditCaptures},
+                {"firstReplayIslandAudit",DescribeIslandTransitionState(lastIslandTransitionAudit)},
                 {"retainedIslandBufferTransactions",processRetainedIslandBuffers.Count},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
@@ -7212,6 +7390,8 @@ namespace SuperchargedPatch.Authoring.Modules
             dirtyRestorePendingValidation=false;pendingDirtyRestoreOrdinal=0;pendingDirtyRestoreState=null;
             contactRecreatePendingValidation=false;pendingContactRecreateSidecar=null;
             checkpointSidecars.Clear();warpTargetSidecar=null;contactManagerContext=0;
+            pendingIslandTransitionAuditSidecar=null;lastIslandTransitionAudit=null;
+            lastIslandTransitionAuditFrame=-1;
             contextObservationFloor=0;
             islandObserverManager=0;
             coreRoundIdentity=null;sceneMetadataGeneration=-1;

@@ -19,11 +19,14 @@ public static class StatusTests
         byte[] beforeSetup = setup.ToProto().ToByteArray(); var before = session.Inspect(true);
         JsonObject Poll() => session.Command(new() { ["command"] = "status", ["full"] = false, ["development"] = false });
         var status = Poll();
-        foreach (string field in new[] { "ok", "connected", "traceFailure", "state", "frame", "requestPending", "exchanges", "freshLevelLoadObserved", "needsFreshLevelBaseline", "lastEmpiricalFrame", "movementAction", "movementCompleted", "invalidStateReason", "errors", "rawInput" })
+        foreach (string field in new[] { "ok", "connected", "traceFailure", "state", "frame", "requestPending", "exchanges", "resumePhaseMetadataVersion", "resumePhaseMetadataEmissions", "freshLevelLoadObserved", "needsFreshLevelBaseline", "lastEmpiricalFrame", "movementAction", "movementCompleted", "invalidStateReason", "errors", "rawInput" })
             Check(JsonNode.DeepEquals(before[field], status[field]), "inspection field preserved " + field);
         foreach (string field in new[] { "outcome", "active", "error", "startFrame", "maximumFrames" })
             Check(JsonNode.DeepEquals(before["typedActions"]![field], status["typedActions"]![field]), "typed scalar preserved " + field);
         Check(status["kind"]!.ToString() == "supercharged-headless-status" && (int)status["version"]! == 1, "explicit distinct schema");
+        Check((int)status["resumePhaseMetadataVersion"]! == 1 &&
+              (long)status["resumePhaseMetadataEmissions"]! == 0,
+            "native resume phase metadata capability is explicit before its first emission");
         Check(status["registryValidation"] is null && status["entities"] is null && status["actionGraph"] is null && status["typedActions"]!["actions"] is null, "expensive validation and graph content omitted explicitly");
         for (int i = 0; i < 100; i++) Poll();
         Check(beforeSetup.SequenceEqual(setup.ToProto().ToByteArray()) && JsonNode.DeepEquals(before, session.Inspect(true)), "repeated status leaves all setup/history and ordinary inspection unchanged");

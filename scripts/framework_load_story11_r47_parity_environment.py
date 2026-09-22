@@ -80,14 +80,27 @@ def main() -> int:
     try:
         bridge = Client(args.bridge_port)
         host = ControllerClient(args.controller_port)
+        host_status = host.call({"command": "status"})
+        if host_status.get("resumePhaseMetadataVersion") != 1:
+            raise RuntimeError(
+                "Controller host does not advertise native resume-phase metadata protocol v1; "
+                "refusing to load a stack whose resume gate requires it")
+        report["controllerCapabilities"] = {
+            "resumePhaseMetadataVersion": host_status["resumePhaseMetadataVersion"],
+            "resumePhaseMetadataEmissions": host_status.get("resumePhaseMetadataEmissions", 0),
+        }
         boundary = bridge.call({"command": "pause"})["bridge"]
         if (boundary.get("loading") or not boundary.get("paused") or
                 not boundary.get("inputBlocked")):
             raise RuntimeError("Setup requires a stable paused, input-fenced bootstrap scene")
         bootstrap = boundary.get("session", {})
-        if boundary.get("loadComplete") is not True and (
-                bootstrap.get("scene") != "StartScreen" or bootstrap.get("stage") != "idle"):
-            raise RuntimeError("Only a completed kitchen or the idle StartScreen may bootstrap setup")
+        if (boundary.get("loadComplete") is not True or
+                bootstrap.get("stage") != "kitchen_ready" or
+                bootstrap.get("scene") == "StartScreen" or
+                bootstrap.get("serverUsers") != 4 or bootstrap.get("clientUsers") != 4):
+            raise RuntimeError(
+                "Setup requires one completed four-local bootstrap kitchen; "
+                "the bridge forbids live-module installation at StartScreen")
         if boundary.get("authoringModules", {}).get("active"):
             raise RuntimeError("Fresh-process fixture requires no preloaded authoring modules")
 
@@ -217,6 +230,19 @@ def main() -> int:
             "command": "hot-call", "slot": "rigidbody-actor-rebuild",
             "operation": "status", "args": {},
         })["detail"]["result"]
+        pause_owner_guard = None
+        if any(slot == "pause-owner-guard" for slot, _, _ in STACK):
+            pause_owner_guard = bridge.call({
+                "command": "hot-call", "slot": "pause-owner-guard",
+                "operation": "status", "args": {},
+            })["detail"]["result"]
+            if (pause_owner_guard.get("active") is not True or
+                    pause_owner_guard.get("failure") or
+                    pause_owner_guard.get("stableMainOwnerCount") != 1 or
+                    pause_owner_guard.get("otherMainOwnerCount") != 0 or
+                    pause_owner_guard.get("nonMainOwnerCount") != 0):
+                raise RuntimeError("Framework pause-owner invariant failed: " +
+                                   json.dumps(pause_owner_guard, sort_keys=True))
         session = status.get("session", {})
         if (session.get("scene") != "s_sushi_1_1" or session.get("serverUsers") != 4 or
                 session.get("clientUsers") != 4 or not controller.get("freshLevelLoadObserved")):
@@ -232,6 +258,7 @@ def main() -> int:
             session=session,
             levelSession=level_session_status,
             actorAfterStoryLoad=actor,
+            pauseOwnerGuard=pause_owner_guard,
         )
     except Exception as error:
         report["error"] = str(error)

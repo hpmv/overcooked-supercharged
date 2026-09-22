@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using SuperchargedPatch.Authoring;
+using SuperchargedPatch.Bridge;
 using Team17.Online.Multiplayer.Messaging;
 using UnityEngine;
 
@@ -22,6 +24,11 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(disposed)throw new ObjectDisposedException("InspectionModule");
             if(args==null)throw new ArgumentNullException("args");
+            if(operation=="pause-owners")
+            {
+                if(args.Count!=0)throw new ArgumentException("pause-owners takes no arguments.");
+                return PauseOwners();
+            }
             if(operation!="batch")return Execute(Prepare(operation,args));
             object value;
             if(!args.TryGetValue("operations",out value) || !(value is object[]))throw new ArgumentException("batch.operations must be an array.");
@@ -115,6 +122,46 @@ namespace SuperchargedPatch.Authoring.Modules
             // Selected reads are resolved without calling their getters here.
             if(args.ContainsKey("members"))SelectedMembers(p);
             return p;
+        }
+
+        private static object PauseOwners()
+        {
+            var manager=GameUtils.RequireManager<TimeManager>();
+            var field=typeof(TimeManager).GetField("m_arbitrationSupressors",Members);
+            if(field==null||field.FieldType!=typeof(List<object>[]))
+                throw new MissingFieldException("TimeManager.m_arbitrationSupressors");
+            var suppressors=(List<object>[])field.GetValue(manager);
+            var helpers=typeof(NativeSessionBridge).Assembly.GetType("SuperchargedPatch.Helpers",true);
+            var stableField=helpers.GetField("timeManagerPauseArbitration",BindingFlags.Static|BindingFlags.NonPublic);
+            if(stableField==null)throw new MissingFieldException("SuperchargedPatch.Helpers.timeManagerPauseArbitration");
+            object stable=stableField.GetValue(null);
+            var layers=new List<object>();int total=0;
+            for(int i=0;i<suppressors.Length;i++)
+            {
+                var owners=new List<object>();var list=suppressors[i];
+                if(list!=null)foreach(object owner in list)
+                {
+                    total++;
+                    Type valueType=owner as Type;
+                    var unity=owner as UnityEngine.Object;
+                    var row=Map("index",owners.Count,"identity",owner==null?0:RuntimeHelpers.GetHashCode(owner),
+                        "runtimeType",owner==null?null:owner.GetType().FullName,
+                        "typeValue",valueType==null?null:valueType.FullName,
+                        "frameworkStableOwner",ReferenceEquals(owner,stable));
+                    if(!ReferenceEquals(unity,null))
+                    {
+                        row["unityAlive"]=unity!=null;
+                        if(unity!=null){row["unityInstanceId"]=unity.GetInstanceID();row["unityName"]=unity.name;}
+                    }
+                    owners.Add(row);
+                }
+                var layer=(TimeManager.PauseLayer)i;
+                layers.Add(Map("index",i,"name",layer.ToString(),"paused",TimeManager.IsPaused(layer),
+                    "ownerCount",list==null?0:list.Count,"owners",owners.ToArray()));
+            }
+            return Map("timeManagerInstanceId",manager.GetInstanceID(),"totalOwners",total,
+                "bridgeInputBlocked",NativeSessionBridge.InputBlocked,"bridgeKitchenReady",NativeSessionBridge.KitchenReady,
+                "layers",layers.ToArray(),"readOnly",true);
         }
 
         private static Dictionary<string,object> Execute(Prepared p)
