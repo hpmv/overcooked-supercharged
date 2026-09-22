@@ -13,7 +13,12 @@ yet rewinds trigger or marker state.
 
 The interaction graph in the shipped checkpoint has a more specific topology
 than either fixture: four contact chefs plus one zero-interaction active body,
-eight static actors, and eighteen interactions total. The moving chef has a
+eight static endpoints, and eighteen interactions total. These thirteen
+actors are the graph's enumerated active bodies and interaction endpoints,
+**not** a proven total of actors in the Unity PhysX scene. The twelve contact
+pairs share just ten contact ShapeSims (four chef capsules and six static
+boxes), with 24 transform-cache references and ten live IDs; the source-built
+one-mover fixture instead uses 24 distinct contact shapes. The moving chef has a
 main capsule with six contact pairs and an auxiliary shape. Two static
 trigger shapes each overlap **both** chef shapes at A, making four trigger
 interactions. The two rows on the main capsule are deleted at B; the two on
@@ -40,6 +45,12 @@ a separate fixture and replay gate.
   flags cannot reproduce a loss notification. Markers have no derived
   payload beyond their base interaction linkage but still need identity,
   slot, and order verification.
+- Key each interaction by type and canonical unordered shape endpoints, but
+  retain its **oriented** shape0/shape1 order for filter and work-unit
+  reproduction. Key ActorPair ownership separately by canonical actor
+  endpoints: PhysX can share one ActorPair across multiple shape pairs from
+  the same two actors. A shape-index-keyed map can silently collapse or
+  duplicate its refcount, touch count, report object, and physical slot.
 - Check the scene trigger-report buffers at settled `fetchResults`; initially
   gate on empty logical sizes and unchanged backing, then add a guarded
   buffer image if the fixture proves that retained capacity/order matters.
@@ -55,6 +66,12 @@ also gate them out. Generalize those guards only when a companion auxiliary
 image validates the exact expected types and identities. Keep the contact
 pair reconstruction contact-only; do not let trigger indices masquerade as
 SIP indices in actor or scene arrays.
+
+The existing `AuxInteractionImage` is the first read-only observer for mixed
+scene/actor order and trigger pool/history. Its current trigger-cache policy
+accepts only box/box geometry. The actual graph's capsule/trigger combination
+needs a source audit of which `TriggerCache` fields are initialized/read
+before the image can be used as a restoration contract there.
 
 Add a separate, preflighted source bridge to recreate the two missing trigger
 pairs through original `NPhaseCore::onOverlapCreated`, preserving the two
@@ -78,10 +95,11 @@ passes full image readback and next-step replay.
    trigger baseline, including physical slots, free chains, all actor
    arrays, and trigger history.
 2. Before making restoration helpers more general, build a second fixture
-   with the shipped four-chef/five-active-body, eight-static,
+   with the shipped four-chef/five-active-body, eight-static-endpoint,
    two-shape-moving-chef graph. Require deterministic fresh-scene A/B
    images, 12/4/2→8/2/2 counts, and exact ownership of the four contact and
-   two trigger deletions. Drive new restore logic against this graph; keep
+   two trigger deletions, plus the shared 10-shape/24-reference contact
+   topology. Drive new restore logic against this graph; keep
    the simpler one-mover fixtures as regression controls.
 3. Recreate only four missing contacts, then only two missing triggers,
    checking survivor identity and no marker mutation. Key pair lookup by
