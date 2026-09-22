@@ -6,6 +6,39 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — NPhase report history is fully captured and planned
+
+Managed RigidbodyActorRebuild r15b and native API 14/r32 extend the atomic
+f444 physics sidecar through `Sc::NPhaseCore`'s complete report-history
+containers.  They capture the ordered ActorPair report set, ordered persistent
+and force-threshold SIP lists, the persistent next-frame split, full report
+buffer metadata, all 8192 allocated buffer bytes, and each owner SIP's report
+stamp, physical list index, and stream index.  Native capture is caller-owned,
+revision-guarded, repeatable, and read-only; managed publication rejects any
+disagreement with the saved ActorPair/SIP graph.
+
+Fresh evidence is
+`artifacts/readiness-plan-nphase-report-f1048-to-f444-r2/`.  Source readiness
+is 26 pass / 0 fail / 41 deferred; restored-target readiness is 62 pass / 0
+fail / 23 deferred / 1 not-applicable.  The target f444 report set is empty,
+the persistent list has 10 exact SIPs with split boundary 10, the force list
+is empty, and the buffer has active index zero.  All membership flags and
+physical report indices agree.  Two live target-paused captures are byte
+identical and use the same addresses, capacities, and 8192-byte allocation as
+the target, but their persistent list is empty and the inactive backing bytes
+have a different hash.  The rewind therefore loses a now-bounded report
+history projection; this is not an allocation-identity problem or sampling
+race.
+
+The readiness contracts are version 3 and explicitly leave Scene-level report
+timestamp offsets deferred rather than guessing them.  No restore writes,
+suffix frame, or search ran.  The next implementation unit should be one
+interaction-graph transaction spanning interaction arrays, island edge
+ownership/deferred deletion, Transform-cache IDs, broadphase created-overlap
+order, allocator/object binding, and finally these report containers.  Before
+mutation, capture both settled f444 and the uninterrupted f444 -> f445
+transition so reconstruction is judged by first-output convergence.
+
 ## Latest result — ActorPair history is fully planned and blocker-free
 
 The v72 audit extends the atomic f444 manager/SIP/manifold capture through the

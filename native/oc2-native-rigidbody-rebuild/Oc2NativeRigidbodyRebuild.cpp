@@ -150,6 +150,9 @@ struct ContactManagerOwnerRecord {
     uint32_t transformCache1;
     uint32_t managerFlags;
     uint32_t sipFlags;
+    uint32_t contactReportStamp;
+    uint32_t reportPairIndex;
+    uint32_t reportStreamIndex;
     uintptr_t actorPair;
     uint32_t managerHash;
     uint32_t sipHash;
@@ -466,6 +469,42 @@ struct ActorPairReportPoolReceipt {
     uint32_t validationFlags;
     uintptr_t topFree[16];
     uintptr_t topAllocated[16];
+};
+
+// Read-only checkpoint view of the report-history structures that precede
+// mDirtyInteractions in Sc::NPhaseCore.  Array capacities retain PhysX's raw
+// ownership bit; the caller receives the exact logical orders and the bytes
+// currently committed in ContactReportBuffer without changing any header.
+struct NPhaseReportStateReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t ownerScene;
+    uintptr_t actorPairData;
+    uint32_t actorPairCount;
+    uint32_t actorPairCapacityRaw;
+    uintptr_t persistentData;
+    uint32_t persistentCount;
+    uint32_t persistentCapacityRaw;
+    uint32_t nextFramePersistentIndex;
+    uintptr_t forceThresholdData;
+    uint32_t forceThresholdCount;
+    uint32_t forceThresholdCapacityRaw;
+    uintptr_t reportBuffer;
+    uint32_t reportBufferCurrentIndex;
+    uint32_t reportBufferCurrentSize;
+    uint32_t reportBufferDefaultSize;
+    uint32_t reportBufferLastIndex;
+    uint32_t reportBufferAllocationLocked;
+    uint32_t actorPairOrderHash;
+    uint32_t persistentOrderHash;
+    uint32_t forceThresholdOrderHash;
+    uint32_t reportBufferActiveHash;
+    uint32_t reportBufferAllocationHash;
+    uint32_t validationFlags;
 };
 
 struct ManifoldPoolReceipt {
@@ -800,7 +839,7 @@ struct InvalidateKinematicTargetReceipt {
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
     "Unexpected Win32 manifold-pool receipt ABI");
-static_assert(sizeof(ContactManagerOwnerRecord) == 160,
+static_assert(sizeof(ContactManagerOwnerRecord) == 172,
     "Unexpected Win32 contact-manager owner record ABI");
 static_assert(sizeof(ContactManagerOwnerReceipt) == 156,
     "Unexpected Win32 contact-manager owner receipt ABI");
@@ -816,6 +855,8 @@ static_assert(sizeof(ActorPairPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-pool receipt ABI");
 static_assert(sizeof(ActorPairReportPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-report-pool receipt ABI");
+static_assert(sizeof(NPhaseReportStateReceipt) == 116,
+    "Unexpected Win32 NPhase report-state receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1101,7 +1142,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 13;
+static const uint32_t kApiVersion = 14;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1120,6 +1161,9 @@ static const uint32_t kFindActorPairRva = 0xA4F7B0;
 static const uint32_t kCreateActorPairReportDataRva = 0xA4E370;
 static const uint32_t kActorPairReportSlabStrideRva = 0xA4DAC4;
 static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
+static const uint32_t kAddPersistentContactEventPairRva = 0xA4CD90;
+static const uint32_t kRemovePersistentContactEventPairRva = 0xA53840;
+static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
@@ -1181,6 +1225,23 @@ static const uint8_t kActorPairReportSlabStrideBytes[] = {
 };
 static const uint8_t kReleaseActorPairReportDataBytes[] = {
     0x55,0x8B,0xEC,0x56,0x8D,0xB1,0x30,0x05,0x00,0x00
+};
+static const uint8_t kAddPersistentContactEventPairBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x08,0x56,0x8B,0xF1,
+    0x81,0x4B,0x2C,0x00,0x00,0x20,0x00,0x8B,0x4E,0x14,
+    0x8B,0x56,0x1C,0x3B,0xCA
+};
+static const uint8_t kRemovePersistentContactEventPairBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x08,0x8B,0xD1,0x56,
+    0x8B,0x73,0x34,0x8B,0x42,0x1C,0x3B,0xF0
+};
+static const uint8_t kContactReportBufferAllocateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x8B,0x55,0x0C,0x53,0x57,0x8B,
+    0xF9,0xF6,0xC2,0x0F,0x74,0x06
+};
+static const uint8_t kContactReportBufferLayoutBytes[] = {
+    0x8B,0x47,0x30,0x8B,0x55,0x10,0xC1,0xE3,0x04,
+    0x8D,0x48,0x0F,0x83,0xE1,0xF0
 };
 static const uint8_t kCreateContactManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
@@ -1549,6 +1610,15 @@ static int FailActorPairPool(ActorPairPoolReceipt* receipt,
 }
 
 static int FailActorPairReportPool(ActorPairReportPoolReceipt* receipt,
+    SipPoolResult result, uint32_t error) {
+    if (receipt) {
+        receipt->result = result;
+        receipt->lastError = error;
+    }
+    return 0;
+}
+
+static int FailNPhaseReportState(NPhaseReportStateReceipt* receipt,
     SipPoolResult result, uint32_t error) {
     if (receipt) {
         receipt->result = result;
@@ -2440,6 +2510,16 @@ static void InitializeActorPairReportPoolReceipt(
     receipt->nphaseCore = nphaseCore;
     receipt->pool = nphaseCore ? nphaseCore + 0x530 : 0;
     receipt->elementSize = 0x24;
+}
+
+static void InitializeNPhaseReportStateReceipt(
+    NPhaseReportStateReceipt* receipt, uintptr_t unityBase,
+    uintptr_t nphaseCore) {
+    *receipt = {};
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(NPhaseReportStateReceipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
 }
 
 static void InitializeManifoldPoolReceipt(ManifoldPoolReceipt* receipt,
@@ -4080,8 +4160,14 @@ static bool ReadContactManagerOwner(uintptr_t unityBase, uintptr_t manager,
     record.interactionFlags = *reinterpret_cast<const uint8_t*>(record.sip + 0x1D);
     record.shapeSim0 = *reinterpret_cast<const uintptr_t*>(record.sip + 0x20);
     record.shapeSim1 = *reinterpret_cast<const uintptr_t*>(record.sip + 0x24);
+    record.contactReportStamp = *reinterpret_cast<const uint32_t*>(
+        record.sip + 0x28);
     record.sipFlags = *reinterpret_cast<const uint32_t*>(record.sip + 0x2C);
     record.actorPair = *reinterpret_cast<const uintptr_t*>(record.sip + 0x30);
+    record.reportPairIndex = *reinterpret_cast<const uint32_t*>(
+        record.sip + 0x34);
+    record.reportStreamIndex = *reinterpret_cast<const uint16_t*>(
+        record.sip + 0x40);
     const uintptr_t backlink = *reinterpret_cast<const uintptr_t*>(record.sip + 0x38);
     if (!record.primaryVtable || !record.secondaryVtable || !record.actorPair ||
         backlink != manager || record.interactionType != 0 ||
@@ -5260,6 +5346,271 @@ static int CaptureActorPairReportPool(uintptr_t unityBase,
     if (receipt->freeCount)
         CopyWords(freeSnapshot, freeOrder, receipt->freeCount);
     receipt->validationFlags = 0xFFu;
+    receipt->result = SipPoolOk;
+    return 1;
+}
+
+static bool NPhaseReportStateRevisionMatches(uintptr_t unityBase) {
+    if (!unityBase) return false;
+    const void* addPersistent = reinterpret_cast<const void*>(
+        unityBase + kAddPersistentContactEventPairRva);
+    const void* removePersistent = reinterpret_cast<const void*>(
+        unityBase + kRemovePersistentContactEventPairRva);
+    const void* allocateBuffer = reinterpret_cast<const void*>(
+        unityBase + kContactReportBufferAllocateRva);
+    const void* bufferLayout = reinterpret_cast<const void*>(
+        unityBase + kContactReportBufferAllocateRva + 0x1F);
+    return Readable(addPersistent,
+            sizeof(kAddPersistentContactEventPairBytes)) &&
+        EqualBytes(addPersistent, kAddPersistentContactEventPairBytes,
+            sizeof(kAddPersistentContactEventPairBytes)) &&
+        Readable(removePersistent,
+            sizeof(kRemovePersistentContactEventPairBytes)) &&
+        EqualBytes(removePersistent,
+            kRemovePersistentContactEventPairBytes,
+            sizeof(kRemovePersistentContactEventPairBytes)) &&
+        Readable(allocateBuffer,
+            sizeof(kContactReportBufferAllocateBytes)) &&
+        EqualBytes(allocateBuffer, kContactReportBufferAllocateBytes,
+            sizeof(kContactReportBufferAllocateBytes)) &&
+        Readable(bufferLayout,
+            sizeof(kContactReportBufferLayoutBytes)) &&
+        EqualBytes(bufferLayout, kContactReportBufferLayoutBytes,
+            sizeof(kContactReportBufferLayoutBytes));
+}
+
+static bool UniquePointers(const uintptr_t* values, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!values[i]) return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (values[i] == values[j]) return false;
+    }
+    return true;
+}
+
+static int CaptureNPhaseReportState(uintptr_t unityBase,
+    uintptr_t nphaseCore, uintptr_t* actorPairs,
+    uint32_t actorPairCapacity, uintptr_t* persistentSips,
+    uint32_t persistentCapacity, uintptr_t* forceThresholdSips,
+    uint32_t forceThresholdCapacity, uint8_t* reportBufferBytes,
+    uint32_t reportBufferCapacity, NPhaseReportStateReceipt* receipt) {
+    if (!receipt) return 0;
+    InitializeNPhaseReportStateReceipt(receipt, unityBase, nphaseCore);
+    if (!unityBase || !nphaseCore)
+        return FailNPhaseReportState(receipt, SipPoolBadArgument,
+            ERROR_INVALID_PARAMETER);
+    if (!NPhaseReportStateRevisionMatches(unityBase))
+        return FailNPhaseReportState(receipt, SipPoolRevisionMismatch,
+            ERROR_REVISION_MISMATCH);
+    if (!Readable(reinterpret_cast<const void*>(nphaseCore), 0x44))
+        return FailNPhaseReportState(receipt, SipPoolUnreadable,
+            ERROR_NOACCESS);
+
+    receipt->ownerScene = *reinterpret_cast<const uintptr_t*>(nphaseCore);
+    receipt->actorPairData = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x04);
+    receipt->actorPairCount = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x08);
+    receipt->actorPairCapacityRaw = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x0C);
+    receipt->persistentData = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x10);
+    receipt->persistentCount = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x14);
+    receipt->persistentCapacityRaw = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x18);
+    receipt->nextFramePersistentIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x1C);
+    receipt->forceThresholdData = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x20);
+    receipt->forceThresholdCount = *reinterpret_cast<const uint32_t*>(
+        nphaseCore + 0x24);
+    receipt->forceThresholdCapacityRaw =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x28);
+    receipt->reportBuffer = *reinterpret_cast<const uintptr_t*>(
+        nphaseCore + 0x2C);
+    receipt->reportBufferCurrentIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x30);
+    receipt->reportBufferCurrentSize =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x34);
+    receipt->reportBufferDefaultSize =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x38);
+    receipt->reportBufferLastIndex =
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x3C);
+    receipt->reportBufferAllocationLocked =
+        *reinterpret_cast<const uint8_t*>(nphaseCore + 0x40);
+
+    uint32_t error = 0;
+    if (!receipt->ownerScene ||
+        !ReadPointerArray(receipt->actorPairData,
+            receipt->actorPairCount, receipt->actorPairCapacityRaw, &error) ||
+        !ReadPointerArray(receipt->persistentData,
+            receipt->persistentCount, receipt->persistentCapacityRaw,
+            &error) ||
+        !ReadPointerArray(receipt->forceThresholdData,
+            receipt->forceThresholdCount,
+            receipt->forceThresholdCapacityRaw, &error) ||
+        receipt->nextFramePersistentIndex > receipt->persistentCount)
+        return FailNPhaseReportState(receipt, SipPoolInvalidMetadata,
+            error ? error : ERROR_INVALID_DATA);
+    if (receipt->actorPairCount > actorPairCapacity ||
+        receipt->persistentCount > persistentCapacity ||
+        receipt->forceThresholdCount > forceThresholdCapacity ||
+        receipt->reportBufferCurrentSize > reportBufferCapacity)
+        return FailNPhaseReportState(receipt, SipPoolCapacityTooSmall,
+            ERROR_INSUFFICIENT_BUFFER);
+    if ((receipt->actorPairCount && (!actorPairs ||
+            !Writable(actorPairs, receipt->actorPairCount *
+                sizeof(uintptr_t)))) ||
+        (receipt->persistentCount && (!persistentSips ||
+            !Writable(persistentSips, receipt->persistentCount *
+                sizeof(uintptr_t)))) ||
+        (receipt->forceThresholdCount && (!forceThresholdSips ||
+            !Writable(forceThresholdSips, receipt->forceThresholdCount *
+                sizeof(uintptr_t)))) ||
+        (receipt->reportBufferCurrentSize && (!reportBufferBytes ||
+            !Writable(reportBufferBytes,
+                receipt->reportBufferCurrentSize))))
+        return FailNPhaseReportState(receipt, SipPoolBadArgument,
+            ERROR_NOACCESS);
+
+    const uintptr_t* sourceActorPairs =
+        reinterpret_cast<const uintptr_t*>(receipt->actorPairData);
+    const uintptr_t* sourcePersistent =
+        reinterpret_cast<const uintptr_t*>(receipt->persistentData);
+    const uintptr_t* sourceForce =
+        reinterpret_cast<const uintptr_t*>(receipt->forceThresholdData);
+    if (!UniquePointers(sourceActorPairs, receipt->actorPairCount) ||
+        !UniquePointers(sourcePersistent, receipt->persistentCount) ||
+        !UniquePointers(sourceForce, receipt->forceThresholdCount))
+        return FailNPhaseReportState(receipt, SipPoolDuplicateNode,
+            ERROR_DUP_NAME);
+    for (uint32_t i = 0; i < receipt->actorPairCount; ++i) {
+        const uintptr_t pair = sourceActorPairs[i];
+        if (!Readable(reinterpret_cast<const void*>(pair), 0x18) ||
+            ((*reinterpret_cast<const uint16_t*>(pair + 0x0C)) & 1u) == 0)
+            return FailNPhaseReportState(receipt, SipPoolInvalidNode,
+                ERROR_INVALID_DATA);
+    }
+    for (uint32_t i = 0; i < receipt->persistentCount; ++i) {
+        const uintptr_t sip = sourcePersistent[i];
+        if (!Readable(reinterpret_cast<const void*>(sip), 0x44) ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2C)) &
+                0x00200000u) == 0 ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2C)) &
+                0x00800000u) != 0 ||
+            *reinterpret_cast<const uint32_t*>(sip + 0x34) != i)
+            return FailNPhaseReportState(receipt, SipPoolInvalidNode,
+                ERROR_INVALID_DATA);
+    }
+    for (uint32_t i = 0; i < receipt->forceThresholdCount; ++i) {
+        const uintptr_t sip = sourceForce[i];
+        if (!Readable(reinterpret_cast<const void*>(sip), 0x44) ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2C)) &
+                0x00800000u) == 0 ||
+            ((*reinterpret_cast<const uint32_t*>(sip + 0x2C)) &
+                0x00200000u) != 0 ||
+            *reinterpret_cast<const uint32_t*>(sip + 0x34) != i)
+            return FailNPhaseReportState(receipt, SipPoolInvalidNode,
+                ERROR_INVALID_DATA);
+        if (ContainsPointer(sourcePersistent, receipt->persistentCount, sip))
+            return FailNPhaseReportState(receipt, SipPoolDuplicateNode,
+                ERROR_DUP_NAME);
+    }
+
+    if (!receipt->reportBuffer || !receipt->reportBufferCurrentSize ||
+        !receipt->reportBufferDefaultSize ||
+        receipt->reportBufferCurrentSize > 0x04000000u ||
+        receipt->reportBufferDefaultSize >
+            receipt->reportBufferCurrentSize ||
+        receipt->reportBufferCurrentIndex >
+            receipt->reportBufferCurrentSize ||
+        receipt->reportBufferAllocationLocked > 1u ||
+        (receipt->reportBufferLastIndex != 0xFFFFFFFFu &&
+            receipt->reportBufferLastIndex >=
+                receipt->reportBufferCurrentIndex) ||
+        (receipt->reportBufferCurrentSize &&
+            !Readable(reinterpret_cast<const void*>(receipt->reportBuffer),
+                receipt->reportBufferCurrentSize)))
+        return FailNPhaseReportState(receipt, SipPoolInvalidMetadata,
+            ERROR_INVALID_DATA);
+
+    receipt->actorPairOrderHash = OrderHash(sourceActorPairs,
+        receipt->actorPairCount);
+    receipt->persistentOrderHash = OrderHash(sourcePersistent,
+        receipt->persistentCount);
+    receipt->forceThresholdOrderHash = OrderHash(sourceForce,
+        receipt->forceThresholdCount);
+    receipt->reportBufferActiveHash = receipt->reportBufferCurrentIndex ?
+        ByteHash(reinterpret_cast<const void*>(receipt->reportBuffer),
+            receipt->reportBufferCurrentIndex) : 2166136261u;
+    receipt->reportBufferAllocationHash = ByteHash(
+        reinterpret_cast<const void*>(receipt->reportBuffer),
+        receipt->reportBufferCurrentSize);
+    if (receipt->actorPairCount)
+        CopyWords(actorPairs, sourceActorPairs, receipt->actorPairCount);
+    if (receipt->persistentCount)
+        CopyWords(persistentSips, sourcePersistent,
+            receipt->persistentCount);
+    if (receipt->forceThresholdCount)
+        CopyWords(forceThresholdSips, sourceForce,
+            receipt->forceThresholdCount);
+    if (receipt->reportBufferCurrentSize)
+        CopyBytes(reportBufferBytes,
+            reinterpret_cast<const void*>(receipt->reportBuffer),
+            receipt->reportBufferCurrentSize);
+
+    if (*reinterpret_cast<const uintptr_t*>(nphaseCore) !=
+            receipt->ownerScene ||
+        *reinterpret_cast<const uintptr_t*>(nphaseCore + 0x04) !=
+            receipt->actorPairData ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x08) !=
+            receipt->actorPairCount ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x0C) !=
+            receipt->actorPairCapacityRaw ||
+        *reinterpret_cast<const uintptr_t*>(nphaseCore + 0x10) !=
+            receipt->persistentData ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x14) !=
+            receipt->persistentCount ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x18) !=
+            receipt->persistentCapacityRaw ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x1C) !=
+            receipt->nextFramePersistentIndex ||
+        *reinterpret_cast<const uintptr_t*>(nphaseCore + 0x20) !=
+            receipt->forceThresholdData ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x24) !=
+            receipt->forceThresholdCount ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x28) !=
+            receipt->forceThresholdCapacityRaw ||
+        *reinterpret_cast<const uintptr_t*>(nphaseCore + 0x2C) !=
+            receipt->reportBuffer ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x30) !=
+            receipt->reportBufferCurrentIndex ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x34) !=
+            receipt->reportBufferCurrentSize ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x38) !=
+            receipt->reportBufferDefaultSize ||
+        *reinterpret_cast<const uint32_t*>(nphaseCore + 0x3C) !=
+            receipt->reportBufferLastIndex ||
+        *reinterpret_cast<const uint8_t*>(nphaseCore + 0x40) !=
+            receipt->reportBufferAllocationLocked ||
+        OrderHash(sourceActorPairs, receipt->actorPairCount) !=
+            receipt->actorPairOrderHash ||
+        OrderHash(sourcePersistent, receipt->persistentCount) !=
+            receipt->persistentOrderHash ||
+        OrderHash(sourceForce, receipt->forceThresholdCount) !=
+            receipt->forceThresholdOrderHash ||
+        (receipt->reportBufferCurrentIndex ?
+            ByteHash(reinterpret_cast<const void*>(receipt->reportBuffer),
+                receipt->reportBufferCurrentIndex) : 2166136261u) !=
+            receipt->reportBufferActiveHash ||
+        ByteHash(reinterpret_cast<const void*>(receipt->reportBuffer),
+            receipt->reportBufferCurrentSize) !=
+            receipt->reportBufferAllocationHash)
+        return FailNPhaseReportState(receipt, SipPoolInvalidMetadata,
+            ERROR_RETRY);
+
+    receipt->validationFlags = 0x7Fu;
     receipt->result = SipPoolOk;
     return 1;
 }
@@ -7463,6 +7814,19 @@ oc2_actor_pair_report_pool_capture_snapshot(
     uint32_t allocatedCapacity, ActorPairReportPoolReceipt* receipt) {
     return CaptureActorPairReportPool(unityBase, nphaseCore, freeSnapshot,
         freeCapacity, allocatedSnapshot, allocatedCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_nphase_report_state_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore, uintptr_t* actorPairs,
+    uint32_t actorPairCapacity, uintptr_t* persistentSips,
+    uint32_t persistentCapacity, uintptr_t* forceThresholdSips,
+    uint32_t forceThresholdCapacity, uint8_t* reportBufferBytes,
+    uint32_t reportBufferCapacity, NPhaseReportStateReceipt* receipt) {
+    return CaptureNPhaseReportState(unityBase, nphaseCore, actorPairs,
+        actorPairCapacity, persistentSips, persistentCapacity,
+        forceThresholdSips, forceThresholdCapacity, reportBufferBytes,
+        reportBufferCapacity, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(

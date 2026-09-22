@@ -1,5 +1,48 @@
 # Fresh-session handoff — 2026-09-08
 
+> **NPhase report-history planning milestone (2026-09-21, managed
+> r15b/native r32):** the bounded Story 1-1 f1048 -> f444 audit now captures
+> the complete PhysX contact-report container state at the same synchronous
+> checkpoint boundary as managers, SIPs, ActorPairs, report objects, and
+> manifolds.  Fresh evidence is
+> `artifacts/readiness-plan-nphase-report-f1048-to-f444-r2/`: source readiness
+> is 26 pass / 0 fail / 41 deferred; target readiness is 62 pass / 0 fail /
+> 23 deferred / 1 not-applicable.  Search and the first suffix frame remain
+> disabled.
+>
+> The target f444 state is now exact rather than inferred: the transient
+> ActorPair report set is empty, the persistent SIP list contains 10 entries
+> in captured order, its next-frame split is 10, the force-threshold list is
+> empty, and the retained ContactReportBuffer allocation is 8192 bytes with
+> active index zero.  SIP flags and physical reportPairIndex values agree with
+> every list member; the two unlisted SIPs carry index `0xFFFFFFFF`.  Two live
+> target-paused captures are byte-equivalent.  After rewind the same exact
+> containers and capacities remain, but the persistent list is empty and the
+> inactive backing-buffer bytes have a different hash.  This proves a missing
+> report-history projection, not a changed allocation or an unstable sample.
+>
+> Native API 14 captures all three ordered lists, the split boundary, buffer
+> metadata, and the full allocated buffer bytes; it also adds per-SIP report
+> stamp/index/stream fields to the owner graph.  Managed validation treats
+> them as one coherent checkpoint transaction and the readiness manifests are
+> contract version 3.  Scene-level report timestamp offsets remain explicitly
+> unmapped and no restore writes were added.  Managed r15b SHA-256 is
+> `B2FD930208AC51A00F733EE792F1FB46A2FD885DD739C0438A0A3111F765D00A`;
+> native r32 SHA-256 is
+> `55FEAB8A3C9426DC8488A2476A480BFB60377DC1CC10020405762D3BEB13B514`.
+> The target report SHA-256 is
+> `E891DCD4047C172DCAEEFA6D7DD8AA810A8211001683A62D13623F6BC7035B6A`;
+> summary SHA-256 is
+> `BBA0B55196E4C943314DECC171BAB126A32BF2795B437E55F961C16F07F5E170`.
+>
+> Continue with one unified interaction-graph transaction rather than a chain
+> of unrelated special cases: interaction registration/array order, island
+> edge ownership and deferred-delete queues, Transform-cache IDs/refcounts,
+> broadphase created-overlap order, ActorPair/SIP/manager/manifold allocation,
+> then NPhase report lists/buffer and first-output convergence.  Capture both
+> the settled f444 graph and the uninterrupted f444 -> f445 transition before
+> implementing mutation.  Preserve ordinary forward and plate-throw physics.
+
 > **ActorPair/report-history planning milestone (2026-09-21, managed
 > r14z/native r31):** the clean, bounded Story 1-1 f1048 -> f444 read-only
 > audit now has zero source or target blockers.  Source readiness is 25 pass /

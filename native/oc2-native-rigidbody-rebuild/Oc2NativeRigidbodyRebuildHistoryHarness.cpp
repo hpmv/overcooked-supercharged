@@ -120,6 +120,25 @@ struct ActorPairPoolReceipt {
 };
 
 typedef ActorPairPoolReceipt ActorPairReportPoolReceipt;
+
+struct NPhaseReportStateReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, ownerScene, actorPairData;
+    uint32_t actorPairCount, actorPairCapacityRaw;
+    uintptr_t persistentData;
+    uint32_t persistentCount, persistentCapacityRaw;
+    uint32_t nextFramePersistentIndex;
+    uintptr_t forceThresholdData;
+    uint32_t forceThresholdCount, forceThresholdCapacityRaw;
+    uintptr_t reportBuffer;
+    uint32_t reportBufferCurrentIndex, reportBufferCurrentSize;
+    uint32_t reportBufferDefaultSize, reportBufferLastIndex;
+    uint32_t reportBufferAllocationLocked;
+    uint32_t actorPairOrderHash, persistentOrderHash;
+    uint32_t forceThresholdOrderHash, reportBufferActiveHash;
+    uint32_t reportBufferAllocationHash;
+    uint32_t validationFlags;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -138,6 +157,8 @@ static_assert(sizeof(SipPoolReceipt) == 128,
     "Unexpected Win32 shape-pair-pool receipt ABI");
 static_assert(sizeof(ActorPairPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-pool receipt ABI");
+static_assert(sizeof(NPhaseReportStateReceipt) == 116,
+    "Unexpected Win32 NPhase report-state receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
 typedef int (__cdecl *CaptureSnapshot)(uintptr_t, uintptr_t*, uint32_t,
@@ -176,6 +197,9 @@ typedef int (__cdecl *CaptureActorPairSnapshot)(uintptr_t, uintptr_t,
 typedef int (__cdecl *CaptureActorPairReportSnapshot)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t,
     ActorPairReportPoolReceipt*);
+typedef int (__cdecl *CaptureNPhaseReportState)(uintptr_t, uintptr_t,
+    uintptr_t*, uint32_t, uintptr_t*, uint32_t, uintptr_t*, uint32_t,
+    uint8_t*, uint32_t, NPhaseReportStateReceipt*);
 typedef int (__cdecl *ContactRecreateStatus)(uintptr_t, uintptr_t,
     ContactRecreateReceipt*);
 typedef int (__cdecl *ContactRecreateCancel)(uintptr_t,
@@ -245,6 +269,9 @@ static const uint32_t kActorPairSlabRva = 0xA4D9BA;
 static const uint32_t kCreateActorPairReportDataRva = 0xA4E370;
 static const uint32_t kActorPairReportSlabStrideRva = 0xA4DAC4;
 static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
+static const uint32_t kAddPersistentContactEventPairRva = 0xA4CD90;
+static const uint32_t kRemovePersistentContactEventPairRva = 0xA53840;
+static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
 static const uint32_t kInitManagerRva = 0xA7E5F0;
 static const uint32_t kCreateSipRva = 0xA54430;
 static const uint32_t kGetShapeTypeRva = 0x842360;
@@ -275,6 +302,23 @@ static const uint8_t kActorPairReportSlabStrideBytes[] = {
 };
 static const uint8_t kReleaseActorPairReportDataBytes[] = {
     0x55,0x8B,0xEC,0x56,0x8D,0xB1,0x30,0x05,0x00,0x00
+};
+static const uint8_t kAddPersistentContactEventPairBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x08,0x56,0x8B,0xF1,
+    0x81,0x4B,0x2C,0x00,0x00,0x20,0x00,0x8B,0x4E,0x14,
+    0x8B,0x56,0x1C,0x3B,0xCA
+};
+static const uint8_t kRemovePersistentContactEventPairBytes[] = {
+    0x55,0x8B,0xEC,0x53,0x8B,0x5D,0x08,0x8B,0xD1,0x56,
+    0x8B,0x73,0x34,0x8B,0x42,0x1C,0x3B,0xF0
+};
+static const uint8_t kContactReportBufferAllocateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x8B,0x55,0x0C,0x53,0x57,0x8B,
+    0xF9,0xF6,0xC2,0x0F,0x74,0x06
+};
+static const uint8_t kContactReportBufferLayoutBytes[] = {
+    0x8B,0x47,0x30,0x8B,0x55,0x10,0xC1,0xE3,0x04,
+    0x8D,0x48,0x0F,0x83,0xE1,0xF0
 };
 static const uint8_t kCreateManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
@@ -397,6 +441,18 @@ static uint8_t* CreateRevisionImage() {
     CopyBytes(image + kReleaseActorPairReportDataRva,
         kReleaseActorPairReportDataBytes,
         sizeof(kReleaseActorPairReportDataBytes));
+    CopyBytes(image + kAddPersistentContactEventPairRva,
+        kAddPersistentContactEventPairBytes,
+        sizeof(kAddPersistentContactEventPairBytes));
+    CopyBytes(image + kRemovePersistentContactEventPairRva,
+        kRemovePersistentContactEventPairBytes,
+        sizeof(kRemovePersistentContactEventPairBytes));
+    CopyBytes(image + kContactReportBufferAllocateRva,
+        kContactReportBufferAllocateBytes,
+        sizeof(kContactReportBufferAllocateBytes));
+    CopyBytes(image + kContactReportBufferAllocateRva + 0x1F,
+        kContactReportBufferLayoutBytes,
+        sizeof(kContactReportBufferLayoutBytes));
     // ECX was saved by the copied prologue at [EBP-4]. Pop one 0x44-byte SIP
     // from NPhaseCore::mLLSipPool, update PxPool counters, and preserve the
     // real thiscall/RET 0x0c contract used by the hook trampoline.
@@ -927,7 +983,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 13 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1014,7 +1070,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 13 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1070,6 +1126,135 @@ static void RunActorPairReportPoolTests(uint8_t* image,
     image[kCreateActorPairReportDataRva] ^= 1;
 }
 
+static void RunNPhaseReportStateTests(uint8_t* image,
+    CaptureNPhaseReportState capture) {
+    __declspec(align(16)) uint8_t nphase[0x80] = {};
+    __declspec(align(16)) uint8_t actorPairObjects[2][0x18] = {};
+    __declspec(align(16)) uint8_t sipObjects[3][0x44] = {};
+    __declspec(align(16)) uint8_t reportBytes[32] = {};
+    uintptr_t actorPairList[2] = {
+        reinterpret_cast<uintptr_t>(actorPairObjects[1]),
+        reinterpret_cast<uintptr_t>(actorPairObjects[0])
+    };
+    uintptr_t persistentList[2] = {
+        reinterpret_cast<uintptr_t>(sipObjects[2]),
+        reinterpret_cast<uintptr_t>(sipObjects[0])
+    };
+    uintptr_t forceList[1] = {
+        reinterpret_cast<uintptr_t>(sipObjects[1])
+    };
+    *reinterpret_cast<uintptr_t*>(nphase + 0x00) =
+        reinterpret_cast<uintptr_t>(nphase + 0x60);
+    *reinterpret_cast<uintptr_t*>(nphase + 0x04) =
+        reinterpret_cast<uintptr_t>(actorPairList);
+    *reinterpret_cast<uint32_t*>(nphase + 0x08) = 2;
+    *reinterpret_cast<uint32_t*>(nphase + 0x0C) = 0x80000004u;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x10) =
+        reinterpret_cast<uintptr_t>(persistentList);
+    *reinterpret_cast<uint32_t*>(nphase + 0x14) = 2;
+    *reinterpret_cast<uint32_t*>(nphase + 0x18) = 4;
+    *reinterpret_cast<uint32_t*>(nphase + 0x1C) = 1;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x20) =
+        reinterpret_cast<uintptr_t>(forceList);
+    *reinterpret_cast<uint32_t*>(nphase + 0x24) = 1;
+    *reinterpret_cast<uint32_t*>(nphase + 0x28) = 2;
+    *reinterpret_cast<uintptr_t*>(nphase + 0x2C) =
+        reinterpret_cast<uintptr_t>(reportBytes);
+    *reinterpret_cast<uint32_t*>(nphase + 0x30) = 19;
+    *reinterpret_cast<uint32_t*>(nphase + 0x34) = 32;
+    *reinterpret_cast<uint32_t*>(nphase + 0x38) = 16;
+    *reinterpret_cast<uint32_t*>(nphase + 0x3C) = 16;
+    nphase[0x40] = 0;
+    for (uint32_t i = 0; i < 2; ++i)
+        *reinterpret_cast<uint16_t*>(actorPairObjects[i] + 0x0C) = 1;
+    *reinterpret_cast<uint32_t*>(sipObjects[2] + 0x2C) = 0x00200000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[2] + 0x34) = 0;
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x2C) = 0x00200000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 1;
+    *reinterpret_cast<uint32_t*>(sipObjects[1] + 0x2C) = 0x00800000u;
+    *reinterpret_cast<uint32_t*>(sipObjects[1] + 0x34) = 0;
+    for (uint32_t i = 0; i < sizeof(reportBytes); ++i)
+        reportBytes[i] = static_cast<uint8_t>(0x80u + i);
+
+    uintptr_t capturedActorPairs[4] = {};
+    uintptr_t capturedPersistent[4] = {};
+    uintptr_t capturedForce[4] = {};
+    uint8_t capturedBytes[32] = {};
+    uint8_t nphaseBefore[sizeof(nphase)] = {};
+    uint8_t pairBefore[sizeof(actorPairObjects)] = {};
+    uint8_t sipBefore[sizeof(sipObjects)] = {};
+    uint8_t reportBefore[sizeof(reportBytes)] = {};
+    memcpy(nphaseBefore, nphase, sizeof(nphase));
+    memcpy(pairBefore, actorPairObjects, sizeof(actorPairObjects));
+    memcpy(sipBefore, sipObjects, sizeof(sipObjects));
+    memcpy(reportBefore, reportBytes, sizeof(reportBytes));
+    NPhaseReportStateReceipt receipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
+        capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
+        &receipt) == 1, "NPhase report-state capture succeeds");
+    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+        receipt.structSize == sizeof(receipt) &&
+        receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
+        receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
+        receipt.nextFramePersistentIndex == 1 &&
+        receipt.forceThresholdCount == 1 &&
+        receipt.reportBufferCurrentIndex == 19 &&
+        receipt.reportBufferCurrentSize == 32 &&
+        receipt.reportBufferDefaultSize == 16 &&
+        receipt.reportBufferLastIndex == 16 &&
+        receipt.validationFlags == 0x7F,
+        "NPhase report receipt proves lists, split, and buffer metadata");
+    Check(Same(capturedActorPairs, actorPairList, 2) &&
+        Same(capturedPersistent, persistentList, 2) &&
+        Same(capturedForce, forceList, 1) &&
+        memcmp(capturedBytes, reportBytes, sizeof(reportBytes)) == 0,
+        "NPhase report capture preserves exact list and allocation bytes");
+    Check(memcmp(nphaseBefore, nphase, sizeof(nphase)) == 0 &&
+        memcmp(pairBefore, actorPairObjects, sizeof(actorPairObjects)) == 0 &&
+        memcmp(sipBefore, sipObjects, sizeof(sipObjects)) == 0 &&
+        memcmp(reportBefore, reportBytes, sizeof(reportBytes)) == 0,
+        "NPhase report capture is non-mutating");
+
+    NPhaseReportStateReceipt repeated = {};
+    uintptr_t repeatedPairs[4] = {};
+    uintptr_t repeatedPersistent[4] = {};
+    uintptr_t repeatedForce[4] = {};
+    uint8_t repeatedBytes[32] = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), repeatedPairs, 4,
+        repeatedPersistent, 4, repeatedForce, 4, repeatedBytes, 32,
+        &repeated) == 1 && memcmp(&receipt, &repeated, sizeof(receipt)) == 0 &&
+        Same(capturedPersistent, repeatedPersistent, 2) &&
+        memcmp(capturedBytes, repeatedBytes, sizeof(capturedBytes)) == 0,
+        "NPhase report capture is byte-repeatable");
+
+    NPhaseReportStateReceipt shortReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
+        capturedPersistent, 4, capturedForce, 4, capturedBytes, 31,
+        &shortReceipt) == 0 && shortReceipt.result == 8,
+        "NPhase report capture rejects a short full-allocation buffer");
+
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 0;
+    NPhaseReportStateReceipt indexReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
+        capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
+        &indexReceipt) == 0 && indexReceipt.result == 6,
+        "NPhase report capture rejects an incoherent SIP list index");
+    *reinterpret_cast<uint32_t*>(sipObjects[0] + 0x34) = 1;
+
+    image[kRemovePersistentContactEventPairRva] ^= 1;
+    NPhaseReportStateReceipt revisionReceipt = {};
+    Check(capture(reinterpret_cast<uintptr_t>(image),
+        reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
+        capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
+        &revisionReceipt) == 0 && revisionReceipt.result == 3,
+        "NPhase report capture rejects a shipped-code revision mismatch");
+    image[kRemovePersistentContactEventPairRva] ^= 1;
+}
+
 static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
     CaptureManifoldSnapshot capture, RestoreManifoldSnapshot restore) {
     const uint32_t poolOffset = poolKind == 0 ? 0x2E4 : 0x40C;
@@ -1088,7 +1273,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 13 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -1878,6 +2063,9 @@ int main(int argc, char** argv) {
     CaptureActorPairReportSnapshot captureActorPairReport =
         reinterpret_cast<CaptureActorPairReportSnapshot>(GetProcAddress(
             library, "oc2_actor_pair_report_pool_capture_snapshot"));
+    CaptureNPhaseReportState captureNPhaseReport =
+        reinterpret_cast<CaptureNPhaseReportState>(GetProcAddress(
+            library, "oc2_nphase_report_state_capture_snapshot"));
     DirtyAction installDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_install"));
     DirtyAction statusDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
@@ -1913,7 +2101,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 13, "API version");
+    Check(version && version() == 14, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -1922,6 +2110,8 @@ int main(int argc, char** argv) {
     Check(captureActorPair != 0, "ActorPair pool capture export");
     Check(captureActorPairReport != 0,
         "ActorPair report pool capture export");
+    Check(captureNPhaseReport != 0,
+        "NPhase report-state capture export");
     Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
@@ -1929,6 +2119,7 @@ int main(int argc, char** argv) {
         statusRecreate && cancelRecreate, "contact recreation exports");
     if (!version || !capture || !restore || !captureManifold || !captureSip ||
         !captureActorPair || !captureActorPairReport ||
+        !captureNPhaseReport ||
         !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
         !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
         !uninstallDirty || !installObserver || !uninstallObserver ||
@@ -1955,7 +2146,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 13 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -2003,6 +2194,7 @@ int main(int argc, char** argv) {
     if (revisionImage) {
         RunActorPairPoolTests(revisionImage, captureActorPair);
         RunActorPairReportPoolTests(revisionImage, captureActorPairReport);
+        RunNPhaseReportStateTests(revisionImage, captureNPhaseReport);
         RunManifoldPoolTests(revisionImage, 0, captureManifold,
             restoreManifold);
         RunManifoldPoolTests(revisionImage, 1, captureManifold,
