@@ -6,6 +6,52 @@ module hashes, and the full evidence trail, continue with
 [`ANIMATOR-REWIND-PARITY.md`](ANIMATOR-REWIND-PARITY.md). Where older handoff
 notes differ, this snapshot and that detailed Animator note control.
 
+## Latest result — the complete PhysX interaction graph is captured
+
+Managed RigidbodyActorRebuild r16c and native API 15/r33 extend the atomic
+f444 sidecar through `InteractionScene`: the six ordered global interaction
+arrays, ordered active bodies and two-way split, deterministic actor endpoint
+enumeration, every actor's ordered cached interaction slots and bilateral
+indices, semantic SIP shape-core keys, and the exact 8/16/32 pointer-pool slab,
+ownership, and free-chain topology.  The capture is caller-owned,
+revision-guarded, read-only, phase-stable, and repeated byte-for-byte before
+the report is admitted.
+
+Fresh evidence is
+`artifacts/readiness-plan-interaction-graph-f1048-to-f444-r1/`.  Source
+readiness is 27 pass / 0 fail / 41 deferred; restored-target readiness is 65
+pass / 0 fail / 28 deferred / 1 not-applicable.  The run stops at restored
+f444 before consuming the sidecar or running f445, and all route segments run
+minimized without foreground ownership.  No search ran.
+
+The uninterrupted target graph has five active bodies (split 1), global counts
+`[12,0,4,2,0,0]`, 13 actors, 18 interactions, and 36 bilateral actor slots.
+The 8/16/32 pools are 3 used / 29 free, 2 used / 30 free, and empty.  Its graph
+hash is `0x3C89501A`; its pool hash is `0xD8E15210`.  After rewind, two live
+captures repeat exactly at graph hash `0x6EADEDB1`, but there are no active
+bodies, the global counts are `[0,0,2,10,0,0]`, only 10 actors / 12
+interactions / 24 slots remain, all 12 target SIP semantic keys are absent,
+and the pool hash is `0x3DCEFC06`.  This localizes the pre-f445 gap to a stable
+whole-graph projection rather than sampling noise or the already-restored
+contact-manager LIFO alone.
+
+Managed SHA-256 is
+`81D3AD1E0FCE552B162F2321118E401888C68A1E2556C79F9E99E9AC3B7EC45B`;
+native SHA-256 is
+`C97C5FD249462537444309820EE28D6FDBD54499FD92511C15404D79DCA41669`.
+The target report SHA-256 is
+`EFCC535E7ECEEF883446ACE45945428EAD73D5E05705AFE4C4A81AEC845DA264`;
+summary SHA-256 is
+`D15DC79F83E2D99D56C474E948AEA83AD874B58F40180A4389FC456EB9D1656D`.
+
+The next planning unit is still read-only: add the settled Transform-cache
+allocator/ID/refcount snapshot and an observation at `finishBroadPhase` for
+the uninterrupted f444 -> f445 created/deleted arrays, followed by the full
+island node/edge state and ordered C/D/B/J change queues at first island
+update.  Then design a single semantic restore spanning those layers plus the
+already captured manager/SIP/ActorPair/report graph.  Do not enable search or
+claim first-output parity yet.
+
 ## Latest result — NPhase report history is fully captured and planned
 
 Managed RigidbodyActorRebuild r15b and native API 14/r32 extend the atomic

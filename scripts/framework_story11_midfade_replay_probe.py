@@ -359,6 +359,7 @@ def main():
             "rigidbody.target-actor-pair-sidecar",
             "rigidbody.target-actor-pair-report-sidecar",
             "rigidbody.target-nphase-report-sidecar",
+            "rigidbody.target-interaction-graph-sidecar",
             "rigidbody.target-large-sidecar", "rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar", "rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows", "rigidbody.native-audit-repeatability",
@@ -387,6 +388,13 @@ def main():
             "rigidbody.nphase-report.target-membership",
             "rigidbody.nphase-report.live-projection",
             "rigidbody.nphase-report.scene-timestamps",
+            "rigidbody.interaction-graph.repeatability",
+            "rigidbody.interaction-graph.layout-identity",
+            "rigidbody.interaction-graph.active-body-order",
+            "rigidbody.interaction-graph.global-order",
+            "rigidbody.interaction-graph.actor-order-and-cached-indices",
+            "rigidbody.interaction-graph.sip-semantic-keys",
+            "rigidbody.interaction-graph.pointer-pool-topology",
         )
         rigidbody_required = list(rigidbody_base_required)
         if phase == "target-paused":
@@ -406,7 +414,7 @@ def main():
             actor.get("provider") == "authoring-rigidbody-actor-rebuild-v1" and
             actor.get("phase") == phase and actor.get("sourceFrame") == 1048 and
             actor.get("targetFrame") == args.target_frame and
-            provider_coverage.get("contractVersion") == 3 and
+            provider_coverage.get("contractVersion") == 4 and
             set(provider_coverage.get("required", [])) == set(rigidbody_required) and
             provider_coverage.get("uncovered") == [] and
             provider_coverage.get("duplicates") == [] and
@@ -560,7 +568,7 @@ def main():
                         "The aggregate omitted required readiness check identifiers."
                         if missing_ids else
                         "Every required aggregate readiness check is explicitly represented."),
-            "evidence": {"contractVersion": 3, "required": required_ids,
+            "evidence": {"contractVersion": 4, "required": required_ids,
                          "uncovered": missing_ids, "duplicates": duplicate_ids},
             "mutation": {"gameState": False, "moduleState": False,
                          "nativeState": False},
@@ -584,7 +592,7 @@ def main():
             "blockers": blockers,
             "deferred": deferred,
             "coverage": {
-                "contractVersion": 3,
+                "contractVersion": 4,
                 "required": required_ids,
                 "uncovered": missing_ids,
                 "duplicates": duplicate_ids,

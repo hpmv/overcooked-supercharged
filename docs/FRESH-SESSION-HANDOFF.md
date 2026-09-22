@@ -1,5 +1,51 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Complete interaction-graph capture milestone (2026-09-21, managed
+> r16c/native r33):** the bounded Story 1-1 f1048 -> f444 audit now captures
+> the complete PhysX interaction graph in the same synchronous checkpoint
+> transaction as managers, SIPs, ActorPairs, manifolds, and report history.
+> Fresh evidence is
+> `artifacts/readiness-plan-interaction-graph-f1048-to-f444-r1/`: source
+> readiness is 27 pass / 0 fail / 41 deferred; target readiness is 65 pass /
+> 0 fail / 28 deferred / 1 not-applicable.  The fixture stopped at restored
+> f444 before f445; no suffix frame or route search ran, and every advancing
+> input lease remained minimized and non-foreground.
+>
+> The original f444 graph is now exact: five ordered active bodies with
+> two-way split 1; global interaction counts `[12,0,4,2,0,0]`; 13 actors,
+> 18 interactions, and 36 bilateral cached actor slots.  Its 8/16/32-byte
+> pointer pools are respectively 3 used / 29 free, 2 used / 30 free, and
+> empty.  The target graph hash is `0x3C89501A` and pool hash is
+> `0xD8E15210`.  After rewind, two caller-owned captures are byte-equivalent
+> (`0x6EADEDB1`), but active bodies are empty, global counts are
+> `[0,0,2,10,0,0]`, only 10 actors / 12 interactions / 24 slots remain, all
+> 12 target SIP semantic keys are absent, and the pool hash is `0x3DCEFC06`.
+> This proves a stable missing whole-graph projection, not an unstable sample
+> or merely a contact-manager free-stack problem.
+>
+> Native API 15 is revision-guarded and read-only.  It captures all six
+> global arrays, the active-body prefix, every actor's ordered interaction
+> slots and bilateral cached indices, semantic SIP keys, and the exact slab,
+> ownership, and free-chain topology of the 8/16/32 pointer pools.  The native
+> harness passes, including 20 repeated runs, corruption/capacity cases,
+> concurrent-read retry, and revision rejection.  Managed r16c SHA-256 is
+> `81D3AD1E0FCE552B162F2321118E401888C68A1E2556C79F9E99E9AC3B7EC45B`;
+> native r33 SHA-256 is
+> `C97C5FD249462537444309820EE28D6FDBD54499FD92511C15404D79DCA41669`.
+> The target report SHA-256 is
+> `EFCC535E7ECEEF883446ACE45945428EAD73D5E05705AFE4C4A81AEC845DA264`;
+> summary SHA-256 is
+> `D15DC79F83E2D99D56C474E948AEA83AD874B58F40180A4389FC456EB9D1656D`.
+>
+> Continue the same read-only planning pass before mutation.  Capture the
+> settled Transform-cache allocator/IDs/refcounts and observe the exact
+> uninterrupted `finishBroadPhase` f444 -> f445 created/deleted arrays; then
+> capture the full island node/edge allocator and C/D/B/J change queues at the
+> first island-update boundary.  Only then design one atomic semantic restore
+> across cache IDs, overlaps, interaction registration, island ownership,
+> manager/SIP/ActorPair allocation, and report history.  Preserve ordinary
+> forward and plate-throw physics.
+
 > **NPhase report-history planning milestone (2026-09-21, managed
 > r15b/native r32):** the bounded Story 1-1 f1048 -> f444 audit now captures
 > the complete PhysX contact-report container state at the same synchronous

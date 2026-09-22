@@ -507,6 +507,120 @@ struct NPhaseReportStateReceipt {
     uint32_t validationFlags;
 };
 
+// Caller-owned, read-only projection of Sc::InteractionScene and every
+// registration/index relation that can affect the next simulation step.
+struct InteractionGraphActorRecord {
+    uintptr_t actor;
+    uintptr_t vtable;
+    uintptr_t inlineSlots[4];
+    uintptr_t interactionsData;
+    uintptr_t firstElement;
+    uintptr_t interactionScene;
+    uint32_t sceneArrayIndex;
+    uint32_t interactionOutputStart;
+    uint32_t interactionCount;
+    uint32_t interactionCapacity;
+    uint32_t activeBodyIndex;
+    uint32_t interactionOrderHash;
+    uint16_t transferringCount;
+    uint16_t uniqueCount;
+    uint16_t countedCount;
+    uint8_t actorType;
+    uint8_t islandNodeInfo;
+    uint32_t validationFlags;
+};
+
+struct InteractionGraphInteractionRecord {
+    uintptr_t interaction;
+    uintptr_t vtable;
+    uintptr_t actor0;
+    uintptr_t actor1;
+    uintptr_t element0;
+    uintptr_t element1;
+    uintptr_t shapeCore0;
+    uintptr_t shapeCore1;
+    uintptr_t pxsShapeCore0;
+    uintptr_t pxsShapeCore1;
+    uintptr_t semanticLow;
+    uintptr_t semanticHigh;
+    uint32_t sceneId;
+    uint32_t globalIndex;
+    uint32_t active;
+    uint16_t actorId0;
+    uint16_t actorId1;
+    uint8_t interactionType;
+    uint8_t interactionFlags;
+    uint16_t reserved;
+    uint32_t validationFlags;
+};
+
+struct InteractionGraphPoolReceipt {
+    uintptr_t pool;
+    uintptr_t slabData;
+    uintptr_t freeHead;
+    uint32_t blockCapacity;
+    uint32_t blockBytes;
+    uint32_t inlineBufferUsed;
+    uint32_t slabCount;
+    uint32_t slabCapacityRaw;
+    uint32_t elementsPerSlab;
+    uint32_t used;
+    uint32_t unreleasedFree;
+    uint32_t slabSize;
+    uint32_t totalElements;
+    uint32_t freeCount;
+    uint32_t slabOutputStart;
+    uint32_t freeOutputStart;
+    uint32_t slabOrderHash;
+    uint32_t freeOrderHash;
+    uint32_t usedOwnerHash;
+    uint32_t validationFlags;
+};
+
+struct InteractionGraphReceipt {
+    uint32_t apiVersion;
+    uint32_t structSize;
+    uint32_t result;
+    uint32_t lastError;
+    uintptr_t unityBase;
+    uintptr_t nphaseCore;
+    uintptr_t ownerScene;
+    uintptr_t interactionScene;
+    uintptr_t llContext;
+    uint32_t timestamp;
+    uintptr_t activeBodiesData;
+    uint32_t activeBodiesCount;
+    uint32_t activeBodiesCapacityRaw;
+    uint32_t activeTwoWayStart;
+    uintptr_t globalData[6];
+    uint32_t globalCount[6];
+    uint32_t globalCapacityRaw[6];
+    uint32_t globalActiveCount[6];
+    uint32_t globalOrderHash[6];
+    uint32_t activeBodiesRequired;
+    uint32_t activeBodiesWritten;
+    uint32_t actorsRequired;
+    uint32_t actorsWritten;
+    uint32_t interactionsRequired;
+    uint32_t interactionsWritten;
+    uint32_t actorSlotsRequired;
+    uint32_t actorSlotsWritten;
+    uint32_t poolSlabsRequired;
+    uint32_t poolSlabsWritten;
+    uint32_t poolFreeRequired;
+    uint32_t poolFreeWritten;
+    uint32_t actorHash;
+    uint32_t interactionHash;
+    uint32_t actorSlotHash;
+    uint32_t poolHash;
+    uint32_t graphHash;
+    uint32_t validationFlags;
+    uint32_t invalidKind;
+    uint32_t invalidIndex;
+    uint32_t detail;
+    InteractionGraphPoolReceipt pools[3];
+};
+
 struct ManifoldPoolReceipt {
     uint32_t apiVersion;
     uint32_t structSize;
@@ -857,6 +971,14 @@ static_assert(sizeof(ActorPairReportPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-report-pool receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
+static_assert(sizeof(InteractionGraphActorRecord) == 72,
+    "Unexpected Win32 interaction-graph actor ABI");
+static_assert(sizeof(InteractionGraphInteractionRecord) == 72,
+    "Unexpected Win32 interaction-graph interaction ABI");
+static_assert(sizeof(InteractionGraphPoolReceipt) == 80,
+    "Unexpected Win32 interaction-graph pool ABI");
+static_assert(sizeof(InteractionGraphReceipt) == 500,
+    "Unexpected Win32 interaction-graph receipt ABI");
 static_assert(sizeof(DirtyInteractionKey) == 16,
     "Unexpected Win32 dirty-interaction key ABI");
 static_assert(sizeof(DirtyInteractionOrderReceipt) == 96,
@@ -1040,6 +1162,20 @@ enum DirtyInteractionOrderAction : uint32_t {
     DirtyInteractionOrderRestore = 2
 };
 
+enum InteractionGraphResult : uint32_t {
+    InteractionGraphOk = 1,
+    InteractionGraphBadArgument = 2,
+    InteractionGraphRevisionMismatch = 3,
+    InteractionGraphUnreadable = 4,
+    InteractionGraphInvalidMetadata = 5,
+    InteractionGraphCapacityTooSmall = 6,
+    InteractionGraphInvalidActiveBody = 7,
+    InteractionGraphInvalidInteraction = 8,
+    InteractionGraphInvalidActor = 9,
+    InteractionGraphInvalidPool = 10,
+    InteractionGraphUnstable = 11
+};
+
 enum DirtyInteractionRestoreMode : uint32_t {
     DirtyInteractionRestoreNone = 0,
     DirtyInteractionRestoreExact = 1,
@@ -1142,7 +1278,7 @@ enum InvalidateKinematicTargetResult : uint32_t {
     InvalidateKinematicTargetReadbackChanged = 9
 };
 
-static const uint32_t kApiVersion = 14;
+static const uint32_t kApiVersion = 15;
 static const uint32_t kMaximumShapePoses = 64;
 static const uint32_t kMaximumContactManagers = 4096;
 static const uint32_t kMaximumManifolds = 4096;
@@ -1150,6 +1286,10 @@ static const uint32_t kMaximumShapeInstancePairs = 4096;
 static const uint32_t kMaximumContactRecreateRows = 32;
 static const uint32_t kMaximumDirtyInteractions = 4096;
 static const uint32_t kMaximumDirtyHashSize = 8192;
+static const uint32_t kMaximumInteractionGraphActors = 4096;
+static const uint32_t kMaximumInteractionGraphInteractions = 16384;
+static const uint32_t kMaximumInteractionGraphActorSlots = 32768;
+static const uint32_t kMaximumInteractionGraphPoolEntries = 65536;
 static const uint32_t kCleanupRva = 0x481ED0;
 static const uint32_t kCreateRva = 0x482510;
 static const uint32_t kGetShapesRva = 0xA10740;
@@ -1164,6 +1304,21 @@ static const uint32_t kReleaseActorPairReportDataRva = 0xA522A0;
 static const uint32_t kAddPersistentContactEventPairRva = 0xA4CD90;
 static const uint32_t kRemovePersistentContactEventPairRva = 0xA53840;
 static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
+static const uint32_t kInteractionSceneCtorRva = 0xA40570;
+static const uint32_t kInteractionSceneCtorPool16Rva = 0xA40623;
+static const uint32_t kInteractionSceneCtorPool32Rva = 0xA40639;
+static const uint32_t kInteractionSceneCtorTailRva = 0xA4064F;
+static const uint32_t kInteractionActorCtorLayoutRva = 0xA3F74C;
+static const uint32_t kInteractionActorReallocRva = 0xA3FA90;
+static const uint32_t kInteractionActorRegisterRva = 0xA3FB40;
+static const uint32_t kInteractionActorUnregisterRva = 0xA3FD50;
+static const uint32_t kInteractionPointerAllocateRva = 0xA40E60;
+static const uint32_t kInteractionPointerFreeRva = 0xA411D0;
+static const uint32_t kInteractionActiveTestRva = 0xA41EC0;
+static const uint32_t kInteractionActivateRva = 0xA41EE0;
+static const uint32_t kInteractionDeactivateRva = 0xA41F40;
+static const uint32_t kInteractionRegisterRva = 0xA420B0;
+static const uint32_t kInteractionUnregisterRva = 0xA42950;
 static const uint32_t kUpdateDirtyInteractionsRva = 0xA540F0;
 static const uint32_t kLargeManifoldPoolRva = 0xA69A90;
 static const uint32_t kSphereManifoldPoolRva = 0xA69AC0;
@@ -1242,6 +1397,69 @@ static const uint8_t kContactReportBufferAllocateBytes[] = {
 static const uint8_t kContactReportBufferLayoutBytes[] = {
     0x8B,0x47,0x30,0x8B,0x55,0x10,0xC1,0xE3,0x04,
     0x8D,0x48,0x0F,0x83,0xE1,0xF0
+};
+static const uint8_t kInteractionSceneCtorBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x56,0x8B,0xF1,0x8D,0x45,0xFF,
+    0x68,0x00,0x04,0x00,0x00,0x6A,0x20,0x50,0xC7,0x06,
+    0x00,0x00,0x00,0x00,0x8D,0x4E,0x70
+};
+static const uint8_t kInteractionSceneCtorPool16Bytes[] = {
+    0x68,0x00,0x08,0x00,0x00,0x6A,0x20,0x8D,0x45,0xFF,0x50,
+    0x8D,0x8E,0x98,0x01,0x00,0x00
+};
+static const uint8_t kInteractionSceneCtorPool32Bytes[] = {
+    0x68,0x00,0x10,0x00,0x00,0x6A,0x20,0x8D,0x45,0xFF,0x50,
+    0x8D,0x8E,0xC0,0x02,0x00,0x00
+};
+static const uint8_t kInteractionSceneCtorTailBytes[] = {
+    0x8B,0x45,0x08,0x89,0x86,0xF0,0x03,0x00,0x00,0x8B,0xC6,
+    0xC7,0x86,0xE8,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+    0xC7,0x86,0xEC,0x03,0x00,0x00,0x00,0x00,0x00,0x00
+};
+static const uint8_t kInteractionActorCtorLayoutBytes[] = {
+    0xC7,0x41,0x14,0x00,0x00,0x00,0x00,
+    0xC7,0x41,0x18,0x00,0x00,0x00,0x00,
+    0xC7,0x41,0x1C,0x00,0x00,0x00,0x00,0x89,0x41,0x24
+};
+static const uint8_t kInteractionActorReallocBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0xD1,0x8B,0x4D,0x14,
+    0x89,0x55,0xFC,0x56,0x57,0x85,0xC9
+};
+static const uint8_t kInteractionActorRegisterBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x53,0x56,0x57,0x8B,0x7D,0x08,
+    0x8B,0xF1,0x8B,0x47,0x04,0x0F,0xB6,0x4F,0x14
+};
+static const uint8_t kInteractionActorUnregisterBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x57,0x8B,0x7D,0x08,0x8B,0xF1,
+    0x39,0x77,0x04,0x75,0x06,0x0F,0xB7,0x57,0x10
+};
+static const uint8_t kInteractionPointerAllocateBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x08,0x56,0x83,0xF8,0x08,0x75,0x32,
+    0x83,0xB9,0x94,0x01,0x00,0x00,0x00,0x8D,0x71,0x70
+};
+static const uint8_t kInteractionPointerFreeBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x0C,0x83,0xF8,0x08,0x75,0x4A,
+    0x56,0x8D,0x71,0x70,0x8B,0x4D,0x08
+};
+static const uint8_t kInteractionActiveTestBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x08,0x0F,0xB6,0x50,0x14,
+    0x8B,0x40,0x0C,0x3B,0x44,0x91,0x58
+};
+static const uint8_t kInteractionActivateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x56,0x8B,0x75,0x08,0x57,
+    0x8D,0x79,0x58,0x0F,0xB6,0x46,0x14
+};
+static const uint8_t kInteractionDeactivateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x57,0x8B,0x7D,0x08,0x89,0x4D,0xFC,
+    0x0F,0xB6,0x47,0x14
+};
+static const uint8_t kInteractionRegisterBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x56,0x57,0x8B,0x7D,0x08,
+    0x8B,0xD1,0x89,0x55,0xF8,0x0F,0xB6,0x4F,0x14
+};
+static const uint8_t kInteractionUnregisterBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x8B,0x55,0x08,0x53,0x56,0x57,
+    0x0F,0xB6,0x7A,0x14,0x8B,0x5A,0x0C
 };
 static const uint8_t kCreateContactManagerPoolBytes[] = {
     0x83,0xBB,0xCC,0x02,0x00,0x00,0x00,0x56,0x8D,0xB3,0xB8,0x02,0x00,0x00
@@ -5615,6 +5833,802 @@ static int CaptureNPhaseReportState(uintptr_t unityBase,
     return 1;
 }
 
+struct InteractionGraphArrayHeader {
+    uintptr_t data;
+    uint32_t count;
+    uint32_t capacityRaw;
+};
+
+static int FailInteractionGraph(InteractionGraphReceipt* receipt,
+    InteractionGraphResult result, uint32_t error, uint32_t kind,
+    uint32_t index, uint32_t detail) {
+    receipt->result = result;
+    receipt->lastError = error;
+    receipt->invalidKind = kind;
+    receipt->invalidIndex = index;
+    receipt->detail = detail;
+    SetLastError(error);
+    return 0;
+}
+
+static bool InteractionGraphCodeMatches(uintptr_t unityBase) {
+    struct CodeGuard {
+        uint32_t rva;
+        const uint8_t* bytes;
+        uint32_t count;
+    };
+    const CodeGuard guards[] = {
+        {kInteractionSceneCtorRva, kInteractionSceneCtorBytes,
+            sizeof(kInteractionSceneCtorBytes)},
+        {kInteractionSceneCtorPool16Rva, kInteractionSceneCtorPool16Bytes,
+            sizeof(kInteractionSceneCtorPool16Bytes)},
+        {kInteractionSceneCtorPool32Rva, kInteractionSceneCtorPool32Bytes,
+            sizeof(kInteractionSceneCtorPool32Bytes)},
+        {kInteractionSceneCtorTailRva, kInteractionSceneCtorTailBytes,
+            sizeof(kInteractionSceneCtorTailBytes)},
+        {kInteractionActorCtorLayoutRva, kInteractionActorCtorLayoutBytes,
+            sizeof(kInteractionActorCtorLayoutBytes)},
+        {kInteractionActorReallocRva, kInteractionActorReallocBytes,
+            sizeof(kInteractionActorReallocBytes)},
+        {kInteractionActorRegisterRva, kInteractionActorRegisterBytes,
+            sizeof(kInteractionActorRegisterBytes)},
+        {kInteractionActorUnregisterRva, kInteractionActorUnregisterBytes,
+            sizeof(kInteractionActorUnregisterBytes)},
+        {kInteractionPointerAllocateRva, kInteractionPointerAllocateBytes,
+            sizeof(kInteractionPointerAllocateBytes)},
+        {kInteractionPointerFreeRva, kInteractionPointerFreeBytes,
+            sizeof(kInteractionPointerFreeBytes)},
+        {kInteractionActiveTestRva, kInteractionActiveTestBytes,
+            sizeof(kInteractionActiveTestBytes)},
+        {kInteractionActivateRva, kInteractionActivateBytes,
+            sizeof(kInteractionActivateBytes)},
+        {kInteractionDeactivateRva, kInteractionDeactivateBytes,
+            sizeof(kInteractionDeactivateBytes)},
+        {kInteractionRegisterRva, kInteractionRegisterBytes,
+            sizeof(kInteractionRegisterBytes)},
+        {kInteractionUnregisterRva, kInteractionUnregisterBytes,
+            sizeof(kInteractionUnregisterBytes)}
+    };
+    if (!unityBase) return false;
+    for (uint32_t i = 0; i < sizeof(guards) / sizeof(guards[0]); ++i) {
+        const void* address = reinterpret_cast<const void*>(
+            unityBase + guards[i].rva);
+        if (!Readable(address, guards[i].count) ||
+            !EqualBytes(address, guards[i].bytes, guards[i].count))
+            return false;
+    }
+    return true;
+}
+
+static bool ReadInteractionGraphArray(uintptr_t address,
+    InteractionGraphArrayHeader& header, uint32_t maximum) {
+    if (!Readable(reinterpret_cast<const void*>(address), 12)) return false;
+    header.data = *reinterpret_cast<const uintptr_t*>(address);
+    header.count = *reinterpret_cast<const uint32_t*>(address + 4);
+    header.capacityRaw = *reinterpret_cast<const uint32_t*>(address + 8);
+    const uint32_t capacity = header.capacityRaw & 0x7FFFFFFFu;
+    return header.count <= capacity && header.count <= maximum &&
+        (!header.count || (header.data && Readable(
+            reinterpret_cast<const void*>(header.data),
+            header.count * sizeof(uintptr_t))));
+}
+
+static uint32_t FindInteractionGraphActor(const uintptr_t* actors,
+    uint32_t count, uintptr_t actor) {
+    return PointerIndex(actors, count, actor);
+}
+
+static bool AddInteractionGraphActor(uintptr_t* actors, uint32_t& count,
+    uintptr_t actor) {
+    if (!actor) return false;
+    if (FindInteractionGraphActor(actors, count, actor) != 0xFFFFFFFFu)
+        return true;
+    if (count >= kMaximumInteractionGraphActors) return false;
+    actors[count++] = actor;
+    return true;
+}
+
+static uint32_t FindInteractionGraphRecord(
+    const InteractionGraphInteractionRecord* records, uint32_t count,
+    uintptr_t interaction) {
+    for (uint32_t i = 0; i < count; ++i)
+        if (records[i].interaction == interaction) return i;
+    return 0xFFFFFFFFu;
+}
+
+static bool FillInteractionGraphInteraction(uintptr_t interaction,
+    uint32_t expectedType, uint32_t globalIndex, uint32_t activeCount,
+    InteractionGraphInteractionRecord& record) {
+    ZeroMemory(&record, sizeof(record));
+    if (!interaction ||
+        !Readable(reinterpret_cast<const void*>(interaction), 0x18))
+        return false;
+    record.interaction = interaction;
+    record.vtable = *reinterpret_cast<const uintptr_t*>(interaction);
+    record.actor0 = *reinterpret_cast<const uintptr_t*>(interaction + 0x04);
+    record.actor1 = *reinterpret_cast<const uintptr_t*>(interaction + 0x08);
+    record.sceneId = *reinterpret_cast<const uint32_t*>(interaction + 0x0C);
+    record.actorId0 = *reinterpret_cast<const uint16_t*>(interaction + 0x10);
+    record.actorId1 = *reinterpret_cast<const uint16_t*>(interaction + 0x12);
+    record.interactionType = *reinterpret_cast<const uint8_t*>(
+        interaction + 0x14);
+    record.interactionFlags = *reinterpret_cast<const uint8_t*>(
+        interaction + 0x15);
+    record.globalIndex = globalIndex;
+    record.active = globalIndex < activeCount ? 1u : 0u;
+    if (!record.vtable || !record.actor0 || !record.actor1 ||
+        record.actor0 == record.actor1 || record.sceneId != globalIndex ||
+        record.interactionType != expectedType ||
+        record.actorId0 == 0xFFFFu || record.actorId1 == 0xFFFFu)
+        return false;
+
+    if (expectedType == 0u || expectedType == 2u ||
+        expectedType == 3u || expectedType == 4u) {
+        if (!Readable(reinterpret_cast<const void*>(interaction), 0x20))
+            return false;
+        record.element0 = *reinterpret_cast<const uintptr_t*>(
+            interaction + 0x18);
+        record.element1 = *reinterpret_cast<const uintptr_t*>(
+            interaction + 0x1C);
+        if (!record.element0 || !record.element1 ||
+            !Readable(reinterpret_cast<const void*>(record.element0), 0x0C) ||
+            !Readable(reinterpret_cast<const void*>(record.element1), 0x0C) ||
+            *reinterpret_cast<const uintptr_t*>(record.element0 + 0x08) !=
+                record.actor0 ||
+            *reinterpret_cast<const uintptr_t*>(record.element1 + 0x08) !=
+                record.actor1)
+            return false;
+    }
+    if (expectedType == 0u) {
+        if ((record.interactionFlags & 0x10u) == 0 ||
+            !Readable(reinterpret_cast<const void*>(record.element0), 0x20) ||
+            !Readable(reinterpret_cast<const void*>(record.element1), 0x20))
+            return false;
+        record.shapeCore0 = *reinterpret_cast<const uintptr_t*>(
+            record.element0 + 0x1C);
+        record.shapeCore1 = *reinterpret_cast<const uintptr_t*>(
+            record.element1 + 0x1C);
+        if (!record.shapeCore0 || !record.shapeCore1 ||
+            !Readable(reinterpret_cast<const void*>(record.shapeCore0 + 0x20),
+                sizeof(uintptr_t)) ||
+            !Readable(reinterpret_cast<const void*>(record.shapeCore1 + 0x20),
+                sizeof(uintptr_t)))
+            return false;
+        record.pxsShapeCore0 = record.shapeCore0 + 0x20;
+        record.pxsShapeCore1 = record.shapeCore1 + 0x20;
+        record.semanticLow = record.pxsShapeCore0 < record.pxsShapeCore1 ?
+            record.pxsShapeCore0 : record.pxsShapeCore1;
+        record.semanticHigh = record.pxsShapeCore0 < record.pxsShapeCore1 ?
+            record.pxsShapeCore1 : record.pxsShapeCore0;
+        if (!record.semanticLow || record.semanticLow == record.semanticHigh)
+            return false;
+    }
+    record.validationFlags = 0x1Fu;
+    return true;
+}
+
+static bool PointerPoolContains(uintptr_t slabData, uint32_t slabCount,
+    uint32_t slabSize, uint32_t blockBytes, uintptr_t pointer) {
+    const uintptr_t* slabs = reinterpret_cast<const uintptr_t*>(slabData);
+    for (uint32_t i = 0; i < slabCount; ++i) {
+        const uintptr_t slab = slabs[i];
+        if (pointer >= slab && pointer < slab + slabSize &&
+            ((pointer - slab) % blockBytes) == 0) return true;
+    }
+    return false;
+}
+
+static bool PointerPoolFreeContains(uintptr_t head, uint32_t maximum,
+    uintptr_t pointer) {
+    uintptr_t node = head;
+    for (uint32_t i = 0; node && i < maximum; ++i) {
+        if (node == pointer) return true;
+        if (!Readable(reinterpret_cast<const void*>(node), sizeof(uintptr_t)))
+            return false;
+        node = *reinterpret_cast<const uintptr_t*>(node);
+    }
+    return false;
+}
+
+static bool ReadInteractionGraphPool(uintptr_t interactionScene,
+    uint32_t poolIndex, uint32_t slabOutputStart, uint32_t freeOutputStart,
+    InteractionGraphPoolReceipt& pool) {
+    ZeroMemory(&pool, sizeof(pool));
+    static const uint32_t offsets[3] = {0x70u, 0x198u, 0x2C0u};
+    static const uint32_t capacities[3] = {8u, 16u, 32u};
+    static const uint32_t blockBytes[3] = {0x20u, 0x40u, 0x80u};
+    pool.pool = interactionScene + offsets[poolIndex];
+    pool.blockCapacity = capacities[poolIndex];
+    pool.blockBytes = blockBytes[poolIndex];
+    pool.slabOutputStart = slabOutputStart;
+    pool.freeOutputStart = freeOutputStart;
+    if (!Readable(reinterpret_cast<const void*>(pool.pool), 0x128))
+        return false;
+    pool.inlineBufferUsed = *reinterpret_cast<const uint8_t*>(
+        pool.pool + 0x104);
+    pool.slabData = *reinterpret_cast<const uintptr_t*>(pool.pool + 0x108);
+    pool.slabCount = *reinterpret_cast<const uint32_t*>(pool.pool + 0x10C);
+    pool.slabCapacityRaw = *reinterpret_cast<const uint32_t*>(
+        pool.pool + 0x110);
+    pool.elementsPerSlab = *reinterpret_cast<const uint32_t*>(
+        pool.pool + 0x114);
+    pool.used = *reinterpret_cast<const uint32_t*>(pool.pool + 0x118);
+    pool.unreleasedFree = *reinterpret_cast<const uint32_t*>(
+        pool.pool + 0x11C);
+    pool.slabSize = *reinterpret_cast<const uint32_t*>(pool.pool + 0x120);
+    pool.freeHead = *reinterpret_cast<const uintptr_t*>(pool.pool + 0x124);
+    const uint32_t slabCapacity = pool.slabCapacityRaw & 0x7FFFFFFFu;
+    if (pool.inlineBufferUsed > 1u || pool.elementsPerSlab != 32u ||
+        pool.slabSize != pool.blockBytes * 32u ||
+        pool.slabCount > slabCapacity || pool.slabCount > 2048u ||
+        (pool.inlineBufferUsed && (pool.slabData != pool.pool + 4u ||
+            slabCapacity != 64u)) ||
+        (pool.slabCount && (!pool.slabData || !Readable(
+            reinterpret_cast<const void*>(pool.slabData),
+            pool.slabCount * sizeof(uintptr_t))))) return false;
+    if (pool.slabCount > kMaximumInteractionGraphPoolEntries / 32u)
+        return false;
+    pool.totalElements = pool.slabCount * 32u;
+    if (pool.used > pool.totalElements) return false;
+    const uintptr_t* slabs = reinterpret_cast<const uintptr_t*>(pool.slabData);
+    for (uint32_t i = 0; i < pool.slabCount; ++i) {
+        if (!slabs[i] ||
+            !Readable(reinterpret_cast<const void*>(slabs[i]), pool.slabSize))
+            return false;
+        for (uint32_t j = 0; j < i; ++j)
+            if (slabs[i] == slabs[j]) return false;
+    }
+    pool.slabOrderHash = OrderHash(slabs, pool.slabCount);
+    uint32_t freeHash = 2166136261u;
+    uintptr_t node = pool.freeHead;
+    while (node) {
+        if (pool.freeCount >= pool.totalElements ||
+            !PointerPoolContains(pool.slabData, pool.slabCount,
+                pool.slabSize, pool.blockBytes, node) ||
+            !Readable(reinterpret_cast<const void*>(node), sizeof(uintptr_t)))
+            return false;
+        freeHash ^= static_cast<uint32_t>(node);
+        freeHash *= 16777619u;
+        ++pool.freeCount;
+        node = *reinterpret_cast<const uintptr_t*>(node);
+    }
+    // mUnReleasedFree is signed deferred slab-reclamation accounting. It is
+    // deliberately independent of the exact free-chain length and can become
+    // negative after releaseEmptySlabs resets it while free nodes remain.
+    if (pool.freeCount + pool.used != pool.totalElements) return false;
+    pool.freeOrderHash = freeHash;
+    pool.validationFlags = 0x3Fu;
+    return true;
+}
+
+static int CaptureInteractionGraph(uintptr_t unityBase, uintptr_t nphaseCore,
+    uintptr_t* activeBodies, uint32_t activeBodyCapacity,
+    InteractionGraphActorRecord* actors, uint32_t actorCapacity,
+    InteractionGraphInteractionRecord* interactions,
+    uint32_t interactionCapacity, uintptr_t* actorSlots,
+    uint32_t actorSlotCapacity, uintptr_t* poolSlabs,
+    uint32_t poolSlabCapacity, uintptr_t* poolFree,
+    uint32_t poolFreeCapacity, InteractionGraphReceipt* receipt) {
+    if (!receipt) return 0;
+    ZeroMemory(receipt, sizeof(*receipt));
+    receipt->apiVersion = kApiVersion;
+    receipt->structSize = sizeof(*receipt);
+    receipt->unityBase = unityBase;
+    receipt->nphaseCore = nphaseCore;
+    receipt->invalidIndex = 0xFFFFFFFFu;
+    if (!unityBase || !nphaseCore)
+        return FailInteractionGraph(receipt, InteractionGraphBadArgument,
+            ERROR_INVALID_PARAMETER, 0, 0xFFFFFFFFu, 1);
+    if (!InteractionGraphCodeMatches(unityBase))
+        return FailInteractionGraph(receipt,
+            InteractionGraphRevisionMismatch, ERROR_REVISION_MISMATCH,
+            0, 0xFFFFFFFFu, 2);
+    if (!Readable(reinterpret_cast<const void*>(nphaseCore), 4))
+        return FailInteractionGraph(receipt, InteractionGraphUnreadable,
+            ERROR_NOACCESS, 0, 0xFFFFFFFFu, 3);
+    receipt->ownerScene = *reinterpret_cast<const uintptr_t*>(nphaseCore);
+    if (!receipt->ownerScene || !Readable(reinterpret_cast<const void*>(
+            receipt->ownerScene + 0x4B4), sizeof(uintptr_t)))
+        return FailInteractionGraph(receipt, InteractionGraphUnreadable,
+            ERROR_NOACCESS, 0, 0xFFFFFFFFu, 4);
+    receipt->interactionScene = *reinterpret_cast<const uintptr_t*>(
+        receipt->ownerScene + 0x4B4);
+    if (!receipt->interactionScene || !Readable(reinterpret_cast<const void*>(
+            receipt->interactionScene), 0x3F4) ||
+        *reinterpret_cast<const uintptr_t*>(receipt->interactionScene + 0x3F0) !=
+            receipt->ownerScene)
+        return FailInteractionGraph(receipt,
+            InteractionGraphInvalidMetadata, ERROR_INVALID_DATA,
+            0, 0xFFFFFFFFu, 5);
+    receipt->llContext = *reinterpret_cast<const uintptr_t*>(
+        receipt->interactionScene + 0x3E8);
+    receipt->timestamp = *reinterpret_cast<const uint32_t*>(
+        receipt->interactionScene + 0x3EC);
+    if (!receipt->llContext)
+        return FailInteractionGraph(receipt,
+            InteractionGraphInvalidMetadata, ERROR_INVALID_DATA,
+            0, 0xFFFFFFFFu, 6);
+
+    InteractionGraphArrayHeader activeHeader = {};
+    InteractionGraphArrayHeader globalHeaders[6] = {};
+    if (!ReadInteractionGraphArray(receipt->interactionScene, activeHeader,
+            kMaximumInteractionGraphActors))
+        return FailInteractionGraph(receipt,
+            InteractionGraphInvalidActiveBody, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 7);
+    receipt->activeBodiesData = activeHeader.data;
+    receipt->activeBodiesCount = activeHeader.count;
+    receipt->activeBodiesCapacityRaw = activeHeader.capacityRaw;
+    receipt->activeBodiesRequired = activeHeader.count;
+    receipt->activeTwoWayStart = *reinterpret_cast<const uint32_t*>(
+        receipt->interactionScene + 0x0C);
+    if (receipt->activeTwoWayStart > activeHeader.count)
+        return FailInteractionGraph(receipt,
+            InteractionGraphInvalidActiveBody, ERROR_INVALID_DATA,
+            1, 0xFFFFFFFFu, 8);
+
+    uint32_t totalInteractions = 0;
+    for (uint32_t type = 0; type < 6; ++type) {
+        const uintptr_t headerAddress = receipt->interactionScene +
+            0x10 + type * 12u;
+        if (!ReadInteractionGraphArray(headerAddress, globalHeaders[type],
+                kMaximumInteractionGraphInteractions - totalInteractions))
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidInteraction, ERROR_INVALID_DATA,
+                2, type, 9);
+        receipt->globalData[type] = globalHeaders[type].data;
+        receipt->globalCount[type] = globalHeaders[type].count;
+        receipt->globalCapacityRaw[type] = globalHeaders[type].capacityRaw;
+        receipt->globalActiveCount[type] =
+            *reinterpret_cast<const uint32_t*>(
+                receipt->interactionScene + 0x58 + type * 4u);
+        if (receipt->globalActiveCount[type] > globalHeaders[type].count)
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidInteraction, ERROR_INVALID_DATA,
+                2, type, 10);
+        receipt->globalOrderHash[type] = OrderHash(
+            reinterpret_cast<const uintptr_t*>(globalHeaders[type].data),
+            globalHeaders[type].count);
+        totalInteractions += globalHeaders[type].count;
+    }
+    receipt->interactionsRequired = totalInteractions;
+
+    uintptr_t actorPointers[kMaximumInteractionGraphActors] = {};
+    uint32_t actorCount = 0;
+    const uintptr_t* activeSource = reinterpret_cast<const uintptr_t*>(
+        activeHeader.data);
+    for (uint32_t i = 0; i < activeHeader.count; ++i) {
+        if (!AddInteractionGraphActor(actorPointers, actorCount,
+                activeSource[i]))
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidActiveBody, ERROR_INVALID_DATA,
+                1, i, 11);
+        for (uint32_t j = 0; j < i; ++j)
+            if (activeSource[i] == activeSource[j])
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidActiveBody, ERROR_DUP_NAME,
+                    1, i, 12);
+    }
+    for (uint32_t type = 0; type < 6; ++type) {
+        const uintptr_t* values = reinterpret_cast<const uintptr_t*>(
+            globalHeaders[type].data);
+        for (uint32_t i = 0; i < globalHeaders[type].count; ++i) {
+            const uintptr_t interaction = values[i];
+            if (!interaction || !Readable(reinterpret_cast<const void*>(
+                    interaction), 0x0C) ||
+                !AddInteractionGraphActor(actorPointers, actorCount,
+                    *reinterpret_cast<const uintptr_t*>(interaction + 0x04)) ||
+                !AddInteractionGraphActor(actorPointers, actorCount,
+                    *reinterpret_cast<const uintptr_t*>(interaction + 0x08)))
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidInteraction, ERROR_INVALID_DATA,
+                    2, i, 13u + type);
+        }
+    }
+    receipt->actorsRequired = actorCount;
+
+    uint32_t actorSlotCount = 0;
+    for (uint32_t i = 0; i < actorCount; ++i) {
+        const uintptr_t actor = actorPointers[i];
+        if (!Readable(reinterpret_cast<const void*>(actor), 0x34))
+            return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+                ERROR_NOACCESS, 3, i, 20);
+        const uint32_t count = *reinterpret_cast<const uint32_t*>(actor + 0x1C);
+        const uint32_t capacity = *reinterpret_cast<const uint32_t*>(
+            actor + 0x18);
+        const uintptr_t data = *reinterpret_cast<const uintptr_t*>(actor + 0x14);
+        if (count > capacity || count > kMaximumInteractionGraphActorSlots -
+                actorSlotCount || (count && (!data || !Readable(
+                    reinterpret_cast<const void*>(data),
+                    count * sizeof(uintptr_t)))))
+            return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+                ERROR_INVALID_DATA, 3, i, 21);
+        actorSlotCount += count;
+    }
+    receipt->actorSlotsRequired = actorSlotCount;
+
+    uint32_t slabRequired = 0;
+    uint32_t freeRequired = 0;
+    for (uint32_t i = 0; i < 3; ++i) {
+        if (!ReadInteractionGraphPool(receipt->interactionScene, i,
+                slabRequired, freeRequired, receipt->pools[i]))
+            return FailInteractionGraph(receipt, InteractionGraphInvalidPool,
+                ERROR_INVALID_DATA, 4, i, 22);
+        slabRequired += receipt->pools[i].slabCount;
+        freeRequired += receipt->pools[i].freeCount;
+        if (slabRequired > kMaximumInteractionGraphPoolEntries ||
+            freeRequired > kMaximumInteractionGraphPoolEntries)
+            return FailInteractionGraph(receipt, InteractionGraphInvalidPool,
+                ERROR_INVALID_DATA, 4, i, 23);
+    }
+    receipt->poolSlabsRequired = slabRequired;
+    receipt->poolFreeRequired = freeRequired;
+
+    if (activeBodyCapacity < activeHeader.count || actorCapacity < actorCount ||
+        interactionCapacity < totalInteractions ||
+        actorSlotCapacity < actorSlotCount ||
+        poolSlabCapacity < slabRequired || poolFreeCapacity < freeRequired)
+        return FailInteractionGraph(receipt,
+            InteractionGraphCapacityTooSmall, ERROR_INSUFFICIENT_BUFFER,
+            0, 0xFFFFFFFFu, 24);
+    if ((activeHeader.count && (!activeBodies || !Writable(activeBodies,
+            activeHeader.count * sizeof(uintptr_t)))) ||
+        (actorCount && (!actors || !Writable(actors,
+            actorCount * sizeof(InteractionGraphActorRecord)))) ||
+        (totalInteractions && (!interactions || !Writable(interactions,
+            totalInteractions * sizeof(InteractionGraphInteractionRecord)))) ||
+        (actorSlotCount && (!actorSlots || !Writable(actorSlots,
+            actorSlotCount * sizeof(uintptr_t)))) ||
+        (slabRequired && (!poolSlabs || !Writable(poolSlabs,
+            slabRequired * sizeof(uintptr_t)))) ||
+        (freeRequired && (!poolFree || !Writable(poolFree,
+            freeRequired * sizeof(uintptr_t)))))
+        return FailInteractionGraph(receipt, InteractionGraphBadArgument,
+            ERROR_NOACCESS, 0, 0xFFFFFFFFu, 25);
+
+    if (activeHeader.count)
+        CopyWords(activeBodies, activeSource, activeHeader.count);
+    receipt->activeBodiesWritten = activeHeader.count;
+
+    uint32_t interactionOutput = 0;
+    for (uint32_t type = 0; type < 6; ++type) {
+        const uintptr_t* values = reinterpret_cast<const uintptr_t*>(
+            globalHeaders[type].data);
+        for (uint32_t i = 0; i < globalHeaders[type].count; ++i) {
+            if (!FillInteractionGraphInteraction(values[i], type, i,
+                    receipt->globalActiveCount[type],
+                    interactions[interactionOutput]))
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidInteraction, ERROR_INVALID_DATA,
+                    2, interactionOutput, 26);
+            ++interactionOutput;
+        }
+    }
+    receipt->interactionsWritten = interactionOutput;
+
+    uint32_t slotOutput = 0;
+    for (uint32_t i = 0; i < actorCount; ++i) {
+        const uintptr_t actor = actorPointers[i];
+        InteractionGraphActorRecord& record = actors[i];
+        ZeroMemory(&record, sizeof(record));
+        record.actor = actor;
+        record.vtable = *reinterpret_cast<const uintptr_t*>(actor);
+        for (uint32_t j = 0; j < 4; ++j)
+            record.inlineSlots[j] = *reinterpret_cast<const uintptr_t*>(
+                actor + 4 + j * 4u);
+        record.interactionsData = *reinterpret_cast<const uintptr_t*>(
+            actor + 0x14);
+        record.interactionCapacity = *reinterpret_cast<const uint32_t*>(
+            actor + 0x18);
+        record.interactionCount = *reinterpret_cast<const uint32_t*>(
+            actor + 0x1C);
+        record.firstElement = *reinterpret_cast<const uintptr_t*>(actor + 0x20);
+        record.interactionScene = *reinterpret_cast<const uintptr_t*>(
+            actor + 0x24);
+        record.sceneArrayIndex = *reinterpret_cast<const uint32_t*>(
+            actor + 0x28);
+        record.transferringCount = *reinterpret_cast<const uint16_t*>(
+            actor + 0x2C);
+        record.uniqueCount = *reinterpret_cast<const uint16_t*>(actor + 0x2E);
+        record.countedCount = *reinterpret_cast<const uint16_t*>(actor + 0x30);
+        record.actorType = *reinterpret_cast<const uint8_t*>(actor + 0x32);
+        record.islandNodeInfo = *reinterpret_cast<const uint8_t*>(actor + 0x33);
+        record.interactionOutputStart = slotOutput;
+        record.activeBodyIndex = PointerIndex(activeSource,
+            activeHeader.count, actor);
+        if (!record.vtable || record.interactionScene !=
+                receipt->interactionScene ||
+            record.transferringCount > record.interactionCount ||
+            (record.interactionCapacity == 0 &&
+                (record.interactionsData || record.interactionCount)) ||
+            (record.interactionCapacity == 4 &&
+                record.interactionsData != actor + 4) ||
+            (record.interactionCapacity > 4 &&
+                record.interactionsData == actor + 4))
+            return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+                ERROR_INVALID_DATA, 3, i, 27);
+        const bool isActive = (record.islandNodeInfo & 1u) != 0;
+        if ((isActive && (record.activeBodyIndex == 0xFFFFFFFFu ||
+                record.sceneArrayIndex != record.activeBodyIndex)) ||
+            (!isActive && (record.activeBodyIndex != 0xFFFFFFFFu ||
+                record.sceneArrayIndex != 0xFFFFFFFEu)))
+            return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+                ERROR_INVALID_DATA, 3, i, 28);
+        const uintptr_t* sourceSlots = reinterpret_cast<const uintptr_t*>(
+            record.interactionsData);
+        uint32_t counted = 0;
+        for (uint32_t j = 0; j < record.interactionCount; ++j) {
+            const uintptr_t interaction = sourceSlots[j];
+            const uint32_t recordIndex = FindInteractionGraphRecord(
+                interactions, totalInteractions, interaction);
+            if (recordIndex == 0xFFFFFFFFu)
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidActor, ERROR_INVALID_DATA,
+                    3, i, 29);
+            const InteractionGraphInteractionRecord& interactionRecord =
+                interactions[recordIndex];
+            const bool actor0 = interactionRecord.actor0 == actor;
+            const bool actor1 = interactionRecord.actor1 == actor;
+            if (actor0 == actor1 ||
+                (actor0 ? interactionRecord.actorId0 :
+                    interactionRecord.actorId1) != j)
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidActor, ERROR_INVALID_DATA,
+                    3, i, 30);
+            const uint32_t otherIndex = FindInteractionGraphActor(
+                actorPointers, actorCount, actor0 ?
+                    interactionRecord.actor1 : interactionRecord.actor0);
+            if (otherIndex == 0xFFFFFFFFu)
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidActor, ERROR_INVALID_DATA,
+                    3, i, 31);
+            const uint8_t otherType = *reinterpret_cast<const uint8_t*>(
+                actorPointers[otherIndex] + 0x32);
+            const bool dynamic0 = record.actorType == 1u ||
+                record.actorType == 4u;
+            const bool dynamic1 = otherType == 1u || otherType == 4u;
+            const bool permanentlyNonTransferring = !dynamic0 || !dynamic1 ||
+                interactionRecord.interactionType == 2u ||
+                interactionRecord.interactionType == 3u;
+            if ((j < record.transferringCount) ==
+                    permanentlyNonTransferring)
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidActor, ERROR_INVALID_DATA,
+                    3, i, 32);
+            if (interactionRecord.interactionType < 2u) ++counted;
+            actorSlots[slotOutput++] = interaction;
+        }
+        if (counted != record.countedCount)
+            return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+                ERROR_INVALID_DATA, 3, i, 33);
+        record.interactionOrderHash = OrderHash(sourceSlots,
+            record.interactionCount);
+        record.validationFlags = 0x7Fu;
+    }
+    receipt->actorsWritten = actorCount;
+    receipt->actorSlotsWritten = slotOutput;
+    if (slotOutput != totalInteractions * 2u)
+        return FailInteractionGraph(receipt, InteractionGraphInvalidActor,
+            ERROR_INVALID_DATA, 3, 0xFFFFFFFFu, 34);
+
+    for (uint32_t i = 0; i < activeHeader.count; ++i) {
+        const uint32_t actorIndex = FindInteractionGraphActor(actorPointers,
+            actorCount, activeSource[i]);
+        if (actorIndex == 0xFFFFFFFFu)
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidActiveBody, ERROR_INVALID_DATA,
+                1, i, 35);
+        const uint8_t node = actors[actorIndex].islandNodeInfo;
+        const uint8_t expectedType = i < receipt->activeTwoWayStart ? 2u : 4u;
+        if ((node & 1u) == 0 ||
+            (node & 0x0Eu) != expectedType)
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidActiveBody, ERROR_INVALID_DATA,
+                1, i, 35);
+    }
+    for (uint32_t i = 0; i < totalInteractions; ++i) {
+        const InteractionGraphInteractionRecord& record = interactions[i];
+        const uint32_t actor0 = FindInteractionGraphActor(actorPointers,
+            actorCount, record.actor0);
+        const uint32_t actor1 = FindInteractionGraphActor(actorPointers,
+            actorCount, record.actor1);
+        if (actor0 == 0xFFFFFFFFu || actor1 == 0xFFFFFFFFu ||
+            (record.active &&
+                actors[actor0].activeBodyIndex == 0xFFFFFFFFu &&
+                actors[actor1].activeBodyIndex == 0xFFFFFFFFu))
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidInteraction, ERROR_INVALID_DATA,
+                2, i, 36);
+    }
+
+    uint32_t slabOutput = 0;
+    uint32_t freeOutput = 0;
+    for (uint32_t poolIndex = 0; poolIndex < 3; ++poolIndex) {
+        InteractionGraphPoolReceipt& pool = receipt->pools[poolIndex];
+        const uintptr_t* slabs = reinterpret_cast<const uintptr_t*>(
+            pool.slabData);
+        if (pool.slabCount)
+            CopyWords(poolSlabs + slabOutput, slabs, pool.slabCount);
+        slabOutput += pool.slabCount;
+        uintptr_t node = pool.freeHead;
+        while (node) {
+            poolFree[freeOutput++] = node;
+            node = *reinterpret_cast<const uintptr_t*>(node);
+        }
+        uint32_t owners = 0;
+        uint32_t ownerHash = 2166136261u;
+        for (uint32_t i = 0; i < actorCount; ++i) {
+            if (actors[i].interactionCapacity != pool.blockCapacity) continue;
+            const uintptr_t block = actors[i].interactionsData;
+            if (!block || !PointerPoolContains(pool.slabData, pool.slabCount,
+                    pool.slabSize, pool.blockBytes, block) ||
+                PointerPoolFreeContains(pool.freeHead, pool.freeCount, block))
+                return FailInteractionGraph(receipt,
+                    InteractionGraphInvalidPool, ERROR_INVALID_DATA,
+                    4, poolIndex, 37);
+            for (uint32_t j = 0; j < i; ++j)
+                if (actors[j].interactionCapacity == pool.blockCapacity &&
+                    actors[j].interactionsData == block)
+                    return FailInteractionGraph(receipt,
+                        InteractionGraphInvalidPool, ERROR_DUP_NAME,
+                        4, poolIndex, 38);
+            ownerHash ^= static_cast<uint32_t>(block);
+            ownerHash *= 16777619u;
+            ++owners;
+        }
+        if (owners != pool.used)
+            return FailInteractionGraph(receipt,
+                InteractionGraphInvalidPool, ERROR_INVALID_DATA,
+                4, poolIndex, 39);
+        pool.usedOwnerHash = ownerHash;
+        pool.validationFlags |= 0x40u;
+    }
+    receipt->poolSlabsWritten = slabOutput;
+    receipt->poolFreeWritten = freeOutput;
+
+    // Reread all independently mutable headers, orders, records and pool
+    // chains. A checkpoint must describe one phase rather than a torn sample.
+    InteractionGraphArrayHeader checkHeader = {};
+    if (!ReadInteractionGraphArray(receipt->interactionScene, checkHeader,
+            kMaximumInteractionGraphActors) ||
+        checkHeader.data != activeHeader.data ||
+        checkHeader.count != activeHeader.count ||
+        checkHeader.capacityRaw != activeHeader.capacityRaw ||
+        *reinterpret_cast<const uint32_t*>(receipt->interactionScene + 0x0C) !=
+            receipt->activeTwoWayStart ||
+        OrderHash(reinterpret_cast<const uintptr_t*>(checkHeader.data),
+            checkHeader.count) != OrderHash(activeBodies,
+                receipt->activeBodiesWritten))
+        return FailInteractionGraph(receipt, InteractionGraphUnstable,
+            ERROR_RETRY, 0, 0xFFFFFFFFu, 40);
+    for (uint32_t type = 0; type < 6; ++type) {
+        if (!ReadInteractionGraphArray(receipt->interactionScene + 0x10 +
+                type * 12u, checkHeader,
+                kMaximumInteractionGraphInteractions) ||
+            checkHeader.data != globalHeaders[type].data ||
+            checkHeader.count != globalHeaders[type].count ||
+            checkHeader.capacityRaw != globalHeaders[type].capacityRaw ||
+            *reinterpret_cast<const uint32_t*>(receipt->interactionScene +
+                0x58 + type * 4u) != receipt->globalActiveCount[type] ||
+            OrderHash(reinterpret_cast<const uintptr_t*>(checkHeader.data),
+                checkHeader.count) != receipt->globalOrderHash[type])
+            return FailInteractionGraph(receipt, InteractionGraphUnstable,
+                ERROR_RETRY, 2, type, 41);
+    }
+    for (uint32_t i = 0; i < actorCount; ++i) {
+        const InteractionGraphActorRecord& record = actors[i];
+        if (!Readable(reinterpret_cast<const void*>(record.actor), 0x34) ||
+            *reinterpret_cast<const uintptr_t*>(record.actor) != record.vtable ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x04) !=
+                record.inlineSlots[0] ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x08) !=
+                record.inlineSlots[1] ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x0C) !=
+                record.inlineSlots[2] ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x10) !=
+                record.inlineSlots[3] ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x14) !=
+                record.interactionsData ||
+            *reinterpret_cast<const uint32_t*>(record.actor + 0x18) !=
+                record.interactionCapacity ||
+            *reinterpret_cast<const uint32_t*>(record.actor + 0x1C) !=
+                record.interactionCount ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x20) !=
+                record.firstElement ||
+            *reinterpret_cast<const uintptr_t*>(record.actor + 0x24) !=
+                record.interactionScene ||
+            *reinterpret_cast<const uint32_t*>(record.actor + 0x28) !=
+                record.sceneArrayIndex ||
+            *reinterpret_cast<const uint16_t*>(record.actor + 0x2C) !=
+                record.transferringCount ||
+            *reinterpret_cast<const uint16_t*>(record.actor + 0x2E) !=
+                record.uniqueCount ||
+            *reinterpret_cast<const uint16_t*>(record.actor + 0x30) !=
+                record.countedCount ||
+            *reinterpret_cast<const uint8_t*>(record.actor + 0x32) !=
+                record.actorType ||
+            *reinterpret_cast<const uint8_t*>(record.actor + 0x33) !=
+                record.islandNodeInfo ||
+            OrderHash(reinterpret_cast<const uintptr_t*>(
+                record.interactionsData), record.interactionCount) !=
+                record.interactionOrderHash)
+            return FailInteractionGraph(receipt, InteractionGraphUnstable,
+                ERROR_RETRY, 3, i, 42);
+    }
+    for (uint32_t i = 0; i < totalInteractions; ++i) {
+        InteractionGraphInteractionRecord check = {};
+        const InteractionGraphInteractionRecord& record = interactions[i];
+        if (!FillInteractionGraphInteraction(record.interaction,
+                record.interactionType, record.globalIndex,
+                receipt->globalActiveCount[record.interactionType],
+                check) || check.vtable != record.vtable ||
+            check.actor0 != record.actor0 || check.actor1 != record.actor1 ||
+            check.sceneId != record.sceneId ||
+            check.actorId0 != record.actorId0 ||
+            check.actorId1 != record.actorId1 ||
+            check.interactionType != record.interactionType ||
+            check.interactionFlags != record.interactionFlags ||
+            check.active != record.active ||
+            check.element0 != record.element0 || check.element1 != record.element1 ||
+            check.shapeCore0 != record.shapeCore0 ||
+            check.shapeCore1 != record.shapeCore1 ||
+            check.pxsShapeCore0 != record.pxsShapeCore0 ||
+            check.pxsShapeCore1 != record.pxsShapeCore1 ||
+            check.semanticLow != record.semanticLow ||
+            check.semanticHigh != record.semanticHigh)
+            return FailInteractionGraph(receipt, InteractionGraphUnstable,
+                ERROR_RETRY, 2, i, 43);
+    }
+    for (uint32_t poolIndex = 0; poolIndex < 3; ++poolIndex) {
+        InteractionGraphPoolReceipt check = {};
+        const InteractionGraphPoolReceipt& pool = receipt->pools[poolIndex];
+        if (!ReadInteractionGraphPool(receipt->interactionScene, poolIndex,
+                pool.slabOutputStart, pool.freeOutputStart, check) ||
+            check.pool != pool.pool || check.slabData != pool.slabData ||
+            check.freeHead != pool.freeHead || check.slabCount != pool.slabCount ||
+            check.slabCapacityRaw != pool.slabCapacityRaw ||
+            check.used != pool.used ||
+            check.unreleasedFree != pool.unreleasedFree ||
+            check.freeCount != pool.freeCount ||
+            check.slabOrderHash != pool.slabOrderHash ||
+            check.freeOrderHash != pool.freeOrderHash)
+            return FailInteractionGraph(receipt, InteractionGraphUnstable,
+                ERROR_RETRY, 4, poolIndex, 44);
+    }
+    if (*reinterpret_cast<const uintptr_t*>(nphaseCore) != receipt->ownerScene ||
+        *reinterpret_cast<const uintptr_t*>(receipt->ownerScene + 0x4B4) !=
+            receipt->interactionScene ||
+        *reinterpret_cast<const uintptr_t*>(receipt->interactionScene + 0x3E8) !=
+            receipt->llContext ||
+        *reinterpret_cast<const uint32_t*>(receipt->interactionScene + 0x3EC) !=
+            receipt->timestamp)
+        return FailInteractionGraph(receipt, InteractionGraphUnstable,
+            ERROR_RETRY, 0, 0xFFFFFFFFu, 45);
+
+    receipt->actorHash = ByteHash(actors,
+        actorCount * sizeof(InteractionGraphActorRecord));
+    receipt->interactionHash = ByteHash(interactions,
+        totalInteractions * sizeof(InteractionGraphInteractionRecord));
+    receipt->actorSlotHash = OrderHash(actorSlots, actorSlotCount);
+    receipt->poolHash = ByteHash(receipt->pools,
+        sizeof(receipt->pools));
+    uint32_t graphHash = 2166136261u;
+    graphHash = AppendByteHash(graphHash, activeBodies,
+        activeHeader.count * sizeof(uintptr_t));
+    graphHash = AppendByteHash(graphHash, &receipt->actorHash,
+        sizeof(receipt->actorHash));
+    graphHash = AppendByteHash(graphHash, &receipt->interactionHash,
+        sizeof(receipt->interactionHash));
+    graphHash = AppendByteHash(graphHash, &receipt->actorSlotHash,
+        sizeof(receipt->actorSlotHash));
+    graphHash = AppendByteHash(graphHash, &receipt->poolHash,
+        sizeof(receipt->poolHash));
+    receipt->graphHash = graphHash;
+    receipt->validationFlags = 0xFFu;
+    receipt->result = InteractionGraphOk;
+    return 1;
+}
+
 static int AuditContactRecreate(uintptr_t unityBase, uintptr_t context,
     uintptr_t nphaseCore, uintptr_t expectedSipPool,
     const uintptr_t* targetSip, uint32_t targetSipCount,
@@ -7827,6 +8841,22 @@ oc2_nphase_report_state_capture_snapshot(
         actorPairCapacity, persistentSips, persistentCapacity,
         forceThresholdSips, forceThresholdCapacity, reportBufferBytes,
         reportBufferCapacity, receipt);
+}
+
+extern "C" __declspec(dllexport) int __cdecl
+oc2_interaction_graph_capture_snapshot(
+    uintptr_t unityBase, uintptr_t nphaseCore,
+    uintptr_t* activeBodies, uint32_t activeBodyCapacity,
+    InteractionGraphActorRecord* actors, uint32_t actorCapacity,
+    InteractionGraphInteractionRecord* interactions,
+    uint32_t interactionCapacity, uintptr_t* actorSlots,
+    uint32_t actorSlotCapacity, uintptr_t* poolSlabs,
+    uint32_t poolSlabCapacity, uintptr_t* poolFree,
+    uint32_t poolFreeCapacity, InteractionGraphReceipt* receipt) {
+    return CaptureInteractionGraph(unityBase, nphaseCore,
+        activeBodies, activeBodyCapacity, actors, actorCapacity,
+        interactions, interactionCapacity, actorSlots, actorSlotCapacity,
+        poolSlabs, poolSlabCapacity, poolFree, poolFreeCapacity, receipt);
 }
 
 extern "C" __declspec(dllexport) int __cdecl oc2_contact_manager_context_observer_install(

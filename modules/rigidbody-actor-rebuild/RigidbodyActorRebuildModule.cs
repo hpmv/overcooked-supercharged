@@ -30,6 +30,10 @@ namespace SuperchargedPatch.Authoring.Modules
         private const int MaximumShapeInstancePairs=4096;
         private const int MaximumContactReportBufferSize=64*1024*1024;
         private const int MaximumDirtyInteractions=4096;
+        private const int MaximumInteractionGraphActors=4096;
+        private const int MaximumInteractionGraphInteractions=16384;
+        private const int MaximumInteractionGraphActorSlots=32768;
+        private const int MaximumInteractionGraphPoolEntries=65536;
         private const uint DirtyInteractionRestoreExact=1;
         private const uint DirtyInteractionRestoreProjection=2;
         private const int MaximumCheckpointSidecars=20000;
@@ -213,6 +217,63 @@ namespace SuperchargedPatch.Authoring.Modules
         }
 
         [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeInteractionGraphActorRecord
+        {
+            public UIntPtr Actor,Vtable;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=4)] public UIntPtr[] InlineSlots;
+            public UIntPtr InteractionsData,FirstElement,InteractionScene;
+            public uint SceneArrayIndex,InteractionOutputStart,InteractionCount,InteractionCapacity;
+            public uint ActiveBodyIndex,InteractionOrderHash;
+            public ushort TransferringCount,UniqueCount,CountedCount;
+            public byte ActorType,IslandNodeInfo;
+            public uint ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeInteractionGraphInteractionRecord
+        {
+            public UIntPtr Interaction,Vtable,Actor0,Actor1,Element0,Element1;
+            public UIntPtr ShapeCore0,ShapeCore1,PxsShapeCore0,PxsShapeCore1;
+            public UIntPtr SemanticLow,SemanticHigh;
+            public uint SceneId,GlobalIndex,Active;
+            public ushort ActorId0,ActorId1;
+            public byte InteractionType,InteractionFlags;
+            public ushort Reserved;
+            public uint ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeInteractionGraphPoolReceipt
+        {
+            public UIntPtr Pool,SlabData,FreeHead;
+            public uint BlockCapacity,BlockBytes,InlineBufferUsed,SlabCount,SlabCapacityRaw;
+            public uint ElementsPerSlab,Used,UnreleasedFree,SlabSize,TotalElements,FreeCount;
+            public uint SlabOutputStart,FreeOutputStart,SlabOrderHash,FreeOrderHash,UsedOwnerHash;
+            public uint ValidationFlags;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
+        private struct NativeInteractionGraphReceipt
+        {
+            public uint ApiVersion,StructSize,Result,LastError;
+            public UIntPtr UnityBase,NPhaseCore,OwnerScene,InteractionScene,LlContext;
+            public uint Timestamp;
+            public UIntPtr ActiveBodiesData;
+            public uint ActiveBodiesCount,ActiveBodiesCapacityRaw,ActiveTwoWayStart;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public UIntPtr[] GlobalData;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public uint[] GlobalCount;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public uint[] GlobalCapacityRaw;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public uint[] GlobalActiveCount;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public uint[] GlobalOrderHash;
+            public uint ActiveBodiesRequired,ActiveBodiesWritten,ActorsRequired,ActorsWritten;
+            public uint InteractionsRequired,InteractionsWritten,ActorSlotsRequired,ActorSlotsWritten;
+            public uint PoolSlabsRequired,PoolSlabsWritten,PoolFreeRequired,PoolFreeWritten;
+            public uint ActorHash,InteractionHash,ActorSlotHash,PoolHash,GraphHash;
+            public uint ValidationFlags,InvalidKind,InvalidIndex,Detail;
+            [MarshalAs(UnmanagedType.ByValArray,SizeConst=3)] public NativeInteractionGraphPoolReceipt[] Pools;
+        }
+
+        [StructLayout(LayoutKind.Sequential,Pack=8)]
         private struct NativeDirtyInteractionKey
         {
             public UIntPtr ElementLow,ElementHigh,PrimaryVtable;
@@ -257,6 +318,11 @@ namespace SuperchargedPatch.Authoring.Modules
             IntPtr persistentSips,uint persistentCapacity,IntPtr forceThresholdSips,
             uint forceThresholdCapacity,IntPtr reportBufferBytes,uint reportBufferCapacity,
             IntPtr receipt);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeInteractionGraphCaptureSnapshot(
+            UIntPtr unityBase,UIntPtr nphaseCore,IntPtr activeBodies,uint activeBodyCapacity,
+            IntPtr actors,uint actorCapacity,IntPtr interactions,uint interactionCapacity,
+            IntPtr actorSlots,uint actorSlotCapacity,IntPtr poolSlabs,uint poolSlabCapacity,
+            IntPtr poolFree,uint poolFreeCapacity,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContextObserverAction(
             UIntPtr unityBase,IntPtr receipt);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NativeContactRecreateArm(
@@ -360,6 +426,14 @@ namespace SuperchargedPatch.Authoring.Modules
             internal byte[] ReportBufferBytes;
         }
 
+        private sealed class InteractionGraphState
+        {
+            internal NativeInteractionGraphReceipt Receipt;
+            internal uint[] ActiveBodies,ActorSlots,PoolSlabs,PoolFree;
+            internal NativeInteractionGraphActorRecord[] Actors;
+            internal NativeInteractionGraphInteractionRecord[] Interactions;
+        }
+
         private sealed class ActorPairReuseScanState
         {
             internal uint ActorPair,Actor0,Actor1,ScannedActor,OtherActor;
@@ -405,6 +479,7 @@ namespace SuperchargedPatch.Authoring.Modules
             internal ActorPairPoolState ActorPairPool;
             internal ActorPairReportPoolState ActorPairReportPool;
             internal NPhaseReportState NPhaseReports;
+            internal InteractionGraphState InteractionGraph;
             internal ManifoldPoolState LargeManifoldPool,SphereManifoldPool;
             internal DirtyInteractionState DirtyInteractions;
             internal TransformDispatchState TransformDispatch;
@@ -429,6 +504,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private NativeActorPairPoolCaptureSnapshot captureActorPairPoolSnapshot;
         private NativeActorPairReportPoolCaptureSnapshot captureActorPairReportPoolSnapshot;
         private NativeNPhaseReportStateCaptureSnapshot captureNPhaseReportStateSnapshot;
+        private NativeInteractionGraphCaptureSnapshot captureInteractionGraphSnapshot;
         private NativeContextObserverAction installContextObserver,statusContextObserver,uninstallContextObserver;
         private NativeApiVersion contactRecreateApiVersion;
         private NativeApiVersion contactRecreateAuditApiVersion;
@@ -546,6 +622,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     "oc2_actor_pair_report_pool_capture_snapshot");
                 captureNPhaseReportStateSnapshot=Export<NativeNPhaseReportStateCaptureSnapshot>(
                     "oc2_nphase_report_state_capture_snapshot");
+                captureInteractionGraphSnapshot=Export<NativeInteractionGraphCaptureSnapshot>(
+                    "oc2_interaction_graph_capture_snapshot");
                 installContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_install");
                 statusContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_status");
                 uninstallContextObserver=Export<NativeContextObserverAction>("oc2_contact_manager_context_observer_uninstall");
@@ -563,7 +641,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 armDirtyInteractionRestore=Export<NativeDirtyInteractionRestoreArm>("oc2_dirty_interaction_order_restore_arm");
                 cancelDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_cancel");
                 uninstallDirtyInteractionOrder=Export<NativeDirtyInteractionAction>("oc2_dirty_interaction_order_uninstall");
-                if(apiVersion()!=14)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
+                if(apiVersion()!=15)throw new InvalidOperationException("Native actor-rebuild API version mismatch.");
                 if(contactRecreateApiVersion()!=2)throw new InvalidOperationException("Native contact-recreate API version mismatch.");
                 if(contactRecreateAuditApiVersion()!=1)throw new InvalidOperationException("Native contact-recreate audit API version mismatch.");
                 nativePath=path;nativeSha256=actual;automatic=auto;automaticGroundCollider=autoGround;
@@ -967,7 +1045,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 }
             }
             finally{Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
+            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext)
                 throw new InvalidOperationException("Native contact-pool receipt contract differs.");
             RecordContactPoolReceipt(action,actionFrame,receipt);
             if(action==1)
@@ -981,6 +1059,8 @@ namespace SuperchargedPatch.Authoring.Modules
                 ActorPairReportPoolState actorPairReports=CaptureActorPairReportPoolState(
                     captureNPhase,actionFrame);
                 NPhaseReportState nphaseReports=CaptureNPhaseReportState(captureNPhase,actionFrame);
+                InteractionGraphState interactionGraph=CaptureInteractionGraphState(
+                    captureNPhase,actionFrame);
                 ManifoldPoolState large=RunManifoldPoolAction(1,LargeManifoldPoolKind,null,actionFrame);
                 ManifoldPoolState sphere=RunManifoldPoolAction(1,SphereManifoldPoolKind,null,actionFrame);
                 TransformDispatchState dispatch=(automaticTransformDispatchRestore||requireTransformCapture)
@@ -993,6 +1073,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     ActorPairPool=actorPairs,
                     ActorPairReportPool=actorPairReports,
                     NPhaseReports=nphaseReports,
+                    InteractionGraph=interactionGraph,
                     LargeManifoldPool=large,SphereManifoldPool=sphere,
                     TransformDispatch=dispatch,CoreSnapshot=actionCoreSnapshot};
                 uint afterObservation;
@@ -1037,7 +1118,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=14||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=15||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeArray.ToUInt32()!=expected.FreeArray||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
@@ -1082,7 +1163,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     MaximumContactManagers,receiptBuffer);
                 var receipt=(NativeContactPoolReceipt)Marshal.PtrToStructure(
                     receiptBuffer,typeof(NativeContactPoolReceipt));
-                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=14||
+                if(ok==0||receipt.Result!=1||receipt.ApiVersion!=15||
                     receipt.StructSize!=(uint)size||receipt.Context.ToUInt32()!=contactManagerContext||
                     receipt.FreeCount<1||receipt.FreeCount>MaximumContactManagers)
                     throw new InvalidOperationException("Read-only live contact-pool capture failed its receipt contract: result="+
@@ -1314,6 +1395,10 @@ namespace SuperchargedPatch.Authoring.Modules
                     delegate { ValidateNPhaseReportState(selected.NPhaseReports); },
                     "TARGET_NPHASE_REPORT_SIDECAR_VALID",
                     "The NPhase contact-report lists and full backing buffer are structurally valid.");
+                AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-interaction-graph-sidecar",phase,
+                    delegate { ValidateInteractionGraphState(selected.InteractionGraph); },
+                    "TARGET_INTERACTION_GRAPH_SIDECAR_VALID",
+                    "The active-body, interaction, actor-slot, and pointer-pool graph is structurally valid.");
                 AddValidatorCheck(checks,blockers,deferred,"rigidbody.target-large-sidecar",phase,
                     delegate { ValidateManifoldPoolState(selected.LargeManifoldPool,
                         LargeManifoldPoolKind,"large"); },
@@ -1449,6 +1534,7 @@ namespace SuperchargedPatch.Authoring.Modules
             AppendActorPairReadiness(checks,blockers,deferred,phase,found?selected:null,
                 nativeAuditAvailable?nativeAudit:(NativeContactRecreateAuditReceipt?)null);
             AppendNPhaseReportReadiness(checks,blockers,deferred,phase,found?selected:null);
+            AppendInteractionGraphReadiness(checks,blockers,deferred,phase,found?selected:null);
 
             if(found&&phase=="target-paused")
             {
@@ -1508,8 +1594,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     "Transform-dispatch live admission requires the restored target-paused state.",null);
             }
 
-            string[] futureFamilies={"interaction-registration-order",
-                "island-edge-allocator-and-change-queues","transform-cache-id-pool",
+            string[] futureFamilies={"island-edge-allocator-and-change-queues","transform-cache-id-pool",
                 "broadphase-created-overlap-order","dirty-interaction-live-projection",
                 "first-output-owner-convergence"};
             foreach(string family in futureFamilies)
@@ -1563,7 +1648,7 @@ namespace SuperchargedPatch.Authoring.Modules
         private static readonly string[] RequiredTargetReadinessCheckIds={
             "rigidbody.target-contact-sidecar","rigidbody.target-sip-sidecar",
             "rigidbody.target-actor-pair-sidecar","rigidbody.target-actor-pair-report-sidecar",
-            "rigidbody.target-nphase-report-sidecar",
+            "rigidbody.target-nphase-report-sidecar","rigidbody.target-interaction-graph-sidecar",
             "rigidbody.target-large-sidecar","rigidbody.target-sphere-sidecar",
             "rigidbody.target-dirty-sidecar","rigidbody.target-cross-pool-coherence",
             "rigidbody.resolved-plan-rows","rigidbody.native-audit-repeatability",
@@ -1587,7 +1672,12 @@ namespace SuperchargedPatch.Authoring.Modules
             "rigidbody.actor-pair.allocation-binding",
             "rigidbody.nphase-report.repeatability","rigidbody.nphase-report.layout-identity",
             "rigidbody.nphase-report.target-membership","rigidbody.nphase-report.live-projection",
-            "rigidbody.nphase-report.scene-timestamps"
+            "rigidbody.nphase-report.scene-timestamps",
+            "rigidbody.interaction-graph.repeatability","rigidbody.interaction-graph.layout-identity",
+            "rigidbody.interaction-graph.active-body-order","rigidbody.interaction-graph.global-order",
+            "rigidbody.interaction-graph.actor-order-and-cached-indices",
+            "rigidbody.interaction-graph.sip-semantic-keys",
+            "rigidbody.interaction-graph.pointer-pool-topology"
         };
 
         private static object FinalizeReadinessCoverage(List<object> checks,List<object> blockers,
@@ -1612,11 +1702,11 @@ namespace SuperchargedPatch.Authoring.Modules
                 duplicates.Length==0&&missing.Length==0?
                     "Every required readiness family is explicitly represented.":
                     "The provider omitted or duplicated required readiness identifiers.",
-                new Dictionary<string,object>{{"contractVersion",3},
+                new Dictionary<string,object>{{"contractVersion",4},
                     {"required",requiredIds.Cast<object>().ToArray()},
                     {"uncovered",missing.Cast<object>().ToArray()},
                     {"duplicates",duplicates.Cast<object>().ToArray()}});
-            return new Dictionary<string,object>{{"contractVersion",3},
+            return new Dictionary<string,object>{{"contractVersion",4},
                 {"required",requiredIds.Cast<object>().ToArray()},
                 {"uncovered",missing.Cast<object>().ToArray()},
                 {"duplicates",duplicates.Cast<object>().ToArray()}};
@@ -2066,6 +2156,165 @@ namespace SuperchargedPatch.Authoring.Modules
             }
         }
 
+        private void AppendInteractionGraphReadiness(List<object> checks,List<object> blockers,
+            List<object> deferred,string phase,CheckpointSidecar selected)
+        {
+            if(phase!="target-paused"||selected==null)
+            {
+                AddReadinessCheck(checks,blockers,deferred,
+                    "rigidbody.interaction-registration-order",phase,
+                    "deferred","blocker","TARGET_PHASE_REQUIRED",
+                    "Interaction-graph live admission requires the restored target-paused state.",null);
+                return;
+            }
+            string[] ids={"rigidbody.interaction-graph.repeatability",
+                "rigidbody.interaction-graph.layout-identity",
+                "rigidbody.interaction-graph.active-body-order",
+                "rigidbody.interaction-graph.global-order",
+                "rigidbody.interaction-graph.actor-order-and-cached-indices",
+                "rigidbody.interaction-graph.sip-semantic-keys",
+                "rigidbody.interaction-graph.pointer-pool-topology",
+                "rigidbody.interaction-registration-order"};
+            try
+            {
+                InteractionGraphState target=selected.InteractionGraph;
+                ValidateInteractionGraphState(target);
+                uint nphase=target.Receipt.NPhaseCore.ToUInt32();
+                InteractionGraphState first=CaptureInteractionGraphState(nphase,selected.Frame);
+                InteractionGraphState second=CaptureInteractionGraphState(nphase,selected.Frame);
+                bool repeatable=SameInteractionGraphState(first,second);
+                NativeInteractionGraphReceipt a=target.Receipt,b=first.Receipt;
+                bool poolLayout=a.Pools.Length==b.Pools.Length;
+                if(poolLayout)for(int i=0;i<a.Pools.Length;i++)
+                {
+                    NativeInteractionGraphPoolReceipt x=a.Pools[i],y=b.Pools[i];
+                    if(x.Pool!=y.Pool||x.SlabData!=y.SlabData||
+                        x.BlockCapacity!=y.BlockCapacity||x.BlockBytes!=y.BlockBytes||
+                        x.SlabCapacityRaw!=y.SlabCapacityRaw||x.ElementsPerSlab!=y.ElementsPerSlab||
+                        x.SlabSize!=y.SlabSize)poolLayout=false;
+                }
+                bool layout=a.NPhaseCore==b.NPhaseCore&&a.OwnerScene==b.OwnerScene&&
+                    a.InteractionScene==b.InteractionScene&&a.LlContext==b.LlContext&&
+                    a.ActiveBodiesData==b.ActiveBodiesData&&
+                    a.ActiveBodiesCapacityRaw==b.ActiveBodiesCapacityRaw&&
+                    a.GlobalData.SequenceEqual(b.GlobalData)&&
+                    a.GlobalCapacityRaw.SequenceEqual(b.GlobalCapacityRaw)&&poolLayout;
+                bool activeExact=target.ActiveBodies.SequenceEqual(first.ActiveBodies)&&
+                    a.ActiveTwoWayStart==b.ActiveTwoWayStart;
+                bool globalExact=a.GlobalCount.SequenceEqual(b.GlobalCount)&&
+                    a.GlobalActiveCount.SequenceEqual(b.GlobalActiveCount)&&
+                    a.GlobalOrderHash.SequenceEqual(b.GlobalOrderHash)&&
+                    target.Interactions.Length==first.Interactions.Length;
+                if(globalExact)for(int i=0;i<target.Interactions.Length;i++)
+                    if(!SameInteractionGraphInteraction(target.Interactions[i],first.Interactions[i]))
+                    {globalExact=false;break;}
+                bool actorExact=target.Actors.Length==first.Actors.Length&&
+                    target.ActorSlots.SequenceEqual(first.ActorSlots);
+                if(actorExact)for(int i=0;i<target.Actors.Length;i++)
+                    if(!SameInteractionGraphActor(target.Actors[i],first.Actors[i]))
+                    {actorExact=false;break;}
+                bool poolsExact=target.PoolSlabs.SequenceEqual(first.PoolSlabs)&&
+                    target.PoolFree.SequenceEqual(first.PoolFree)&&a.PoolHash==b.PoolHash;
+                if(poolsExact)for(int i=0;i<a.Pools.Length;i++)
+                    if(!SameInteractionGraphPool(a.Pools[i],b.Pools[i])){poolsExact=false;break;}
+
+                NativeContactManagerOwnerRecord[] owners=selected.ContactManagerOwners.Records;
+                var targetByPointer=target.Interactions.ToDictionary(item=>item.Interaction.ToUInt32());
+                bool targetSemantic=owners.All(owner=>
+                {
+                    NativeInteractionGraphInteractionRecord item;
+                    if(!targetByPointer.TryGetValue(unchecked(owner.Sip.ToUInt32()+8u),out item)||
+                        item.InteractionType!=0||(item.InteractionFlags&0x10u)==0)return false;
+                    uint low=Math.Min(owner.PxsShapeCore0.ToUInt32(),owner.PxsShapeCore1.ToUInt32());
+                    uint high=Math.Max(owner.PxsShapeCore0.ToUInt32(),owner.PxsShapeCore1.ToUInt32());
+                    return item.SemanticLow.ToUInt32()==low&&item.SemanticHigh.ToUInt32()==high;
+                });
+                var liveKeys=new HashSet<string>(first.Interactions.Where(item=>item.InteractionType==0&&
+                    (item.InteractionFlags&0x10u)!=0).Select(item=>item.SemanticLow.ToUInt32().ToString("X8")+
+                        ":"+item.SemanticHigh.ToUInt32().ToString("X8")),StringComparer.Ordinal);
+                string[] targetKeys=owners.Select(owner=>Math.Min(owner.PxsShapeCore0.ToUInt32(),
+                        owner.PxsShapeCore1.ToUInt32()).ToString("X8")+":"+
+                    Math.Max(owner.PxsShapeCore0.ToUInt32(),owner.PxsShapeCore1.ToUInt32()).ToString("X8"))
+                    .Distinct(StringComparer.Ordinal).ToArray();
+                string[] missingKeys=targetKeys.Where(key=>!liveKeys.Contains(key)).ToArray();
+                bool exact=SameInteractionGraphState(target,first);
+
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.repeatability",phase,
+                    repeatable?"pass":"fail","blocker",
+                    repeatable?"INTERACTION_GRAPH_CAPTURE_REPEATABLE":"INTERACTION_GRAPH_CAPTURE_CHANGED",
+                    repeatable?"Two complete caller-owned graph captures are byte-equivalent.":
+                        "Repeated graph capture observed a changing physics phase.",
+                    new Dictionary<string,object>{{"firstGraphHash","0x"+b.GraphHash.ToString("X8")},
+                        {"secondGraphHash","0x"+second.Receipt.GraphHash.ToString("X8")}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.layout-identity",phase,
+                    layout?"pass":"fail","blocker",
+                    layout?"INTERACTION_GRAPH_LAYOUT_STABLE":"INTERACTION_GRAPH_LAYOUT_CHANGED",
+                    layout?"Target and live graphs share the same Scene, arrays, and pointer-pool allocations.":
+                        "An interaction container moved or changed capacity, so projection is unsafe.",
+                    new Dictionary<string,object>{{"targetScene",Hex(a.InteractionScene)},
+                        {"liveScene",Hex(b.InteractionScene)},{"poolLayout",poolLayout}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.active-body-order",phase,
+                    activeExact?"pass":"deferred","blocker",
+                    activeExact?"ACTIVE_BODY_ORDER_EXACT":"ACTIVE_BODY_ORDER_PROJECTION_REQUIRED",
+                    activeExact?"The active-body order and one-way/two-way split already match.":
+                        "The exact target active-body order is captured but not projected yet.",
+                    new Dictionary<string,object>{{"target",HexArray(target.ActiveBodies)},
+                        {"live",HexArray(first.ActiveBodies)},{"targetSplit",a.ActiveTwoWayStart},
+                        {"liveSplit",b.ActiveTwoWayStart}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.global-order",phase,
+                    globalExact?"pass":"deferred","blocker",
+                    globalExact?"GLOBAL_INTERACTION_ORDER_EXACT":"GLOBAL_INTERACTION_ORDER_PROJECTION_REQUIRED",
+                    globalExact?"All six global interaction arrays and active prefixes already match.":
+                        "The target global interaction order is exact, but live registration differs.",
+                    new Dictionary<string,object>{{"targetCounts",a.GlobalCount.Cast<object>().ToArray()},
+                        {"liveCounts",b.GlobalCount.Cast<object>().ToArray()},
+                        {"targetHashes",a.GlobalOrderHash.Select(x=>(object)("0x"+x.ToString("X8"))).ToArray()},
+                        {"liveHashes",b.GlobalOrderHash.Select(x=>(object)("0x"+x.ToString("X8"))).ToArray()}});
+                AddReadinessCheck(checks,blockers,deferred,
+                    "rigidbody.interaction-graph.actor-order-and-cached-indices",phase,
+                    actorExact?"pass":"deferred","blocker",
+                    actorExact?"ACTOR_INTERACTION_SLOTS_EXACT":"ACTOR_INTERACTION_SLOT_PROJECTION_REQUIRED",
+                    actorExact?"Every actor interaction order and cached bilateral index already matches.":
+                        "Per-actor arrays are internally valid but differ from the target order.",
+                    new Dictionary<string,object>{{"targetActors",target.Actors.Length},
+                        {"liveActors",first.Actors.Length},{"targetSlots",target.ActorSlots.Length},
+                        {"liveSlots",first.ActorSlots.Length}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.sip-semantic-keys",phase,
+                    !targetSemantic?"fail":missingKeys.Length==0?"pass":"deferred","blocker",
+                    !targetSemantic?"TARGET_SIP_GRAPH_CONTRADICTION":
+                        missingKeys.Length==0?"SIP_GRAPH_SEMANTICS_PRESENT":"SIP_GRAPH_RECONSTRUCTION_REQUIRED",
+                    !targetSemantic?"Saved manager/SIP owners contradict the saved global graph.":
+                        missingKeys.Length==0?"Every target SIP semantic pair is present in the live graph.":
+                            "The saved graph proves which semantic SIP registrations must be reconstructed.",
+                    new Dictionary<string,object>{{"targetKeys",targetKeys.Cast<object>().ToArray()},
+                        {"missingKeys",missingKeys.Cast<object>().ToArray()}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-graph.pointer-pool-topology",phase,
+                    poolsExact?"pass":"deferred","blocker",
+                    poolsExact?"POINTER_POOLS_EXACT":"POINTER_POOL_TOPOLOGY_PROJECTION_REQUIRED",
+                    poolsExact?"The 8/16/32 actor-array pointer pools already match exactly.":
+                        "Exact slab and free-chain order is captured, but live allocator topology differs.",
+                    new Dictionary<string,object>{{"targetPoolHash","0x"+a.PoolHash.ToString("X8")},
+                        {"livePoolHash","0x"+b.PoolHash.ToString("X8")}});
+                AddReadinessCheck(checks,blockers,deferred,"rigidbody.interaction-registration-order",phase,
+                    !repeatable||!layout||!targetSemantic?"fail":exact?"pass":"deferred","blocker",
+                    !repeatable||!layout||!targetSemantic?"INTERACTION_GRAPH_ADMISSION_FAILED":
+                        exact?"INTERACTION_GRAPH_EXACT":"INTERACTION_GRAPH_PROJECTION_REQUIRED",
+                    !repeatable||!layout||!targetSemantic?
+                        "The interaction graph failed structural admission before replay.":
+                        exact?"The complete active/global/actor/pool interaction graph already matches.":
+                            "The full target graph is captured and coherent; atomic projection remains.",
+                    new Dictionary<string,object>{{"exact",exact},
+                        {"targetGraphHash","0x"+a.GraphHash.ToString("X8")},
+                        {"liveGraphHash","0x"+b.GraphHash.ToString("X8")}});
+            }
+            catch(Exception error)
+            {
+                foreach(string id in ids)
+                    AddReadinessCheck(checks,blockers,deferred,id,phase,"fail","blocker",
+                        "INTERACTION_GRAPH_AUDIT_FAILED",error.GetType().Name+": "+error.Message,null);
+            }
+        }
+
         private NativeContactRecreateAuditReceipt CallContactRecreateAudit(
             CheckpointSidecar selected,NativeContactRecreatePlanRow[] rows)
         {
@@ -2392,7 +2641,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native contact-manager owner capture failed: result="+
                         receipt.Result+", Win32/error="+receipt.LastError+", invalidSlot="+
                         receipt.InvalidSlot+", detail="+receipt.Detail+".");
-                if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)receiptSize||
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)receiptSize||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.Context.ToUInt32()!=contactManagerContext||receipt.TotalSlots<1||
                     receipt.TotalSlots>MaximumContactManagers||receipt.RecordsRequired!=receipt.UsedCount||
@@ -2566,7 +2815,7 @@ namespace SuperchargedPatch.Authoring.Modules
             {
                 Marshal.FreeHGlobal(snapshotBuffer);Marshal.FreeHGlobal(receiptBuffer);
             }
-            if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                 receipt.Context.ToUInt32()!=contactManagerContext||receipt.PoolKind!=poolKind||
                 receipt.Pool==UIntPtr.Zero||receipt.FreeHeadBefore.ToUInt32()!=
@@ -2623,7 +2872,7 @@ namespace SuperchargedPatch.Authoring.Modules
             if(ok==0||receipt.Result!=1)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool action failed: result="+
                     receipt.Result+", Win32/error="+receipt.LastError+".");
-            if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                 receipt.UnityBase.ToUInt32()!=unityPlayerBase||receipt.Context.ToUInt32()!=contactManagerContext||
                 receipt.PoolKind!=poolKind||receipt.Pool==UIntPtr.Zero)
                 throw new InvalidOperationException("Native "+poolName+" manifold-pool receipt contract differs.");
@@ -2691,7 +2940,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native shape-pair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.TraversedCount>MaximumShapeInstancePairs||receipt.ValidationFlags!=0x1Fu)
@@ -2738,7 +2987,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -2792,7 +3041,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native ActorPair report-pool capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.Pool==UIntPtr.Zero||
                     receipt.FreeCount>MaximumShapeInstancePairs||
@@ -2854,7 +3103,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(ok==0||receipt.Result!=1)
                     throw new InvalidOperationException("Native NPhase report-state capture failed at frame "+frame+
                         ": result="+receipt.Result+", Win32/error="+receipt.LastError+".");
-                if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||
                     receipt.UnityBase.ToUInt32()!=unityPlayerBase||
                     receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
                     receipt.ActorPairCount>MaximumShapeInstancePairs||
@@ -2879,6 +3128,89 @@ namespace SuperchargedPatch.Authoring.Modules
             var state=new NPhaseReportState {Receipt=receipt,ActorPairs=actorPairs,
                 PersistentSips=persistent,ForceThresholdSips=force,ReportBufferBytes=bytes};
             ValidateNPhaseReportState(state);
+            return state;
+        }
+
+        private InteractionGraphState CaptureInteractionGraphState(uint nphaseCore,int frame)
+        {
+            if(captureInteractionGraphSnapshot==null||nphaseCore==0)
+                throw new InvalidOperationException("Native interaction-graph capture is unavailable.");
+            int receiptSize=Marshal.SizeOf(typeof(NativeInteractionGraphReceipt));
+            int actorSize=Marshal.SizeOf(typeof(NativeInteractionGraphActorRecord));
+            int interactionSize=Marshal.SizeOf(typeof(NativeInteractionGraphInteractionRecord));
+            int poolSize=Marshal.SizeOf(typeof(NativeInteractionGraphPoolReceipt));
+            if(receiptSize!=500||actorSize!=72||interactionSize!=72||poolSize!=80)
+                throw new InvalidOperationException("Managed interaction-graph ABI size differs.");
+            IntPtr receiptBuffer=Marshal.AllocHGlobal(receiptSize);
+            IntPtr activeBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphActors*IntPtr.Size);
+            IntPtr actorBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphActors*actorSize);
+            IntPtr interactionBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphInteractions*interactionSize);
+            IntPtr actorSlotBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphActorSlots*IntPtr.Size);
+            IntPtr poolSlabBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphPoolEntries*IntPtr.Size);
+            IntPtr poolFreeBuffer=Marshal.AllocHGlobal(MaximumInteractionGraphPoolEntries*IntPtr.Size);
+            NativeInteractionGraphReceipt receipt;
+            uint[] activeBodies=null,actorSlots=null,poolSlabs=null,poolFree=null;
+            NativeInteractionGraphActorRecord[] actors=null;
+            NativeInteractionGraphInteractionRecord[] interactions=null;
+            try
+            {
+                for(int i=0;i<receiptSize;i++)Marshal.WriteByte(receiptBuffer,i,0);
+                int ok=captureInteractionGraphSnapshot(new UIntPtr(unityPlayerBase),
+                    new UIntPtr(nphaseCore),activeBuffer,MaximumInteractionGraphActors,
+                    actorBuffer,MaximumInteractionGraphActors,
+                    interactionBuffer,MaximumInteractionGraphInteractions,
+                    actorSlotBuffer,MaximumInteractionGraphActorSlots,
+                    poolSlabBuffer,MaximumInteractionGraphPoolEntries,
+                    poolFreeBuffer,MaximumInteractionGraphPoolEntries,receiptBuffer);
+                receipt=(NativeInteractionGraphReceipt)Marshal.PtrToStructure(
+                    receiptBuffer,typeof(NativeInteractionGraphReceipt));
+                if(ok==0||receipt.Result!=1)
+                    throw new InvalidOperationException("Native interaction-graph capture failed at frame "+frame+
+                        ": result="+receipt.Result+", Win32/error="+receipt.LastError+
+                        ", kind="+receipt.InvalidKind+", index="+receipt.InvalidIndex+
+                        ", detail="+receipt.Detail+".");
+                if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)receiptSize||
+                    receipt.UnityBase.ToUInt32()!=unityPlayerBase||
+                    receipt.NPhaseCore.ToUInt32()!=nphaseCore||receipt.OwnerScene==UIntPtr.Zero||
+                    receipt.InteractionScene==UIntPtr.Zero||receipt.LlContext==UIntPtr.Zero||
+                    receipt.ActiveBodiesWritten!=receipt.ActiveBodiesRequired||
+                    receipt.ActorsWritten!=receipt.ActorsRequired||
+                    receipt.InteractionsWritten!=receipt.InteractionsRequired||
+                    receipt.ActorSlotsWritten!=receipt.ActorSlotsRequired||
+                    receipt.PoolSlabsWritten!=receipt.PoolSlabsRequired||
+                    receipt.PoolFreeWritten!=receipt.PoolFreeRequired||
+                    receipt.ActiveBodiesWritten>MaximumInteractionGraphActors||
+                    receipt.ActorsWritten>MaximumInteractionGraphActors||
+                    receipt.InteractionsWritten>MaximumInteractionGraphInteractions||
+                    receipt.ActorSlotsWritten>MaximumInteractionGraphActorSlots||
+                    receipt.PoolSlabsWritten>MaximumInteractionGraphPoolEntries||
+                    receipt.PoolFreeWritten>MaximumInteractionGraphPoolEntries||
+                    receipt.ValidationFlags!=0xFFu)
+                    throw new InvalidOperationException("Native interaction-graph receipt contract differs at frame "+frame+".");
+                activeBodies=ReadPointerBuffer(activeBuffer,receipt.ActiveBodiesWritten);
+                actorSlots=ReadPointerBuffer(actorSlotBuffer,receipt.ActorSlotsWritten);
+                poolSlabs=ReadPointerBuffer(poolSlabBuffer,receipt.PoolSlabsWritten);
+                poolFree=ReadPointerBuffer(poolFreeBuffer,receipt.PoolFreeWritten);
+                actors=new NativeInteractionGraphActorRecord[receipt.ActorsWritten];
+                for(int i=0;i<actors.Length;i++)actors[i]=(NativeInteractionGraphActorRecord)
+                    Marshal.PtrToStructure(new IntPtr(actorBuffer.ToInt64()+i*actorSize),
+                        typeof(NativeInteractionGraphActorRecord));
+                interactions=new NativeInteractionGraphInteractionRecord[receipt.InteractionsWritten];
+                for(int i=0;i<interactions.Length;i++)interactions[i]=(NativeInteractionGraphInteractionRecord)
+                    Marshal.PtrToStructure(new IntPtr(interactionBuffer.ToInt64()+i*interactionSize),
+                        typeof(NativeInteractionGraphInteractionRecord));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(poolFreeBuffer);Marshal.FreeHGlobal(poolSlabBuffer);
+                Marshal.FreeHGlobal(actorSlotBuffer);Marshal.FreeHGlobal(interactionBuffer);
+                Marshal.FreeHGlobal(actorBuffer);Marshal.FreeHGlobal(activeBuffer);
+                Marshal.FreeHGlobal(receiptBuffer);
+            }
+            var state=new InteractionGraphState {Receipt=receipt,ActiveBodies=activeBodies,
+                Actors=actors,Interactions=interactions,ActorSlots=actorSlots,
+                PoolSlabs=poolSlabs,PoolFree=poolFree};
+            ValidateInteractionGraphState(state);
             return state;
         }
 
@@ -3209,7 +3541,7 @@ namespace SuperchargedPatch.Authoring.Modules
 
         private void ValidateDirtyInteractionReceiptContract(NativeDirtyInteractionReceipt receipt,int size)
         {
-            if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native dirty-interaction receipt contract differs.");
         }
 
@@ -3242,7 +3574,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("Native context observer "+action+" failed: result="+receipt.Result+", Win32/error="+receipt.LastError+".");
             }
             finally{Marshal.FreeHGlobal(buffer);}
-            if(receipt.ApiVersion!=14||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
+            if(receipt.ApiVersion!=15||receipt.StructSize!=(uint)size||receipt.UnityBase.ToUInt32()!=unityPlayerBase)
                 throw new InvalidOperationException("Native context observer receipt contract differs.");
             lastContextObserverReceipt=new Dictionary<string,object>{{"action",action},{"unityBase",Hex(receipt.UnityBase)},
                 {"observedContext",Hex(receipt.ObservedContext)},{"observations",receipt.Observations},{"installed",receipt.Installed!=0}};
@@ -3429,7 +3761,7 @@ namespace SuperchargedPatch.Authoring.Modules
             uint actorCapacity=receipt.ActorPairCapacityRaw&0x7FFFFFFFu;
             uint persistentCapacity=receipt.PersistentCapacityRaw&0x7FFFFFFFu;
             uint forceCapacity=receipt.ForceThresholdCapacityRaw&0x7FFFFFFFu;
-            if(receipt.Result!=1||receipt.ApiVersion!=14||receipt.StructSize!=116u||
+            if(receipt.Result!=1||receipt.ApiVersion!=15||receipt.StructSize!=116u||
                 receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
                 receipt.OwnerScene==UIntPtr.Zero||receipt.ReportBuffer==UIntPtr.Zero||
                 receipt.ValidationFlags!=0x7Fu||
@@ -3464,6 +3796,110 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ForceThresholdSips.Distinct().Count()!=value.ForceThresholdSips.Length||
                 value.PersistentSips.Intersect(value.ForceThresholdSips).Any())
                 throw new InvalidOperationException("The NPhase report-state checkpoint contains null, duplicate, or conflicting list members.");
+        }
+
+        private static void ValidateInteractionGraphState(InteractionGraphState value)
+        {
+            if(value==null||value.ActiveBodies==null||value.Actors==null||
+                value.Interactions==null||value.ActorSlots==null||
+                value.PoolSlabs==null||value.PoolFree==null)
+                throw new InvalidOperationException("The interaction-graph checkpoint sidecar is incomplete.");
+            NativeInteractionGraphReceipt receipt=value.Receipt;
+            if(receipt.Result!=1||receipt.ApiVersion!=15||receipt.StructSize!=500u||
+                receipt.UnityBase==UIntPtr.Zero||receipt.NPhaseCore==UIntPtr.Zero||
+                receipt.OwnerScene==UIntPtr.Zero||receipt.InteractionScene==UIntPtr.Zero||
+                receipt.LlContext==UIntPtr.Zero||receipt.ActiveBodiesData==UIntPtr.Zero||
+                receipt.GlobalData==null||receipt.GlobalData.Length!=6||
+                receipt.GlobalCount==null||receipt.GlobalCount.Length!=6||
+                receipt.GlobalCapacityRaw==null||receipt.GlobalCapacityRaw.Length!=6||
+                receipt.GlobalActiveCount==null||receipt.GlobalActiveCount.Length!=6||
+                receipt.GlobalOrderHash==null||receipt.GlobalOrderHash.Length!=6||
+                receipt.Pools==null||receipt.Pools.Length!=3||
+                receipt.ActiveBodiesCount!=(uint)value.ActiveBodies.Length||
+                receipt.ActiveBodiesWritten!=receipt.ActiveBodiesRequired||
+                receipt.ActiveBodiesWritten!=receipt.ActiveBodiesCount||
+                receipt.ActorsWritten!=receipt.ActorsRequired||
+                receipt.ActorsWritten!=(uint)value.Actors.Length||
+                receipt.InteractionsWritten!=receipt.InteractionsRequired||
+                receipt.InteractionsWritten!=(uint)value.Interactions.Length||
+                receipt.ActorSlotsWritten!=receipt.ActorSlotsRequired||
+                receipt.ActorSlotsWritten!=(uint)value.ActorSlots.Length||
+                receipt.PoolSlabsWritten!=receipt.PoolSlabsRequired||
+                receipt.PoolSlabsWritten!=(uint)value.PoolSlabs.Length||
+                receipt.PoolFreeWritten!=receipt.PoolFreeRequired||
+                receipt.PoolFreeWritten!=(uint)value.PoolFree.Length||
+                receipt.ActiveTwoWayStart>receipt.ActiveBodiesCount||
+                receipt.GlobalCount.Aggregate(0UL,(sum,item)=>sum+item)!=(ulong)value.Interactions.Length||
+                receipt.GlobalActiveCount.Where((count,index)=>count>receipt.GlobalCount[index]).Any()||
+                receipt.ValidationFlags!=0xFFu)
+                throw new InvalidOperationException("The interaction-graph checkpoint receipt is incomplete.");
+            if(value.ActiveBodies.Any(pointer=>pointer==0)||
+                value.ActiveBodies.Distinct().Count()!=value.ActiveBodies.Length||
+                value.Actors.Any(actor=>actor.Actor==UIntPtr.Zero||actor.Vtable==UIntPtr.Zero||
+                    actor.InteractionScene!=receipt.InteractionScene||actor.ValidationFlags!=0x7Fu)||
+                value.Actors.Select(actor=>actor.Actor.ToUInt32()).Distinct().Count()!=value.Actors.Length||
+                value.Interactions.Any(item=>item.Interaction==UIntPtr.Zero||item.Vtable==UIntPtr.Zero||
+                    item.Actor0==UIntPtr.Zero||item.Actor1==UIntPtr.Zero||
+                    item.InteractionType>5||item.ValidationFlags!=0x1Fu)||
+                value.Interactions.Select(item=>item.Interaction.ToUInt32()).Distinct().Count()!=value.Interactions.Length)
+                throw new InvalidOperationException("The interaction graph contains null, duplicate, or invalid native rows.");
+            var actorByPointer=value.Actors.ToDictionary(actor=>actor.Actor.ToUInt32());
+            for(int i=0;i<value.ActiveBodies.Length;i++)
+            {
+                NativeInteractionGraphActorRecord actor;
+                if(!actorByPointer.TryGetValue(value.ActiveBodies[i],out actor)||
+                    actor.ActiveBodyIndex!=(uint)i)
+                    throw new InvalidOperationException("The interaction graph active-body order disagrees with actor metadata.");
+            }
+            foreach(NativeInteractionGraphActorRecord actor in value.Actors)
+            {
+                ulong end=(ulong)actor.InteractionOutputStart+actor.InteractionCount;
+                if(end>(ulong)value.ActorSlots.Length||actor.InteractionCount>actor.InteractionCapacity||
+                    actor.TransferringCount>actor.InteractionCount||
+                    actor.UniqueCount>actor.InteractionCount||actor.CountedCount>actor.InteractionCount||
+                    (actor.ActiveBodyIndex!=0xFFFFFFFFu&&actor.ActiveBodyIndex>=value.ActiveBodies.Length))
+                    throw new InvalidOperationException("An interaction-graph actor row has invalid counts or offsets.");
+            }
+            var interactionByPointer=value.Interactions.ToDictionary(item=>item.Interaction.ToUInt32());
+            foreach(NativeInteractionGraphInteractionRecord item in value.Interactions)
+            {
+                NativeInteractionGraphActorRecord actor0,actor1;
+                if(!actorByPointer.TryGetValue(item.Actor0.ToUInt32(),out actor0)||
+                    !actorByPointer.TryGetValue(item.Actor1.ToUInt32(),out actor1)||
+                    item.ActorId0>=actor0.InteractionCount||item.ActorId1>=actor1.InteractionCount||
+                    value.ActorSlots[actor0.InteractionOutputStart+item.ActorId0]!=item.Interaction.ToUInt32()||
+                    value.ActorSlots[actor1.InteractionOutputStart+item.ActorId1]!=item.Interaction.ToUInt32())
+                    throw new InvalidOperationException("An interaction row disagrees with a cached per-actor slot.");
+            }
+            foreach(uint slot in value.ActorSlots)
+                if(slot==0||!interactionByPointer.ContainsKey(slot))
+                    throw new InvalidOperationException("An actor slot names an interaction outside the global arrays.");
+            uint interactionOffset=0;
+            for(uint type=0;type<6;type++)
+            {
+                uint count=receipt.GlobalCount[type];
+                for(uint index=0;index<count;index++)
+                {
+                    NativeInteractionGraphInteractionRecord item=value.Interactions[interactionOffset+index];
+                    if(item.InteractionType!=type||item.GlobalIndex!=index||
+                        item.SceneId!=index||item.Active!=(index<receipt.GlobalActiveCount[type]?1u:0u))
+                        throw new InvalidOperationException("An interaction row disagrees with global type order or its active prefix.");
+                }
+                interactionOffset+=count;
+            }
+            foreach(NativeInteractionGraphPoolReceipt pool in receipt.Pools)
+            {
+                if(pool.Pool==UIntPtr.Zero||pool.SlabData==UIntPtr.Zero||
+                    (pool.BlockCapacity!=8u&&pool.BlockCapacity!=16u&&pool.BlockCapacity!=32u)||
+                    pool.BlockBytes!=pool.BlockCapacity*4u||pool.InlineBufferUsed>1u||
+                    pool.ElementsPerSlab!=32u||pool.SlabSize!=pool.BlockBytes*32u||
+                    pool.TotalElements!=pool.SlabCount*pool.ElementsPerSlab||
+                    pool.Used+pool.FreeCount!=pool.TotalElements||
+                    (ulong)pool.SlabOutputStart+pool.SlabCount>(ulong)value.PoolSlabs.Length||
+                    (ulong)pool.FreeOutputStart+pool.FreeCount>(ulong)value.PoolFree.Length||
+                    pool.ValidationFlags!=0x7Fu)
+                    throw new InvalidOperationException("An interaction pointer-pool receipt is incomplete.");
+            }
         }
 
         private static void ValidateContactManagerOwnerState(ContactManagerOwnerState value)
@@ -3574,6 +4010,61 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")}};
         }
 
+        private static object DescribeInteractionGraphState(InteractionGraphState value)
+        {
+            if(value==null)return null;
+            NativeInteractionGraphReceipt receipt=value.Receipt;
+            object[] global=Enumerable.Range(0,6).Select(type=>(object)new Dictionary<string,object>{
+                {"type",type},{"data",Hex(receipt.GlobalData[type])},
+                {"count",receipt.GlobalCount[type]},
+                {"capacityRaw","0x"+receipt.GlobalCapacityRaw[type].ToString("X8")},
+                {"activeCount",receipt.GlobalActiveCount[type]},
+                {"orderHash","0x"+receipt.GlobalOrderHash[type].ToString("X8")}}).ToArray();
+            object[] actors=value.Actors.Select(actor=>(object)new Dictionary<string,object>{
+                {"actor",Hex(actor.Actor)},{"vtable",Hex(actor.Vtable)},
+                {"data",Hex(actor.InteractionsData)},{"count",actor.InteractionCount},
+                {"capacity",actor.InteractionCapacity},{"slotStart",actor.InteractionOutputStart},
+                {"activeBodyIndex",actor.ActiveBodyIndex==0xFFFFFFFFu?(object)null:actor.ActiveBodyIndex},
+                {"transferring",actor.TransferringCount},{"unique",actor.UniqueCount},
+                {"counted",actor.CountedCount},{"actorType",actor.ActorType},
+                {"islandNodeInfo","0x"+actor.IslandNodeInfo.ToString("X2")},
+                {"orderHash","0x"+actor.InteractionOrderHash.ToString("X8")}}).ToArray();
+            object[] interactions=value.Interactions.Select(item=>(object)new Dictionary<string,object>{
+                {"interaction",Hex(item.Interaction)},{"type",item.InteractionType},
+                {"flags","0x"+item.InteractionFlags.ToString("X2")},
+                {"globalIndex",item.GlobalIndex},{"active",item.Active!=0},
+                {"actor0",Hex(item.Actor0)},{"actor1",Hex(item.Actor1)},
+                {"actorId0",item.ActorId0},{"actorId1",item.ActorId1},
+                {"element0",Hex(item.Element0)},{"element1",Hex(item.Element1)},
+                {"pxsShapeCore0",Hex(item.PxsShapeCore0)},
+                {"pxsShapeCore1",Hex(item.PxsShapeCore1)},
+                {"semanticLow",Hex(item.SemanticLow)},{"semanticHigh",Hex(item.SemanticHigh)}}).ToArray();
+            object[] pools=receipt.Pools.Select(pool=>(object)new Dictionary<string,object>{
+                {"pool",Hex(pool.Pool)},{"blockCapacity",pool.BlockCapacity},
+                {"blockBytes",pool.BlockBytes},{"slabData",Hex(pool.SlabData)},
+                {"slabCount",pool.SlabCount},{"slabCapacityRaw","0x"+pool.SlabCapacityRaw.ToString("X8")},
+                {"used",pool.Used},{"unreleasedFree",unchecked((int)pool.UnreleasedFree)},
+                {"freeCount",pool.FreeCount},{"freeHead",Hex(pool.FreeHead)},
+                {"slabOrderHash","0x"+pool.SlabOrderHash.ToString("X8")},
+                {"freeOrderHash","0x"+pool.FreeOrderHash.ToString("X8")},
+                {"usedOwnerHash","0x"+pool.UsedOwnerHash.ToString("X8")}}).ToArray();
+            return new Dictionary<string,object>{{"nphaseCore",Hex(receipt.NPhaseCore)},
+                {"ownerScene",Hex(receipt.OwnerScene)},{"interactionScene",Hex(receipt.InteractionScene)},
+                {"llContext",Hex(receipt.LlContext)},{"timestamp",receipt.Timestamp},
+                {"activeBodiesData",Hex(receipt.ActiveBodiesData)},
+                {"activeBodiesCapacityRaw","0x"+receipt.ActiveBodiesCapacityRaw.ToString("X8")},
+                {"activeTwoWayStart",receipt.ActiveTwoWayStart},{"activeBodies",HexArray(value.ActiveBodies)},
+                {"global",global},{"actors",actors},{"interactions",interactions},{"pools",pools},
+                {"actorSlots",HexArray(value.ActorSlots)},{"poolSlabs",HexArray(value.PoolSlabs)},
+                {"poolFree",HexArray(value.PoolFree)},
+                {"actorHash","0x"+receipt.ActorHash.ToString("X8")},
+                {"interactionHash","0x"+receipt.InteractionHash.ToString("X8")},
+                {"actorSlotHash","0x"+receipt.ActorSlotHash.ToString("X8")},
+                {"poolHash","0x"+receipt.PoolHash.ToString("X8")},
+                {"graphHash","0x"+receipt.GraphHash.ToString("X8")},
+                {"validationFlags","0x"+receipt.ValidationFlags.ToString("X8")}};
+        }
+
         private static uint DirtyInteractionOrderHash(NativeDirtyInteractionKey[] values)
         {
             if(values==null)throw new ArgumentNullException("values");
@@ -3633,12 +4124,14 @@ namespace SuperchargedPatch.Authoring.Modules
             ValidateActorPairPoolState(value.ActorPairPool);
             ValidateActorPairReportPoolState(value.ActorPairReportPool);
             ValidateNPhaseReportState(value.NPhaseReports);
+            ValidateInteractionGraphState(value.InteractionGraph);
             ValidateContactManagerOwnerState(value.ContactManagerOwners);
             ValidateDirtyInteractionState(value.DirtyInteractions);
             if(value.ShapeInstancePairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
                 value.ActorPairReportPool.NPhaseCore!=value.DirtyInteractions.NPhaseCore||
-                value.NPhaseReports.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore)
+                value.NPhaseReports.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore||
+                value.InteractionGraph.Receipt.NPhaseCore.ToUInt32()!=value.DirtyInteractions.NPhaseCore)
                 throw new InvalidOperationException("Checkpoint SIP and dirty-interaction state belong to different NPhaseCore instances.");
             ValidateCheckpointPoolCoherence(value);
             if(!ReferenceEquals(value.CoreSnapshot,CoreCheckpointSnapshot(value.Frame)))
@@ -3655,6 +4148,7 @@ namespace SuperchargedPatch.Authoring.Modules
                     SameActorPairPoolSnapshot(previous.ActorPairPool,value.ActorPairPool)&&
                     SameActorPairReportPoolSnapshot(previous.ActorPairReportPool,value.ActorPairReportPool)&&
                     SameNPhaseReportState(previous.NPhaseReports,value.NPhaseReports)&&
+                    SameInteractionGraphState(previous.InteractionGraph,value.InteractionGraph)&&
                     SameManifoldPoolSnapshot(previous.LargeManifoldPool,value.LargeManifoldPool)&&
                     SameManifoldPoolSnapshot(previous.SphereManifoldPool,value.SphereManifoldPool)&&
                     SameTransformDispatchSnapshot(previous.TransformDispatch,value.TransformDispatch)&&
@@ -3677,6 +4171,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.ActorPairReportPool==null||value.ActorPairReportPool.FreeOrder==null||
                 value.ActorPairReportPool.AllocatedOrder==null||
                 value.NPhaseReports==null||
+                value.InteractionGraph==null||value.InteractionGraph.Interactions==null||
                 value.LargeManifoldPool==null||value.LargeManifoldPool.Order==null||
                 value.SphereManifoldPool==null||value.SphereManifoldPool.Order==null)
                 throw new InvalidOperationException("Checkpoint pool-coherence inputs are incomplete.");
@@ -3741,6 +4236,26 @@ namespace SuperchargedPatch.Authoring.Modules
                 new HashSet<uint>(value.NPhaseReports.ForceThresholdSips).SetEquals(expectedForceSips)&&
                 reportListIndices&&owners.Where(owner=>(owner.SipFlags&0x00A00000u)==0)
                     .All(owner=>owner.ReportPairIndex==0xFFFFFFFFu);
+            ValidateInteractionGraphState(value.InteractionGraph);
+            NativeInteractionGraphReceipt graphReceipt=value.InteractionGraph.Receipt;
+            var graphByPointer=value.InteractionGraph.Interactions.ToDictionary(
+                item=>item.Interaction.ToUInt32());
+            bool interactionGraphCoherent=graphReceipt.NPhaseCore.ToUInt32()==
+                    value.ShapeInstancePairPool.NPhaseCore&&
+                graphReceipt.OwnerScene==value.NPhaseReports.Receipt.OwnerScene&&
+                graphReceipt.LlContext.ToUInt32()==value.Context&&
+                owners.All(owner=>
+                {
+                    NativeInteractionGraphInteractionRecord item;
+                    uint interaction=unchecked(owner.Sip.ToUInt32()+8u);
+                    if(!graphByPointer.TryGetValue(interaction,out item)||
+                        item.InteractionType!=0||(item.InteractionFlags&0x10u)==0)return false;
+                    uint owner0=owner.PxsShapeCore0.ToUInt32();
+                    uint owner1=owner.PxsShapeCore1.ToUInt32();
+                    uint item0=item.PxsShapeCore0.ToUInt32();
+                    uint item1=item.PxsShapeCore1.ToUInt32();
+                    return (owner0==item0&&owner1==item1)||(owner0==item1&&owner1==item0);
+                });
             NativeContactManagerOwnerReceipt receipt=value.ContactManagerOwners.Receipt;
             if(receipt.Context.ToUInt32()!=value.Context||receipt.FreeArray.ToUInt32()!=value.FreeArray||
                 receipt.FreeCount!=(uint)value.ContactPoolOrder.Length||receipt.FreeOrderHash!=value.OrderHash||
@@ -3755,7 +4270,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 receipt.UsedCount!=(uint)owners.Length||
                 value.ShapeInstancePairPool.Used<(uint)sips.Length||
                 value.ActorPairPool.Used!=(uint)actorPairs.Length||
-                !actorPairRowsCoherent||!nphaseReportCoherent||
+                !actorPairRowsCoherent||!nphaseReportCoherent||!interactionGraphCoherent||
                 value.LargeManifoldPool.Used<(uint)large.Length||
                 value.SphereManifoldPool.Used<(uint)sphere.Length)
                 throw new InvalidOperationException("Checkpoint contact owners and allocator partitions were not captured at one coherent physics boundary.");
@@ -3828,6 +4343,87 @@ namespace SuperchargedPatch.Authoring.Modules
                 left.PersistentSips.SequenceEqual(right.PersistentSips)&&
                 left.ForceThresholdSips.SequenceEqual(right.ForceThresholdSips)&&
                 left.ReportBufferBytes.SequenceEqual(right.ReportBufferBytes);
+        }
+
+        private static bool SameInteractionGraphPool(NativeInteractionGraphPoolReceipt a,
+            NativeInteractionGraphPoolReceipt b)
+        {
+            return a.Pool==b.Pool&&a.SlabData==b.SlabData&&a.FreeHead==b.FreeHead&&
+                a.BlockCapacity==b.BlockCapacity&&a.BlockBytes==b.BlockBytes&&
+                a.InlineBufferUsed==b.InlineBufferUsed&&a.SlabCount==b.SlabCount&&
+                a.SlabCapacityRaw==b.SlabCapacityRaw&&a.ElementsPerSlab==b.ElementsPerSlab&&
+                a.Used==b.Used&&a.UnreleasedFree==b.UnreleasedFree&&a.SlabSize==b.SlabSize&&
+                a.TotalElements==b.TotalElements&&a.FreeCount==b.FreeCount&&
+                a.SlabOutputStart==b.SlabOutputStart&&a.FreeOutputStart==b.FreeOutputStart&&
+                a.SlabOrderHash==b.SlabOrderHash&&a.FreeOrderHash==b.FreeOrderHash&&
+                a.UsedOwnerHash==b.UsedOwnerHash&&a.ValidationFlags==b.ValidationFlags;
+        }
+
+        private static bool SameInteractionGraphActor(NativeInteractionGraphActorRecord a,
+            NativeInteractionGraphActorRecord b)
+        {
+            return a.Actor==b.Actor&&a.Vtable==b.Vtable&&a.InlineSlots!=null&&b.InlineSlots!=null&&
+                a.InlineSlots.SequenceEqual(b.InlineSlots)&&a.InteractionsData==b.InteractionsData&&
+                a.FirstElement==b.FirstElement&&a.InteractionScene==b.InteractionScene&&
+                a.SceneArrayIndex==b.SceneArrayIndex&&a.InteractionOutputStart==b.InteractionOutputStart&&
+                a.InteractionCount==b.InteractionCount&&a.InteractionCapacity==b.InteractionCapacity&&
+                a.ActiveBodyIndex==b.ActiveBodyIndex&&a.InteractionOrderHash==b.InteractionOrderHash&&
+                a.TransferringCount==b.TransferringCount&&a.UniqueCount==b.UniqueCount&&
+                a.CountedCount==b.CountedCount&&a.ActorType==b.ActorType&&
+                a.IslandNodeInfo==b.IslandNodeInfo&&a.ValidationFlags==b.ValidationFlags;
+        }
+
+        private static bool SameInteractionGraphInteraction(
+            NativeInteractionGraphInteractionRecord a,NativeInteractionGraphInteractionRecord b)
+        {
+            return a.Interaction==b.Interaction&&a.Vtable==b.Vtable&&a.Actor0==b.Actor0&&
+                a.Actor1==b.Actor1&&a.Element0==b.Element0&&a.Element1==b.Element1&&
+                a.ShapeCore0==b.ShapeCore0&&a.ShapeCore1==b.ShapeCore1&&
+                a.PxsShapeCore0==b.PxsShapeCore0&&a.PxsShapeCore1==b.PxsShapeCore1&&
+                a.SemanticLow==b.SemanticLow&&a.SemanticHigh==b.SemanticHigh&&
+                a.SceneId==b.SceneId&&a.GlobalIndex==b.GlobalIndex&&a.Active==b.Active&&
+                a.ActorId0==b.ActorId0&&a.ActorId1==b.ActorId1&&
+                a.InteractionType==b.InteractionType&&a.InteractionFlags==b.InteractionFlags&&
+                a.Reserved==b.Reserved&&a.ValidationFlags==b.ValidationFlags;
+        }
+
+        private static bool SameInteractionGraphState(InteractionGraphState left,
+            InteractionGraphState right)
+        {
+            if(left==null||right==null)return left==right;
+            NativeInteractionGraphReceipt a=left.Receipt,b=right.Receipt;
+            bool receipt=a.ApiVersion==b.ApiVersion&&a.StructSize==b.StructSize&&
+                a.Result==b.Result&&a.LastError==b.LastError&&a.UnityBase==b.UnityBase&&
+                a.NPhaseCore==b.NPhaseCore&&a.OwnerScene==b.OwnerScene&&
+                a.InteractionScene==b.InteractionScene&&a.LlContext==b.LlContext&&
+                a.Timestamp==b.Timestamp&&a.ActiveBodiesData==b.ActiveBodiesData&&
+                a.ActiveBodiesCount==b.ActiveBodiesCount&&
+                a.ActiveBodiesCapacityRaw==b.ActiveBodiesCapacityRaw&&
+                a.ActiveTwoWayStart==b.ActiveTwoWayStart&&a.GlobalData.SequenceEqual(b.GlobalData)&&
+                a.GlobalCount.SequenceEqual(b.GlobalCount)&&
+                a.GlobalCapacityRaw.SequenceEqual(b.GlobalCapacityRaw)&&
+                a.GlobalActiveCount.SequenceEqual(b.GlobalActiveCount)&&
+                a.GlobalOrderHash.SequenceEqual(b.GlobalOrderHash)&&
+                a.ActiveBodiesRequired==b.ActiveBodiesRequired&&a.ActorsRequired==b.ActorsRequired&&
+                a.InteractionsRequired==b.InteractionsRequired&&a.ActorSlotsRequired==b.ActorSlotsRequired&&
+                a.PoolSlabsRequired==b.PoolSlabsRequired&&a.PoolFreeRequired==b.PoolFreeRequired&&
+                a.ActorHash==b.ActorHash&&a.InteractionHash==b.InteractionHash&&
+                a.ActorSlotHash==b.ActorSlotHash&&a.PoolHash==b.PoolHash&&
+                a.GraphHash==b.GraphHash&&a.ValidationFlags==b.ValidationFlags&&
+                a.Pools.Length==b.Pools.Length;
+            if(!receipt)return false;
+            for(int i=0;i<a.Pools.Length;i++)if(!SameInteractionGraphPool(a.Pools[i],b.Pools[i]))return false;
+            if(!left.ActiveBodies.SequenceEqual(right.ActiveBodies)||
+                !left.ActorSlots.SequenceEqual(right.ActorSlots)||
+                !left.PoolSlabs.SequenceEqual(right.PoolSlabs)||
+                !left.PoolFree.SequenceEqual(right.PoolFree)||
+                left.Actors.Length!=right.Actors.Length||
+                left.Interactions.Length!=right.Interactions.Length)return false;
+            for(int i=0;i<left.Actors.Length;i++)
+                if(!SameInteractionGraphActor(left.Actors[i],right.Actors[i]))return false;
+            for(int i=0;i<left.Interactions.Length;i++)
+                if(!SameInteractionGraphInteraction(left.Interactions[i],right.Interactions[i]))return false;
+            return true;
         }
 
         private static bool SameContactManagerOwnerSnapshot(ContactManagerOwnerState left,ContactManagerOwnerState right)
@@ -3909,6 +4505,7 @@ namespace SuperchargedPatch.Authoring.Modules
                 {"actorPairPool",found?DescribeActorPairPoolState(value.ActorPairPool):null},
                 {"actorPairReportPool",found?DescribeActorPairReportPoolState(value.ActorPairReportPool):null},
                 {"nphaseReports",found?DescribeNPhaseReportState(value.NPhaseReports):null},
+                {"interactionGraph",found?DescribeInteractionGraphState(value.InteractionGraph):null},
                 {"largeManifoldPool",found?DescribeManifoldPoolState(value.LargeManifoldPool):null},
                 {"sphereManifoldPool",found?DescribeManifoldPoolState(value.SphereManifoldPool):null},
                 {"transformDispatchCaptured",found&&value.TransformDispatch!=null},
@@ -4067,7 +4664,7 @@ namespace SuperchargedPatch.Authoring.Modules
             int lastFrame=latest==null?-1:latest.Frame;
             var value=new Dictionary<string,object>{{"name",Name},{"apiVersion",1},{"operation",operation},
                 {"active",ReferenceEquals(active,this)},{"automaticChefs",automatic},{"automaticGroundCollider",automaticGroundCollider},{"nativePath",nativePath},
-                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:14},
+                {"nativeSha256",nativeSha256},{"nativeApiVersion",library==IntPtr.Zero?(object)null:15},
                 {"unityPlayerBase","0x"+unityPlayerBase.ToString("X8")},
                 {"rebuilds",rebuilds},{"failure",failure},{"receipts",receipts.ToArray()},
                 {"contactManagerContext",contactManagerContext==0?null:"0x"+contactManagerContext.ToString("X8")},
@@ -4089,6 +4686,8 @@ namespace SuperchargedPatch.Authoring.Modules
                     DescribeActorPairReportPoolState(latest.ActorPairReportPool)},
                 {"nphaseReportSnapshot",latest==null?null:
                     DescribeNPhaseReportState(latest.NPhaseReports)},
+                {"interactionGraphSnapshot",latest==null?null:
+                    DescribeInteractionGraphState(latest.InteractionGraph)},
                 {"manifoldPoolSnapshotCaptured",latest!=null&&latest.LargeManifoldPool!=null&&latest.SphereManifoldPool!=null},
                 {"manifoldPoolSnapshotFrame",latest==null?-1:lastFrame},
                 {"largeManifoldPoolSnapshot",latest==null?null:DescribeManifoldPoolState(latest.LargeManifoldPool)},
@@ -4154,6 +4753,7 @@ namespace SuperchargedPatch.Authoring.Modules
             captureActorPairPoolSnapshot=null;
             captureActorPairReportPoolSnapshot=null;
             captureNPhaseReportStateSnapshot=null;
+            captureInteractionGraphSnapshot=null;
             installContextObserver=null;statusContextObserver=null;uninstallContextObserver=null;
             contactRecreateApiVersion=null;contactRecreateAuditApiVersion=null;auditContactRecreate=null;
             armContactRecreate=null;statusContactRecreate=null;cancelContactRecreate=null;

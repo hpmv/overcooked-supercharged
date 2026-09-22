@@ -139,6 +139,53 @@ struct NPhaseReportStateReceipt {
     uint32_t reportBufferAllocationHash;
     uint32_t validationFlags;
 };
+
+struct InteractionGraphActorRecord {
+    uintptr_t actor, vtable, inlineSlots[4], interactionsData, firstElement,
+        interactionScene;
+    uint32_t sceneArrayIndex, interactionOutputStart, interactionCount,
+        interactionCapacity, activeBodyIndex, interactionOrderHash;
+    uint16_t transferringCount, uniqueCount, countedCount;
+    uint8_t actorType, islandNodeInfo;
+    uint32_t validationFlags;
+};
+
+struct InteractionGraphInteractionRecord {
+    uintptr_t interaction, vtable, actor0, actor1, element0, element1,
+        shapeCore0, shapeCore1, pxsShapeCore0, pxsShapeCore1,
+        semanticLow, semanticHigh;
+    uint32_t sceneId, globalIndex, active;
+    uint16_t actorId0, actorId1;
+    uint8_t interactionType, interactionFlags;
+    uint16_t reserved;
+    uint32_t validationFlags;
+};
+
+struct InteractionGraphPoolReceipt {
+    uintptr_t pool, slabData, freeHead;
+    uint32_t blockCapacity, blockBytes, inlineBufferUsed, slabCount,
+        slabCapacityRaw, elementsPerSlab, used, unreleasedFree, slabSize,
+        totalElements, freeCount, slabOutputStart, freeOutputStart,
+        slabOrderHash, freeOrderHash, usedOwnerHash, validationFlags;
+};
+
+struct InteractionGraphReceipt {
+    uint32_t apiVersion, structSize, result, lastError;
+    uintptr_t unityBase, nphaseCore, ownerScene, interactionScene, llContext;
+    uint32_t timestamp;
+    uintptr_t activeBodiesData;
+    uint32_t activeBodiesCount, activeBodiesCapacityRaw, activeTwoWayStart;
+    uintptr_t globalData[6];
+    uint32_t globalCount[6], globalCapacityRaw[6], globalActiveCount[6],
+        globalOrderHash[6];
+    uint32_t activeBodiesRequired, activeBodiesWritten, actorsRequired,
+        actorsWritten, interactionsRequired, interactionsWritten,
+        actorSlotsRequired, actorSlotsWritten, poolSlabsRequired,
+        poolSlabsWritten, poolFreeRequired, poolFreeWritten, actorHash,
+        interactionHash, actorSlotHash, poolHash, graphHash, validationFlags,
+        invalidKind, invalidIndex, detail;
+    InteractionGraphPoolReceipt pools[3];
+};
 #pragma pack(pop)
 
 static_assert(sizeof(ManifoldPoolReceipt) == 200,
@@ -159,6 +206,14 @@ static_assert(sizeof(ActorPairPoolReceipt) == 212,
     "Unexpected Win32 ActorPair-pool receipt ABI");
 static_assert(sizeof(NPhaseReportStateReceipt) == 116,
     "Unexpected Win32 NPhase report-state receipt ABI");
+static_assert(sizeof(InteractionGraphActorRecord) == 72,
+    "Unexpected Win32 interaction-graph actor ABI");
+static_assert(sizeof(InteractionGraphInteractionRecord) == 72,
+    "Unexpected Win32 interaction-graph interaction ABI");
+static_assert(sizeof(InteractionGraphPoolReceipt) == 80,
+    "Unexpected Win32 interaction-graph pool ABI");
+static_assert(sizeof(InteractionGraphReceipt) == 500,
+    "Unexpected Win32 interaction-graph receipt ABI");
 
 typedef uint32_t (__cdecl *ApiVersion)();
 typedef int (__cdecl *CaptureSnapshot)(uintptr_t, uintptr_t*, uint32_t,
@@ -200,6 +255,10 @@ typedef int (__cdecl *CaptureActorPairReportSnapshot)(uintptr_t, uintptr_t,
 typedef int (__cdecl *CaptureNPhaseReportState)(uintptr_t, uintptr_t,
     uintptr_t*, uint32_t, uintptr_t*, uint32_t, uintptr_t*, uint32_t,
     uint8_t*, uint32_t, NPhaseReportStateReceipt*);
+typedef int (__cdecl *CaptureInteractionGraph)(uintptr_t, uintptr_t,
+    uintptr_t*, uint32_t, InteractionGraphActorRecord*, uint32_t,
+    InteractionGraphInteractionRecord*, uint32_t, uintptr_t*, uint32_t,
+    uintptr_t*, uint32_t, uintptr_t*, uint32_t, InteractionGraphReceipt*);
 typedef int (__cdecl *ContactRecreateStatus)(uintptr_t, uintptr_t,
     ContactRecreateReceipt*);
 typedef int (__cdecl *ContactRecreateCancel)(uintptr_t,
@@ -275,6 +334,21 @@ static const uint32_t kContactReportBufferAllocateRva = 0xA53950;
 static const uint32_t kInitManagerRva = 0xA7E5F0;
 static const uint32_t kCreateSipRva = 0xA54430;
 static const uint32_t kGetShapeTypeRva = 0x842360;
+static const uint32_t kInteractionSceneCtorRva = 0xA40570;
+static const uint32_t kInteractionSceneCtorPool16Rva = 0xA40623;
+static const uint32_t kInteractionSceneCtorPool32Rva = 0xA40639;
+static const uint32_t kInteractionSceneCtorTailRva = 0xA4064F;
+static const uint32_t kInteractionActorCtorLayoutRva = 0xA3F74C;
+static const uint32_t kInteractionActorReallocRva = 0xA3FA90;
+static const uint32_t kInteractionActorRegisterRva = 0xA3FB40;
+static const uint32_t kInteractionActorUnregisterRva = 0xA3FD50;
+static const uint32_t kInteractionPointerAllocateRva = 0xA40E60;
+static const uint32_t kInteractionPointerFreeRva = 0xA411D0;
+static const uint32_t kInteractionActiveTestRva = 0xA41EC0;
+static const uint32_t kInteractionActivateRva = 0xA41EE0;
+static const uint32_t kInteractionDeactivateRva = 0xA41F40;
+static const uint32_t kInteractionRegisterRva = 0xA420B0;
+static const uint32_t kInteractionUnregisterRva = 0xA42950;
 static const uint8_t kCreateManagerBytes[] = {0x55,0x8B,0xEC,0x53,0x8B,0xD9};
 static const uint8_t kCreateShapeInstancePairBytes[] = {
     0x55,0x8B,0xEC,0x51,0x53,0x8B,0x5D,0x08
@@ -347,6 +421,69 @@ static const uint8_t kCreateSipShapeBytes[] = {
     0x83,0xC0,0x20,0x89,0x7D,0xB4,0x83
 };
 static const uint8_t kGetShapeTypeBytes[] = {0x8B,0x41,0x74,0xC3};
+static const uint8_t kInteractionSceneCtorBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x56,0x8B,0xF1,0x8D,0x45,0xFF,
+    0x68,0x00,0x04,0x00,0x00,0x6A,0x20,0x50,0xC7,0x06,
+    0x00,0x00,0x00,0x00,0x8D,0x4E,0x70
+};
+static const uint8_t kInteractionSceneCtorPool16Bytes[] = {
+    0x68,0x00,0x08,0x00,0x00,0x6A,0x20,0x8D,0x45,0xFF,0x50,
+    0x8D,0x8E,0x98,0x01,0x00,0x00
+};
+static const uint8_t kInteractionSceneCtorPool32Bytes[] = {
+    0x68,0x00,0x10,0x00,0x00,0x6A,0x20,0x8D,0x45,0xFF,0x50,
+    0x8D,0x8E,0xC0,0x02,0x00,0x00
+};
+static const uint8_t kInteractionSceneCtorTailBytes[] = {
+    0x8B,0x45,0x08,0x89,0x86,0xF0,0x03,0x00,0x00,0x8B,0xC6,
+    0xC7,0x86,0xE8,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+    0xC7,0x86,0xEC,0x03,0x00,0x00,0x00,0x00,0x00,0x00
+};
+static const uint8_t kInteractionActorCtorLayoutBytes[] = {
+    0xC7,0x41,0x14,0x00,0x00,0x00,0x00,
+    0xC7,0x41,0x18,0x00,0x00,0x00,0x00,
+    0xC7,0x41,0x1C,0x00,0x00,0x00,0x00,0x89,0x41,0x24
+};
+static const uint8_t kInteractionActorReallocBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x8B,0xD1,0x8B,0x4D,0x14,
+    0x89,0x55,0xFC,0x56,0x57,0x85,0xC9
+};
+static const uint8_t kInteractionActorRegisterBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x53,0x56,0x57,0x8B,0x7D,0x08,
+    0x8B,0xF1,0x8B,0x47,0x04,0x0F,0xB6,0x4F,0x14
+};
+static const uint8_t kInteractionActorUnregisterBytes[] = {
+    0x55,0x8B,0xEC,0x56,0x57,0x8B,0x7D,0x08,0x8B,0xF1,
+    0x39,0x77,0x04,0x75,0x06,0x0F,0xB7,0x57,0x10
+};
+static const uint8_t kInteractionPointerAllocateBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x08,0x56,0x83,0xF8,0x08,0x75,0x32,
+    0x83,0xB9,0x94,0x01,0x00,0x00,0x00,0x8D,0x71,0x70
+};
+static const uint8_t kInteractionPointerFreeBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x0C,0x83,0xF8,0x08,0x75,0x4A,
+    0x56,0x8D,0x71,0x70,0x8B,0x4D,0x08
+};
+static const uint8_t kInteractionActiveTestBytes[] = {
+    0x55,0x8B,0xEC,0x8B,0x45,0x08,0x0F,0xB6,0x50,0x14,
+    0x8B,0x40,0x0C,0x3B,0x44,0x91,0x58
+};
+static const uint8_t kInteractionActivateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x56,0x8B,0x75,0x08,0x57,
+    0x8D,0x79,0x58,0x0F,0xB6,0x46,0x14
+};
+static const uint8_t kInteractionDeactivateBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x53,0x57,0x8B,0x7D,0x08,0x89,0x4D,0xFC,
+    0x0F,0xB6,0x47,0x14
+};
+static const uint8_t kInteractionRegisterBytes[] = {
+    0x55,0x8B,0xEC,0x83,0xEC,0x08,0x56,0x57,0x8B,0x7D,0x08,
+    0x8B,0xD1,0x89,0x55,0xF8,0x0F,0xB6,0x4F,0x14
+};
+static const uint8_t kInteractionUnregisterBytes[] = {
+    0x55,0x8B,0xEC,0x51,0x8B,0x55,0x08,0x53,0x56,0x57,
+    0x0F,0xB6,0x7A,0x14,0x8B,0x5A,0x0C
+};
 static const uint8_t kDirtyUpdateFunctionBytes[] = {
     0x55,0x8B,0xEC,0x83,0xEC,0x34,0x8B,0xE5,0x5D,0xC3
 };
@@ -481,6 +618,46 @@ static uint8_t* CreateRevisionImage() {
         sizeof(kCreateSipShapeBytes));
     CopyBytes(image + kGetShapeTypeRva, kGetShapeTypeBytes,
         sizeof(kGetShapeTypeBytes));
+    CopyBytes(image + kInteractionSceneCtorRva,
+        kInteractionSceneCtorBytes, sizeof(kInteractionSceneCtorBytes));
+    CopyBytes(image + kInteractionSceneCtorPool16Rva,
+        kInteractionSceneCtorPool16Bytes,
+        sizeof(kInteractionSceneCtorPool16Bytes));
+    CopyBytes(image + kInteractionSceneCtorPool32Rva,
+        kInteractionSceneCtorPool32Bytes,
+        sizeof(kInteractionSceneCtorPool32Bytes));
+    CopyBytes(image + kInteractionSceneCtorTailRva,
+        kInteractionSceneCtorTailBytes,
+        sizeof(kInteractionSceneCtorTailBytes));
+    CopyBytes(image + kInteractionActorCtorLayoutRva,
+        kInteractionActorCtorLayoutBytes,
+        sizeof(kInteractionActorCtorLayoutBytes));
+    CopyBytes(image + kInteractionActorReallocRva,
+        kInteractionActorReallocBytes,
+        sizeof(kInteractionActorReallocBytes));
+    CopyBytes(image + kInteractionActorRegisterRva,
+        kInteractionActorRegisterBytes,
+        sizeof(kInteractionActorRegisterBytes));
+    CopyBytes(image + kInteractionActorUnregisterRva,
+        kInteractionActorUnregisterBytes,
+        sizeof(kInteractionActorUnregisterBytes));
+    CopyBytes(image + kInteractionPointerAllocateRva,
+        kInteractionPointerAllocateBytes,
+        sizeof(kInteractionPointerAllocateBytes));
+    CopyBytes(image + kInteractionPointerFreeRva,
+        kInteractionPointerFreeBytes,
+        sizeof(kInteractionPointerFreeBytes));
+    CopyBytes(image + kInteractionActiveTestRva,
+        kInteractionActiveTestBytes,
+        sizeof(kInteractionActiveTestBytes));
+    CopyBytes(image + kInteractionActivateRva,
+        kInteractionActivateBytes, sizeof(kInteractionActivateBytes));
+    CopyBytes(image + kInteractionDeactivateRva,
+        kInteractionDeactivateBytes, sizeof(kInteractionDeactivateBytes));
+    CopyBytes(image + kInteractionRegisterRva,
+        kInteractionRegisterBytes, sizeof(kInteractionRegisterBytes));
+    CopyBytes(image + kInteractionUnregisterRva,
+        kInteractionUnregisterBytes, sizeof(kInteractionUnregisterBytes));
     return image;
 }
 
@@ -983,7 +1160,7 @@ static void RunActorPairPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x18 && receipt.elementsPerSlab == 32 &&
@@ -1070,7 +1247,7 @@ static void RunActorPairReportPoolTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), freeOrder, 32,
         allocatedOrder, 32, &receipt) == 1,
         "ActorPair report pool capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.pool == reinterpret_cast<uintptr_t>(pool) &&
         receipt.elementSize == 0x24 && receipt.elementsPerSlab == 32 &&
@@ -1193,7 +1370,7 @@ static void RunNPhaseReportStateTests(uint8_t* image,
         reinterpret_cast<uintptr_t>(nphase), capturedActorPairs, 4,
         capturedPersistent, 4, capturedForce, 4, capturedBytes, 32,
         &receipt) == 1, "NPhase report-state capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
         receipt.structSize == sizeof(receipt) &&
         receipt.ownerScene == reinterpret_cast<uintptr_t>(nphase + 0x60) &&
         receipt.actorPairCount == 2 && receipt.persistentCount == 2 &&
@@ -1273,7 +1450,7 @@ static void RunManifoldPoolTests(uint8_t* image, uint32_t poolKind,
 
     Check(capture(imagePointer, contextPointer, poolKind, saved, 3,
         &receipt) == 1, "manifold capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
         receipt.structSize == sizeof(receipt), "manifold capture receipt");
     Check(receipt.pool == poolPointer && receipt.poolKind == poolKind &&
         receipt.elementSize == elementSize && receipt.traversedCount == 3,
@@ -2032,6 +2209,314 @@ static void RunContactRecreateSipTests(uint8_t* image,
         "dual shape-pair/contact observer uninstalls");
 }
 
+struct InteractionGraphFixture {
+    uint8_t nphase[4];
+    uint8_t ownerScene[0x4B8];
+    uint8_t interactionScene[0x3F4];
+    uint8_t actors[4][0x34];
+    uint8_t interactions[6][0x20];
+    uint8_t elements[12][0x20];
+    uint8_t shapeCores[2][0x24];
+    uintptr_t activeBodies[4];
+    uintptr_t globalInteractions[6];
+    uint8_t slab8[0x400];
+    uint8_t slab16[0x800];
+    uint8_t slab32[0x1000];
+};
+
+static void InitializeInteractionPointerPool(uint8_t* pool, uint8_t* slab,
+    uint32_t blockBytes, uint32_t usedBlocks) {
+    *reinterpret_cast<uintptr_t*>(pool + 0x04) =
+        reinterpret_cast<uintptr_t>(slab);
+    *reinterpret_cast<uint8_t*>(pool + 0x104) = 1;
+    *reinterpret_cast<uintptr_t*>(pool + 0x108) =
+        reinterpret_cast<uintptr_t>(pool + 0x04);
+    *reinterpret_cast<uint32_t*>(pool + 0x10C) = 1;
+    *reinterpret_cast<uint32_t*>(pool + 0x110) = 0x80000040u;
+    *reinterpret_cast<uint32_t*>(pool + 0x114) = 32;
+    *reinterpret_cast<uint32_t*>(pool + 0x118) = usedBlocks;
+    // Intentionally differs from freeCount. It is deferred slab-reclamation
+    // accounting, not a second expression of the free-chain length.
+    *reinterpret_cast<uint32_t*>(pool + 0x11C) = 0xFFFFFFFDu;
+    *reinterpret_cast<uint32_t*>(pool + 0x120) = blockBytes * 32u;
+    *reinterpret_cast<uintptr_t*>(pool + 0x124) =
+        reinterpret_cast<uintptr_t>(slab + usedBlocks * blockBytes);
+    for (uint32_t i = usedBlocks; i < 32; ++i) {
+        *reinterpret_cast<uintptr_t*>(slab + i * blockBytes) = i == 31 ?
+            0 : reinterpret_cast<uintptr_t>(slab + (i + 1) * blockBytes);
+    }
+}
+
+static void InitializeInteractionGraphFixture(InteractionGraphFixture& f) {
+    ZeroMemory(&f, sizeof(f));
+    const uintptr_t owner = reinterpret_cast<uintptr_t>(f.ownerScene);
+    const uintptr_t scene = reinterpret_cast<uintptr_t>(f.interactionScene);
+    *reinterpret_cast<uintptr_t*>(f.nphase) = owner;
+    *reinterpret_cast<uintptr_t*>(f.ownerScene + 0x4B4) = scene;
+    *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x3E8) =
+        reinterpret_cast<uintptr_t>(&f);
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x3EC) = 123;
+    *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x3F0) = owner;
+
+    for (uint32_t i = 0; i < 4; ++i)
+        f.activeBodies[i] = reinterpret_cast<uintptr_t>(f.actors[i]);
+    *reinterpret_cast<uintptr_t*>(f.interactionScene) =
+        reinterpret_cast<uintptr_t>(f.activeBodies);
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x04) = 4;
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x08) = 4;
+    *reinterpret_cast<uint32_t*>(f.interactionScene + 0x0C) = 1;
+
+    for (uint32_t i = 0; i < 6; ++i)
+        f.globalInteractions[i] =
+            reinterpret_cast<uintptr_t>(f.interactions[i]);
+    for (uint32_t i = 0; i < 6; ++i) {
+        *reinterpret_cast<uintptr_t*>(f.interactionScene + 0x10 + i * 12) =
+            reinterpret_cast<uintptr_t>(f.globalInteractions + i);
+        *reinterpret_cast<uint32_t*>(f.interactionScene + 0x14 + i * 12) = 1;
+        *reinterpret_cast<uint32_t*>(f.interactionScene + 0x18 + i * 12) = 1;
+        *reinterpret_cast<uint32_t*>(f.interactionScene + 0x58 + i * 4) = 1;
+    }
+
+    const uint32_t poolOffsets[3] = {0x70u, 0x198u, 0x2C0u};
+    uint8_t* slabs[3] = {f.slab8, f.slab16, f.slab32};
+    const uint32_t blockBytes[3] = {0x20u, 0x40u, 0x80u};
+    const uint32_t usedBlocks[3] = {2u, 1u, 1u};
+    for (uint32_t i = 0; i < 3; ++i)
+        InitializeInteractionPointerPool(f.interactionScene + poolOffsets[i],
+            slabs[i], blockBytes[i], usedBlocks[i]);
+
+    for (uint32_t i = 0; i < 4; ++i) {
+        uint8_t* actor = f.actors[i];
+        *reinterpret_cast<uintptr_t*>(actor) =
+            reinterpret_cast<uintptr_t>(actor + 0x30);
+        *reinterpret_cast<uintptr_t*>(actor + 0x20) =
+            reinterpret_cast<uintptr_t>(f.elements[i * 2]);
+        *reinterpret_cast<uintptr_t*>(actor + 0x24) = scene;
+        *reinterpret_cast<uint32_t*>(actor + 0x28) = i;
+        *reinterpret_cast<uint16_t*>(actor + 0x2E) = 1;
+        *reinterpret_cast<uint8_t*>(actor + 0x32) = 1;
+        *reinterpret_cast<uint8_t*>(actor + 0x33) = i == 0 ? 3 : 5;
+    }
+    *reinterpret_cast<uint32_t*>(f.actors[0] + 0x1C) = 6;
+    *reinterpret_cast<uint16_t*>(f.actors[0] + 0x2C) = 4;
+    *reinterpret_cast<uint16_t*>(f.actors[0] + 0x30) = 2;
+    *reinterpret_cast<uintptr_t*>(f.actors[1] + 0x14) =
+        reinterpret_cast<uintptr_t>(f.slab8 + 0x20);
+    *reinterpret_cast<uint32_t*>(f.actors[1] + 0x1C) = 2;
+    *reinterpret_cast<uint32_t*>(f.actors[1] + 0x18) = 8;
+    *reinterpret_cast<uint16_t*>(f.actors[1] + 0x2C) = 1;
+    *reinterpret_cast<uint16_t*>(f.actors[1] + 0x30) = 1;
+    *reinterpret_cast<uintptr_t*>(f.actors[2] + 0x14) =
+        reinterpret_cast<uintptr_t>(f.slab16);
+    *reinterpret_cast<uint32_t*>(f.actors[2] + 0x1C) = 2;
+    *reinterpret_cast<uint32_t*>(f.actors[2] + 0x18) = 16;
+    *reinterpret_cast<uint16_t*>(f.actors[2] + 0x2C) = 2;
+    *reinterpret_cast<uint16_t*>(f.actors[2] + 0x30) = 1;
+    *reinterpret_cast<uintptr_t*>(f.actors[3] + 0x14) =
+        reinterpret_cast<uintptr_t>(f.slab32);
+    *reinterpret_cast<uint32_t*>(f.actors[3] + 0x1C) = 2;
+    *reinterpret_cast<uint32_t*>(f.actors[3] + 0x18) = 32;
+    *reinterpret_cast<uint16_t*>(f.actors[3] + 0x2C) = 1;
+    *reinterpret_cast<uint16_t*>(f.actors[3] + 0x30) = 0;
+
+    *reinterpret_cast<uintptr_t*>(f.actors[0] + 0x14) =
+        reinterpret_cast<uintptr_t>(f.slab8);
+    *reinterpret_cast<uint32_t*>(f.actors[0] + 0x18) = 8;
+    const uint32_t actor0Order[6] = {0u, 1u, 4u, 5u, 2u, 3u};
+    for (uint32_t i = 0; i < 6; ++i)
+        *reinterpret_cast<uintptr_t*>(f.slab8 + i * 4) =
+            reinterpret_cast<uintptr_t>(f.interactions[actor0Order[i]]);
+    *reinterpret_cast<uintptr_t*>(f.slab8 + 0x20) =
+        reinterpret_cast<uintptr_t>(f.interactions[0]);
+    *reinterpret_cast<uintptr_t*>(f.slab8 + 0x24) =
+        reinterpret_cast<uintptr_t>(f.interactions[3]);
+    *reinterpret_cast<uintptr_t*>(f.slab16) =
+        reinterpret_cast<uintptr_t>(f.interactions[1]);
+    *reinterpret_cast<uintptr_t*>(f.slab16 + 0x04) =
+        reinterpret_cast<uintptr_t>(f.interactions[4]);
+    *reinterpret_cast<uintptr_t*>(f.slab32) =
+        reinterpret_cast<uintptr_t>(f.interactions[5]);
+    *reinterpret_cast<uintptr_t*>(f.slab32 + 0x04) =
+        reinterpret_cast<uintptr_t>(f.interactions[2]);
+
+    const uint32_t peerActors[6] = {1u, 2u, 3u, 1u, 2u, 3u};
+    const uint16_t actor0Ids[6] = {0u, 1u, 4u, 5u, 2u, 3u};
+    const uint16_t peerIds[6] = {0u, 0u, 1u, 1u, 1u, 0u};
+    for (uint32_t i = 0; i < 6; ++i) {
+        *reinterpret_cast<uintptr_t*>(f.elements[i * 2] + 0x08) =
+            reinterpret_cast<uintptr_t>(f.actors[0]);
+        *reinterpret_cast<uintptr_t*>(f.elements[i * 2 + 1] + 0x08) =
+            reinterpret_cast<uintptr_t>(f.actors[peerActors[i]]);
+    }
+    *reinterpret_cast<uintptr_t*>(f.elements[0] + 0x1C) =
+        reinterpret_cast<uintptr_t>(f.shapeCores[0]);
+    *reinterpret_cast<uintptr_t*>(f.elements[1] + 0x1C) =
+        reinterpret_cast<uintptr_t>(f.shapeCores[1]);
+    for (uint32_t i = 0; i < 2; ++i)
+        *reinterpret_cast<uintptr_t*>(f.shapeCores[i] + 0x20) =
+            reinterpret_cast<uintptr_t>(f.shapeCores[i] + 0x20);
+    for (uint32_t i = 0; i < 6; ++i) {
+        uint8_t* interaction = f.interactions[i];
+        *reinterpret_cast<uintptr_t*>(interaction) =
+            reinterpret_cast<uintptr_t>(interaction + 0x1C);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x04) =
+            reinterpret_cast<uintptr_t>(f.actors[0]);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x08) =
+            reinterpret_cast<uintptr_t>(f.actors[peerActors[i]]);
+        *reinterpret_cast<uint32_t*>(interaction + 0x0C) = 0;
+        *reinterpret_cast<uint16_t*>(interaction + 0x10) = actor0Ids[i];
+        *reinterpret_cast<uint16_t*>(interaction + 0x12) = peerIds[i];
+        *reinterpret_cast<uint8_t*>(interaction + 0x14) =
+            static_cast<uint8_t>(i);
+        *reinterpret_cast<uint8_t*>(interaction + 0x15) = i == 0 ? 0x11 : 1;
+        *reinterpret_cast<uintptr_t*>(interaction + 0x18) =
+            reinterpret_cast<uintptr_t>(f.elements[i * 2]);
+        *reinterpret_cast<uintptr_t*>(interaction + 0x1C) =
+            reinterpret_cast<uintptr_t>(f.elements[i * 2 + 1]);
+    }
+}
+
+struct InteractionGraphMutation {
+    volatile LONG run;
+    volatile LONG* timestamp;
+};
+
+static DWORD WINAPI MutateInteractionGraphTimestamp(void* value) {
+    InteractionGraphMutation* mutation =
+        static_cast<InteractionGraphMutation*>(value);
+    while (InterlockedCompareExchange(&mutation->run, 1, 1) == 1)
+        InterlockedIncrement(mutation->timestamp);
+    return 0;
+}
+
+static void RunInteractionGraphTests(uint8_t* image,
+    CaptureInteractionGraph capture) {
+    InteractionGraphFixture fixture = {};
+    InitializeInteractionGraphFixture(fixture);
+    InteractionGraphFixture before = {};
+    CopyMemory(&before, &fixture, sizeof(fixture));
+    uintptr_t active[4] = {};
+    InteractionGraphActorRecord actors[4] = {};
+    InteractionGraphInteractionRecord interactions[6] = {};
+    uintptr_t slots[12] = {};
+    uintptr_t slabs[3] = {};
+    uintptr_t freeBlocks[92] = {};
+    InteractionGraphReceipt receipt = {};
+    const uintptr_t imagePointer = reinterpret_cast<uintptr_t>(image);
+    const uintptr_t nphase = reinterpret_cast<uintptr_t>(fixture.nphase);
+    const auto invoke = [&](InteractionGraphReceipt* output,
+        uint32_t activeCapacity, uint32_t actorCapacity,
+        uint32_t interactionCapacity, uint32_t slotCapacity,
+        uint32_t slabCapacity, uint32_t freeCapacity) {
+        return capture(imagePointer, nphase, active, activeCapacity,
+            actors, actorCapacity, interactions, interactionCapacity,
+            slots, slotCapacity, slabs, slabCapacity, freeBlocks,
+            freeCapacity, output);
+    };
+
+    const int firstCapture = invoke(&receipt, 4, 4, 6, 12, 3, 92);
+    if (!firstCapture)
+        printf("interaction graph diagnostic: result=%u kind=%u index=%u detail=%u error=%u\n",
+            receipt.result, receipt.invalidKind, receipt.invalidIndex,
+            receipt.detail, receipt.lastError);
+    Check(firstCapture == 1,
+        "interaction graph capture succeeds");
+    Check(receipt.apiVersion == 15 && receipt.structSize == sizeof(receipt) &&
+        receipt.result == 1 && receipt.validationFlags == 0xFF &&
+        receipt.activeBodiesWritten == 4 && receipt.actorsWritten == 4 &&
+        receipt.interactionsWritten == 6 && receipt.actorSlotsWritten == 12 &&
+        receipt.poolSlabsWritten == 3 && receipt.poolFreeWritten == 92,
+        "interaction graph receipt proves complete caller-owned projection");
+    Check(Same(active, fixture.activeBodies, 4) &&
+        interactions[0].semanticLow ==
+            reinterpret_cast<uintptr_t>(fixture.shapeCores[0] + 0x20) &&
+        interactions[0].semanticHigh ==
+            reinterpret_cast<uintptr_t>(fixture.shapeCores[1] + 0x20),
+        "interaction graph retains exact SIP PxsShapeCore semantic keys");
+    bool flattened = true;
+    for (uint32_t i = 0; i < 6; ++i)
+        flattened = flattened && interactions[i].interactionType == i &&
+            interactions[i].interaction == fixture.globalInteractions[i];
+    Check(flattened,
+        "interaction graph flattens all six global type arrays in order");
+    Check(actors[0].validationFlags == 0x7F &&
+        interactions[0].validationFlags == 0x1F &&
+        receipt.pools[0].validationFlags == 0x7F &&
+        receipt.pools[1].validationFlags == 0x7F &&
+        receipt.pools[2].validationFlags == 0x7F &&
+        receipt.pools[0].freeCount == 30 &&
+        receipt.pools[0].unreleasedFree == 0xFFFFFFFDu,
+        "interaction graph validates indices, active prefixes, and pool ownership");
+    Check(memcmp(&before, &fixture, sizeof(fixture)) == 0,
+        "interaction graph capture is non-mutating");
+
+    uintptr_t repeatedActive[4] = {};
+    InteractionGraphActorRecord repeatedActors[4] = {};
+    InteractionGraphInteractionRecord repeatedInteractions[6] = {};
+    uintptr_t repeatedSlots[12] = {};
+    uintptr_t repeatedSlabs[3] = {};
+    uintptr_t repeatedFree[92] = {};
+    InteractionGraphReceipt repeated = {};
+    Check(capture(imagePointer, nphase, repeatedActive, 4, repeatedActors, 4,
+        repeatedInteractions, 6, repeatedSlots, 12, repeatedSlabs, 3,
+        repeatedFree, 92, &repeated) == 1 &&
+        memcmp(&receipt, &repeated, sizeof(receipt)) == 0 &&
+        memcmp(active, repeatedActive, sizeof(active)) == 0 &&
+        memcmp(actors, repeatedActors, sizeof(actors)) == 0 &&
+        memcmp(interactions, repeatedInteractions, sizeof(interactions)) == 0 &&
+        memcmp(slots, repeatedSlots, sizeof(slots)) == 0 &&
+        memcmp(slabs, repeatedSlabs, sizeof(slabs)) == 0 &&
+        memcmp(freeBlocks, repeatedFree, sizeof(freeBlocks)) == 0,
+        "interaction graph capture is byte-repeatable");
+
+    InteractionGraphReceipt shortReceipt = {};
+    Check(invoke(&shortReceipt, 3, 4, 6, 12, 3, 92) == 0 &&
+        shortReceipt.result == 6 && shortReceipt.activeBodiesRequired == 4 &&
+        shortReceipt.poolFreeRequired == 92,
+        "interaction graph capture reports all required capacities");
+
+    *reinterpret_cast<uint16_t*>(fixture.interactions[0] + 0x10) = 1;
+    InteractionGraphReceipt cachedIndexReceipt = {};
+    Check(invoke(&cachedIndexReceipt, 4, 4, 6, 12, 3, 92) == 0 &&
+        cachedIndexReceipt.result == 9,
+        "interaction graph rejects a corrupt bilateral cached actor slot");
+    *reinterpret_cast<uint16_t*>(fixture.interactions[0] + 0x10) = 0;
+
+    *reinterpret_cast<uintptr_t*>(fixture.interactionScene + 0x70 + 0x124) =
+        reinterpret_cast<uintptr_t>(fixture.slab8);
+    InteractionGraphReceipt poolReceipt = {};
+    Check(invoke(&poolReceipt, 4, 4, 6, 12, 3, 92) == 0 &&
+        poolReceipt.result == 10,
+        "interaction graph rejects a corrupt pointer-pool free chain");
+    *reinterpret_cast<uintptr_t*>(fixture.interactionScene + 0x70 + 0x124) =
+        reinterpret_cast<uintptr_t>(fixture.slab8 + 0x40);
+
+    InteractionGraphMutation mutation = {1,
+        reinterpret_cast<volatile LONG*>(fixture.interactionScene + 0x3EC)};
+    HANDLE thread = CreateThread(0, 0, MutateInteractionGraphTimestamp,
+        &mutation, 0, 0);
+    Check(thread != 0, "interaction graph mutation thread starts");
+    if (thread) {
+        Sleep(10);
+        InteractionGraphReceipt unstableReceipt = {};
+        const int unstable = invoke(&unstableReceipt, 4, 4, 6, 12, 3, 92);
+        InterlockedExchange(&mutation.run, 0);
+        WaitForSingleObject(thread, 10000);
+        CloseHandle(thread);
+        Check(unstable == 0 && unstableReceipt.result == 11 &&
+            unstableReceipt.lastError == ERROR_RETRY,
+            "interaction graph repeat-read rejects a torn sample with ERROR_RETRY");
+    }
+    *reinterpret_cast<uint32_t*>(fixture.interactionScene + 0x3EC) = 123;
+
+    image[kInteractionActorRegisterRva] ^= 1;
+    InteractionGraphReceipt revisionReceipt = {};
+    Check(invoke(&revisionReceipt, 4, 4, 6, 12, 3, 92) == 0 &&
+        revisionReceipt.result == 3,
+        "interaction graph capture fails closed on a revision mismatch");
+    image[kInteractionActorRegisterRva] ^= 1;
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("usage: Oc2NativeRigidbodyRebuildHistoryHarness <dll>\n");
@@ -2066,6 +2551,9 @@ int main(int argc, char** argv) {
     CaptureNPhaseReportState captureNPhaseReport =
         reinterpret_cast<CaptureNPhaseReportState>(GetProcAddress(
             library, "oc2_nphase_report_state_capture_snapshot"));
+    CaptureInteractionGraph captureInteractionGraph =
+        reinterpret_cast<CaptureInteractionGraph>(GetProcAddress(
+            library, "oc2_interaction_graph_capture_snapshot"));
     DirtyAction installDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
         library, "oc2_dirty_interaction_order_install"));
     DirtyAction statusDirty = reinterpret_cast<DirtyAction>(GetProcAddress(
@@ -2101,7 +2589,7 @@ int main(int argc, char** argv) {
     ContactRecreateCancel cancelRecreate =
         reinterpret_cast<ContactRecreateCancel>(GetProcAddress(library,
             "oc2_contact_recreate_cancel"));
-    Check(version && version() == 14, "API version");
+    Check(version && version() == 15, "API version");
     Check(capture != 0, "capture export");
     Check(restore != 0, "restore export");
     Check(captureManifold != 0, "manifold capture export");
@@ -2112,6 +2600,8 @@ int main(int argc, char** argv) {
         "ActorPair report pool capture export");
     Check(captureNPhaseReport != 0,
         "NPhase report-state capture export");
+    Check(captureInteractionGraph != 0,
+        "interaction graph capture export");
     Check(installDirty && statusDirty && lastDirtyNPhase && armDirtyCapture && copyDirtyCapture &&
         armDirtyRestore && cancelDirty && uninstallDirty,
         "dirty interaction exports");
@@ -2119,7 +2609,7 @@ int main(int argc, char** argv) {
         statusRecreate && cancelRecreate, "contact recreation exports");
     if (!version || !capture || !restore || !captureManifold || !captureSip ||
         !captureActorPair || !captureActorPairReport ||
-        !captureNPhaseReport ||
+        !captureNPhaseReport || !captureInteractionGraph ||
         !restoreManifold || !installDirty || !statusDirty || !lastDirtyNPhase || !armDirtyCapture ||
         !copyDirtyCapture || !armDirtyRestore || !cancelDirty ||
         !uninstallDirty || !installObserver || !uninstallObserver ||
@@ -2146,7 +2636,7 @@ int main(int argc, char** argv) {
     ContactPoolReceipt receipt = {};
     Check(capture(contextPointer, saved, 3, &receipt) == 1,
         "capture succeeds");
-    Check(receipt.result == 1 && receipt.apiVersion == 14 &&
+    Check(receipt.result == 1 && receipt.apiVersion == 15 &&
         receipt.structSize == sizeof(receipt), "capture receipt");
     Check(Same(saved, values, 3), "capture copies exact order");
 
@@ -2195,6 +2685,7 @@ int main(int argc, char** argv) {
         RunActorPairPoolTests(revisionImage, captureActorPair);
         RunActorPairReportPoolTests(revisionImage, captureActorPairReport);
         RunNPhaseReportStateTests(revisionImage, captureNPhaseReport);
+        RunInteractionGraphTests(revisionImage, captureInteractionGraph);
         RunManifoldPoolTests(revisionImage, 0, captureManifold,
             restoreManifold);
         RunManifoldPoolTests(revisionImage, 1, captureManifold,
