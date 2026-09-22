@@ -57,7 +57,11 @@ leave/return suffix 100 times, matching the full implemented Oracle,
 trigger/marker image, ordered callbacks, and initialized allocator bytes.
 That result depends on a fixed-address diagnostic allocator unavailable in
 the shipped Unity binary; it is a source-level reference, not a game-side
-restore. Actor and
+restore. An [isolated trigger-rewind fixture](../experiments/physx333-offline/trigger_rewind/README.md)
+now also reconstructs two deleted capsule/box trigger pairs through the
+original PhysX NPhase lifecycle, with exact A and next-B images over 100 cold
+and 100 warm cycles. It has no contact or marker survivors, so the joined
+level-graph component restore is still open. Actor and
 shape lifetime, CCD, and several other native-state families remain gated.
 Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and

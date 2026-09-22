@@ -102,6 +102,10 @@ first write. After contact and trigger lifecycle creation, restore unified
 scene and actor interaction order and reverse indices, then trigger history
 and pool state. Markers should remain the same objects in this fixture; no
 marker reconstruction is required for the 12/4/2→8/2/2 transaction.
+An [isolated two-trigger deletion rewind](../experiments/physx333-offline/trigger_rewind/README.md)
+now validates the native trigger lifecycle and exact cold/warm replay where
+there are **no** survivor interactions. The joined survivor/marker case
+remains the next integration gate.
 The four missing contact pairs each have a distinct static actor in the
 level-like graph, so each should receive a distinct ActorPair; surviving
 markers on two of those actor endpoints do not count as SIPs for source
