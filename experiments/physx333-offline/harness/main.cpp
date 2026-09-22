@@ -18,11 +18,14 @@
 #include "../sap/SapImage.h"
 #include "../oracle/Oracle.h"
 #include "../cache/TransformCacheImage.h"
+#include "../shape_cache/ShapeCacheBindings.h"
 #include "../nphase/NPhaseTopology.h"
 #include "../island/IslandImage.h"
 #include "../memblock/MemBlockImage.h"
 #include "../memblock_restore/MemBlockRestore.h"
 #include "../interaction/InteractionImage.h"
+#include "../body/BodyImage.h"
+#include "../scene_clock/SceneClockImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -518,6 +521,7 @@ int main(int argc, char** argv)
     bool interactionOrderProbe = false;
     bool interactionMetadataProbe = false;
     bool joinedPayloadProbe = false;
+    bool joinedReplayProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
@@ -526,6 +530,11 @@ int main(int argc, char** argv)
         else if (std::string(argv[i]) == "--interaction-order-probe") interactionOrderProbe = true;
         else if (std::string(argv[i]) == "--interaction-metadata-probe") interactionMetadataProbe = true;
         else if (std::string(argv[i]) == "--joined-payload-probe") joinedPayloadProbe = true;
+        else if (std::string(argv[i]) == "--joined-replay-probe")
+        {
+            joinedPayloadProbe = true;
+            joinedReplayProbe = true;
+        }
         else die(std::string("unknown argument: ") + argv[i]);
     }
 
@@ -574,6 +583,11 @@ int main(int argc, char** argv)
         physx333_offline::MemBlockIdentityRegistry memBlockIds;
         physx333_offline::MemBlockRestoreImage checkpointMemBlocks;
         oc2::offline::IslandImage checkpointIsland;
+        oc2::offline::SapImage checkpointSap;
+        oc2::offline::TransformCacheImage checkpointCache;
+        oc2::offline::ShapeCacheBindings checkpointShapeCache;
+        oc2::offline::BodyImage checkpointBody;
+        oc2::offline::SceneClockImage checkpointClock;
         if (joinedPayloadProbe &&
             !physx333_offline::CaptureMemBlockRestore(*source->scene,
                 memBlockIds, checkpointMemBlocks, error))
@@ -582,10 +596,47 @@ int main(int argc, char** argv)
             !oc2::offline::CaptureIsland(*source->scene,
                                          checkpointIsland, error))
             die("joined checkpoint island capture: " + error);
+        if (joinedPayloadProbe &&
+            (!oc2::offline::CaptureSap(*source->scene, checkpointSap, error) ||
+             !oc2::offline::CaptureTransformCache(*source->scene,
+                                                  checkpointCache, error) ||
+             !oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                checkpointShapeCache, error) ||
+             !oc2::offline::CaptureBodies(*source->scene,
+                                          checkpointBody, error) ||
+             !oc2::offline::CaptureSceneClock(*source->scene,
+                                              checkpointClock, error)))
+            die("joined checkpoint component capture: " + error);
         physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
         if (nphaseReverseProbe)
             std::reverse(requestedTopology.pairs.begin(), requestedTopology.pairs.end());
         source->step(true);
+        Snapshot expectedDeletion;
+        physx333_offline::OracleImage expectedDeletionOracle;
+        oc2::offline::SapImage expectedDeletionSap;
+        oc2::offline::TransformCacheImage expectedDeletionCache;
+        oc2::offline::BodyImage expectedDeletionBody;
+        oc2::offline::SceneClockImage expectedDeletionClock;
+        oc2::offline::IslandImage expectedDeletionIsland;
+        physx333_offline::MemBlockRestoreImage expectedDeletionBlocks;
+        if (joinedReplayProbe)
+        {
+            expectedDeletion = source->capture();
+            expectedDeletionOracle = captureOracle(*source);
+            if (!oc2::offline::CaptureSap(*source->scene,
+                                          expectedDeletionSap, error) ||
+                !oc2::offline::CaptureTransformCache(*source->scene,
+                                                      expectedDeletionCache, error) ||
+                !oc2::offline::CaptureBodies(*source->scene,
+                                              expectedDeletionBody, error) ||
+                !oc2::offline::CaptureSceneClock(*source->scene,
+                                                  expectedDeletionClock, error) ||
+                !oc2::offline::CaptureIsland(*source->scene,
+                                              expectedDeletionIsland, error) ||
+                !physx333_offline::CaptureMemBlockRestore(*source->scene,
+                    memBlockIds, expectedDeletionBlocks, error))
+                die("joined deletion component capture: " + error);
+        }
         physx333_offline::NPhaseTopologyImage deletedTopology;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
                                                      deletedTopology, error) ||
@@ -714,6 +765,45 @@ int main(int argc, char** argv)
                                              checkpointIsland, error))
                 die("joined island restore: " + error);
             std::cout << "PASS joined island restore\n";
+            if (!oc2::offline::RestoreSap(*source->scene, checkpointSap, error))
+                die("joined SAP restore: " + error);
+            std::cout << "PASS joined SAP restore\n";
+            if (!oc2::offline::RestoreTransformCache(*source->scene,
+                                                      checkpointCache, error))
+                die("joined transform-cache restore: " + error);
+            std::cout << "PASS joined transform-cache restore\n";
+            oc2::offline::ShapeCacheBindings recreatedShapeCache;
+            if (!oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                    recreatedShapeCache, error))
+                die("joined recreated shape-cache binding capture: " + error);
+            std::string shapeCacheDifference;
+            std::cout << "SHAPE_CACHE_BINDINGS before_restore_equal=" <<
+                checkpointShapeCache.equals(recreatedShapeCache,
+                                            shapeCacheDifference) << "\n";
+            oc2::offline::ShapeCacheBindings corruptShapeCache =
+                checkpointShapeCache;
+            corruptShapeCache.bindings[0].transformCacheId = PX_INVALID_U32;
+            if (oc2::offline::RestoreShapeCacheBindings(*source->scene,
+                    corruptShapeCache, error))
+                die("corrupt shape-cache binding image was accepted");
+            oc2::offline::ShapeCacheBindings afterShapeReject;
+            if (!oc2::offline::CaptureShapeCacheBindings(*source->scene,
+                    afterShapeReject, error) ||
+                !recreatedShapeCache.equals(afterShapeReject, error))
+                die("shape-cache binding rejection changed the scene: " + error);
+            std::cout << "PASS corrupt shape-cache binding rejected atomically\n";
+            if (!oc2::offline::RestoreShapeCacheBindings(*source->scene,
+                    checkpointShapeCache, error))
+                die("joined shape-cache binding restore: " + error);
+            std::cout << "PASS joined shape-cache binding restore\n";
+            if (!oc2::offline::RestoreBodies(*source->scene,
+                                              checkpointBody, error))
+                die("joined body restore: " + error);
+            std::cout << "PASS joined body restore\n";
+            if (!oc2::offline::RestoreSceneClock(*source->scene,
+                                                  checkpointClock, error))
+                die("joined scene-clock restore: " + error);
+            std::cout << "PASS joined scene-clock restore\n";
         }
         const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
         const bool oracleExact = checkpointOracle.equals(recreatedOracle, error);
@@ -747,6 +837,180 @@ int main(int argc, char** argv)
                   << " recreated_sip="
                   << sixSlotsByMoverShape(recreatedOracle, "nphase.shape_pairs", 1)
                   << "\n";
+        if (joinedReplayProbe)
+        {
+            source->step(true);
+            const Snapshot replayedDeletion = source->capture();
+            std::string replayDifference;
+            if (!compare(expectedDeletion, replayedDeletion,
+                         replayDifference))
+                die("joined next-step public/callback parity: " + replayDifference);
+            std::cout << "PASS joined next-step public/callback parity\n";
+            const physx333_offline::OracleImage replayedOracle =
+                captureOracle(*source);
+            if (!expectedDeletionOracle.equals(replayedOracle,
+                                               replayDifference))
+                die("joined next-step oracle parity: " + replayDifference);
+            std::cout << "PASS joined next-step 39-section oracle parity\n";
+            oc2::offline::SapImage replayedSap;
+            oc2::offline::TransformCacheImage replayedCache;
+            oc2::offline::BodyImage replayedBody;
+            oc2::offline::SceneClockImage replayedClock;
+            oc2::offline::IslandImage replayedIsland;
+            physx333_offline::MemBlockRestoreImage replayedBlocks;
+            physx333_offline::MemBlockIdentityRegistry replayIds = memBlockIds;
+            if (!oc2::offline::CaptureSap(*source->scene, replayedSap,
+                                          replayDifference) ||
+                !oc2::offline::CaptureTransformCache(*source->scene,
+                    replayedCache, replayDifference) ||
+                !oc2::offline::CaptureBodies(*source->scene,
+                    replayedBody, replayDifference) ||
+                !oc2::offline::CaptureSceneClock(*source->scene,
+                    replayedClock, replayDifference) ||
+                !oc2::offline::CaptureIsland(*source->scene,
+                    replayedIsland, replayDifference) ||
+                !physx333_offline::CaptureMemBlockRestore(*source->scene,
+                    replayIds, replayedBlocks, replayDifference))
+                die("joined next-step component capture: " + replayDifference);
+            bool extendedParity = true;
+            if (!expectedDeletionSap.equals(replayedSap, replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE SAP=" << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionCache.equals(replayedCache, replayDifference))
+            {
+                const auto& savedIds = expectedDeletionCache.freeIds;
+                const auto& actualIds = replayedCache.freeIds;
+                size_t firstByte = 0;
+                while (firstByte < savedIds.bytes.size() &&
+                       firstByte < actualIds.bytes.size() &&
+                       savedIds.bytes[firstByte] == actualIds.bytes[firstByte])
+                    ++firstByte;
+                std::cout << "CACHE_FREE_IDS expected_size=" << savedIds.size
+                          << " actual_size=" << actualIds.size
+                          << " capacity=" << savedIds.capacity << "/"
+                          << actualIds.capacity << " first_byte=" << firstByte;
+                if (firstByte < savedIds.bytes.size() &&
+                    firstByte < actualIds.bytes.size())
+                    std::cout << " expected=" << unsigned(savedIds.bytes[firstByte])
+                              << " actual=" << unsigned(actualIds.bytes[firstByte]);
+                std::cout << "\n";
+                for (size_t id = 0; id < savedIds.size; ++id)
+                {
+                    PxU32 wanted = 0;
+                    PxU32 got = 0;
+                    std::memcpy(&wanted, &savedIds.bytes[id * sizeof(PxU32)],
+                                sizeof(PxU32));
+                    std::memcpy(&got, &actualIds.bytes[id * sizeof(PxU32)],
+                                sizeof(PxU32));
+                    std::cout << "CACHE_FREE_ID " << id << " expected="
+                              << wanted << " actual=" << got << "\n";
+                }
+                std::cout << "EXTENDED_DIFFERENCE transform_cache="
+                          << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionBody.equals(replayedBody, replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE body=" << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionClock.equals(replayedClock, replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE clock=" << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionIsland.equals(replayedIsland, replayDifference))
+            {
+                std::cout << "EXTENDED_DIFFERENCE island=" << replayDifference << "\n";
+                extendedParity = false;
+            }
+            if (!expectedDeletionBlocks.pool.equals(replayedBlocks.pool,
+                                                     replayDifference) ||
+                expectedDeletionBlocks.contactBindings !=
+                    replayedBlocks.contactBindings)
+            {
+                std::cout << "EXTENDED_DIFFERENCE memblock=" << replayDifference
+                          << "\n";
+                extendedParity = false;
+            }
+            if (!extendedParity)
+                die("joined next-step extended image parity differs");
+            std::cout << "PASS joined next-step SAP/cache/body/clock/island/block images\n";
+            for (unsigned iteration = 1; iteration < 100; ++iteration)
+            {
+                if (!physx333_offline::RestoreInteractionOrder(
+                        *source->scene, checkpointInteraction, error) ||
+                    !physx333_offline::RestoreInteractionMetadata(
+                        *source->scene, checkpointInteraction, error) ||
+                    !physx333_offline::InstallInteractionContactBindings(
+                        *source->scene, checkpointInteraction, error) ||
+                    !physx333_offline::RestoreMemBlockPoolForJoin(
+                        *source->scene, memBlockIds, checkpointMemBlocks,
+                        error) ||
+                    !physx333_offline::RestoreInteractionContactPayload(
+                        *source->scene, checkpointInteraction, error) ||
+                    !oc2::offline::RestoreIslandForJoin(
+                        *source->scene, checkpointIsland, error) ||
+                    !oc2::offline::RestoreSap(*source->scene,
+                                              checkpointSap, error) ||
+                    !oc2::offline::RestoreTransformCache(*source->scene,
+                                                          checkpointCache, error) ||
+                    !oc2::offline::RestoreShapeCacheBindings(*source->scene,
+                        checkpointShapeCache, error) ||
+                    !oc2::offline::RestoreBodies(*source->scene,
+                                                  checkpointBody, error) ||
+                    !oc2::offline::RestoreSceneClock(*source->scene,
+                                                      checkpointClock, error))
+                    die("joined repeat rewind " + std::to_string(iteration) +
+                        ": " + error);
+                const physx333_offline::OracleImage repeatedCheckpoint =
+                    captureOracle(*source);
+                if (!checkpointOracle.equals(repeatedCheckpoint,
+                                             replayDifference))
+                    die("joined repeat checkpoint " +
+                        std::to_string(iteration) + ": " + replayDifference);
+                source->step(true);
+                const Snapshot repeatedDeletion = source->capture();
+                if (!compare(expectedDeletion, repeatedDeletion,
+                             replayDifference))
+                    die("joined repeat public/callback " +
+                        std::to_string(iteration) + ": " + replayDifference);
+                const physx333_offline::OracleImage repeatedOracle =
+                    captureOracle(*source);
+                if (!expectedDeletionOracle.equals(repeatedOracle,
+                                                   replayDifference))
+                    die("joined repeat oracle " +
+                        std::to_string(iteration) + ": " + replayDifference);
+            }
+            std::cout << "PASS joined rewind and next-step parity x100\n";
+            World reference(runtime);
+            reference.step(false);
+            reference.step(true);
+            reference.step(false);
+            reference.step(true);
+            const bool suffixAway[] = {false, false, true, false, true};
+            for (unsigned suffix = 0; suffix <
+                   sizeof(suffixAway) / sizeof(suffixAway[0]); ++suffix)
+            {
+                source->step(suffixAway[suffix]);
+                reference.step(suffixAway[suffix]);
+                if (!compare(reference.capture(), source->capture(),
+                             replayDifference))
+                    die("joined suffix public/callback " +
+                        std::to_string(suffix) + ": " + replayDifference);
+                const physx333_offline::OracleImage expectedSuffix =
+                    captureOracle(reference);
+                const physx333_offline::OracleImage replayedSuffix =
+                    captureOracle(*source);
+                if (!expectedSuffix.equals(replayedSuffix,
+                                           replayDifference))
+                    die("joined suffix oracle " +
+                        std::to_string(suffix) + ": " + replayDifference);
+            }
+            std::cout << "PASS joined five-step contact suffix parity\n";
+        }
         std::cout.flush();
         std::_Exit(0);
     }
