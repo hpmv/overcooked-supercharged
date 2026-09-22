@@ -828,6 +828,12 @@ namespace SuperchargedPatch.Authoring.Modules
             internal NativeContactManagerOwnerRecord[] Records;
             internal string[] ShapeOwners0,ShapeOwners1;
             internal ColliderEndpointState[] Endpoints0,Endpoints1;
+            // The scalar owner records deliberately expose every pointer that
+            // must be rebound, while these bounded images retain the opaque
+            // solver/contact history living between those fields.  A later
+            // restore may copy an image only after replacing its captured
+            // pointers with the current semantic incarnations.
+            internal byte[][] ManagerBytes,SipBytes,ActorPairBytes,ManifoldBytes,CacheBytes;
         }
 
         private sealed class LiveContactPoolState
@@ -3868,9 +3874,23 @@ namespace SuperchargedPatch.Authoring.Modules
                     throw new InvalidOperationException("An active contact manager endpoint has no unique live Collider owner.");
                 string[] owners0=endpoints0.Select(value=>value.Identity).ToArray();
                 string[] owners1=endpoints1.Select(value=>value.Identity).ToArray();
+                byte[][] managerBytes=records.Select(value=>
+                    ReadBytes(value.Manager.ToUInt32(),0x80)).ToArray();
+                byte[][] sipBytes=records.Select(value=>
+                    ReadBytes(value.Sip.ToUInt32(),0x44)).ToArray();
+                byte[][] actorPairBytes=records.Select(value=>
+                    ReadBytes(value.ActorPair.ToUInt32(),0x18)).ToArray();
+                byte[][] manifoldBytes=records.Select(value=>value.ManifoldBytes==0?
+                    new byte[0]:ReadBytes(value.Manifold.ToUInt32(),
+                        checked((int)value.ManifoldBytes))).ToArray();
+                byte[][] cacheBytes=records.Select(value=>value.CacheSize==0?
+                    new byte[0]:ReadBytes(value.CachePointer.ToUInt32(),value.CacheSize)).ToArray();
                 return new ContactManagerOwnerState {Receipt=receipt,Records=records,
                     ShapeOwners0=owners0,ShapeOwners1=owners1,
-                    Endpoints0=endpoints0,Endpoints1=endpoints1};
+                    Endpoints0=endpoints0,Endpoints1=endpoints1,
+                    ManagerBytes=managerBytes,SipBytes=sipBytes,
+                    ActorPairBytes=actorPairBytes,ManifoldBytes=manifoldBytes,
+                    CacheBytes=cacheBytes};
             }
             finally
             {
@@ -3934,8 +3954,19 @@ namespace SuperchargedPatch.Authoring.Modules
                 for(int i=0;i<rows.Length;i++)rows[i]=DescribeContactManagerOwnerRecord(
                     value.Records[i],value.ShapeOwners0[i],value.ShapeOwners1[i]);
                 result.Add("records",rows);
+                result.Add("managerContentSha256",value.ManagerBytes.Select(ContentSha256).ToArray());
+                result.Add("sipContentSha256",value.SipBytes.Select(ContentSha256).ToArray());
+                result.Add("actorPairContentSha256",value.ActorPairBytes.Select(ContentSha256).ToArray());
+                result.Add("manifoldContentSha256",value.ManifoldBytes.Select(ContentSha256).ToArray());
+                result.Add("cacheContentSha256",value.CacheBytes.Select(ContentSha256).ToArray());
             }
             return result;
+        }
+
+        private static string ContentSha256(byte[] bytes)
+        {
+            using(var algorithm=SHA256.Create())
+                return BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-","");
         }
 
         private static object DescribeContactManagerOwnerRecord(
@@ -6438,8 +6469,13 @@ namespace SuperchargedPatch.Authoring.Modules
         {
             if(value==null||value.Records==null||value.ShapeOwners0==null||value.ShapeOwners1==null||
                 value.Endpoints0==null||value.Endpoints1==null||
+                value.ManagerBytes==null||value.SipBytes==null||value.ActorPairBytes==null||
+                value.ManifoldBytes==null||value.CacheBytes==null||
                 value.Records.Length!=value.ShapeOwners0.Length||value.Records.Length!=value.ShapeOwners1.Length||
                 value.Records.Length!=value.Endpoints0.Length||value.Records.Length!=value.Endpoints1.Length||
+                value.Records.Length!=value.ManagerBytes.Length||value.Records.Length!=value.SipBytes.Length||
+                value.Records.Length!=value.ActorPairBytes.Length||
+                value.Records.Length!=value.ManifoldBytes.Length||value.Records.Length!=value.CacheBytes.Length||
                 value.Endpoints0.Any(endpoint=>endpoint==null)||value.Endpoints1.Any(endpoint=>endpoint==null)||
                 value.Receipt.Result!=1||value.Receipt.ConsistencyFlags!=0xFFu||
                 value.Receipt.RecordsWritten!=(uint)value.Records.Length||
@@ -6448,6 +6484,18 @@ namespace SuperchargedPatch.Authoring.Modules
                 value.Receipt.ActiveCount!=value.Receipt.UsedCount||
                 value.Receipt.FreeCount+value.Receipt.UsedCount!=value.Receipt.TotalSlots)
                 throw new InvalidOperationException("Contact-manager owner checkpoint sidecar is incomplete.");
+            for(int i=0;i<value.Records.Length;i++)
+            {
+                NativeContactManagerOwnerRecord record=value.Records[i];
+                if(value.ManagerBytes[i]==null||value.ManagerBytes[i].Length!=0x80||
+                    value.SipBytes[i]==null||value.SipBytes[i].Length!=0x44||
+                    value.ActorPairBytes[i]==null||value.ActorPairBytes[i].Length!=0x18||
+                    value.ManifoldBytes[i]==null||
+                    value.ManifoldBytes[i].Length!=checked((int)record.ManifoldBytes)||
+                    value.CacheBytes[i]==null||value.CacheBytes[i].Length!=record.CacheSize)
+                    throw new InvalidOperationException(
+                        "Contact-manager raw checkpoint image differs at row "+i+".");
+            }
         }
 
         private static object DescribeManifoldPoolState(ManifoldPoolState value)
@@ -7529,6 +7577,18 @@ namespace SuperchargedPatch.Authoring.Modules
                 if(!ReferenceEquals(left.Endpoints0[i].Collider,right.Endpoints0[i].Collider)||
                     !ReferenceEquals(left.Endpoints1[i].Collider,right.Endpoints1[i].Collider))return false;
             }
+            return SameByteMatrix(left.ManagerBytes,right.ManagerBytes)&&
+                SameByteMatrix(left.SipBytes,right.SipBytes)&&
+                SameByteMatrix(left.ActorPairBytes,right.ActorPairBytes)&&
+                SameByteMatrix(left.ManifoldBytes,right.ManifoldBytes)&&
+                SameByteMatrix(left.CacheBytes,right.CacheBytes);
+        }
+
+        private static bool SameByteMatrix(byte[][] left,byte[][] right)
+        {
+            if(left==null||right==null||left.Length!=right.Length)return left==right;
+            for(int i=0;i<left.Length;i++)
+                if(left[i]==null||right[i]==null||!left[i].SequenceEqual(right[i]))return false;
             return true;
         }
 

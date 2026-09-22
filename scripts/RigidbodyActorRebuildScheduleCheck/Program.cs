@@ -17,6 +17,18 @@ string[] Calls(string name)=>Instructions(name).Where(value=>value.Operand is Me
     .Select(value=>((MethodReference)value.Operand).Name).ToArray();
 string[] Strings(string name)=>Instructions(name).Where(value=>value.OpCode.Code==Code.Ldstr)
     .Select(value=>(string)value.Operand).ToArray();
+IEnumerable<TypeDefinition> Descendants(TypeDefinition root)
+{
+    yield return root;
+    foreach(var nested in root.NestedTypes)
+        foreach(var descendant in Descendants(nested))yield return descendant;
+}
+int FamilyCallCount(string method,string called)=>Descendants(type)
+    .SelectMany(value=>value.Methods)
+    .Where(value=>value.Name==method||value.Name.Contains("<"+method+">"))
+    .Where(value=>value.HasBody)
+    .SelectMany(value=>value.Body.Instructions)
+    .Count(value=>value.Operand is MethodReference target&&target.Name==called);
 int CallIndex(string name,string called)=>Array.FindIndex(Instructions(name),value=>
     value.Operand is MethodReference method&&method.Name==called);
 int StoreIndex(string name,string field)=>Array.FindIndex(Instructions(name),value=>
@@ -100,6 +112,14 @@ foreach(string family in new[]{"CurrentCheckpointFrame","CoreCheckpointSnapshot"
     "CaptureDirtyInteractionStateReadOnly"})
     Check(phaseCalls.Contains(family),
         "post-transition image captures "+family+" at the same output boundary");
+var ownerState=type.NestedTypes.Single(value=>value.Name=="ContactManagerOwnerState");
+foreach(string image in new[]{"ManagerBytes","SipBytes","ActorPairBytes","ManifoldBytes","CacheBytes"})
+    Check(ownerState.Fields.Any(value=>value.Name==image&&value.FieldType.FullName=="System.Byte[][]"),
+        "contact-owner checkpoint retains bounded "+image+" images");
+Check(FamilyCallCount("CaptureContactManagerOwners","ReadBytes")==5,
+    "contact-owner capture reads every opaque native image exactly once per row");
+Check(Calls("SameContactManagerOwnerSnapshot").Count(value=>value=="SameByteMatrix")==5,
+    "contact-owner equality includes every opaque native image");
 Check(Strings("Activate").Contains("oc2_dirty_interaction_order_capture_snapshot"),
     "activation requires the API18 stateless dirty-interaction snapshot export");
 Check(Calls("CaptureDirtyInteractionStateReadOnly").Contains("Equals")&&
