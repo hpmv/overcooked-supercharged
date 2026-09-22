@@ -30,18 +30,20 @@ edit the upstream checkout.
 The mirror also enables the source's existing explicit scene-query template
 instantiations for Win32, which v143 needs at link time.
 
-For the isolated NPhase lifecycle probe, use `-NPhaseBridge`. This copies our
-small test-only bridge into the ignored mirror, adds it to the mirrored
-SimulationController project, and force-links its export into the Win32 DLL:
+For the isolated NPhase lifecycle and report-metadata probes, use
+`-NPhaseBridge`. This copies our small test-only bridges into the ignored
+mirror, adds them to the mirrored SimulationController project, and force-links
+their exports into the Win32 DLL:
 
 ```powershell
 .\Build-PhysX333.ps1 -Configuration release -NPhaseBridge
 ```
 
-Run `..\harness\Build-Harness.cmd --nphase-topology-probe` from a command
-prompt after that build. This probe intentionally exits without normal PhysX
-teardown because it reconstructs pair topology but not the other coupled
-predecessor state. It must not be used with the shipped Unity DLL.
+Run `..\harness\Build-Harness.cmd --nphase-topology-probe` or
+`..\harness\Build-Harness.cmd --interaction-metadata-probe` from a command
+prompt after that build. These probes intentionally exit without normal PhysX
+teardown because they do not reconstruct all coupled predecessor state. They
+must not be used with the shipped Unity DLL.
 
 Small test-only changes to private SDK internals can be supplied as patch
 files with `-MirrorPatch path1.patch,path2.patch`. Patches are applied after

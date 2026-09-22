@@ -21,6 +21,7 @@
 #include "../nphase/NPhaseTopology.h"
 #include "../island/IslandImage.h"
 #include "../memblock/MemBlockImage.h"
+#include "../interaction/InteractionImage.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -513,15 +514,20 @@ int main(int argc, char** argv)
     bool publicProbe = false;
     bool nphaseTopologyProbe = false;
     bool nphaseReverseProbe = false;
+    bool interactionOrderProbe = false;
+    bool interactionMetadataProbe = false;
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--public-rewind-probe") publicProbe = true;
         else if (std::string(argv[i]) == "--nphase-topology-probe") nphaseTopologyProbe = true;
         else if (std::string(argv[i]) == "--nphase-reverse-probe") nphaseReverseProbe = true;
+        else if (std::string(argv[i]) == "--interaction-order-probe") interactionOrderProbe = true;
+        else if (std::string(argv[i]) == "--interaction-metadata-probe") interactionMetadataProbe = true;
         else die(std::string("unknown argument: ") + argv[i]);
     }
 
-    if (nphaseTopologyProbe || nphaseReverseProbe)
+    if (nphaseTopologyProbe || nphaseReverseProbe || interactionOrderProbe ||
+        interactionMetadataProbe)
     {
         if (publicProbe) die("NPhase topology probe is a separate process mode");
         Runtime runtime;
@@ -533,11 +539,35 @@ int main(int argc, char** argv)
         source->step(true);
         source->step(false);
         const physx333_offline::OracleImage checkpointOracle = captureOracle(*source);
+        {
+            const auto& reports = checkpointOracle.parts.at("nphase.report_buffer");
+            const auto& eventLists = checkpointOracle.parts.at("nphase.event_lists");
+            const auto& actors = checkpointOracle.parts.at("nphase.actor_pairs");
+            std::cout << "NPHASE_REPORT cursor=" << reports[0]
+                      << " capacity=" << reports[1]
+                      << " default=" << reports[2]
+                      << " last=" << reports[3]
+                      << " locked=" << reports[4]
+                      << " event_meta=" << eventLists[0] << ',' << eventLists[1]
+                      << ',' << eventLists[2] << ',' << eventLists[3]
+                      << " actor_report_slots=";
+            for (size_t i = 0; i < kPairCount; ++i)
+            {
+                if (i) std::cout << ',';
+                std::cout << actors[i * (actors.size() / kPairCount) + 7];
+            }
+            std::cout << "\n";
+        }
         physx333_offline::NPhaseTopologyImage checkpointTopology;
         std::string error;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
                                                      checkpointTopology, error))
             die("NPhase checkpoint topology capture: " + error);
+        physx333_offline::InteractionImage checkpointInteraction;
+        if ((interactionOrderProbe || interactionMetadataProbe) &&
+            !physx333_offline::CaptureInteractionImage(*source->scene,
+                                                        checkpointInteraction, error))
+            die("interaction checkpoint capture: " + error);
         physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
         if (nphaseReverseProbe)
             std::reverse(requestedTopology.pairs.begin(), requestedTopology.pairs.end());
@@ -558,8 +588,27 @@ int main(int argc, char** argv)
             !deletedTopology.equals(afterReject, error))
             die("NPhase bridge preflight rejection changed the scene: " + error);
         std::cout << "PASS NPhase filter mismatch rejected before mutation\n";
-        if (!physx333_offline::RestoreNPhaseTopology(*source->scene,
-                                                     requestedTopology, error))
+        if (interactionOrderProbe || interactionMetadataProbe)
+        {
+            if (!physx333_offline::RestoreInteractionOrder(*source->scene,
+                                                           checkpointInteraction, error))
+                die("interaction order reconstruction: " + error);
+            physx333_offline::InteractionImage recreatedInteraction;
+            if (!physx333_offline::CaptureInteractionImage(*source->scene,
+                                                            recreatedInteraction, error) ||
+                !checkpointInteraction.sameSlotsAndOrder(recreatedInteraction, error))
+                die("interaction slot/order comparison: " + error);
+            std::cout << "PASS interaction scene/actor and physical slot order restored\n";
+            if (interactionMetadataProbe)
+            {
+                if (!physx333_offline::RestoreInteractionMetadata(*source->scene,
+                                                                    checkpointInteraction, error))
+                    die("interaction metadata reconstruction: " + error);
+                std::cout << "PASS interaction report/event/touch metadata restored\n";
+            }
+        }
+        else if (!physx333_offline::RestoreNPhaseTopology(*source->scene,
+                                                           requestedTopology, error))
             die("NPhase lifecycle reconstruction: " + error);
         physx333_offline::NPhaseTopologyImage recreated;
         if (!physx333_offline::CaptureNPhaseTopology(*source->scene,
@@ -567,11 +616,21 @@ int main(int argc, char** argv)
             die("NPhase recreated topology capture: " + error);
         if (!requestedTopology.sameShapePairs(recreated, error))
             die("NPhase reconstructed pair identities: " + error);
-        if (requestedTopology.equals(recreated, error))
-            die("NPhase lifecycle-only reconstruction unexpectedly restored full touch state");
-        std::cout << "PASS NPhase lifecycle restores six requested shape pairs"
-                  << (nphaseReverseProbe ? " (reverse order)" : "")
-                  << "; touch/contact history remains different (" << error << ")\n";
+        const bool topologyExact = requestedTopology.equals(recreated, error);
+        if (interactionMetadataProbe)
+        {
+            if (!topologyExact)
+                die("interaction metadata did not restore topology/touch state: " + error);
+            std::cout << "PASS NPhase topology and touch metadata image\n";
+        }
+        else
+        {
+            if (topologyExact)
+                die("NPhase lifecycle-only reconstruction unexpectedly restored full touch state");
+            std::cout << "PASS NPhase lifecycle restores six requested shape pairs"
+                      << (nphaseReverseProbe ? " (reverse order)" : "")
+                      << "; touch/contact history remains different (" << error << ")\n";
+        }
         const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
         if (checkpointOracle.equals(recreatedOracle, error))
             die("NPhase lifecycle-only reconstruction unexpectedly matched the complete oracle");

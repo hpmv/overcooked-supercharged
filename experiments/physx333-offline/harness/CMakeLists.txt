@@ -25,6 +25,7 @@ add_executable(physx333_offline_harness
   ../nphase/NPhaseTopology.cpp
   ../island/IslandImage.cpp
   ../memblock/MemBlockImage.cpp
+  ../interaction/InteractionImage.cpp
 )
 target_compile_features(physx333_offline_harness PRIVATE cxx_std_11)
 target_compile_definitions(physx333_offline_harness PRIVATE

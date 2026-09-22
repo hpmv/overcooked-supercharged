@@ -68,8 +68,11 @@ $sceneQueriesText = $sceneQueriesText.Replace($oldGuard, '#if !PX_IS_SPU')
 if ($NPhaseBridge) {
     $bridgeSource = Join-Path $PSScriptRoot '..\nphase\NPhaseBridge.cpp'
     $bridgeHeader = Join-Path $PSScriptRoot '..\nphase\NPhaseBridge.h'
+    $reportBridgeSource = Join-Path $PSScriptRoot '..\interaction\InteractionReportBridge.cpp'
+    $reportBridgeHeader = Join-Path $PSScriptRoot '..\interaction\InteractionReportBridge.h'
     $bridgeDestination = Join-Path $sdkMirror 'Source\SimulationController\src'
-    foreach ($bridgeFile in @($bridgeSource, $bridgeHeader)) {
+    foreach ($bridgeFile in @($bridgeSource, $bridgeHeader,
+                              $reportBridgeSource, $reportBridgeHeader)) {
         if (-not (Test-Path -LiteralPath $bridgeFile)) {
             throw "NPhase bridge source not found: $bridgeFile"
         }
@@ -83,7 +86,9 @@ if ($NPhaseBridge) {
         throw "Expected NPhase compile entry missing: $simulationProject"
     }
     $simulationText = $simulationText.Replace($compileAnchor,
-        '<ClCompile Include="..\..\SimulationController\src\NPhaseBridge.cpp" />' + "`r`n`t`t" + $compileAnchor)
+        '<ClCompile Include="..\..\SimulationController\src\NPhaseBridge.cpp" />' + "`r`n`t`t" +
+        '<ClCompile Include="..\..\SimulationController\src\InteractionReportBridge.cpp" />' + "`r`n`t`t" +
+        $compileAnchor)
     [System.IO.File]::WriteAllText($simulationProject, $simulationText,
         (New-Object System.Text.UTF8Encoding($false)))
 
@@ -94,7 +99,7 @@ if ($NPhaseBridge) {
         throw "Expected release linker options missing: $physxProject"
     }
     $physxText = $physxText.Replace($linkAnchor,
-        '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO /INCLUDE:_oc2_physx333_nphase_recreate_v1</AdditionalOptions>')
+        '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO /INCLUDE:_oc2_physx333_nphase_recreate_v1 /INCLUDE:_oc2_physx333_report_create_v1</AdditionalOptions>')
     [System.IO.File]::WriteAllText($physxProject, $physxText,
         (New-Object System.Text.UTF8Encoding($false)))
 }

@@ -172,6 +172,17 @@ manifold, island, and allocator history still differ. This supports a
 lifecycle-first restore followed by an explicit ordered-container and payload
 projection; it is not a whole-scene rewind result.
 
+The `--interaction-metadata-probe` now continues that reverse-order lifecycle
+path: it restores physical SIP/ActorPair/contact-manager slot bindings, puts
+InteractionScene and the mover's interaction array back in checkpoint order,
+then uses a second test-only source bridge to allocate six lazy ActorPair
+report objects in their original pool slots. It restores the persistent event
+list and SIP/ActorPair/report/manager touch metadata. The NPhase topology and
+touch image then matches, and the first remaining oracle difference is the
+contact manager's contact count (`4` versus `0`). The probe still exits
+without simulating because contact streams, manifolds, memory blocks, island
+graph, and body/scene state are not yet a joined transaction.
+
 A separate island image now captures manager-owned graph pools, ordered free
 chains, bitmaps, queues, counters, and work backing. Same-topology idempotent
 restore passes 100 times, and malformed images or missing contact-edge
