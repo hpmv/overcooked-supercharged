@@ -120,3 +120,22 @@ island history are not restored yet. Capacity changes and cross-allocation
 rebasing remain outside this component's admission. The production Unity
 helper remains read-only for SAP/BPElem and does not apply the full predecessor
 transaction.
+
+A read-only NPhase/contact/island oracle now passes the same checkpoint,
+six-deletion, and settled-suffix comparisons between independent scenes. It
+captures 39 ordered sections including interaction and ActorPair topology,
+six NPhase pools, contact-manager free order and work units, contact streams,
+single-manifold contacts, report/event lists, and island nodes, edges, islands,
+free lists, bitmaps, and change queues. Duplicate capture at the settled
+checkpoint also agrees. In the public-only rewind negative control, this
+oracle differs at the contact-manager free stack even before considering the
+six lost-contact callbacks. The fixture explicitly checks six found-contact
+callbacks at checkpoint and six lost-contact callbacks on deletion.
+
+This is observation coverage, not a restore implementation. The oracle marks
+free-slot payload and allocator tails, the filter-pair pool and dirty set,
+constraint/articulation payload, and solver/friction backing as unsupported;
+multi-manifold contents are flagged if encountered. The next milestone is a
+same-scene NPhase/contact/island transaction that restores the checkpoint and
+reproduces the full next-step image. Until then, no PhysX-only rewind parity
+claim is warranted.

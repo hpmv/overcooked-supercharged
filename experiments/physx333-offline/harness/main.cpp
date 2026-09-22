@@ -16,6 +16,7 @@
 #include "ScInteractionScene.h"
 #include "PxsContext.h"
 #include "../sap/SapImage.h"
+#include "../oracle/Oracle.h"
 
 // Only this translation unit opens the original 3.3.3 access labels. These
 // declarations retain their original field order and are used read-only.
@@ -432,6 +433,25 @@ void requireEqual(const char* label, const Snapshot& expected, const Snapshot& a
     std::cout << "PASS " << label << "\n";
 }
 
+physx333_offline::OracleImage captureOracle(World& world)
+{
+    physx333_offline::OracleImage image;
+    std::string error;
+    if (!physx333_offline::CaptureOracle(*world.scene, image, error))
+        die("NPhase/island oracle capture: " + error);
+    return image;
+}
+
+void requireOracleEqual(const char* label,
+                        const physx333_offline::OracleImage& expected,
+                        const physx333_offline::OracleImage& actual)
+{
+    std::string difference;
+    if (!expected.equals(actual, difference))
+        die(std::string(label) + ": " + difference);
+    std::cout << "PASS " << label << "\n";
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -445,6 +465,7 @@ int main(int argc, char** argv)
 
     Runtime runtime;
     Snapshot checkpoint, deletion, settled;
+    physx333_offline::OracleImage checkpointOracle, deletionOracle, settledOracle;
     {
         World source(runtime);
         // Exercise both overlap output arrays before checkpoint. Their first
@@ -455,6 +476,14 @@ int main(int argc, char** argv)
         source.step(false);
         std::cout << "PASS six-contact warmup\n";
         checkpoint = source.capture();
+        if (source.events.rows.size() != 4u * kPairCount)
+            die("checkpoint did not report six contact events");
+        for (PxU32 i = 0; i != kPairCount; ++i)
+            if (!(source.events.rows[4u * i + 2u] & PxPairFlag::eNOTIFY_TOUCH_FOUND))
+                die("checkpoint contact event is not touch-found");
+        checkpointOracle = captureOracle(source);
+        requireOracleEqual("NPhase/island checkpoint double capture",
+                           checkpointOracle, captureOracle(source));
         const PublicBodyState publicCheckpoint = source.saveBody();
         oc2::offline::SapImage sapCheckpoint;
         oc2::offline::SapImage sapCheckpointCopy;
@@ -469,6 +498,12 @@ int main(int argc, char** argv)
 
         source.step(true);
         deletion = source.capture();
+        if (source.events.rows.size() != 4u * kPairCount)
+            die("deletion did not report six contact events");
+        for (PxU32 i = 0; i != kPairCount; ++i)
+            if (!(source.events.rows[4u * i + 2u] & PxPairFlag::eNOTIFY_TOUCH_LOST))
+                die("deletion contact event is not touch-lost");
+        deletionOracle = captureOracle(source);
         oc2::offline::SapImage sapDeleted;
         if (!oc2::offline::CaptureSap(*source.scene, sapDeleted, sapError))
             die("SAP deletion capture: " + sapError);
@@ -519,6 +554,7 @@ int main(int argc, char** argv)
 
         source.step(false);
         settled = source.capture();
+        settledOracle = captureOracle(source);
 
         const PxU32 checkpointPairs = checkpoint.parts["sap.meta"][6];
         const PxU32 deletedPairs = deletion.parts["sap.meta"][6];
@@ -539,10 +575,14 @@ int main(int argc, char** argv)
             source.restorePublicBody(publicCheckpoint);
             source.step(true);
             const Snapshot naive = source.capture();
+            const physx333_offline::OracleImage naiveOracle = captureOracle(source);
             std::string difference;
             if (compare(deletion, naive, difference))
                 die("public-only rewind unexpectedly matched; fixture needs stronger history pressure");
             std::cout << "PUBLIC_REWIND_INSUFFICIENT first_difference=" << difference << "\n";
+            if (deletionOracle.equals(naiveOracle, difference))
+                die("public-only rewind unexpectedly matched NPhase/island oracle");
+            std::cout << "PUBLIC_ORACLE_INSUFFICIENT first_difference=" << difference << "\n";
         }
     }
 
@@ -552,14 +592,21 @@ int main(int argc, char** argv)
         replay.step(true);
         replay.step(false);
         requireEqual("fresh replay checkpoint", checkpoint, replay.capture());
+        requireOracleEqual("fresh replay NPhase/island checkpoint",
+                           checkpointOracle, captureOracle(replay));
         replay.step(true);
         requireEqual("fresh replay six deletions", deletion, replay.capture());
+        requireOracleEqual("fresh replay NPhase/island six deletions",
+                           deletionOracle, captureOracle(replay));
         replay.step(false);
         requireEqual("fresh replay settled suffix", settled, replay.capture());
+        requireOracleEqual("fresh replay NPhase/island settled suffix",
+                           settledOracle, captureOracle(replay));
     }
 
     if (runtime.errors.errors)
         die("PhysX emitted at least one error during the fixture");
-    std::cout << "PASS offline PhysX 3.3.3 source-backed oracle\n";
+    std::cout << "PASS offline PhysX 3.3.3 source-backed oracle ("
+              << checkpointOracle.summary() << ")\n";
     return 0;
 }
