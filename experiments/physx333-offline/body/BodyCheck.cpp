@@ -199,6 +199,48 @@ void checkRoundTrip(Fixture& fixture, const char* title, bool expectForcePayload
     std::cout << "PASS " << title << " duplicate, 100 A-B-A round trips, atomic rejection\n";
 }
 
+void checkKinematicTargetRoundTrip()
+{
+    Fixture fixture;
+    fixture.mover->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+    std::string error;
+    const PxTransform nearTarget(PxVec3(0.0f, 0.95f, 0.0f));
+    const PxTransform farTarget(PxVec3(0.0f, 0.95f, 5.0f));
+    fixture.mover->setKinematicTarget(nearTarget);
+    fixture.scene->simulate(1.0f / 60.0f);
+    require(fixture.scene->fetchResults(true), "kinematic near fetchResults");
+    BodyImage nearImage;
+    require(CaptureBodies(*fixture.scene, nearImage, error),
+            "kinematic near capture: " + error);
+    require(nearImage.actors.back().simStateData != 0,
+            "kinematic SimStateData was not retained");
+
+    fixture.mover->setKinematicTarget(farTarget);
+    fixture.scene->simulate(1.0f / 60.0f);
+    require(fixture.scene->fetchResults(true), "kinematic far fetchResults");
+    BodyImage farImage;
+    require(CaptureBodies(*fixture.scene, farImage, error),
+            "kinematic far capture: " + error);
+    require(!nearImage.equals(farImage, error),
+            "kinematic target did not change body image");
+
+    for (int i = 0; i < 100; ++i)
+    {
+        require(RestoreBodies(*fixture.scene, nearImage, error),
+                "kinematic near restore: " + error);
+        BodyImage observed;
+        require(CaptureBodies(*fixture.scene, observed, error) &&
+                nearImage.equals(observed, error),
+                "kinematic near verification: " + error);
+        require(RestoreBodies(*fixture.scene, farImage, error),
+                "kinematic far restore: " + error);
+        require(CaptureBodies(*fixture.scene, observed, error) &&
+                farImage.equals(observed, error),
+                "kinematic far verification: " + error);
+    }
+    std::cout << "PASS settled kinematic-target BodyImage A-B-A x100\n";
+}
+
 } // namespace
 
 int main()
@@ -213,5 +255,6 @@ int main()
         fixture.mover->addForce(PxVec3(3.0f, 0.0f, 0.0f), PxForceMode::eFORCE);
         checkRoundTrip(fixture, "six-box force payload", true);
     }
+    checkKinematicTargetRoundTrip();
     return 0;
 }
