@@ -72,3 +72,21 @@ This is a deterministic red test and component-state inventory. It does not
 mutate PhysX internals or claim a 12-to-8 rewind implementation. The shipped
 Story 1-1 trace also has a distinct broadphase pattern (zero created/six
 deleted), so this fixture is not intended as an exact scene reconstruction.
+
+For the bounded source-lifecycle subset stage, run:
+
+```bat
+cmd /c experiments\physx333-offline\partial_contacts\Build-Check.cmd --subset-probe
+```
+
+This separate fail-stop mode captures A's NPhase pair keys and physical SIP/CM
+slots, checks that corrupt shape and physical-slot requests are rejected
+without a scene change, then preflights and creates only the four missing B
+pairs through the original
+`NPhaseCore::onOverlapCreated` path. It verifies the ordered twelve-pair
+topology and exact SIP/CM slot mapping. It prints the first full-Oracle
+difference and exits without a physics step or normal scene teardown, since
+contact payload, reports, island, SAP, body, and context still describe B.
+In the observed source run, the first difference is
+`contact.managers[7] 0x0 vs 0xa`, within a surviving manager's contact work
+state. This lifecycle stage therefore has no full rewind claim.

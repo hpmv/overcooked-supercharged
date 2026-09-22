@@ -15,6 +15,7 @@
 #include "../oracle/Oracle.h"
 #include "../sap/SapImage.h"
 #include "../island/IslandImage.h"
+#include "../nphase/NPhaseTopology.h"
 
 using namespace physx;
 
@@ -449,12 +450,78 @@ void verifyFreshEqual(const Capture& a, const Capture& b,
     }
 }
 
+void subsetProbe(Runtime& runtime)
+{
+    World world(runtime);
+    world.step(0.0f);
+    world.step(0.0f);
+    const Capture checkpoint = world.capture();
+    physx333_offline::NPhaseTopologyImage target;
+    std::string error;
+    if (!physx333_offline::CaptureNPhaseTopology(*world.scene,
+                                                 target, error))
+        fail("NPhase checkpoint capture: " + error);
+    world.step(-0.2f);
+    const Capture successor = world.capture();
+    physx333_offline::NPhaseTopologyImage current;
+    if (!physx333_offline::CaptureNPhaseTopology(*world.scene,
+                                                 current, error))
+        fail("NPhase successor capture: " + error);
+    if (target.pairs.size() != 12 || current.pairs.size() != 8)
+        fail("NPhase subset probe did not produce 12-to-8");
+
+    physx333_offline::NPhaseTopologyImage invalid = target;
+    invalid.pairs.back().shape0.shapeIndex = 99;
+    if (physx333_offline::RestoreNPhaseSubset(*world.scene, invalid, error))
+        fail("Invalid NPhase subset target was accepted");
+    const Capture afterReject = world.capture();
+    if (!successor.oracle.equals(afterReject.oracle, error))
+        fail("Rejected NPhase subset target changed the scene: " + error);
+
+    invalid = target;
+    invalid.pairs.back().managerSlot = 999;
+    if (physx333_offline::RestoreNPhaseSubset(*world.scene, invalid, error))
+        fail("Impossible NPhase manager slot was accepted");
+    const Capture afterSlotReject = world.capture();
+    if (!successor.oracle.equals(afterSlotReject.oracle, error))
+        fail("Rejected NPhase manager slot changed the scene: " + error);
+
+    if (!physx333_offline::RestoreNPhaseSubset(*world.scene, target, error))
+        fail("NPhase subset lifecycle failed; scene is fail-stop: " + error);
+    physx333_offline::NPhaseTopologyImage restored;
+    if (!physx333_offline::CaptureNPhaseTopology(*world.scene,
+                                                 restored, error) ||
+        !target.sameShapePairs(restored, error))
+        fail("NPhase subset ordered topology differs: " + error);
+    for (std::size_t i = 0; i < target.pairs.size(); ++i)
+    {
+        if (target.pairs[i].sipPoolSlot != restored.pairs[i].sipPoolSlot ||
+            target.pairs[i].managerSlot != restored.pairs[i].managerSlot)
+            fail("NPhase subset SIP/manager slot differs at pair " +
+                 std::to_string(i));
+    }
+    physx333_offline::OracleImage projected;
+    if (!physx333_offline::CaptureOracle(*world.scene, projected, error))
+        fail("NPhase subset projected Oracle capture: " + error);
+    if (checkpoint.oracle.equals(projected, error))
+        fail("Lifecycle-only subset unexpectedly matched the full checkpoint");
+    std::cout << "SUBSET_ORACLE_FIRST_DIFFERENCE " << error << '\n';
+    std::cout << "PASS preflighted subset lifecycle preserved eight survivors "
+                 "and recreated four missing SIP/CM physical slots in "
+                 "checkpoint order; no simulation follows\n";
+    std::cout.flush();
+    std::_Exit(0);
+}
+
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
     static_assert(sizeof(void*) == 4, "Requires Win32 PhysX");
+    const bool subset = argc == 2 && std::string(argv[1]) == "--subset-probe";
+    if (argc != 1 && !subset) fail("Unknown partial-contact fixture argument");
     Runtime runtime;
+    if (subset) subsetProbe(runtime);
     Capture checkpoint, successor;
     std::vector<Event> publicRepeat;
     {

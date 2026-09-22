@@ -26,6 +26,11 @@ struct NPhasePairTopology {
     std::uint32_t hasManager;
     std::uint32_t actorPairRefCount;
     std::uint32_t actorPairTouchCount;
+    // Physical same-scene allocation bindings. These are used only for the
+    // source-built subset resurrection preflight, never as portable IDs.
+    std::uint32_t sipPoolSlot;
+    std::uint32_t managerSlot;
+    std::uint32_t islandEdge;
 
     bool operator==(const NPhasePairTopology& other) const;
 };
@@ -59,5 +64,16 @@ bool CaptureNPhaseTopology(physx::PxScene& scene,
 bool RestoreNPhaseTopology(physx::PxScene& scene,
                            const NPhaseTopologyImage& target,
                            std::string& error);
+
+// Source-built test-only subset lifecycle stage. The current 6- or 12-box
+// fixture must retain at least one pair; the function creates only target
+// pairs absent from that successor. It preflights the next SIP/CM pool slots,
+// preserves survivor objects, and restores ordered scene/mover pair arrays.
+// Touch, report, contact payload, island, SAP, and other checkpoint state are
+// NOT restored. On any postwrite failure the disposable scene is fail-stop:
+// do not simulate or destroy/reuse it as a valid restored scene.
+bool RestoreNPhaseSubset(physx::PxScene& scene,
+                          const NPhaseTopologyImage& target,
+                          std::string& error);
 
 } // namespace physx333_offline

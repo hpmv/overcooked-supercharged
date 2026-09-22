@@ -32,4 +32,12 @@ typedef std::uint32_t (__cdecl* NPhaseRecreateFnV1)(
     void* nphaseCore, const NPhaseBridgePairV1* pairs,
     std::uint32_t pairCount);
 
+// Export name: oc2_physx333_nphase_recreate_subset_v2. The caller supplies
+// only absent rigid box pairs and the expected count of existing overlaps.
+// The source bridge validates all requests and survivor disjointness before
+// invoking the original NPhase lifecycle. Postwrite failure is fail-stop.
+typedef std::uint32_t (__cdecl* NPhaseRecreateSubsetFnV2)(
+    void* nphaseCore, const NPhaseBridgePairV1* missingPairs,
+    std::uint32_t missingCount, std::uint32_t expectedExistingCount);
+
 } // namespace physx333_offline

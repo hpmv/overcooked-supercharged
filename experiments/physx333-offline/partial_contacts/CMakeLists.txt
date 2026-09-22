@@ -22,6 +22,7 @@ add_executable(physx333_partial_contacts
   ../oracle/Oracle.cpp
   ../sap/SapImage.cpp
   ../island/IslandImage.cpp
+  ../nphase/NPhaseTopology.cpp
 )
 target_compile_features(physx333_partial_contacts PRIVATE cxx_std_11)
 target_compile_definitions(physx333_partial_contacts PRIVATE

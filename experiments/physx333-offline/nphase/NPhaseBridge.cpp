@@ -12,6 +12,7 @@
 #include "ScRigidSim.h"
 #include "ScInteractionScene.h"
 #include "ScElement.h"
+#include "ScShapeInstancePairLL.h"
 
 static_assert(sizeof(void*) == 4, "The offline bridge requires Win32 PhysX");
 static_assert(sizeof(physx333_offline::NPhaseBridgePairV1) == 20,
@@ -136,6 +137,100 @@ oc2_physx333_nphase_recreate_v1(
     // No object or scene memory is written before this point. These calls
     // construct objects through the SDK's own pair, manager and island path.
     for (PxU32 i = 0; i < pairCount; ++i)
+        nphase.onOverlapCreated(resolved[i].shape0, resolved[i].shape1, 0);
+    return NPhaseBridgeSuccess;
+}
+
+extern "C" __declspec(dllexport) PxU32 __cdecl
+oc2_physx333_nphase_recreate_subset_v2(
+    void* nphaseCore,
+    const physx333_offline::NPhaseBridgePairV1* missingPairs,
+    PxU32 missingCount,
+    PxU32 expectedExistingCount)
+{
+    using namespace physx333_offline;
+    // Bound the stack-resident preflight image. No source state is written
+    // until every requested pair and existing overlap has been checked.
+    if (!nphaseCore || !missingPairs || !missingCount || missingCount > 64 ||
+        expectedExistingCount > 64)
+        return NPhaseBridgeInvalidInput;
+
+    Sc::NPhaseCore& nphase = *static_cast<Sc::NPhaseCore*>(nphaseCore);
+    Sc::Scene& scene = nphase.getScene();
+    Sc::InteractionScene& interactions = scene.getInteractionScene();
+    if (interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) !=
+            expectedExistingCount ||
+        interactions.getActiveInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) !=
+            expectedExistingCount ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER) ||
+        scene.getFilterCallbackFast())
+        return NPhaseBridgeUnsupportedScene;
+
+    ResolvedPair resolved[64];
+    for (PxU32 i = 0; i < missingCount; ++i)
+    {
+        const NPhaseBridgePairV1& pair = missingPairs[i];
+        if (!pair.actorCore0 || !pair.actorCore1 || !pair.shapeCore0 ||
+            !pair.shapeCore1 || pair.actorCore0 == pair.actorCore1)
+            return NPhaseBridgeInvalidInput;
+        Sc::RigidSim* actor0 =
+            static_cast<Sc::RigidCore*>(pair.actorCore0)->getSim();
+        Sc::RigidSim* actor1 =
+            static_cast<Sc::RigidCore*>(pair.actorCore1)->getSim();
+        if (!actor0 || !actor1 || &actor0->getScene() != &scene ||
+            &actor1->getScene() != &scene)
+            return NPhaseBridgeUnresolvedShape;
+        const bool supportedActors =
+            (actor0->getActorType() == PxActorType::eRIGID_DYNAMIC &&
+             actor1->getActorType() == PxActorType::eRIGID_STATIC) ||
+            (actor0->getActorType() == PxActorType::eRIGID_STATIC &&
+             actor1->getActorType() == PxActorType::eRIGID_DYNAMIC);
+        if (!supportedActors) return NPhaseBridgeUnsupportedScene;
+
+        Sc::ShapeSim* shape0 = findShape(
+            *actor0, *static_cast<Sc::ShapeCore*>(pair.shapeCore0));
+        Sc::ShapeSim* shape1 = findShape(
+            *actor1, *static_cast<Sc::ShapeCore*>(pair.shapeCore1));
+        if (!shape0 || !shape1 || shape0 == shape1 ||
+            !shape0->hasAABBMgrHandle() || !shape1->hasAABBMgrHandle())
+            return NPhaseBridgeUnresolvedShape;
+        if (shape0->getGeometryType() != PxGeometryType::eBOX ||
+            shape1->getGeometryType() != PxGeometryType::eBOX ||
+            !(shape0->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) ||
+            !(shape1->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) ||
+            (shape0->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) ||
+            (shape1->getFlags() & PxShapeFlag::eTRIGGER_SHAPE))
+            return NPhaseBridgeUnsupportedScene;
+        if (!matchesFixtureFilter(scene, *shape0, *shape1,
+                                  pair.expectedPairFlags))
+            return NPhaseBridgeUnexpectedFilter;
+
+        for (PxU32 j = 0; j < i; ++j)
+            if ((resolved[j].shape0 == shape0 &&
+                 resolved[j].shape1 == shape1) ||
+                (resolved[j].shape0 == shape1 &&
+                 resolved[j].shape1 == shape0))
+                return NPhaseBridgeExistingInteraction;
+
+        Cm::Range<Sc::Interaction*const> existing = interactions.getInteractions(
+            Sc::PX_INTERACTION_TYPE_OVERLAP);
+        while (!existing.empty())
+        {
+            Sc::ShapeInstancePairLL* sip =
+                static_cast<Sc::ShapeInstancePairLL*>(existing.front());
+            existing.popFront();
+            Sc::ShapeSim* live0 = &sip->getShape0();
+            Sc::ShapeSim* live1 = &sip->getShape1();
+            if ((live0 == shape0 && live1 == shape1) ||
+                (live0 == shape1 && live1 == shape0))
+                return NPhaseBridgeExistingInteraction;
+        }
+        resolved[i].shape0 = shape0;
+        resolved[i].shape1 = shape1;
+    }
+
+    for (PxU32 i = 0; i < missingCount; ++i)
         nphase.onOverlapCreated(resolved[i].shape0, resolved[i].shape1, 0);
     return NPhaseBridgeSuccess;
 }
