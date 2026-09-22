@@ -47,7 +47,9 @@ and an isolated source-built test verifies touch and separation histories.
 The newer [level-shaped graph baseline](../experiments/physx333-offline/level_graph/README.md)
 reproduces four chef capsules, a fifth active body, shared static endpoints,
 two auxiliary markers, four triggers, twelve large capsule manifolds, and
-the six semantic broadphase deletions. It is still a fresh-scene control:
+the six semantic broadphase deletions. It now also captures the full existing
+component images at each settled boundary and checks their immediate
+same-scene recapture. It is still a fresh-scene control:
 its deletion order and TransformCache allocation history differ from the
 shipped observation. Graph-aware contact/trigger reconstruction and joined
 component next-step rewind remain open. A separate
@@ -55,14 +57,16 @@ component next-step rewind remain open. A separate
 does rewind this synthetic level-shaped source scene: it replays a five-step
 leave/return suffix and a second non-adjacent checkpoint's suffix 100 times,
 matching the full implemented Oracle, trigger/marker and ActorPair images,
-ordered callbacks, and initialized allocator bytes.
+the full SAP, cache, island, memory-block, body, clock, context, and query
+component images, ordered callbacks, and initialized allocator bytes.
 That result depends on a fixed-address diagnostic allocator unavailable in
 the shipped Unity binary; it is a source-level reference, not a game-side
 restore. An [isolated trigger-rewind fixture](../experiments/physx333-offline/trigger_rewind/README.md)
 now also reconstructs two deleted capsule/box trigger pairs through the
 original PhysX NPhase lifecycle, with exact A and next-B images over 100 cold
-and 100 warm cycles. It has no contact or marker survivors, so the joined
-level-graph component restore is still open. Actor and
+and 100 warm cycles. Its second variant keeps one trigger and one marker
+survivor while recreating two deleted triggers; it still has no contacts, so
+the joined level-graph component restore is open. Actor and
 shape lifetime, CCD, and several other native-state families remain gated.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,

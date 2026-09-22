@@ -13,6 +13,15 @@ void equalSnapshot(const Snapshot& expected, const Snapshot& actual)
     if (!expected.oracle.equals(actual.oracle, difference) ||
         !expected.aux.equals(actual.aux, difference) ||
         !(expected.actorPair == actual.actorPair) ||
+        !expected.sap.equals(actual.sap, difference) ||
+        !expected.cache.equals(actual.cache, difference) ||
+        !expected.island.equals(actual.island, difference) ||
+        !expected.memBlocks.equals(actual.memBlocks, difference) ||
+        !expected.shapeCache.equals(actual.shapeCache, difference) ||
+        !expected.bodies.equals(actual.bodies, difference) ||
+        !expected.clock.equals(actual.clock, difference) ||
+        !expected.context.equals(actual.context, difference) ||
+        !expected.query.equals(actual.query, difference) ||
         !(expected.graph == actual.graph) ||
         !(expected.facts == actual.facts) ||
         expected.deletedOverlaps != actual.deletedOverlaps ||

@@ -21,6 +21,12 @@ add_executable(physx333_level_arena
   ../cache/TransformCacheImage.cpp
   ../sap/SapImage.cpp
   ../island/IslandImage.cpp
+  ../memblock/MemBlockImage.cpp
+  ../shape_cache/ShapeCacheBindings.cpp
+  ../body/BodyImage.cpp
+  ../scene_clock/SceneClockImage.cpp
+  ../context_image/ContextImage.cpp
+  ../query_image/QueryImage.cpp
   ../aux_interactions/AuxInteractionImage.cpp
   ../actor_pair_graph/ActorPairGraphImage.cpp)
 target_compile_features(physx333_level_arena PRIVATE cxx_std_11)

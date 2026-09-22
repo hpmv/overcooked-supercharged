@@ -17,9 +17,12 @@ The sequence is recorded once and then repeated from the same A image for
 100 rewinds. A second checkpoint C is taken after the first return; each
 cycle also restores C from a later state and replays its own leave/return
 suffix. At every replay step the test compares all 39 implemented
-source Oracle sections, the full trigger/marker and ActorPair ownership
-images, ordered scene/actor graph and callbacks, SAP/cache/manifold/island facts, the
-allocation ledger, and every initialized byte in its fixed-address arena.
+source Oracle sections; the full trigger/marker, ActorPair, SAP,
+TransformCache, Island, memory-block, shape-cache-binding, Body, SceneClock,
+Context, and Query images; ordered scene/actor graph and callbacks; the
+allocation ledger; and every initialized byte in its fixed-address arena.
+These are same-scene target-image comparisons, not assertions that raw
+address-bearing images from two fresh scenes should be equal.
 
 The only normalized comparison bytes are exactly 75 unwritten padding bytes
 inside 25 embedded `PxsComputeAABBParams` task copies. Their offsets are
