@@ -90,6 +90,22 @@ input history still require later calibration against the shipped binary.
 
 ## Current status
 
-The source-backed build and harness are being developed. None of the gates
-above has yet been passed. The current production helper remains read-only
-for SAP/BPElem and does not apply the full predecessor restoration transaction.
+Gates 1 and 2 pass in the pinned Win32 Release source build. The fixture has
+six separated dynamic-box/static-box contacts. After the checkpoint, moving
+the dynamic actor away changes six SAP pairs to zero. A fresh scene reproduces
+the checkpoint, deletion frame, and settled suffix exactly across body bits,
+SAP endpoints/boxes/pair chains, the BPElem active/free partition, contact
+events, and public simulation statistics. Run the source-backed oracle with:
+
+```powershell
+cmd /c experiments\physx333-offline\harness\Build-Harness.cmd
+```
+
+The additional `--public-rewind-probe` is a negative control. Restoring only
+the body's public pose/velocities in the same scene and repeating the deletion
+step yields zero contact-event words, whereas uninterrupted execution yields
+24 words (six four-word contact rows). This is a fast, source-level reproduction
+of a missing contact predecessor. It is not yet a rewind fix. The SAP image and
+full NPhase/island restoration are in development; no source-built same-scene
+rewind has passed yet. The production Unity helper remains read-only for
+SAP/BPElem and does not apply the full predecessor transaction.
