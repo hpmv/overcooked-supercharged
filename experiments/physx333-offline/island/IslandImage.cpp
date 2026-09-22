@@ -442,7 +442,8 @@ bool validateDisjointRanges(const Plan& plan, std::string& error)
     return true;
 }
 
-bool buildPlan(PxScene& scene, Plan& plan, std::string& error)
+bool buildPlan(PxScene& scene, Plan& plan, std::string& error,
+               bool allowPendingChanges = false)
 {
     NpScene& np = static_cast<NpScene&>(scene);
     if (np.isPhysicsRunning() || np.isPhysicsBuffering())
@@ -466,13 +467,14 @@ bool buildPlan(PxScene& scene, Plan& plan, std::string& error)
 
     ProcessSleepingIslandsComputeData& compute = mgr.mProcessSleepingIslandsComputeData;
     IslandManagerUpdateWorkBuffers& work = mgr.mIslandManagerUpdateWorkBuffers;
-    if (mgr.mPerformIslandUpdate || mgr.mHasAnythingChanged ||
-        mgr.mNodeChangeManager.mCreatedNodesSize ||
-        mgr.mNodeChangeManager.mDeletedNodesSize ||
-        mgr.mEdgeChangeManager.mCreatedEdgesSize ||
-        mgr.mEdgeChangeManager.mDeletedEdgesSize ||
-        mgr.mEdgeChangeManager.mJoinedEdgesSize ||
-        mgr.mEdgeChangeManager.mBrokenEdgesSize ||
+    if ((!allowPendingChanges &&
+         (mgr.mPerformIslandUpdate || mgr.mHasAnythingChanged ||
+          mgr.mNodeChangeManager.mCreatedNodesSize ||
+          mgr.mNodeChangeManager.mDeletedNodesSize ||
+          mgr.mEdgeChangeManager.mCreatedEdgesSize ||
+          mgr.mEdgeChangeManager.mDeletedEdgesSize ||
+          mgr.mEdgeChangeManager.mJoinedEdgesSize ||
+          mgr.mEdgeChangeManager.mBrokenEdgesSize)) ||
         compute.mDataBlock || compute.mBodiesToWakeOrSleep ||
         compute.mNarrowPhaseContactManagers || compute.mSolverBodyMap ||
         compute.mSolverKinematics || compute.mSolverBodies ||
@@ -891,11 +893,12 @@ bool IslandImage::equals(const IslandImage& other, std::string& firstDifference)
     return true;
 }
 
-bool CaptureIsland(PxScene& scene, IslandImage& image, std::string& error)
+bool captureIslandImpl(PxScene& scene, IslandImage& image,
+                       std::string& error, bool allowPendingChanges)
 {
     error.clear();
     Plan plan;
-    if (!buildPlan(scene, plan, error)) return false;
+    if (!buildPlan(scene, plan, error, allowPendingChanges)) return false;
     IslandImage fresh;
     fresh.scene = plan.scene;
     fresh.context = plan.context;
@@ -929,11 +932,17 @@ bool CaptureIsland(PxScene& scene, IslandImage& image, std::string& error)
     return true;
 }
 
-bool RestoreIsland(PxScene& scene, const IslandImage& image, std::string& error)
+bool CaptureIsland(PxScene& scene, IslandImage& image, std::string& error)
+{
+    return captureIslandImpl(scene, image, error, false);
+}
+
+bool restoreIslandImpl(PxScene& scene, const IslandImage& image,
+                       std::string& error, bool allowPendingChanges)
 {
     error.clear();
     Plan live;
-    if (!buildPlan(scene, live, error)) return false;
+    if (!buildPlan(scene, live, error, allowPendingChanges)) return false;
     if (image.scene != live.scene || image.context != live.context ||
         image.manager != live.manager ||
         image.scratchAllocator != live.scratchAllocator)
@@ -996,14 +1005,16 @@ bool RestoreIsland(PxScene& scene, const IslandImage& image, std::string& error)
         return false;
 
     IslandImage rollback;
-    if (!CaptureIsland(scene, rollback, error)) return false;
+    if (!captureIslandImpl(scene, rollback, error,
+                           allowPendingChanges)) return false;
     writeImage(live, image);
     IslandImage observed;
     std::string verifyError;
     bool verified = false;
     try
     {
-        verified = CaptureIsland(scene, observed, verifyError) &&
+        verified = captureIslandImpl(scene, observed, verifyError,
+                                     allowPendingChanges) &&
                    image.equals(observed, verifyError);
     }
     catch (...)
@@ -1015,13 +1026,25 @@ bool RestoreIsland(PxScene& scene, const IslandImage& image, std::string& error)
         writeImage(live, rollback);
         IslandImage reverted;
         std::string rollbackError;
-        if (!CaptureIsland(scene, reverted, rollbackError) ||
+        if (!captureIslandImpl(scene, reverted, rollbackError,
+                               allowPendingChanges) ||
             !rollback.equals(reverted, rollbackError))
             std::abort();
         error = "island restore failed verification and rolled back: " + verifyError;
         return false;
     }
     return true;
+}
+
+bool RestoreIsland(PxScene& scene, const IslandImage& image, std::string& error)
+{
+    return restoreIslandImpl(scene, image, error, false);
+}
+
+bool RestoreIslandForJoin(PxScene& scene, const IslandImage& image,
+                          std::string& error)
+{
+    return restoreIslandImpl(scene, image, error, true);
 }
 
 }} // namespace oc2::offline

@@ -57,4 +57,12 @@ struct IslandImage
 bool CaptureIsland(physx::PxScene& scene, IslandImage& image, std::string& error);
 bool RestoreIsland(physx::PxScene& scene, const IslandImage& image, std::string& error);
 
+// Joined NPhase restore only: accepts pending island change journals left by
+// pair recreation at a stopped scene boundary. The target image must still
+// have valid quiescent transient work pointers, and the live active node/edge
+// bindings must already match. The caller must finish the whole scene image
+// before simulation; this does not make a dirty intermediate state runnable.
+bool RestoreIslandForJoin(physx::PxScene& scene, const IslandImage& image,
+                          std::string& error);
+
 }} // namespace oc2::offline

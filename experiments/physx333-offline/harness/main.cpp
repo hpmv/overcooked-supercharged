@@ -573,10 +573,15 @@ int main(int argc, char** argv)
             die("interaction checkpoint capture: " + error);
         physx333_offline::MemBlockIdentityRegistry memBlockIds;
         physx333_offline::MemBlockRestoreImage checkpointMemBlocks;
+        oc2::offline::IslandImage checkpointIsland;
         if (joinedPayloadProbe &&
             !physx333_offline::CaptureMemBlockRestore(*source->scene,
                 memBlockIds, checkpointMemBlocks, error))
             die("joined checkpoint memory-block capture: " + error);
+        if (joinedPayloadProbe &&
+            !oc2::offline::CaptureIsland(*source->scene,
+                                         checkpointIsland, error))
+            die("joined checkpoint island capture: " + error);
         physx333_offline::NPhaseTopologyImage requestedTopology = checkpointTopology;
         if (nphaseReverseProbe)
             std::reverse(requestedTopology.pairs.begin(), requestedTopology.pairs.end());
@@ -705,11 +710,25 @@ int main(int argc, char** argv)
                     die("repeat contact payload restore: " + error);
             }
             std::cout << "PASS joined contact/allocator idempotence x100\n";
+            if (!oc2::offline::RestoreIslandForJoin(*source->scene,
+                                             checkpointIsland, error))
+                die("joined island restore: " + error);
+            std::cout << "PASS joined island restore\n";
         }
         const physx333_offline::OracleImage recreatedOracle = captureOracle(*source);
-        if (checkpointOracle.equals(recreatedOracle, error))
-            die("NPhase lifecycle-only reconstruction unexpectedly matched the complete oracle");
-        std::cout << "NPHASE_REMAINING first_difference=" << error << "\n";
+        const bool oracleExact = checkpointOracle.equals(recreatedOracle, error);
+        if (joinedPayloadProbe)
+        {
+            if (!oracleExact)
+                die("joined source oracle mismatch: " + error);
+            std::cout << "PASS joined 39-section source oracle image\n";
+        }
+        else
+        {
+            if (oracleExact)
+                die("NPhase lifecycle-only reconstruction unexpectedly matched the complete oracle");
+            std::cout << "NPHASE_REMAINING first_difference=" << error << "\n";
+        }
         std::cout << "NPHASE_SLOTS checkpoint_cm="
                   << sixSlotOrder(checkpointOracle, "contact.managers", 0)
                   << " recreated_cm="
