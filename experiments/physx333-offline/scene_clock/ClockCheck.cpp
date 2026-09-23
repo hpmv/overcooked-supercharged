@@ -8,6 +8,7 @@
 #include "PxPhysicsAPI.h"
 #include "NpScene.h"
 #include "ScObjectIDTracker.h"
+#include "ScSimStats.h"
 
 using namespace physx;
 using oc2::offline::SceneClockImage;
@@ -166,6 +167,14 @@ PxU32 primeFreeStack(Sc::ObjectIDTracker& tracker)
     return zero;
 }
 
+std::size_t fieldIndex(const SceneClockImage& image, const char* name)
+{
+    for (std::size_t i = 0; i < image.fields.size(); ++i)
+        if (image.fields[i].name == name) return i;
+    require(false, std::string("missing image field ") + name);
+    return 0;
+}
+
 void check()
 {
     Fixture fixture;
@@ -315,6 +324,86 @@ void checkBodyListPointerRejection()
                  "atomic pointer rejection\n";
 }
 
+void checkSimulationStatistics()
+{
+    Fixture fixture;
+    fixture.step(1.0f / 60.0f);
+    Sc::SimStats& stats = static_cast<NpScene&>(*fixture.scene)
+        .getScene().getScScene().getStatsInternal();
+    stats.incTriggerPairs(PxGeometryType::eBOX, PxGeometryType::eBOX);
+    stats.incTriggerPairs(PxGeometryType::eBOX, PxGeometryType::eBOX);
+    stats.incBroadphaseAdds(PxSimulationStatistics::eRIGID_BODY);
+    stats.incBroadphaseAdds(PxSimulationStatistics::eRIGID_BODY);
+    stats.incBroadphaseRemoves(PxSimulationStatistics::eRIGID_BODY);
+
+    SceneClockImage a;
+    std::string error;
+    require(CaptureSceneClock(*fixture.scene, a, error),
+            "statistics A capture: " + error);
+    const std::size_t triggerIndex = fieldIndex(a, "Sc.simStats.triggerPairs");
+    require(a.fields[triggerIndex].bytes.size() ==
+                sizeof(PxU32) * (PxGeometryType::eCONVEXMESH + 1) *
+                PxGeometryType::eGEOMETRY_COUNT,
+            "trigger statistics table size");
+    const char* broadphaseFields[] = {
+        "Sc.simStats.broadPhaseAdds",
+        "Sc.simStats.broadPhaseRemoves",
+        "Sc.simStats.broadPhaseAddsPending",
+        "Sc.simStats.broadPhaseRemovesPending"
+    };
+    for (const char* name : broadphaseFields)
+        require(a.fields[fieldIndex(a, name)].bytes.size() ==
+                    sizeof(PxU32) * PxSimulationStatistics::eVOLUME_COUNT,
+                std::string(name) + " table size");
+    fieldIndex(a, "Sc.simStats.object");
+    PxSimulationStatistics output;
+    fixture.scene->getSimulationStatistics(output);
+    require(output.nbTriggerPairs[PxGeometryType::eBOX]
+                                 [PxGeometryType::eBOX] == 2,
+            "source A trigger statistics API value");
+
+    fixture.step(1.0f / 60.0f);
+    SceneClockImage b;
+    require(CaptureSceneClock(*fixture.scene, b, error),
+            "statistics B capture: " + error);
+    fixture.scene->getSimulationStatistics(output);
+    require(output.nbTriggerPairs[PxGeometryType::eBOX]
+                                 [PxGeometryType::eBOX] == 0 &&
+            output.nbBroadPhaseAdds[PxSimulationStatistics::eRIGID_BODY] == 2 &&
+            output.nbBroadPhaseRemoves[PxSimulationStatistics::eRIGID_BODY] == 1,
+            "source B statistics API values");
+
+    require(RestoreSceneClock(*fixture.scene, a, error),
+            "statistics restore A: " + error);
+    fixture.scene->getSimulationStatistics(output);
+    require(output.nbTriggerPairs[PxGeometryType::eBOX]
+                                 [PxGeometryType::eBOX] == 2 &&
+            output.nbBroadPhaseAdds[PxSimulationStatistics::eRIGID_BODY] == 0,
+            "restored A immediate statistics API parity");
+    SceneClockImage observed;
+    require(CaptureSceneClock(*fixture.scene, observed, error) &&
+            a.equals(observed, error), "statistics A image parity: " + error);
+
+    require(RestoreSceneClock(*fixture.scene, b, error),
+            "statistics restore B: " + error);
+    fixture.scene->getSimulationStatistics(output);
+    require(output.nbTriggerPairs[PxGeometryType::eBOX]
+                                 [PxGeometryType::eBOX] == 0 &&
+            output.nbBroadPhaseAdds[PxSimulationStatistics::eRIGID_BODY] == 2 &&
+            output.nbBroadPhaseRemoves[PxSimulationStatistics::eRIGID_BODY] == 1,
+            "restored B immediate statistics API parity");
+
+    SceneClockImage corrupt = a;
+    corrupt.fields[triggerIndex].address += sizeof(PxU32);
+    require(!RestoreSceneClock(*fixture.scene, corrupt, error),
+            "wrong trigger statistics address accepted");
+    require(CaptureSceneClock(*fixture.scene, observed, error) &&
+            b.equals(observed, error),
+            "rejected statistics image mutated scene");
+    std::cout << "PASS scene-clock SimStats immediate API parity and "
+                 "atomic invalid-address rejection\n";
+}
+
 } // namespace
 
 int main()
@@ -322,5 +411,6 @@ int main()
     check();
     checkSixContactBoundary();
     checkBodyListPointerRejection();
+    checkSimulationStatistics();
     return 0;
 }

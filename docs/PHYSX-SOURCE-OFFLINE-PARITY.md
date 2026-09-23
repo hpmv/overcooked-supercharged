@@ -128,9 +128,11 @@ A [fixed-address joined arena differential](../experiments/physx333-offline/join
 compares the same component restore against a raw allocator checkpoint. In
 four cold/warm and SAP-order variants, component A/B and direct/no-input
 successors match. The warm successor allocation ledger and all non-padding
-bytes converge exactly, but restored warm A retains 121–123 differing native
-bytes. Most lie in unused array capacity or task scratch; one is the
-immediately readable `Sc::SimStats::numTriggerPairs`, so complete native
+bytes converge exactly, but restored warm A retained 121–123 differing native
+bytes before the statistics fix. The immediately readable
+`Sc::SimStats::numTriggerPairs` byte is now restored by `SceneClockImage`,
+leaving 120–122 warm-A bytes in retained array capacity or task scratch.
+Those tails have not been proven safe for all histories, so complete native
 checkpoint parity is **not** yet established. Cold histories also retain five
 allocator-ledger entries after component rewind and allocate five new blocks
 on replay, although component and tested output comparisons pass.

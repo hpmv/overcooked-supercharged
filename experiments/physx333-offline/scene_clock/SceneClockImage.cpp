@@ -365,6 +365,16 @@ bool CaptureSceneClock(PxScene& scene, SceneClockImage& image,
     addField(next, "Sc.visualizationScale", sc.mVisualizationScale);
     addField(next, "Sc.visualizationParameterChanged",
              sc.mVisualizationParameterChanged);
+    // ScSimStats.h defines five fixed-size PxU32 tables. Capture each
+    // source-defined table, not the enclosing allocation or its padding.
+    Sc::SimStats& stats = sc.getStatsInternal();
+    addField(next, "Sc.simStats.broadPhaseAdds", stats.numBroadPhaseAdds);
+    addField(next, "Sc.simStats.broadPhaseRemoves", stats.numBroadPhaseRemoves);
+    addField(next, "Sc.simStats.broadPhaseAddsPending",
+             stats.numBroadPhaseAddsPending);
+    addField(next, "Sc.simStats.broadPhaseRemovesPending",
+             stats.numBroadPhaseRemovesPending);
+    addField(next, "Sc.simStats.triggerPairs", stats.numTriggerPairs);
     addField(next, "Np.elapsedTime", np.elapsedTime);
     addField(next, "Np.hasSimulated", np.mHasSimulated);
     addField(next, "Np.controllingSimulation", np.mControllingSimulation);
@@ -386,6 +396,7 @@ bool CaptureSceneClock(PxScene& scene, SceneClockImage& image,
     addField(next, "Sc.staticAnchor", sc.mStaticAnchor, true);
     addField(next, "Sc.shapeIDTracker", sc.mShapeIDTracker, true);
     addField(next, "Sc.rigidIDTracker", sc.mRigidIDTracker, true);
+    addField(next, "Sc.simStats.object", sc.mStats, true);
     addField(next, "Np.nbClients", np.mNbClients, true);
 
     addPointerArray(next, "Sc.sleepBodies", sc.mSleepBodies);

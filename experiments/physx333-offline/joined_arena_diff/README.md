@@ -56,8 +56,8 @@ the cold replay, including rebased live query-tree pointers, although the
 query image's source-defined rebasing comparison and tested outputs pass.
 
 Both warm variants hold the allocator ledger fixed across A, B, restore, and
-replay. At restored A, the ordinary warm case still has 121 non-padding changed
-bytes in live blocks; shipped-order warm has 123. The ordinary warm breakdown
+replay. At restored A, the ordinary warm case still has 120 non-padding changed
+bytes in live blocks; shipped-order warm has 122. The ordinary warm breakdown
 is:
 
 | Owner and changed bytes | Source evidence | Classification |
@@ -67,7 +67,13 @@ is:
 | Contact-report actor-pair array, 14 | `SimulationController/src/ScNPhaseCore.h:150,219` identifies its logical size/storage; `ScNPhaseCore.cpp:1949` clears it. The fixture measures size 0 at A. | Retained-capacity array contents; tested next steps converge. |
 | Trigger API and extra-data arrays, 8 + 2 (shipped warm: 10 + 2) | `SimulationController/include/ScScene.h:417-418,533-535` names the arrays; `SimulationController/src/ScScene.cpp:2679-2680` clears them. Both measure size 0 at A. `foundation/include/PsArray.h:248-251` sets size 0 without clearing the backing bytes. | Retained-capacity array contents; tested next steps converge. |
 | Friction stream array, 2 | `LowLevel/common/include/pipeline/PxcNpMemBlockPool.h:113-120` names the two arrays; `../memblock_restore/MemBlockRestore.cpp:398-412` restores logical entries only. The changed backing array measures logical size 0 at A. | Retained-capacity entries; tested next steps converge. |
-| `Sc::SimStats::numTriggerPairs`, 1 | `SimulationController/src/ScSimStats.cpp:34,42-50` clears it at the next `simStart()`; `:53-64` also exposes it in `readOut()` before that step. The changed byte is source A=2, restored A=0. | **Real missing native API-state parity** at restored A, despite next-step convergence. |
+
+The original differential also found one immediately readable
+`Sc::SimStats::numTriggerPairs` byte (source A=2, restored A=0).
+`SceneClockImage` now restores all five source-defined statistics tables,
+including this value; its focused test verifies immediate
+`getSimulationStatistics()` parity. That byte is no longer among the warm-A
+differences.
 
 Source paths in the table that begin `SimulationController/`, `LowLevel/`,
 `Common/`, or `foundation/` are relative to the generated
@@ -82,8 +88,7 @@ The residual bytes should not be declared universally benign. The fixture has
 shown no downstream effect in the tested branches, not that every possible
 native read ignores them. Retained-capacity contents and flush-pool scratch
 history warrant a longer branching test or an explicit source-level proof
-before an unconditional parity claim. Simulation statistics already provide a
-specific counterexample to immediate full-API parity.
+before an unconditional parity claim.
 
 This test uses a diagnostic fixed-address allocator instead of the shipped
 Unity allocator. It does not establish Unity/Animator/game rewind parity, and
