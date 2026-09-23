@@ -95,6 +95,13 @@ fresh-scene comparison pass. It identifies `contact.managers[48]` as
 `frictionPatchCount` on a **surviving** chef/static pair, changing 2→1;
 therefore the eventual contact payload restore must cover all twelve A
 managers, not just the four recreated contacts.
+A separate [joined manifold-pool image](../experiments/physx333-offline/joined_manifold_pool/README.md)
+checks all twelve keyed PCM bindings and the physical used/free large-manifold
+pool partition across A, B, and a public-API return to A. The four deleted
+contacts reacquire their original slots in two independent synthetic scenes,
+and the same-scene pool image returns exactly to A. This is read-only evidence
+for the restore plan, not a joined contact-payload restorer or proof for an
+arbitrary Unity allocation history.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.
