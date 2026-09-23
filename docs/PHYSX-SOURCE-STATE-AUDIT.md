@@ -85,8 +85,9 @@ that joins contact and auxiliary interactions remains open. The
 [joined topology bridge](../experiments/physx333-offline/joined_topology/README.md)
 is the first source-native step toward it: all four deleted contacts and
 two deleted triggers return among the level-shaped survivors with correct
-physical pool slots and mixed interaction order, while seven malformed
-plans leave B unchanged. Contact payload/report, island, SAP, and other
+physical pool slots, manager/edge bindings, and mixed interaction order,
+while nine malformed plans leave B unchanged. Contact payload/report,
+the complete island image, SAP, and other
 component restoration and next-step replay remain open.
 
 ## Retained-state inventory

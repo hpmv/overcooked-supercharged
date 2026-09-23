@@ -73,8 +73,10 @@ the joined level-graph component restore is open. A new
 recreates the level-shaped graph's four missing contacts and two missing
 triggers together through native NPhase, preserving eight contact, two
 trigger, and two marker survivors, physical SIP/ActorPair/trigger slots, and
-mixed scene/actor interaction order. Seven malformed plans reject before
-any write. This is topology only: the full Oracle still first differs at
+mixed scene/actor interaction order. The bridge now also validates the four
+contact-manager indices and island-edge IDs against their source-defined
+free-pool allocation order before writing. Nine malformed plans reject
+without changing B. This is topology only: the full Oracle still first differs at
 `contact.managers[48]`, and no restored successor step is attempted. Actor
 and shape lifetime, CCD, and several other native-state families remain gated.
 The level-arena build also has a separate public-API cache-history check that

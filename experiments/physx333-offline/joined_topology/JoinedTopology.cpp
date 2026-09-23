@@ -165,6 +165,16 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
         PxPairFlag::eCONTACT_DEFAULT | PxPairFlag::eNOTIFY_TOUCH_FOUND |
         PxPairFlag::eNOTIFY_TOUCH_PERSISTS |
         PxPairFlag::eNOTIFY_TOUCH_LOST);
+    const auto& sipRows = part(a.oracle, "nphase.shape_pairs");
+    const auto& edgeRows = part(a.oracle, "island.edges.active");
+    if (sipRows.size() != 12u * 12u || edgeRows.size() % 6u)
+        fail("joined source contact/edge row layout changed");
+    std::map<PxU32, PxU32> edgeByManager;
+    for (size_t offset = 0; offset < edgeRows.size(); offset += 6)
+        if (edgeRows[offset + 5] != 0xffffffffu &&
+            !edgeByManager.insert(std::make_pair(
+                edgeRows[offset + 5], edgeRows[offset])).second)
+            fail("joined source has duplicate island edge manager owner");
     std::map<PairKey, PxU32> roleByKey;
     for (PxU32 i = 0; i < 18; ++i)
     {
@@ -174,6 +184,8 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
         JoinedTopologyRoleV1& role = plan.roles[i];
         role.type = key.type;
         role.targetActorPairPoolSlot = 0xffffffffu;
+        role.targetContactManagerIndex = 0xffffffffu;
+        role.targetIslandEdgeId = 0xffffffffu;
         if (i < 12)
         {
             const ActorGraphSipRow& sip = a.actorPair.sips[i];
@@ -186,6 +198,14 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
             role.expectedPairFlags = contactFlags;
             role.targetInteractionPoolSlot = sip.sipSlot;
             role.targetActorPairPoolSlot = sip.actorPairSlot;
+            if (sipRows[i * 12u + 1] != sip.sipSlot ||
+                sipRows[i * 12u + 11] == 0xffffffffu)
+                fail("joined source SIP/manager identity differs");
+            role.targetContactManagerIndex = sipRows[i * 12u + 11];
+            auto edge = edgeByManager.find(role.targetContactManagerIndex);
+            if (edge == edgeByManager.end())
+                fail("joined source manager has no island edge");
+            role.targetIslandEdgeId = edge->second;
             plan.contactSceneOrder[i] = i;
         }
         else if (i < 16)
@@ -350,9 +370,42 @@ void verifyTopologyReadback(const Snapshot& a, const Snapshot& b,
             fail("joined checkpoint contact-manager binding differs at " +
                  std::to_string(row) + ": target=" +
                  std::to_string(targetSipRows[start + 11]) +
-                 " restored=" +
+                " restored=" +
                  std::to_string(currentSipRows[start + 11]));
     }
+    const auto& targetEdges = part(a.oracle, "island.edges.active");
+    const auto& currentEdges = part(restored.oracle,
+                                    "island.edges.active");
+    if (targetEdges.size() % 6u || currentEdges.size() % 6u)
+        fail("joined island edge row layout changed");
+    std::map<PxU32, PxU32> targetEdgeByManager, liveEdgeByManager;
+    for (size_t offset = 0; offset < targetEdges.size(); offset += 6)
+        if (targetEdges[offset + 5] != 0xffffffffu &&
+            !targetEdgeByManager.insert(std::make_pair(
+                targetEdges[offset + 5], targetEdges[offset])).second)
+            fail("joined checkpoint has duplicate manager/edge owner");
+    for (size_t offset = 0; offset < currentEdges.size(); offset += 6)
+        if (currentEdges[offset + 5] != 0xffffffffu &&
+            !liveEdgeByManager.insert(std::make_pair(
+                currentEdges[offset + 5], currentEdges[offset])).second)
+            fail("joined restored state has duplicate manager/edge owner");
+    if (targetEdgeByManager.size() != 12 ||
+        liveEdgeByManager != targetEdgeByManager)
+        fail("joined checkpoint manager/island-edge binding differs");
+    const auto& bManagerFree = part(b.oracle, "contact.pool.free_order");
+    const auto& liveManagerFree = part(restored.oracle,
+                                       "contact.pool.free_order");
+    const auto& bEdgeFree = part(b.oracle, "island.edges.free_order");
+    const auto& liveEdgeFree = part(restored.oracle,
+                                    "island.edges.free_order");
+    if (bManagerFree.size() < 4 || bEdgeFree.size() < 4 ||
+        liveManagerFree.size() + 4 != bManagerFree.size() ||
+        liveEdgeFree.size() + 4 != bEdgeFree.size() ||
+        !std::equal(liveManagerFree.begin(), liveManagerFree.end(),
+                    bManagerFree.begin()) ||
+        !std::equal(liveEdgeFree.begin(), liveEdgeFree.end(),
+                    bEdgeFree.begin() + 4))
+        fail("joined manager/edge untouched free tails changed");
 
     // The full source Oracle is deliberately not A-equal: newly created
     // contacts do not yet have A's touch/report, work-unit, or manifold state.
@@ -405,9 +458,18 @@ void runScenario(const char* name, bool warm)
     const Snapshot b = world.step(-0.2f);
     verify(b, true);
     const auto plan = makePlan(world, a, b);
+    const auto& bManagerFree = part(b.oracle, "contact.pool.free_order");
+    const auto& bEdgeFree = part(b.oracle, "island.edges.free_order");
+    if (bManagerFree.size() < 4 || bEdgeFree.size() < 4)
+        fail("joined successor manager/edge free chains are too short");
+    bool managerReorder = false, edgeReorder = false;
     for (PxU32 i = 0; i < 4; ++i)
     {
         const PxU32 role = plan.missingContactRoles[i];
+        managerReorder |= bManagerFree[bManagerFree.size() - 1 - i] !=
+                          plan.roles[role].targetContactManagerIndex;
+        edgeReorder |= bEdgeFree[i] !=
+                       plan.roles[role].targetIslandEdgeId;
         std::cout << "JOINED_CONTACT_FREE step=" << i
                   << " role=" << role
                   << " sip=" << plan.roles[role].targetInteractionPoolSlot
@@ -416,8 +478,15 @@ void runScenario(const char* name, bool warm)
                     part(b.oracle, "nphase.pool.shape_pair.free_order")[i]
                   << " b_ap_free=" <<
                     part(b.oracle, "nphase.pool.actor_pair.free_order")[i]
+                  << " cm=" << plan.roles[role].targetContactManagerIndex
+                  << " b_cm_next=" <<
+                    bManagerFree[bManagerFree.size() - 1 - i]
+                  << " edge=" << plan.roles[role].targetIslandEdgeId
+                  << " b_edge_next=" << bEdgeFree[i]
                   << '\n';
     }
+    std::cout << "JOINED_POOL_REORDER cm=" << managerReorder
+              << " edge=" << edgeReorder << '\n';
     for (PxU32 i = 0; i < 2; ++i)
     {
         const PxU32 role = plan.missingTriggerRoles[i];
@@ -446,6 +515,16 @@ void runScenario(const char* name, bool warm)
     invalid = plan;
     invalid.roles[plan.missingContactRoles[0]].targetActorPairPoolSlot = 31;
     requireReject(world, b, nphase, invalid, "missing ActorPair slot mismatch",
+                  physx333_offline::JoinedTopologyPoolMismatch);
+    invalid = plan;
+    invalid.roles[plan.missingContactRoles[0]].targetContactManagerIndex =
+        0xffffffffu;
+    requireReject(world, b, nphase, invalid, "missing manager index mismatch",
+                  physx333_offline::JoinedTopologyPoolMismatch);
+    invalid = plan;
+    invalid.roles[plan.missingContactRoles[0]].targetIslandEdgeId =
+        0xffffffffu;
+    requireReject(world, b, nphase, invalid, "missing island edge mismatch",
                   physx333_offline::JoinedTopologyPoolMismatch);
     invalid = plan;
     PxU32 survivorTrigger = 0xffffffffu;
@@ -482,7 +561,7 @@ void runScenario(const char* name, bool warm)
     if (runtime.errors.count) fail("PhysX reported an error");
     std::cout << "PASS joined " << name
               << " 12/4/2 topology reconstruction from 8/2/2 "
-                 "with seven atomic prewrite rejection controls; "
+                 "with nine atomic prewrite rejection controls; "
                  "contact reports/payload and full rewind remain unrestored\n";
 }
 

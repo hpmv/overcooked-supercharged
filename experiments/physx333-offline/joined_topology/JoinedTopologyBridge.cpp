@@ -4,7 +4,9 @@
 #include "JoinedTopologyBridge.h"
 
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
+#include <vector>
 
 #define private public
 #define protected public
@@ -24,15 +26,18 @@
 #include "ScElementInteractionMarker.h"
 #include "ScActorPair.h"
 #include "ScCoreInteraction.h"
+#include "PxsContext.h"
+#include "PxsContactManager.h"
+#include "PxsIslandManager.h"
 #undef protected
 #undef private
 
 static_assert(sizeof(void*) == 4, "Joined topology bridge requires Win32");
-static_assert(sizeof(physx333_offline::JoinedTopologyRoleV1) == 56,
+static_assert(sizeof(physx333_offline::JoinedTopologyRoleV1) == 64,
               "Unexpected joined role ABI");
 static_assert(sizeof(physx333_offline::JoinedTopologyActorOrderV1) == 80,
               "Unexpected joined actor ABI");
-static_assert(sizeof(physx333_offline::JoinedTopologyPlanV1) == 2144,
+static_assert(sizeof(physx333_offline::JoinedTopologyPlanV1) == 2288,
               "Unexpected joined plan ABI");
 
 namespace {
@@ -42,6 +47,17 @@ using namespace physx333_offline;
 const PxU32 kContacts = 12, kTriggers = 4, kMarkers = 2;
 const PxU32 kRoles = 18, kActors = 13, kPoolSize = 32;
 const PxU32 kNoSlot = 0xffffffffu;
+
+PxU32 edgeHookId(const PxsIslandManagerEdgeHook& hook)
+{
+    // This source-defined hook consists of one private EdgeType index; the
+    // header is transitively included before the access-label shim opens it.
+    static_assert(sizeof(hook) == sizeof(EdgeType),
+                  "Unexpected PhysX edge-hook layout");
+    EdgeType id;
+    std::memcpy(&id, &hook, sizeof(id));
+    return id;
+}
 
 struct ResolvedRole {
     Sc::RigidSim* actor0;
@@ -173,6 +189,114 @@ void orderFreePrefix(Pool& pool, const PxU32* desired, PxU32 count)
     ordered[count - 1]->mNext = nodes[count];
 }
 
+typedef PxcPoolList<PxsContactManager, PxsContext> ContactManagerPool;
+
+bool contactManagerFreeSuffix(const ContactManagerPool& pool,
+                              const PxU32* desired, PxU32 count)
+{
+    // PxcPoolList::get pops mFreeList[--mFreeCount]. No growth may occur
+    // during this fixed-size join, and the four target IDs must already be
+    // the four available objects at that end of the stack.
+    if (!pool.mSlabCount || !pool.mSlabs || !pool.mFreeList ||
+        pool.mFreeCount < count ||
+        pool.mFreeCount > pool.mSlabCount * pool.mEltsPerSlab)
+        return false;
+    const PxU32 capacity = pool.mSlabCount * pool.mEltsPerSlab;
+    std::vector<bool> seen(capacity, false);
+    PxU32 active = 0;
+    for (PxU32 i = 0; i < capacity; ++i)
+        active += pool.mUseBitmap.boundedTest(i) ? 1u : 0u;
+    if (active != 8 || active + pool.mFreeCount != capacity)
+        return false;
+    for (PxU32 i = 0; i < pool.mFreeCount; ++i)
+    {
+        const PxsContactManager* manager = pool.mFreeList[i];
+        if (!manager) return false;
+        const PxU32 id = manager->getIndex();
+        if (id >= capacity || seen[id] ||
+            pool.mUseBitmap.boundedTest(id) ||
+            manager != pool.mSlabs[id / pool.mEltsPerSlab] +
+                       id % pool.mEltsPerSlab)
+            return false;
+        seen[id] = true;
+    }
+    for (PxU32 i = 0; i < count; ++i)
+    {
+        if (desired[i] >= capacity) return false;
+        bool found = false;
+        for (PxU32 j = 0; j < count; ++j)
+            found |= pool.mFreeList[pool.mFreeCount - 1 - j]->getIndex() ==
+                     desired[i];
+        if (!found) return false;
+        for (PxU32 j = 0; j < i; ++j)
+            if (desired[j] == desired[i]) return false;
+    }
+    return true;
+}
+
+void orderContactManagerFreeSuffix(ContactManagerPool& pool,
+                                   const PxU32* desired, PxU32 count)
+{
+    // Only the allocation end changes; the remainder of the free stack and
+    // every used manager stay untouched.
+    PxsContactManager* ordered[4] = {};
+    for (PxU32 i = 0; i < count; ++i)
+        for (PxU32 j = 0; j < count; ++j)
+        {
+            PxsContactManager* item =
+                pool.mFreeList[pool.mFreeCount - 1 - j];
+            if (item->getIndex() == desired[i]) ordered[i] = item;
+        }
+    for (PxU32 i = 0; i < count; ++i)
+        pool.mFreeList[pool.mFreeCount - 1 - i] = ordered[i];
+}
+
+bool islandEdgeFreePrefix(const EdgeManager& edges,
+                          const PxU32* desired, PxU32 count)
+{
+    // ElemManager::getAvailableElem consumes mNextFreeElem and follows
+    // mFreeElems[id]. Check the complete chain before changing its prefix.
+    if (!edges.mFreeElems || edges.mCapacity < 12 ||
+        edges.mNumFreeElems < count ||
+        edges.mNumFreeElems > edges.mCapacity ||
+        edges.mCapacity - edges.mNumFreeElems != 8)
+        return false;
+    std::vector<bool> seen(edges.mCapacity, false);
+    PxU32 prefix[4] = {};
+    PxU32 id = edges.mNextFreeElem;
+    for (PxU32 i = 0; i < edges.mNumFreeElems; ++i)
+    {
+        if (id >= edges.mCapacity || seen[id]) return false;
+        seen[id] = true;
+        if (i < count) prefix[i] = id;
+        id = edges.mFreeElems[id];
+    }
+    if (id != static_cast<PxU32>(Edge::INVALID)) return false;
+    for (PxU32 i = 0; i < count; ++i)
+    {
+        if (desired[i] >= edges.mCapacity) return false;
+        bool found = false;
+        for (PxU32 j = 0; j < count; ++j)
+            found |= prefix[j] == desired[i];
+        if (!found) return false;
+        for (PxU32 j = 0; j < i; ++j)
+            if (desired[j] == desired[i]) return false;
+    }
+    return true;
+}
+
+void orderIslandEdgeFreePrefix(EdgeManager& edges,
+                               const PxU32* desired, PxU32 count)
+{
+    PxU32 tail = edges.mNextFreeElem;
+    for (PxU32 i = 0; i < count; ++i)
+        tail = edges.mFreeElems[tail];
+    edges.mNextFreeElem = desired[0];
+    for (PxU32 i = 0; i + 1 < count; ++i)
+        edges.mFreeElems[desired[i]] = static_cast<EdgeType>(desired[i + 1]);
+    edges.mFreeElems[desired[count - 1]] = static_cast<EdgeType>(tail);
+}
+
 PxU32 interactionSlot(const Sc::NPhaseCore& nphase,
                       const Sc::Interaction& interaction)
 {
@@ -244,6 +368,11 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
     Sc::NPhaseCore& nphase = *static_cast<Sc::NPhaseCore*>(nphaseCore);
     Sc::Scene& scene = nphase.getScene();
     Sc::InteractionScene& interactions = scene.getInteractionScene();
+    if (!interactions.getLowLevelContext())
+        return JoinedTopologyUnsupportedScene;
+    PxsContext& context = *interactions.getLowLevelContext();
+    ContactManagerPool& managerPool = context.mContactManagerPool;
+    EdgeManager& edgePool = context.getIslandManager().mEdgeManager;
     const PxU32 overlapType = Sc::PX_INTERACTION_TYPE_OVERLAP;
     const PxU32 triggerType = Sc::PX_INTERACTION_TYPE_TRIGGER;
     const PxU32 markerType = Sc::PX_INTERACTION_TYPE_MARKER;
@@ -290,6 +419,9 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
             p.targetInteractionPoolSlot >= kPoolSize ||
             (type == overlapType ? p.targetActorPairPoolSlot >= kPoolSize :
                                    p.targetActorPairPoolSlot != kNoSlot) ||
+            (type != overlapType &&
+             (p.targetContactManagerIndex != kNoSlot ||
+              p.targetIslandEdgeId != kNoSlot)) ||
             (type == markerType && p.expectedPairFlags != 0))
             return JoinedTopologyInvalidInput;
         Sc::RigidSim* a = static_cast<Sc::RigidCore*>(p.actorCore0)->getSim();
@@ -366,7 +498,11 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
                     static_cast<Sc::ShapeInstancePairLL*>(interaction);
                 if (&sip->getShape0() != sa || &sip->getShape1() != sb ||
                     physicalSlot<Sc::ActorPair>(nphase.mActorPairPool,
-                        sip->getActorPair()) != p.targetActorPairPoolSlot)
+                        sip->getActorPair()) != p.targetActorPairPoolSlot ||
+                    !sip->mManager ||
+                    sip->mManager->getIndex() !=
+                        p.targetContactManagerIndex ||
+                    edgeHookId(sip->mLLIslandHook) != p.targetIslandEdgeId)
                     return JoinedTopologyUnsupportedScene;
             }
             else if (type == triggerType)
@@ -407,6 +543,7 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         }
     }
     PxU32 missingContactSlots[4], missingActorPairSlots[4];
+    PxU32 missingManagerIndices[4], missingEdgeIds[4];
     PxU32 missingTriggerSlots[2];
     bool markedMissing[kRoles] = {};
     for (PxU32 i = 0; i < 4; ++i)
@@ -418,6 +555,9 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         missingContactSlots[i] = plan->roles[id].targetInteractionPoolSlot;
         missingActorPairSlots[i] =
             plan->roles[id].targetActorPairPoolSlot;
+        missingManagerIndices[i] =
+            plan->roles[id].targetContactManagerIndex;
+        missingEdgeIds[i] = plan->roles[id].targetIslandEdgeId;
         for (PxU32 j = 0; j < kContacts; ++j)
             if (j != id && sameActorPair(roles[id], roles[j]))
                 return JoinedTopologyUnsupportedScene;
@@ -439,7 +579,9 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         !freePrefix<Sc::ActorPair>(nphase.mActorPairPool,
             missingActorPairSlots, 4) ||
         !freePrefix<Sc::TriggerInteraction>(nphase.mTriggerPool,
-            missingTriggerSlots, 2))
+            missingTriggerSlots, 2) ||
+        !contactManagerFreeSuffix(managerPool, missingManagerIndices, 4) ||
+        !islandEdgeFreePrefix(edgePool, missingEdgeIds, 4))
         return JoinedTopologyPoolMismatch;
 
     // Validate each actor's proposed mixed array as a bijection with its
@@ -485,6 +627,8 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         missingActorPairSlots, 4);
     orderFreePrefix<Sc::TriggerInteraction>(nphase.mTriggerPool,
         missingTriggerSlots, 2);
+    orderContactManagerFreeSuffix(managerPool, missingManagerIndices, 4);
+    orderIslandEdgeFreePrefix(edgePool, missingEdgeIds, 4);
     for (PxU32 i = 0; i < 4; ++i)
     {
         const PxU32 id = plan->missingContactRoles[i];
@@ -501,7 +645,12 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
             &sip->getShape1() != r.shape1 ||
             physicalSlot<Sc::ActorPair>(nphase.mActorPairPool,
                 sip->getActorPair()) !=
-                plan->roles[id].targetActorPairPoolSlot)
+                plan->roles[id].targetActorPairPoolSlot ||
+            !sip->mManager ||
+            sip->mManager->getIndex() !=
+                plan->roles[id].targetContactManagerIndex ||
+            edgeHookId(sip->mLLIslandHook) !=
+                plan->roles[id].targetIslandEdgeId)
             failStop();
     }
     for (PxU32 i = 0; i < 2; ++i)

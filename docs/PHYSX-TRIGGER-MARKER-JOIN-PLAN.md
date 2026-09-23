@@ -163,8 +163,8 @@ neutral adjustment to the main fixture or proof of game-state equality.
    **Topology-only joined reconstruction now passes** in
    [joined_topology](../experiments/physx333-offline/joined_topology/README.md):
    it recreates all six missing pairs, restores their physical SIP/ActorPair/
-   trigger slots and unified scene/actor order, and rejects seven malformed
-   plans with complete B-state nonmutation. It does not restore contact
+   trigger slots, manager/edge IDs, and unified scene/actor order, and rejects
+   nine malformed plans with complete B-state nonmutation. It does not restore contact
    reports, manifolds, or other checkpoint components.
 4. Restore unified interaction order and trigger history, then contact
    reports, memory, island, SAP, body, cache, clock, context, and query

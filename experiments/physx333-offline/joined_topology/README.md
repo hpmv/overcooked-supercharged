@@ -32,19 +32,28 @@ claim arbitrary allocation histories or full native rewind parity.
 The bridge accepts only this exact fixed topology at a stopped scene. Before
 writing, it validates all 18 source-core pair bindings and fixture filters,
 survivor identities and pool slots, six missing role IDs, independent SIP,
-ActorPair, and trigger free-list heads, array capacities, and every actor's
-requested mixed order. It then uses PhysX's original
+ActorPair, trigger, contact-manager, and island-edge allocation heads, array
+capacities, and every actor's requested mixed order. Manager indices and edge
+IDs come from the settled A Oracle image, while the B free stack/chain is
+validated using the source allocation rules (`PxcPoolList::get` pops the
+stack end; `ElemManager::getAvailableElem` consumes the linked-list head).
+Only those four free positions may be reordered, and the untouched free
+tails are checked after reconstruction. It then uses PhysX's original
 `NPhaseCore::onOverlapCreated` lifecycle for the four missing contacts and
 two triggers, keeps all survivors and markers, restores per-type scene and
 per-actor order/reverse indices, and restores initialized trigger history.
 The harness checks malformed plans leave the complete B Oracle, auxiliary,
 ActorPair, graph, and nine component images unchanged. A successful call
 checks the A graph, full auxiliary image, physical SIP/ActorPair pool topology,
-per-pair contact-manager slots, and selected source-Oracle pool sections.
+per-pair contact-manager indices and island-edge IDs, and selected
+source-Oracle pool sections. The cold and warm fixtures already have the
+needed manager/edge allocation order, so neither requires reordering; the
+prewrite guards still check it independently.
 
-The seven negative controls cover an absent contact core, a filter mismatch,
-an invalid trigger slot, an impossible ActorPair slot, a wrong surviving
-trigger slot, duplicate scene order, and duplicate actor order. Each is
+The nine negative controls cover an absent contact core, a filter mismatch,
+an invalid trigger slot, an impossible ActorPair slot, impossible missing
+contact-manager and island-edge IDs, a wrong surviving trigger slot,
+duplicate scene order, and duplicate actor order. Each is
 rejected before any source write and checked against the complete B image.
 The positive topology readback is intentionally narrower: creating contacts
 leaves the island manager's change queues pending, so its complete image
@@ -54,7 +63,7 @@ restore stage. The full A Oracle's first remaining difference is in
 
 This is a **topology-only** experiment. It does not restore the deleted
 contacts' report objects, touch metadata, contact-manager work units,
-persistent manifolds, contact-memory streams, island graph, SAP, body state,
+persistent manifolds, contact-memory streams, the complete island graph, SAP, body state,
 or other full checkpoint state. It does not simulate the successor after the
 native reconstruction. Consequently it is not a full rewind, a game test,
 or a Unity-compatible PhysX replacement. The synthetic scene also differs
