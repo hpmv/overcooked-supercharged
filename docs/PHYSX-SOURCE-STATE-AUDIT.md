@@ -81,7 +81,13 @@ replays both a five-step suffix and a non-adjacent two-step suffix with full
 comparator-defined image equality plus arena ledger/bytes over 100 cycles.
 It also verifies A and C immediately after restoration and replays a
 no-input one-step branch from A 100 times. A graph-aware component restore
-that joins contact and auxiliary interactions remains open.
+that joins contact and auxiliary interactions remains open. The
+[joined topology bridge](../experiments/physx333-offline/joined_topology/README.md)
+is the first source-native step toward it: all four deleted contacts and
+two deleted triggers return among the level-shaped survivors with correct
+physical pool slots and mixed interaction order, while seven malformed
+plans leave B unchanged. Contact payload/report, island, SAP, and other
+component restoration and next-step replay remain open.
 
 ## Retained-state inventory
 

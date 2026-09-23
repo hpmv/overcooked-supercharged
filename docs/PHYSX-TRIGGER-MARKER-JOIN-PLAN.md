@@ -158,6 +158,12 @@ neutral adjustment to the main fixture or proof of game-state equality.
 3. Recreate only four missing contacts, then only two missing triggers,
    checking survivor identity and no marker mutation. Key pair lookup by
    actor/shape identity rather than contiguous mover shape indices.
+   **Topology-only joined reconstruction now passes** in
+   [joined_topology](../experiments/physx333-offline/joined_topology/README.md):
+   it recreates all six missing pairs, restores their physical SIP/ActorPair/
+   trigger slots and unified scene/actor order, and rejects seven malformed
+   plans with complete B-state nonmutation. It does not restore contact
+   reports, manifolds, or other checkpoint components.
 4. Restore unified interaction order and trigger history, then contact
    reports, memory, island, SAP, body, cache, clock, context, and query
    images as one stopped-scene transaction.

@@ -68,8 +68,15 @@ now also reconstructs two deleted capsule/box trigger pairs through the
 original PhysX NPhase lifecycle, with exact A and next-B images over 100 cold
 and 100 warm cycles. Its second variant keeps one trigger and one marker
 survivor while recreating two deleted triggers; it still has no contacts, so
-the joined level-graph component restore is open. Actor and
-shape lifetime, CCD, and several other native-state families remain gated.
+the joined level-graph component restore is open. A new
+[joined topology bridge](../experiments/physx333-offline/joined_topology/README.md)
+recreates the level-shaped graph's four missing contacts and two missing
+triggers together through native NPhase, preserving eight contact, two
+trigger, and two marker survivors, physical SIP/ActorPair/trigger slots, and
+mixed scene/actor interaction order. Seven malformed plans reject before
+any write. This is topology only: the full Oracle still first differs at
+`contact.managers[48]`, and no restored successor step is attempted. Actor
+and shape lifetime, CCD, and several other native-state families remain gated.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.
