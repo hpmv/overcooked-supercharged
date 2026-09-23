@@ -104,6 +104,17 @@ Cold and warm tests pass in both baseline and shipped-like SAP deletion order;
 six malformed checkpoint images reject without changing the contact image.
 The first remaining full Oracle difference is `island.change_queues`.
 This is still a partial restore: the fixture does not simulate after it.
+A new [joined full-replay fixture](../experiments/physx333-offline/joined_full_replay/README.md)
+composes the guarded topology, report, WorkUnit/PCM, memory-block, island,
+SAP, cache, shape-ID, body, clock, context, and query restorers. In the
+synthetic level-shaped source scene, cold and warm histories with either
+default or shipped-like SAP order each pass 100 exact A→B restore/replay
+cycles and 100 later C→N→D→E cycles; N advances without fixture pose or
+velocity setters. Every restore matches the full implemented stopped image
+before simulation. Only one query FIFO capacity-tail comparison is semantic:
+the active entries and every other field still match, and source code shows
+the unused tail is overwritten before read. This is not shipped f444 or
+Unity-binary parity.
 A separate [joined manifold-pool image](../experiments/physx333-offline/joined_manifold_pool/README.md)
 checks all twelve keyed PCM bindings and the physical used/free large-manifold
 pool partition across A, B, and a public-API return to A. The four deleted
