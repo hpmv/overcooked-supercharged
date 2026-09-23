@@ -95,3 +95,36 @@ add_custom_command(TARGET physx333_level_graph POST_BUILD
     "${PHYSX333_BIN}/PhysX3Common_x86.dll"
     $<TARGET_FILE_DIR:physx333_level_graph>
 )
+
+# A differential scene-reset experiment shares this source-built graph and its
+# observers, but has a separate entry point and an independent gate.
+add_executable(physx333_scene_reset
+  ../scene_reset/SceneReset.cpp
+  ../oracle/Oracle.cpp
+  ../cache/TransformCacheImage.cpp
+  ../sap/SapImage.cpp
+  ../island/IslandImage.cpp
+  ../memblock/MemBlockImage.cpp
+  ../shape_cache/ShapeCacheBindings.cpp
+  ../body/BodyImage.cpp
+  ../scene_clock/SceneClockImage.cpp
+  ../context_image/ContextImage.cpp
+  ../query_image/QueryImage.cpp
+  ../aux_interactions/AuxInteractionImage.cpp
+  ../actor_pair_graph/ActorPairGraphImage.cpp)
+target_compile_features(physx333_scene_reset PRIVATE cxx_std_11)
+target_compile_definitions(physx333_scene_reset PRIVATE
+  WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
+if(MSVC)
+  target_compile_options(physx333_scene_reset PRIVATE /W4 /WX- /EHsc)
+endif()
+target_include_directories(physx333_scene_reset PRIVATE
+  $<TARGET_PROPERTY:physx333_level_graph,INCLUDE_DIRECTORIES>)
+target_link_libraries(physx333_scene_reset PRIVATE
+  "${PHYSX333_LIB}/PhysX3_x86.lib"
+  "${PHYSX333_LIB}/PhysX3Common_x86.lib")
+add_custom_command(TARGET physx333_scene_reset POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${PHYSX333_BIN}/PhysX3_x86.dll"
+    "${PHYSX333_BIN}/PhysX3Common_x86.dll"
+    $<TARGET_FILE_DIR:physx333_scene_reset>)

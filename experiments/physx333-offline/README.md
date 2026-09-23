@@ -19,6 +19,12 @@ inside one source-built scene. An isolated source-native trigger fixture
 reconstructs two deleted capsule/box trigger interactions for 100 cold and
 100 warm same-scene rewinds.
 
+The `scene_reset` differential separately tests retained actor/shape objects
+after all-actor removal and flush against a fresh-scene replay. Its
+same-scene path demonstrably diverges on the first step, while its diagnostic
+new-scene path matches the measured eight-step continuation. See
+[`scene_reset/README.md`](scene_reset/README.md) for the controls and limits.
+
 These are **current covered gates**, not a test for complete level or Unity
 parity. The [remaining trigger/marker and graph-aware rewind work](../../docs/PHYSX-TRIGGER-MARKER-JOIN-PLAN.md)
 is still open. The script never launches the game.
