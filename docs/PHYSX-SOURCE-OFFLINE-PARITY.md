@@ -57,8 +57,10 @@ component next-step rewind remain open. A separate
 does rewind this synthetic level-shaped source scene: it replays a five-step
 leave/return suffix and a second non-adjacent checkpoint's suffix 100 times,
 matching the full implemented Oracle, trigger/marker and ActorPair images,
-the full SAP, cache, island, memory-block, body, clock, context, and query
-component images, ordered callbacks, and initialized allocator bytes.
+the SAP, cache, island, memory-block, body, clock, context, and query
+comparator-defined payloads, ordered callbacks, and initialized allocator
+bytes. It also matches A and C immediately after restoration, before fixture
+inputs, and replays a separate no-input one-step branch from A 100 times.
 That result depends on a fixed-address diagnostic allocator unavailable in
 the shipped Unity binary; it is a source-level reference, not a game-side
 restore. An [isolated trigger-rewind fixture](../experiments/physx333-offline/trigger_rewind/README.md)

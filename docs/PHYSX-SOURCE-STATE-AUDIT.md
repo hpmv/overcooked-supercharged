@@ -68,8 +68,20 @@ coverage in the single-threaded fixture, not actor-lifetime support in the
 component-based restorer or Unity.
 The separate [trigger/marker baseline](../experiments/physx333-offline/trigger_marker/README.md)
 reproduces 12/4/2→8/2/2 source-built interaction and pool counts plus ordered
-four-contact/two-trigger losses, but it is a fresh-scene reference only, not
-a trigger or marker rewind result.
+four-contact/two-trigger losses. A narrower
+[trigger rewind](../experiments/physx333-offline/trigger_rewind/README.md)
+recreates two capsule/box triggers through the original NPhase lifecycle,
+including a variant with one surviving trigger and one marker, and passes
+100 cold and 100 warm same-scene A/next-B replays. That fixture has no
+contacts. The [level-shaped graph](../experiments/physx333-offline/level_graph/README.md)
+contains four chefs, five active bodies, shared static endpoints, all 18
+interactions, and full component images at its settled A/B boundaries.
+Its [fixed-address arena diagnostic](../experiments/physx333-offline/level_arena/README.md)
+replays both a five-step suffix and a non-adjacent two-step suffix with full
+comparator-defined image equality plus arena ledger/bytes over 100 cycles.
+It also verifies A and C immediately after restoration and replays a
+no-input one-step branch from A 100 times. A graph-aware component restore
+that joins contact and auxiliary interactions remains open.
 
 ## Retained-state inventory
 

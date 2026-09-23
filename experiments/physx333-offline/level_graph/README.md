@@ -92,15 +92,18 @@ checks that all surviving ActorPairs and report objects keep their slots,
 the four removed ActorPair slots and two removed report slots return to their
 free chains, and the full A/B images equal those of a second fresh scene.
 
-At every stopped boundary, the fixture now also retains the **complete
-existing component images** for SAP, TransformCache, ShapeCacheBindings,
-Island, Body, SceneClock, Context, Query, and the memory-block pool. It takes
-an immediate second capture of each image and requires its full same-scene
-equality method to pass. The memory-block capture uses one identity registry
-per scene across all steps, and both settled A/B images must report no
-unsupported memory-block ownership. These checks establish that the images
-can be captured coherently for this mixed, multi-actor scene; they do not
-restore any of the captured state.
+At every stopped boundary, the fixture also retains the **complete captured
+payloads** of the existing component observers for SAP, TransformCache,
+ShapeCacheBindings, Island, Body, SceneClock, Context, Query, and the
+memory-block pool. It takes an immediate second capture of each image and
+requires that observer's documented equality contract to pass. Some general
+comparators deliberately omit raw allocation addresses or reset-before-use
+fields; this repeated-capture check alone does not assert equality of those
+omitted fields. The memory-block capture uses one identity registry per scene
+across all steps, and both settled A/B images must report no unsupported
+memory-block ownership. These checks establish that the images can be
+captured coherently for this mixed, multi-actor scene; they do not restore
+any of the captured state.
 
 Independent fresh scenes are compared at three levels:
 

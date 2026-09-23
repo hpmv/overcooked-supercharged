@@ -139,6 +139,12 @@ int main(int argc, char** argv)
         std::string error;
         if (!arena.restore(arenaA, error))
             fail("restore source-built arena: " + error);
+        // Callback storage belongs to the fixture, outside the PhysX arena.
+        // Restore that one expected output vector before comparing the
+        // stopped physics scene without any pose/velocity setters or step.
+        world.callback.rows = a.events;
+        equalSnapshot(a, world.capture());
+        equalInitializedArena(arenaA, arena.capture());
         for (unsigned step = 0; step != 5; ++step)
         {
             const Snapshot replay = world.step(trajectory[step]);
@@ -151,6 +157,9 @@ int main(int argc, char** argv)
         // of the suffix and verify its separate leave/return continuation.
         if (!arena.restore(referenceArena[2], error))
             fail("restore non-adjacent source-built checkpoint: " + error);
+        world.callback.rows = reference[2].events;
+        equalSnapshot(reference[2], world.capture());
+        equalInitializedArena(referenceArena[2], arena.capture());
         for (unsigned step = 3; step != 5; ++step)
         {
             const Snapshot replay = world.step(trajectory[step]);
@@ -160,6 +169,28 @@ int main(int argc, char** argv)
         }
         if (runtime.errors.count) fail("PhysX reported an arena replay error");
     }
+    // The ordinary fixture deliberately overwrites pose and velocity before
+    // each step. This independent one-step branch does not: it checks that
+    // replay from A also preserves the stopped body state itself.
+    std::string error;
+    if (!arena.restore(arenaA, error))
+        fail("restore no-input reference checkpoint: " + error);
+    world.callback.rows = a.events;
+    equalSnapshot(a, world.capture());
+    const Snapshot naturalReference = world.advanceWithoutInputs();
+    const auto naturalArena = arena.capture();
+    for (unsigned cycle = 0; cycle != 100; ++cycle)
+    {
+        if (!arena.restore(arenaA, error))
+            fail("restore no-input replay checkpoint: " + error);
+        world.callback.rows = a.events;
+        equalSnapshot(a, world.capture());
+        equalInitializedArena(arenaA, arena.capture());
+        equalSnapshot(naturalReference, world.advanceWithoutInputs());
+        equalInitializedArena(naturalArena, arena.capture());
+        if (runtime.errors.count) fail("PhysX reported a no-input replay error");
+    }
     std::cout << "PASS level-like shared-endpoint full raw-allocation "
-                 "12/4/2 -> 8/2/2 five-step and non-adjacent suffixes x100\n";
+                 "12/4/2 -> 8/2/2 five-step, non-adjacent, and no-input "
+                 "suffixes x100\n";
 }

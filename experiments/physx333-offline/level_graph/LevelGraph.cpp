@@ -484,10 +484,11 @@ struct Snapshot
     std::vector<Event> events;
 };
 
-// Every image below contains its complete source-defined payload. Most image
-// equality methods intentionally include scene/allocation addresses, so a
-// second capture at the same stopped boundary checks their full bytes and
-// identity without pretending that addresses match a different scene.
+// Every image below contains its observer-defined payload. A second capture
+// at the same stopped boundary checks each observer's equality contract;
+// some general-purpose comparators deliberately omit rebased or reset-before-
+// reuse fields. The fixed-address arena diagnostic separately checks the
+// initialized source allocations and allocation ledger.
 void verifyRepeatCapture(PxScene& scene,
                          physx333_offline::MemBlockIdentityRegistry& registry,
                          const Snapshot& image)
@@ -741,6 +742,22 @@ struct World
         idle->setWakeCounter(100.0f);
         scene->simulate(kStep);
         if (!scene->fetchResults(true)) fail("fetchResults");
+        return capture();
+    }
+
+    Snapshot advanceWithoutInputs()
+    {
+        callback.rows.clear();
+        scene->simulate(kStep);
+        if (!scene->fetchResults(true)) fail("fetchResults without inputs");
+        return capture();
+    }
+
+    // Observe an already-settled boundary without applying fixture inputs or
+    // advancing PhysX. The arena diagnostic uses this immediately after a
+    // restore, before step() can overwrite any checkpoint body state.
+    Snapshot capture()
+    {
         Snapshot image;
         std::string error;
         if (!physx333_offline::CaptureOracle(*scene, image.oracle, error))
