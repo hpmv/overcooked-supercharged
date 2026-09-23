@@ -21,6 +21,14 @@ actors with the missing main-shape triggers; two surviving markers share
 static actors with missing contacts. Thus scene and actor interaction arrays
 have genuinely mixed survivor order.
 
+The gate runs this reconstruction twice in independent scenes. The cold case
+uses the first settled A/B pair. Before checkpoint A in the warm case, public
+PhysX calls first traverse a complete `12/4/2 -> 8/2/2 -> 12/4/2` cycle,
+then settle once more at A. Both cases run the same positive topology readback
+and all seven atomic malformed-plan/nonmutation controls. This checks that
+the test-only bridge does not depend on a first-use scene, but it does not
+claim arbitrary allocation histories or full native rewind parity.
+
 The bridge accepts only this exact fixed topology at a stopped scene. Before
 writing, it validates all 18 source-core pair bindings and fixture filters,
 survivor identities and pool slots, six missing role IDs, independent SIP,

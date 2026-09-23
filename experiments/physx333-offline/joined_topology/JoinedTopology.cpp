@@ -380,11 +380,26 @@ void requireReject(World& world, const Snapshot& b,
 
 } // namespace
 
-int main()
+void runScenario(const char* name, bool warm)
 {
+    std::cout << "JOINED_SCENARIO " << name << '\n';
     Runtime runtime;
     World world(runtime);
     world.step(0.0f);
+    if (warm)
+    {
+        const Snapshot settled = world.step(0.0f);
+        verify(settled, false);
+        const Snapshot departed = world.step(-0.2f);
+        verify(departed, true);
+        const Snapshot returned = world.step(0.0f);
+        if (returned.graph.scenePairs.size() != 18 ||
+            std::set<PairKey>(returned.graph.scenePairs.begin(),
+                              returned.graph.scenePairs.end()) !=
+                expectedPairs(false))
+            fail("warmup did not reconstruct the 12/4/2 pair graph");
+        std::cout << "JOINED_WARMUP 12/4/2 -> 8/2/2 -> 12/4/2\n";
+    }
     const Snapshot a = world.step(0.0f);
     verify(a, false);
     const Snapshot b = world.step(-0.2f);
@@ -465,7 +480,14 @@ int main()
     const StoppedImage restored = captureTopology(world);
     verifyTopologyReadback(a, b, restored);
     if (runtime.errors.count) fail("PhysX reported an error");
-    std::cout << "PASS joined 12/4/2 topology reconstruction from 8/2/2 "
+    std::cout << "PASS joined " << name
+              << " 12/4/2 topology reconstruction from 8/2/2 "
                  "with seven atomic prewrite rejection controls; "
                  "contact reports/payload and full rewind remain unrestored\n";
+}
+
+int main()
+{
+    runScenario("cold", false);
+    runScenario("warm", true);
 }
