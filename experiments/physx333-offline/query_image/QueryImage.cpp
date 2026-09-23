@@ -359,13 +359,35 @@ bool addPruner(QueryImage& image, const char* prefix,
     const Sq::BucketPrunerCore& bucket = pruner.mBucketPruner;
     const bool building = pruner.mProgress == Sq::BUILD_INIT ||
                           pruner.mProgress == Sq::BUILD_IN_PROGRESS;
+    // commit() frees the cached boxes after a completed progressive build,
+    // but leaves the count and builder input pointer behind. The builder's
+    // node base still aliases the tree that was just promoted to current.
+    // Check only pointer values here: mAABBArray points into freed storage.
+    // Progressive build allocates indices[N] and nodes[2*N-1] from that
+    // retained count. mTotalPrims counts build work, not index storage.
+    const bool committedPostSwap = incremental &&
+        pruner.mProgress == Sq::BUILD_NOT_STARTED &&
+        !pruner.mNewTree && !pruner.mCachedBoxes &&
+        pruner.mNbCachedBoxes && pruner.mNbCachedBoxes <= 65536 &&
+        pruner.mPool.mNbObjects <= pruner.mNbCachedBoxes &&
+        pruner.mAABBTree &&
+        pruner.mAABBTree->mPool && !pruner.mAABBTree->mStack &&
+        pruner.mAABBTree->mTotalNbNodes ==
+            pruner.mNbCachedBoxes * 2 - 1 &&
+        pruner.mBuilder.mNbPrimitives == pruner.mNbCachedBoxes &&
+        pruner.mBuilder.mCount == pruner.mAABBTree->mTotalNbNodes &&
+        pruner.mBuilder.mTotalPrims == pruner.mAABBTree->mTotalPrims &&
+        pruner.mBuilder.mAABBArray &&
+        pruner.mBuilder.mNodeBase == pruner.mAABBTree->mPool &&
+        !pruner.mDoSaveFixups;
     if (pruner.mIncrementalRebuild != incremental ||
         (!building && pruner.mProgress != Sq::BUILD_NOT_STARTED) ||
         (building && (!incremental || !pruner.mNewTree ||
                       !pruner.mCachedBoxes || !pruner.mNbCachedBoxes ||
                       pruner.mBuilder.mAABBArray != pruner.mCachedBoxes ||
                       !pruner.mDoSaveFixups)) ||
-        (!building && (pruner.mNewTree || pruner.mCachedBoxes ||
+        (!building && !committedPostSwap &&
+         (pruner.mNewTree || pruner.mCachedBoxes ||
                        pruner.mNbCachedBoxes || pruner.mBuilder.mNodeBase ||
                        pruner.mBuilder.mAABBArray || pruner.mDoSaveFixups)) ||
         pruner.mUncommittedChanges ||
@@ -397,7 +419,8 @@ bool addPruner(QueryImage& image, const char* prefix,
         !addField(image, p + ".cachedBoxes", pruner.mCachedBoxes, true, error) ||
         !addField(image, p + ".cachedBoxCount", pruner.mNbCachedBoxes, true, error) ||
         !addArray(image, p + ".cachedBoxStorage", pruner.mCachedBoxes,
-                  pruner.mNbCachedBoxes, false, error) ||
+                  pruner.mCachedBoxes ? pruner.mNbCachedBoxes : 0,
+                  false, error) ||
         !addField(image, p + ".progress", pruner.mProgress, true, error) ||
         !addField(image, p + ".incremental", pruner.mIncrementalRebuild, true, error) ||
         !addField(image, p + ".builderSettings", pruner.mBuilder.mSettings, true, error) ||
@@ -436,7 +459,8 @@ bool addPruner(QueryImage& image, const char* prefix,
                   pruner.mTreeMap.mMapping.size(), true, error) ||
         !addPool(image, (p + ".pool").c_str(), pruner.mPool, error) ||
         !addTree(image, (p + ".tree").c_str(), pruner.mAABBTree,
-                 pruner.mPool.mNbObjects, error) ||
+                 committedPostSwap ? pruner.mNbCachedBoxes :
+                                     pruner.mPool.mNbObjects, error) ||
         !addTree(image, (p + ".newTreeStorage").c_str(), pruner.mNewTree,
                  pruner.mNbCachedBoxes, error))
         return false;

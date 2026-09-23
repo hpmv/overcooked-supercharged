@@ -23,6 +23,15 @@ addresses can differ. `equalsWithRebuiltColdTree` compares that first build
 step by initialized node bits, index data, and FIFO node offsets; the node
 AABB bytes have not yet been initialized by PhysX. Later build steps are
 outside that comparator. The source checkout and game are untouched.
+The settled committed post-swap state is also supported when its allocations
+remain compatible. PhysX frees `mCachedBoxes` while retaining the count and a
+stale builder input-pointer value; the image records that value without
+dereferencing it and captures zero cached-box bytes. The builder node base
+must alias the promoted current tree. A focused test passes 20 restores and
+query replays in this phase and rejects a pre-refit image after refit storage
+allocates, a checkpoint across a new build, and a checkpoint across a second
+tree swap before mutation. This does **not** restore deleted tree allocations
+across the swap itself.
 
 Source basis:
 
@@ -78,7 +87,9 @@ FIFO buffer and the strictly gated cold tree release. `BUILD_INIT` and
 retain their allocation addresses. A dynamic new-tree FIFO buffer may have
 grown after the checkpoint if its live capacity is at least the checkpoint
 capacity; shrinking or replacing the stack object or node pool is otherwise
-rejected.
+rejected. A committed post-swap `BUILD_NOT_STARTED` boundary is supported only
+with the same promoted tree and compatible storage; cross-swap restoration
+remains rejected.
 It permits pending `SceneQueryManager` dirty shapes, which is the path
 exercised above. It does not yet restore a progressive rebuild across other
 allocation changes, bucket fallback, static tree replacement, pruner growth,

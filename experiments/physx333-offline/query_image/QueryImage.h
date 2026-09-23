@@ -11,6 +11,8 @@ namespace oc2 { namespace offline {
 // A source-layout image of the settled SceneQueryManager and its AABB pruners.
 // Same-scene only; guarded allocations must remain live except the explicit
 // progressive FIFO rebase and cold BUILD_INIT rewind documented below.
+// After a committed tree swap, the retained builder input address is a stale
+// pointer value only; the freed cached-box allocation is never captured.
 struct QueryImage
 {
     struct Field

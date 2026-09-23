@@ -1,5 +1,6 @@
 #include "QueryImage.h"
 
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -568,6 +569,144 @@ void checkStackRebase()
                  "growth rejected atomically\n";
 }
 
+PxU32 queryWord(const QueryImage& image, const char* name)
+{
+    const QueryImage::Field* field = queryField(image, name);
+    require(field && field->bytes.size() == sizeof(PxU32),
+            std::string("missing query word ") + name);
+    PxU32 value = 0;
+    std::memcpy(&value, field->bytes.data(), sizeof(value));
+    return value;
+}
+
+bool committedPostSwap(const QueryImage& image)
+{
+    return queryWord(image, "dynamic.progress") == 0 &&
+           queryWord(image, "dynamic.cachedBoxCount") != 0 &&
+           queryWord(image, "dynamic.cachedBoxes") == 0;
+}
+
+void checkCommittedPostSwap()
+{
+    Fixture fixture(32);
+    fixture.mover->setGlobalPose(PxTransform(PxVec3(7.0f, 0.0f, 0.0f)));
+    fixture.mover->putToSleep();
+    std::string error;
+    QueryImage checkpoint;
+    bool swapped = false;
+    for (int step = 0; step < 512; ++step)
+    {
+        fixture.scene->simulate(1.0f / 60.0f);
+        require(fixture.scene->fetchResults(true), "first swap fetchResults");
+        if (!CaptureQueryImage(*fixture.scene, checkpoint, error))
+            require(false, "first swap capture: " + error);
+        if (committedPostSwap(checkpoint))
+        {
+            swapped = true;
+            break;
+        }
+    }
+    require(swapped, "first progressive tree did not swap");
+    const QueryImage beforeFirstRefit = checkpoint;
+    // The promoted tree allocates its refit bitmap on its first update.
+    // Prime that public query path before comparing fixed-storage images.
+    fixture.mover->setGlobalPose(PxTransform(PxVec3(7.25f, 0.0f, 0.0f)));
+    require(fixture.rayAt(7.25f) && fixture.overlapAt(7.25f),
+            "first post-swap refit");
+    if (!CaptureQueryImage(*fixture.scene, checkpoint, error))
+        require(false, "primed post-swap capture: " + error);
+    require(committedPostSwap(checkpoint), "refit left post-swap state");
+    require(!RestoreQueryImage(*fixture.scene, beforeFirstRefit, error),
+            "pre-refit image was accepted after bitmap allocation");
+    QueryImage afterLifecycleReject;
+    if (!CaptureQueryImage(*fixture.scene, afterLifecycleReject, error) ||
+        !checkpoint.equals(afterLifecycleReject, error))
+        require(false, "pre-refit rejection mutated query: " + error);
+    const QueryImage::Field* releasedBoxes = queryField(
+        checkpoint, "dynamic.cachedBoxStorage");
+    const PxU32 firstTree = queryWord(checkpoint, "dynamic.currentTree");
+    require(releasedBoxes && !releasedBoxes->address &&
+            releasedBoxes->bytes.empty() &&
+            queryWord(checkpoint, "dynamic.cachedBoxCount") == 32 &&
+            queryWord(checkpoint, "dynamic.builderInputCount") == 32 &&
+            queryWord(checkpoint, "dynamic.builderInputPointer") != 0 &&
+            queryWord(checkpoint, "dynamic.builderNodePointer") ==
+                queryWord(checkpoint, "dynamic.tree.nodesPointer") &&
+            queryWord(checkpoint, "dynamic.tree.stackPointer") == 0 &&
+            queryWord(checkpoint, "dynamic.newTree") == 0 &&
+            firstTree != 0,
+            "post-swap image does not match source ownership");
+    require(fixture.rayAt(7.25f) && fixture.overlapAt(7.25f),
+            "post-swap raycast/overlap");
+
+    fixture.mover->setGlobalPose(PxTransform(PxVec3(8.0f, 0.0f, 0.0f)));
+    QueryImage pending;
+    if (!CaptureQueryImage(*fixture.scene, pending, error))
+        require(false, "post-swap pending capture: " + error);
+    require(fixture.rayAt(8.0f) && fixture.overlapAt(8.0f),
+            "post-swap updated raycast/overlap");
+    QueryImage flushed;
+    if (!CaptureQueryImage(*fixture.scene, flushed, error))
+        require(false, "post-swap flushed capture: " + error);
+    for (int i = 0; i < 20; ++i)
+    {
+        if (!RestoreQueryImage(*fixture.scene, pending, error))
+            require(false, "post-swap restore: " + error);
+        QueryImage observed;
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !pending.equals(observed, error))
+            require(false, "post-swap restored parity: " + error);
+        require(fixture.rayAt(8.0f) && fixture.overlapAt(8.0f),
+                "post-swap restored query results");
+        if (!CaptureQueryImage(*fixture.scene, observed, error) ||
+            !flushed.equals(observed, error))
+            require(false, "post-swap flush replay parity: " + error);
+    }
+
+    fixture.mover->setGlobalPose(PxTransform(PxVec3(9.0f, 0.0f, 0.0f)));
+    fixture.mover->putToSleep();
+    fixture.scene->simulate(1.0f / 60.0f);
+    require(fixture.scene->fetchResults(true), "second build fetchResults");
+    QueryImage building;
+    if (!CaptureQueryImage(*fixture.scene, building, error))
+        require(false, "second build capture: " + error);
+    require(queryWord(building, "dynamic.progress") != 0,
+            "second build did not start");
+    require(!RestoreQueryImage(*fixture.scene, checkpoint, error),
+            "cross-build post-swap restore was accepted");
+    QueryImage afterReject;
+    if (!CaptureQueryImage(*fixture.scene, afterReject, error) ||
+        !building.equals(afterReject, error))
+        require(false, "cross-build rejection mutated query: " + error);
+
+    QueryImage secondSwap;
+    swapped = false;
+    for (int step = 0; step < 512; ++step)
+    {
+        fixture.scene->simulate(1.0f / 60.0f);
+        require(fixture.scene->fetchResults(true), "second swap fetchResults");
+        if (!CaptureQueryImage(*fixture.scene, secondSwap, error))
+            require(false, "second swap capture: " + error);
+        if (committedPostSwap(secondSwap) &&
+            queryWord(secondSwap, "dynamic.currentTree") != firstTree)
+        {
+            swapped = true;
+            break;
+        }
+    }
+    require(swapped, "second progressive tree did not swap");
+    require(!RestoreQueryImage(*fixture.scene, checkpoint, error),
+            "cross-swap restore was accepted");
+    if (!CaptureQueryImage(*fixture.scene, afterReject, error) ||
+        !secondSwap.equals(afterReject, error))
+        require(false, "cross-swap rejection mutated query: " + error);
+    require(fixture.rayAt(9.0f) && fixture.overlapAt(9.0f),
+            "second post-swap raycast/overlap");
+    std::cout << "PASS committed post-swap query image: 20 restores, "
+                 "query replay, atomic refit, cross-build and cross-swap "
+                 "rejection\n";
+}
+
 } // namespace
 
 int main()
@@ -576,5 +715,6 @@ int main()
     checkRebuildGate();
     checkColdBuildRewind();
     checkStackRebase();
+    checkCommittedPostSwap();
     return 0;
 }

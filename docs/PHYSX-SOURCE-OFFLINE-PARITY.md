@@ -149,6 +149,13 @@ sleep/wake list entries that are not live same-scene BodyCore pointers.
 Focused negative tests prove both failures leave the scene unchanged.
 These guards do not solve allocation-address reuse (ABA) or establish that a
 different live body belongs in a saved sleep/wake list.
+The [query image](../experiments/physx333-offline/query_image/README.md) now
+also recognizes PhysX's valid committed post-tree-swap boundary without
+dereferencing the stale builder input pointer or freed cached-box storage.
+Its fixed-storage test passes 20 restores and query replays and atomically
+rejects attempts to rewind across refit allocation, build restart, or a
+second swap. Reconstructing deleted tree allocations across a swap remains
+open.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.
