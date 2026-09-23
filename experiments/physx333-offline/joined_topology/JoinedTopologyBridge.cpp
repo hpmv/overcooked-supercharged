@@ -35,11 +35,11 @@
 #undef private
 
 static_assert(sizeof(void*) == 4, "Joined topology bridge requires Win32");
-static_assert(sizeof(physx333_offline::JoinedTopologyRoleV1) == 64,
+static_assert(sizeof(physx333_offline::JoinedTopologyRoleV1) == 72,
               "Unexpected joined role ABI");
 static_assert(sizeof(physx333_offline::JoinedTopologyActorOrderV1) == 80,
               "Unexpected joined actor ABI");
-static_assert(sizeof(physx333_offline::JoinedTopologyPlanV1) == 2288,
+static_assert(sizeof(physx333_offline::JoinedTopologyPlanV1) == 2432,
               "Unexpected joined plan ABI");
 
 extern "C" void __cdecl oc2_physx333_joined_lazy_report(void* actorPair);
@@ -194,6 +194,26 @@ void orderFreePrefix(Pool& pool, const PxU32* desired, PxU32 count)
 }
 
 typedef PxcPoolList<PxsContactManager, PxsContext> ContactManagerPool;
+typedef Ps::Pool<Gu::LargePersistentContactManifold> ManifoldPool;
+
+bool manifoldBinding(const ManifoldPool& pool,
+                     const PxsContactManager& manager,
+                     const JoinedTopologyRoleV1& target)
+{
+    const PxcNpWorkUnit& work = manager.getWorkUnit();
+    const std::uintptr_t address = work.pairCache.manifold;
+    if (!address || (address & 15u) ||
+        address != reinterpret_cast<std::uintptr_t>(
+            target.targetManifoldAddress) ||
+        work.index != manager.getIndex() ||
+        physicalSlot<Gu::LargePersistentContactManifold>(pool,
+            reinterpret_cast<const void*>(address)) !=
+            target.targetManifoldPoolSlot)
+        return false;
+    const Gu::LargePersistentContactManifold* manifold =
+        reinterpret_cast<const Gu::LargePersistentContactManifold*>(address);
+    return manifold->mContactPoints == manifold->mContactPointsBuff;
+}
 
 bool contactManagerFreeSuffix(const ContactManagerPool& pool,
                               const PxU32* desired, PxU32 count)
@@ -412,6 +432,7 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         return JoinedTopologyUnsupportedScene;
     PxsContext& context = *interactions.getLowLevelContext();
     ContactManagerPool& managerPool = context.mContactManagerPool;
+    ManifoldPool& manifoldPool = context.mManifoldPool;
     EdgeManager& edgePool = context.getIslandManager().mEdgeManager;
     const PxU32 overlapType = Sc::PX_INTERACTION_TYPE_OVERLAP;
     const PxU32 triggerType = Sc::PX_INTERACTION_TYPE_TRIGGER;
@@ -427,6 +448,7 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         interactions.mInteractions[markerType].capacity() < kMarkers ||
         !validPool<Sc::ShapeInstancePairLL>(nphase.mLLSipPool, 8) ||
         !validPool<Sc::ActorPair>(nphase.mActorPairPool, 8) ||
+        !validPool<Gu::LargePersistentContactManifold>(manifoldPool, 8) ||
         !validPool<Sc::TriggerInteraction>(nphase.mTriggerPool, 2) ||
         !validPool<Sc::ElementInteractionMarker>(
             nphase.mInteractionMarkerPool, 2))
@@ -459,6 +481,11 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
             p.targetInteractionPoolSlot >= kPoolSize ||
             (type == overlapType ? p.targetActorPairPoolSlot >= kPoolSize :
                                    p.targetActorPairPoolSlot != kNoSlot) ||
+            (type == overlapType ?
+                (!p.targetManifoldAddress ||
+                 p.targetManifoldPoolSlot >= kPoolSize) :
+                (p.targetManifoldAddress ||
+                 p.targetManifoldPoolSlot != kNoSlot)) ||
             (type != overlapType &&
              (p.targetContactManagerIndex != kNoSlot ||
               p.targetIslandEdgeId != kNoSlot)) ||
@@ -544,6 +571,8 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
                         p.targetContactManagerIndex ||
                     edgeHookId(sip->mLLIslandHook) != p.targetIslandEdgeId)
                     return JoinedTopologyUnsupportedScene;
+                if (!manifoldBinding(manifoldPool, *sip->mManager, p))
+                    return JoinedTopologyPoolMismatch;
             }
             else if (type == triggerType)
             {
@@ -566,6 +595,21 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         }
     }
 
+    // A's twelve contact targets must name distinct physical objects in the
+    // one slab retained by B. This checks same-scene address identity without
+    // dereferencing the four target objects currently on B's free list.
+    bool targetManifoldSlots[kPoolSize] = {};
+    for (PxU32 i = 0; i < kContacts; ++i)
+    {
+        const JoinedTopologyRoleV1& target = plan->roles[i];
+        const PxU32 slot = target.targetManifoldPoolSlot;
+        if (targetManifoldSlots[slot] ||
+            physicalSlot<Gu::LargePersistentContactManifold>(
+                manifoldPool, target.targetManifoldAddress) != slot)
+            return JoinedTopologyPoolMismatch;
+        targetManifoldSlots[slot] = true;
+    }
+
     // The supplied role inventory must cover every live interaction exactly
     // once. This also forbids an unexpected native pair hidden in the scene.
     for (PxU32 t = 0; t < 3; ++t)
@@ -584,6 +628,7 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
     }
     PxU32 missingContactSlots[4], missingActorPairSlots[4];
     PxU32 missingManagerIndices[4], missingEdgeIds[4];
+    PxU32 missingManifoldSlots[4];
     PxU32 missingTriggerSlots[2];
     bool markedMissing[kRoles] = {};
     for (PxU32 i = 0; i < 4; ++i)
@@ -598,6 +643,8 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         missingManagerIndices[i] =
             plan->roles[id].targetContactManagerIndex;
         missingEdgeIds[i] = plan->roles[id].targetIslandEdgeId;
+        missingManifoldSlots[i] =
+            plan->roles[id].targetManifoldPoolSlot;
         for (PxU32 j = 0; j < kContacts; ++j)
             if (j != id && sameActorPair(roles[id], roles[j]))
                 return JoinedTopologyUnsupportedScene;
@@ -621,8 +668,26 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
         !freePrefix<Sc::TriggerInteraction>(nphase.mTriggerPool,
             missingTriggerSlots, 2) ||
         !contactManagerFreeSuffix(managerPool, missingManagerIndices, 4) ||
+        !freePrefix<Gu::LargePersistentContactManifold>(manifoldPool,
+            missingManifoldSlots, 4) ||
         !islandEdgeFreePrefix(edgePool, missingEdgeIds, 4))
         return JoinedTopologyPoolMismatch;
+    PxU32 manifoldFreeTail[kPoolSize - kContacts] = {};
+    const ManifoldPool::FreeList* freeManifold = manifoldPool.mFreeElement;
+    for (PxU32 i = 0; i < 4; ++i)
+        freeManifold = freeManifold->mNext;
+    for (PxU32 i = 0; i < kPoolSize - kContacts; ++i)
+    {
+        const PxU32 slot =
+            physicalSlot<Gu::LargePersistentContactManifold>(
+                manifoldPool, freeManifold);
+        // None of A's twelve owners may also be on B's untouched free tail.
+        // The first four free nodes were separately matched to missing roles.
+        if (slot >= kPoolSize || targetManifoldSlots[slot])
+            return JoinedTopologyPoolMismatch;
+        manifoldFreeTail[i] = slot;
+        freeManifold = freeManifold->mNext;
+    }
 
     // Validate each actor's proposed mixed array as a bijection with its
     // endpoints, and ensure no source array has to grow during recreation.
@@ -668,6 +733,8 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
     orderFreePrefix<Sc::TriggerInteraction>(nphase.mTriggerPool,
         missingTriggerSlots, 2);
     orderContactManagerFreeSuffix(managerPool, missingManagerIndices, 4);
+    orderFreePrefix<Gu::LargePersistentContactManifold>(manifoldPool,
+        missingManifoldSlots, 4);
     orderIslandEdgeFreePrefix(edgePool, missingEdgeIds, 4);
     for (PxU32 i = 0; i < 4; ++i)
     {
@@ -690,7 +757,9 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
             sip->mManager->getIndex() !=
                 plan->roles[id].targetContactManagerIndex ||
             edgeHookId(sip->mLLIslandHook) !=
-                plan->roles[id].targetIslandEdgeId)
+                plan->roles[id].targetIslandEdgeId ||
+            !manifoldBinding(manifoldPool, *sip->mManager,
+                plan->roles[id]))
             failStop();
     }
     for (PxU32 i = 0; i < 2; ++i)
@@ -760,6 +829,10 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
             kMarkers ||
         nphase.mLLSipPool.mUsed != kContacts ||
         nphase.mActorPairPool.mUsed != kContacts ||
+        !validPool<Gu::LargePersistentContactManifold>(
+            manifoldPool, kContacts) ||
+        !exactFreeOrder<Gu::LargePersistentContactManifold>(
+            manifoldPool, manifoldFreeTail, kPoolSize - kContacts) ||
         nphase.mTriggerPool.mUsed != kTriggers ||
         nphase.mInteractionMarkerPool.mUsed != kMarkers)
         failStop();

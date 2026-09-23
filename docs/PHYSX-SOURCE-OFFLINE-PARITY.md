@@ -79,11 +79,13 @@ triggers together through native NPhase, preserving eight contact, two
 trigger, and two marker survivors, physical SIP/ActorPair/trigger slots, and
 mixed scene/actor interaction order. The bridge now also validates the four
 contact-manager indices and island-edge IDs against their source-defined
-free-pool allocation order before writing. A second native stage creates
+free-pool allocation order before writing. It now also validates the PCM
+large-manifold pool and all twelve target manager-to-manifold identities,
+including the four reallocated slots. A second native stage creates
 exactly two missing ActorPair report objects through PhysX's lazy path and
 restores all twelve pairs' touch/report metadata, ordered persistent events,
 and manager bitmaps. Cold and warm readbacks match the full A ActorPair/report
-graph; thirteen malformed plans across both stages reject without mutation.
+graph; fifteen malformed plans across both stages reject without mutation.
 The full Oracle still first differs at `contact.managers[48]`, and no
 restored successor step is attempted. Actor
 and shape lifetime, CCD, and several other native-state families remain gated.

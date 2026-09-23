@@ -25,18 +25,25 @@ The gate runs this reconstruction twice in independent scenes. The cold case
 uses the first settled A/B pair. Before checkpoint A in the warm case, public
 PhysX calls first traverse a complete `12/4/2 -> 8/2/2 -> 12/4/2` cycle,
 then settle once more at A. Both cases run the same positive readbacks
-and all thirteen atomic malformed-plan/nonmutation controls. This checks that
+and all fifteen atomic malformed-plan/nonmutation controls. This checks that
 the test-only bridge does not depend on a first-use scene, but it does not
 claim arbitrary allocation histories or full native rewind parity.
 
 The bridge accepts only this exact fixed topology at a stopped scene. Before
 writing, it validates all 18 source-core pair bindings and fixture filters,
 survivor identities and pool slots, six missing role IDs, independent SIP,
-ActorPair, trigger, contact-manager, and island-edge allocation heads, array
+ActorPair, trigger, contact-manager, PCM large-manifold, and island-edge
+allocation heads, array
 capacities, and every actor's requested mixed order. Manager indices and edge
 IDs come from the settled A Oracle image, while the B free stack/chain is
 validated using the source allocation rules (`PxcPoolList::get` pops the
-stack end; `ElemManager::getAvailableElem` consumes the linked-list head).
+stack end; `Ps::PoolBase::allocate` and `ElemManager::getAvailableElem`
+consume their linked-list heads). The PCM preflight also requires one retained
+32-object slab, eight unique surviving manager-to-manifold bindings, twelve
+distinct checkpoint target addresses/slots in that slab, the complete valid
+free chain, and exactly the four missing target slots at its head. It never
+dereferences those four currently freed objects. The source constructors
+reacquire the exact target manifold addresses; readback checks all twelve.
 Only those four free positions may be reordered, and the untouched free
 tails are checked after reconstruction. It then uses PhysX's original
 `NPhaseCore::onOverlapCreated` lifecycle for the four missing contacts and
@@ -45,7 +52,7 @@ per-actor order/reverse indices, and restores initialized trigger history.
 The harness checks malformed plans leave the complete B Oracle, auxiliary,
 ActorPair, graph, and nine component images unchanged. A successful call
 checks the A graph, full auxiliary image, physical SIP/ActorPair pool topology,
-per-pair contact-manager indices and island-edge IDs, and selected
+per-pair contact-manager indices, PCM pool identities, island-edge IDs, and selected
 source-Oracle pool sections. The cold and warm fixtures already have the
 needed manager/edge allocation order, so neither requires reordering; the
 prewrite guards still check it independently.
@@ -61,9 +68,10 @@ data, the ordered ten-pair persistent event list, contact-manager flags/status,
 and event bitmaps. The readback matches the complete checkpoint ActorPair/
 report graph and selected NPhase Oracle sections in both scenes.
 
-The nine topology negative controls cover an absent contact core, a filter mismatch,
+The eleven topology negative controls cover an absent contact core, a filter mismatch,
 an invalid trigger slot, an impossible ActorPair slot, impossible missing
-contact-manager and island-edge IDs, a wrong surviving trigger slot,
+contact-manager, island-edge, and manifold slots, a wrong surviving manifold
+address and trigger slot,
 duplicate scene order, and duplicate actor order. Each is
 rejected before any source write and checked against the complete B image.
 Four malformed report plans are also rejected before any source write and
@@ -76,7 +84,7 @@ difference is `contact.managers[48]`: a surviving manager has two friction
 patches at A and one at B. This is contact payload, not report ownership.
 
 This is a **topology-plus-report/touch** experiment. It does not restore the
-contact-manager work units, persistent manifolds, contact-memory streams,
+contact-manager work units, persistent manifold contents, contact-memory streams,
 the complete island graph, SAP, body state,
 or other full checkpoint state. It does not simulate the successor after the
 native reconstruction. Consequently it is not a full rewind, a game test,

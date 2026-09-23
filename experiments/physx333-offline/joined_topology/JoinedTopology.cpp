@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <cstring>
 
 namespace {
 
@@ -163,13 +164,27 @@ ShapeKey shapeKey(const physx333_offline::AuxShapeKey& shape)
 }
 
 physx333_offline::JoinedTopologyPlanV1 makePlan(
-    World& world, const Snapshot& a, const Snapshot& b)
+    World& world, const Snapshot& a, const Snapshot& b,
+    const physx333_offline::JoinedContactImage& contactA)
 {
     using namespace physx333_offline;
     if (a.graph.scenePairs.size() != 18 ||
         a.actorPair.sips.size() != 12 || a.aux.triggers.size() != 4 ||
-        a.aux.markers.size() != 2 || a.graph.actors.size() != 13)
+        a.aux.markers.size() != 2 || a.graph.actors.size() != 13 ||
+        contactA.rows.size() != 12)
         fail("joined checkpoint images have unexpected counts");
+    NpScene& np = static_cast<NpScene&>(*world.scene);
+    PxsContext* context = np.getScene().getScScene()
+        .getInteractionScene().getLowLevelContext();
+    if (!context) fail("joined successor has no low-level context");
+    const auto& manifoldPool = context->mManifoldPool;
+    if (manifoldPool.mSlabs.size() != 1 ||
+        manifoldPool.mElementsPerSlab != 32)
+        fail("joined successor large-manifold pool shape changed");
+    const std::uintptr_t manifoldBase =
+        reinterpret_cast<std::uintptr_t>(manifoldPool.mSlabs[0]);
+    const std::uintptr_t manifoldBytes = 32u *
+        sizeof(Gu::LargePersistentContactManifold);
     const LiveCores live = captureLiveCores(world);
     JoinedTopologyPlanV1 plan = {};
     const PxU32 contactFlags = static_cast<PxU32>(
@@ -197,6 +212,7 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
         role.targetActorPairPoolSlot = 0xffffffffu;
         role.targetContactManagerIndex = 0xffffffffu;
         role.targetIslandEdgeId = 0xffffffffu;
+        role.targetManifoldPoolSlot = 0xffffffffu;
         if (i < 12)
         {
             const ActorGraphSipRow& sip = a.actorPair.sips[i];
@@ -213,6 +229,29 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
                 sipRows[i * 12u + 11] == 0xffffffffu)
                 fail("joined source SIP/manager identity differs");
             role.targetContactManagerIndex = sipRows[i * 12u + 11];
+            const JoinedContactRow& contact = contactA.rows[i];
+            if (contact.sceneIndex != i ||
+                contact.key.shape0.actor != s0.actor ||
+                contact.key.shape0.shape != s0.shape ||
+                contact.key.shape1.actor != s1.actor ||
+                contact.key.shape1.shape != s1.shape ||
+                contact.managerSlot != role.targetContactManagerIndex ||
+                contact.manifoldKind != 1 ||
+                contact.workUnitBytes.size() != sizeof(PxcNpWorkUnit))
+                fail("joined contact/manifold checkpoint row differs");
+            PxcNpWorkUnit work;
+            std::memcpy(&work, contact.workUnitBytes.data(), sizeof(work));
+            const std::uintptr_t manifold = work.pairCache.manifold;
+            if (!manifold || (manifold & 15u) ||
+                manifold < manifoldBase ||
+                manifold >= manifoldBase + manifoldBytes ||
+                (manifold - manifoldBase) %
+                    sizeof(Gu::LargePersistentContactManifold))
+                fail("joined target manifold is outside retained pool");
+            role.targetManifoldAddress = reinterpret_cast<void*>(manifold);
+            role.targetManifoldPoolSlot = static_cast<PxU32>(
+                (manifold - manifoldBase) /
+                sizeof(Gu::LargePersistentContactManifold));
             auto edge = edgeByManager.find(role.targetContactManagerIndex);
             if (edge == edgeByManager.end())
                 fail("joined source manager has no island edge");
@@ -697,8 +736,10 @@ void runScenario(const char* name, bool warm)
     verify(b, true);
     const physx333_offline::JoinedContactImage contactB =
         captureContact(world);
-    const auto plan = makePlan(world, a, b);
+    const auto plan = makePlan(world, a, b, contactA);
     const auto reportPlan = makeReportPlan(a, contactA, contactB, plan);
+    const std::set<PairKey> bKeys(
+        b.graph.scenePairs.begin(), b.graph.scenePairs.end());
     const auto& bManagerFree = part(b.oracle, "contact.pool.free_order");
     const auto& bEdgeFree = part(b.oracle, "island.edges.free_order");
     if (bManagerFree.size() < 4 || bEdgeFree.size() < 4)
@@ -724,6 +765,8 @@ void runScenario(const char* name, bool warm)
                     bManagerFree[bManagerFree.size() - 1 - i]
                   << " edge=" << plan.roles[role].targetIslandEdgeId
                   << " b_edge_next=" << bEdgeFree[i]
+                  << " manifold=" <<
+                    plan.roles[role].targetManifoldPoolSlot
                   << '\n';
     }
     std::cout << "JOINED_POOL_REORDER cm=" << managerReorder
@@ -768,9 +811,23 @@ void runScenario(const char* name, bool warm)
     requireReject(world, b, nphase, invalid, "missing island edge mismatch",
                   physx333_offline::JoinedTopologyPoolMismatch);
     invalid = plan;
+    invalid.roles[plan.missingContactRoles[0]].targetManifoldPoolSlot = 31;
+    requireReject(world, b, nphase, invalid, "missing manifold slot mismatch",
+                  physx333_offline::JoinedTopologyPoolMismatch);
+    PxU32 survivorContact = 0xffffffffu;
+    for (PxU32 role = 0; role < 12; ++role)
+        if (bKeys.count(a.graph.scenePairs[role]))
+        { survivorContact = role; break; }
+    if (survivorContact == 0xffffffffu)
+        fail("joined fixture has no surviving contact");
+    invalid = plan;
+    invalid.roles[survivorContact].targetManifoldAddress =
+        plan.roles[plan.missingContactRoles[0]].targetManifoldAddress;
+    requireReject(world, b, nphase, invalid,
+                  "survivor manifold address mismatch",
+                  physx333_offline::JoinedTopologyPoolMismatch);
+    invalid = plan;
     PxU32 survivorTrigger = 0xffffffffu;
-    const std::set<PairKey> bKeys(
-        b.graph.scenePairs.begin(), b.graph.scenePairs.end());
     for (PxU32 role = 12; role < 16; ++role)
         if (bKeys.count(a.graph.scenePairs[role]))
         { survivorTrigger = role; break; }
@@ -799,6 +856,22 @@ void runScenario(const char* name, bool warm)
     // boundary. No simulation is authorized in this topology-only gate.
     const StoppedImage restored = captureTopology(world);
     verifyTopologyReadback(a, b, restored);
+    const physx333_offline::JoinedContactImage topologyContact =
+        captureContact(world);
+    if (topologyContact.rows.size() != 12)
+        fail("joined topology did not restore twelve manifold owners");
+    for (PxU32 i = 0; i < 12; ++i)
+    {
+        const auto& row = topologyContact.rows[i];
+        if (row.workUnitBytes.size() != sizeof(PxcNpWorkUnit))
+            fail("joined topology WorkUnit size changed");
+        PxcNpWorkUnit work;
+        std::memcpy(&work, row.workUnitBytes.data(), sizeof(work));
+        if (work.pairCache.manifold != reinterpret_cast<std::uintptr_t>(
+                plan.roles[i].targetManifoldAddress))
+            fail("joined topology manifold address readback differs");
+    }
+    std::cout << "JOINED_MANIFOLD_BINDINGS 12/12\n";
     const StoppedImage reportBaseline = captureTopology(world);
     auto invalidReport = reportPlan;
     invalidReport.roles[0].shapeCore0 = NULL;
@@ -825,8 +898,9 @@ void runScenario(const char* name, bool warm)
     verifyReportReadback(contactA, captureContact(world));
     if (runtime.errors.count) fail("PhysX reported an error");
     std::cout << "PASS joined " << name
-              << " 12/4/2 topology and ten/eight report ownership "
-                 "reconstruction with thirteen prewrite rejection controls; "
+              << " 12/4/2 topology, twelve PCM pool identities, and ten/eight "
+                 "report ownership reconstruction with fifteen prewrite "
+                 "rejection controls; "
                  "contact payload and full rewind remain unrestored\n";
 }
 

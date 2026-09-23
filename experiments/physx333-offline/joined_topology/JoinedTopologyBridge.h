@@ -18,6 +18,8 @@ struct JoinedTopologyRoleV1 {
     std::uint32_t targetActorPairPoolSlot; // contacts only; UINT32_MAX otherwise
     std::uint32_t targetContactManagerIndex; // contacts only; UINT32_MAX otherwise
     std::uint32_t targetIslandEdgeId; // contacts only; UINT32_MAX otherwise
+    void* targetManifoldAddress;        // contacts only; same-scene PCM owner
+    std::uint32_t targetManifoldPoolSlot; // contacts only; UINT32_MAX otherwise
     std::uint32_t targetInteractionFlags;
     std::uint32_t targetCoreFlags;
     std::uint32_t targetDirtyFlags;
@@ -105,9 +107,10 @@ enum JoinedReportResultV1 {
 
 // Recreates only the four missing contact and two missing trigger interactions
 // in the synthetic 12/4/2 graph. Existing marker objects survive. It repairs
-// interaction identity, manager/edge IDs, pool slots, scene order, all
+// interaction identity, manager/edge IDs, pool slots, PCM manifold identity,
+// scene order, all
 // actors' mixed order and reverse indices, and initialized trigger history.
-// Contact report data, contact-manager payload, manifold bytes, broadphase,
+// Contact report data, contact-manager payload, manifold contents, broadphase,
 // and the complete island graph are not restored by this function. All
 // rejection is prewrite; any postwrite
 // mismatch aborts rather than returning a partially mutated scene.
