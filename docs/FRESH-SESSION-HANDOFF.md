@@ -1,5 +1,41 @@
 # Fresh-session handoff — 2026-09-08
 
+> **Physics replay-reset feasibility (2026-09-22):** We tested the proposed
+> fast alternative to restoring every hidden PhysX cache: retain the same
+> actors/GameObjects, clear their participation, and replay physics from the
+> level start. The new source-built PhysX 3.3.3
+> [`scene_reset` fixture](../experiments/physx333-offline/scene_reset/README.md)
+> keeps all 13 actors and their shapes alive. All-actor removal, flush, public
+> body reset, and identical reinsertion into the **same** PxScene changes the
+> first replayed body pose, ray result, and ordered callbacks. Repeating with
+> a **new** PxScene under the same PxPhysics, while retaining those exact actor
+> and shape objects, matches eight steps of public and normalized native
+> observations in all four tested order variants. This is a synthetic result,
+> not Unity or level parity. The full offline suite passes; commit `64bd5bd`.
+>
+> The separate Unity 2017.4.8f1 x86
+> [same-object canary](../experiments/unity-2017-physics-repro/README.md)
+> preserves managed GameObject/Rigidbody/Collider identities and manually
+> replays 24 steps. Capsule/floor alone matches exactly. With a box allocated
+> inactive and activated at step 7, all body bits still match, but collision
+> callback order and signed-zero velocity payloads differ; an overlap query
+> returns the same objects in a different order. Forward/reverse deactivation
+> and zero/one empty reset step all fail the same strict gate. The failure
+> repeats in a disposable empty player using the installed non-development
+> UnityPlayer binary; no Overcooked process was launched. This proves that
+> simply toggling the existing GameObjects is not a full replay reset. Commit
+> `7483923`; both commits are on [PR #4](https://github.com/hpmv/overcooked-supercharged/pull/4).
+>
+> A read-only PDB/disassembly audit locates Unity's global PxPhysics/PxScene
+> pointers, but its built-in `PhysicsManager::RecreateScene` releases the
+> entire SDK, so it is not safe for retained actors. No native Unity scene
+> replacement was attempted. A scene-**only** replacement using Unity's own
+> PxPhysics is the next option-(2) feasibility gate, in an isolated empty
+> player only; it requires verified scene descriptor, callback, ownership, and
+> wrapper contracts before any writes. Whole-game input movies have proven
+> deterministic gameplay events, **not** bit-exact fresh-start native physics.
+> Search remains disabled.
+
 > **Complete NPhase report-history image milestone (2026-09-22, managed
 > r24 / native API 21):** settled checkpoints and post-transition oracles now
 > retain both revision-guarded `Sc::Scene` clocks, the raw header and every
