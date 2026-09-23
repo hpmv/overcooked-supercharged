@@ -156,6 +156,15 @@ Its fixed-storage test passes 20 restores and query replays and atomically
 rejects attempts to rewind across refit allocation, build restart, or a
 second swap. Reconstructing deleted tree allocations across a swap remains
 open.
+A [joined motion fixture](../experiments/physx333-offline/joined_motion/README.md)
+now stresses the same 12/4/2→8/2/2 component transaction under gravity,
+solver-generated nonzero velocity, and ten live friction records. It passes
+100 direct A/B cycles, 100 no-input-then-scripted cycles, and 100 kinetic
+dash-to-deletion cycles; the last has three simulation steps with no fixture
+input after A and checks every intermediate image and ordered callback. Its
+auxiliary trigger box is deliberately taller than the game's unknown live
+geometry to preserve the surviving trigger-history invariant, so this is a
+motion stress test, not a level-geometry match.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.

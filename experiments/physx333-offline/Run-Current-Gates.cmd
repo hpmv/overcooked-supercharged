@@ -37,6 +37,8 @@ call "%~dp0actor_pair_graph\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0context_image\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0scene_clock\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 call "%~dp0query_image\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0trigger_rewind\Build-Check.cmd"
@@ -46,6 +48,8 @@ if errorlevel 1 exit /b 1
 call "%~dp0joined_workunit_restore\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_full_replay\Build-Check.cmd"
+if errorlevel 1 exit /b 1
+call "%~dp0joined_motion\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_cache_history\Build-Check.cmd"
 if errorlevel 1 exit /b 1
