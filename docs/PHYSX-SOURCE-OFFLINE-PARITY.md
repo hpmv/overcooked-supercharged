@@ -115,6 +115,15 @@ before simulation. Only one query FIFO capacity-tail comparison is semantic:
 the active entries and every other field still match, and source code shows
 the unused tail is overwritten before read. This is not shipped f444 or
 Unity-binary parity.
+A separate [joined cache-history fixture](../experiments/physx333-offline/joined_cache_history/README.md)
+uses public PhysX shape attachments and detachments to reach the observed
+transform-cache ledger (`currentId=13`, ten live IDs, 24 references, and free
+IDs `[12,11,10]`) before its joined checkpoint. In independent fresh-process
+traces, complete component restoration and exact successor comparisons pass
+100 direct A→B cycles and 100 A→no-input→B cycles. Its other native histories
+and geometry remain synthetic. A longer trajectory after 100 direct cycles
+currently reaches a query-pruner phase rejected by the existing guarded
+capture; this test does not silently bypass that phase.
 A separate [joined manifold-pool image](../experiments/physx333-offline/joined_manifold_pool/README.md)
 checks all twelve keyed PCM bindings and the physical used/free large-manifold
 pool partition across A, B, and a public-API return to A. The four deleted
