@@ -155,6 +155,9 @@ control, not an exact f444 scene reconstruction.
 Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and
 game-side ABI have not been proven from the source-built fixtures.
+The [f444 inventory gap](PHYSX-F444-SCENE-INVENTORY-GAP.md) also records why
+the existing serialized scene and interaction-only dumps cannot yet support
+a truly level-matched offline source scene.
 
 ### Why a rebuilt PhysX DLL is not a drop-in game replacement
 
