@@ -203,7 +203,10 @@ is:
 2. After native lifecycle and mixed-order restoration, recreate only the two
    missing report objects (A has ten, B has eight; two missing contacts were
    non-touching), then restore touch/report metadata, event order, and CM
-   bitmaps. Assert the full A ActorPair/report image before proceeding.
+   bitmaps. **This stage now passes** in both cold and warm joined fixtures:
+   the complete A ActorPair/report graph and selected NPhase Oracle sections
+   match, with four additional prewrite nonmutation controls. It does not
+   restore WorkUnit/PCM payload or authorize a successor simulation.
 3. Install saved WorkUnit and contact-stream bindings for **all twelve**
    pairs, not only the four recreated pairs. This must precede memory-block
    restoration because that component validates live contact bindings. Each

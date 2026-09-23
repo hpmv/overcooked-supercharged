@@ -1,5 +1,6 @@
 #define OC2_LEVEL_GRAPH_NO_MAIN
 #include "../level_graph/LevelGraph.cpp"
+#include "../joined_contact_image/JoinedContactImage.h"
 #include "JoinedTopologyBridge.h"
 
 #include <map>
@@ -63,6 +64,16 @@ StoppedImage captureTopology(World& world)
         !physx333_offline::CaptureActorPairGraph(
             *world.scene, image.actorPair, error))
         fail("joined topology readback: " + error);
+    return image;
+}
+
+physx333_offline::JoinedContactImage captureContact(World& world)
+{
+    physx333_offline::JoinedContactImage image;
+    std::string error;
+    if (!physx333_offline::CaptureJoinedContactImage(
+            *world.scene, image, error))
+        fail("joined contact image: " + error);
     return image;
 }
 
@@ -296,6 +307,125 @@ physx333_offline::JoinedTopologyPlanV1 makePlan(
     return plan;
 }
 
+ShapeKey shapeKey(const physx333_offline::JoinedContactShapeKey& shape)
+{
+    ShapeKey key; key.actor = shape.actor; key.shape = shape.shape;
+    return key;
+}
+
+void fillReportBitmap(physx333_offline::JoinedReportBitmapV1& destination,
+                      const physx333_offline::JoinedContactBitmap& source)
+{
+    if (source.words.size() > 64)
+        fail("joined report bitmap exceeds fixed plan capacity");
+    destination.expectedStorage = reinterpret_cast<void*>(source.address);
+    destination.count = static_cast<PxU32>(source.words.size());
+    std::copy(source.words.begin(), source.words.end(), destination.words);
+}
+
+physx333_offline::JoinedReportPlanV1 makeReportPlan(
+    const Snapshot& a, const physx333_offline::JoinedContactImage& contactA,
+    const physx333_offline::JoinedContactImage& contactB,
+    const physx333_offline::JoinedTopologyPlanV1& topology)
+{
+    using namespace physx333_offline;
+    if (contactA.rows.size() != 12 || contactB.rows.size() != 8 ||
+        contactA.actorPairs.reportDataPool.usedCount != 10 ||
+        contactB.actorPairs.reportDataPool.usedCount != 8 ||
+        contactA.persistentEventOrder.size() != 10 ||
+        contactB.persistentEventOrder.size() != 8 ||
+        !contactA.forceThresholdEventOrder.empty() ||
+        !contactB.forceThresholdEventOrder.empty() ||
+        !contactA.actorPairs.reportSetOrder.empty() ||
+        !contactB.actorPairs.reportSetOrder.empty() ||
+        contactA.reportBufferIndex || contactB.reportBufferIndex ||
+        !contactA.reportBufferBytes.empty() ||
+        !contactB.reportBufferBytes.empty())
+        fail("joined report checkpoint topology is unsupported");
+    JoinedReportPlanV1 plan = {};
+    std::map<JoinedContactKey, PxU32> roleByKey;
+    std::map<PxU32, PxU32> missingByReportSlot;
+    for (PxU32 i = 0; i < 12; ++i)
+    {
+        const JoinedContactRow& source = contactA.rows[i];
+        const PairKey key = pair(Sc::PX_INTERACTION_TYPE_OVERLAP,
+            shapeKey(source.key.shape0), shapeKey(source.key.shape1));
+        if (!(a.graph.scenePairs[i] == key) ||
+            !roleByKey.insert(std::make_pair(source.key, i)).second ||
+            topology.roles[i].targetInteractionPoolSlot != source.sipSlot ||
+            topology.roles[i].targetActorPairPoolSlot != source.actorPairSlot ||
+            topology.roles[i].targetContactManagerIndex != source.managerSlot)
+            fail("joined contact row differs from topology role");
+        JoinedReportRoleV1& target = plan.roles[i];
+        target.shapeCore0 = topology.roles[i].shapeCore0;
+        target.shapeCore1 = topology.roles[i].shapeCore1;
+        target.sipSlot = source.sipSlot;
+        target.actorPairSlot = source.actorPairSlot;
+        target.managerSlot = source.managerSlot;
+        target.reportPoolSlot = source.reportPoolSlot;
+        target.sipFlags = source.sipFlags;
+        target.reportStamp = source.reportStamp;
+        target.reportPairIndex = source.reportPairIndex;
+        target.reportStreamIndex = source.reportStreamIndex;
+        target.actorPairFlags = source.actorPairFlags;
+        target.touchCount = source.actorPairTouchCount;
+        target.refCount = source.actorPairRefCount;
+        target.reportResetStamp = source.reportResetStamp;
+        target.reportActorAId = source.reportActorA;
+        target.reportActorBId = source.reportActorB;
+        target.reportStreamSize =
+            static_cast<PxU32>(source.reportStreamManager.size());
+        if (target.reportStreamSize > sizeof(target.reportStreamBytes))
+            fail("joined contact report stream manager exceeds plan");
+        std::copy(source.reportStreamManager.begin(),
+                  source.reportStreamManager.end(), target.reportStreamBytes);
+        target.managerFlags = source.managerFlags;
+        target.managerStatusFlags = source.managerStatusFlags;
+        const auto bRow = std::find_if(contactB.rows.begin(),
+            contactB.rows.end(), [&](const JoinedContactRow& row) {
+                return row.key == source.key;
+            });
+        if (bRow == contactB.rows.end() &&
+            source.reportPoolSlot != 0xffffffffu)
+            if (!missingByReportSlot.insert(std::make_pair(
+                    source.reportPoolSlot, i)).second)
+                fail("joined missing report pool slot is duplicated");
+    }
+    if (missingByReportSlot.size() != 2)
+        fail("joined report stage expected exactly two new owners");
+    const auto& bFree = contactB.actorPairs.reportDataPool.freeOrder;
+    const auto& aFree = contactA.actorPairs.reportDataPool.freeOrder;
+    if (bFree.size() != 24 || aFree.size() != 22 ||
+        !std::equal(aFree.begin(), aFree.end(), bFree.begin() + 2))
+        fail("joined report pool untouched free tail differs");
+    plan.currentReportFreeCount = static_cast<PxU32>(bFree.size());
+    plan.targetReportFreeCount = static_cast<PxU32>(aFree.size());
+    std::copy(bFree.begin(), bFree.end(), plan.currentReportFreeOrder);
+    std::copy(aFree.begin(), aFree.end(), plan.targetReportFreeOrder);
+    for (PxU32 i = 0; i < 2; ++i)
+    {
+        const auto found = missingByReportSlot.find(bFree[i]);
+        if (found == missingByReportSlot.end())
+            fail("joined source report free head cannot realize checkpoint");
+        plan.createRoles[i] = found->second;
+    }
+    for (PxU32 i = 0; i < 10; ++i)
+        plan.persistentRoles[i] = roleByKey.at(
+            contactA.persistentEventOrder[i]);
+    plan.targetNextPersistent = contactA.nextPersistentPair;
+    plan.reportBufferIndex = contactA.reportBufferIndex;
+    plan.reportBufferSize = contactA.reportBufferSize;
+    plan.reportBufferDefaultSize = contactA.reportBufferDefaultSize;
+    plan.reportBufferLastIndex = contactA.reportBufferLastIndex;
+    plan.reportBufferAllocationLocked =
+        contactA.reportBufferAllocationLocked;
+    fillReportBitmap(plan.managerUse, contactA.managerUse);
+    fillReportBitmap(plan.activeManagers, contactA.activeManagers);
+    fillReportBitmap(plan.modifiableManagers, contactA.modifiableManagers);
+    fillReportBitmap(plan.touchEventManagers, contactA.touchEventManagers);
+    return plan;
+}
+
 void verifyTopologyReadback(const Snapshot& a, const Snapshot& b,
                             const StoppedImage& restored)
 {
@@ -415,6 +545,112 @@ void verifyTopologyReadback(const Snapshot& a, const Snapshot& b,
               << difference << '\n';
 }
 
+void verifyReportReadback(
+    const physx333_offline::JoinedContactImage& target,
+    const physx333_offline::JoinedContactImage& restored)
+{
+    if (!(target.actorPairs == restored.actorPairs))
+        fail("joined checkpoint full ActorPair/report graph differs");
+    if (target.rows.size() != 12 || restored.rows.size() != 12)
+        fail("joined report row inventory differs");
+    for (PxU32 i = 0; i < 12; ++i)
+    {
+        const auto& a = target.rows[i];
+        const auto& b = restored.rows[i];
+        if (!(a.key == b.key) ||
+            a.sipSlot != b.sipSlot ||
+            a.actorPairSlot != b.actorPairSlot ||
+            a.managerSlot != b.managerSlot ||
+            a.islandEdge != b.islandEdge ||
+            a.sipFlags != b.sipFlags ||
+            a.reportStamp != b.reportStamp ||
+            a.reportPairIndex != b.reportPairIndex ||
+            a.reportStreamIndex != b.reportStreamIndex ||
+            a.actorPairFlags != b.actorPairFlags ||
+            a.actorPairTouchCount != b.actorPairTouchCount ||
+            a.actorPairRefCount != b.actorPairRefCount ||
+            a.reportPoolSlot != b.reportPoolSlot ||
+            a.reportResetStamp != b.reportResetStamp ||
+            a.reportActorA != b.reportActorA ||
+            a.reportActorB != b.reportActorB ||
+            a.reportStreamManager != b.reportStreamManager ||
+            a.managerFlags != b.managerFlags ||
+            a.managerStatusFlags != b.managerStatusFlags)
+            fail("joined report/touch row differs at role " +
+                 std::to_string(i));
+    }
+    if (target.persistentEventOrder != restored.persistentEventOrder ||
+        target.nextPersistentPair != restored.nextPersistentPair ||
+        target.forceThresholdEventOrder !=
+            restored.forceThresholdEventOrder ||
+        target.managerUse.words != restored.managerUse.words ||
+        target.activeManagers.words != restored.activeManagers.words ||
+        target.modifiableManagers.words !=
+            restored.modifiableManagers.words ||
+        target.touchEventManagers.words !=
+            restored.touchEventManagers.words ||
+        target.reportBufferIndex != restored.reportBufferIndex ||
+        target.reportBufferSize != restored.reportBufferSize ||
+        target.reportBufferDefaultSize !=
+            restored.reportBufferDefaultSize ||
+        target.reportBufferLastIndex != restored.reportBufferLastIndex ||
+        target.reportBufferAllocationLocked !=
+            restored.reportBufferAllocationLocked ||
+        target.reportBufferBytes != restored.reportBufferBytes)
+        fail("joined ordered event, bitmap, or report buffer differs");
+    const char* exactSections[] = {
+        "nphase.shape_pairs", "nphase.actor_pairs",
+        "nphase.event_lists", "nphase.report_buffer",
+        "nphase.pool.actor_pair_report.header",
+        "nphase.pool.actor_pair_report.free_order"
+    };
+    for (const char* section : exactSections)
+        if (part(target.oracle, section) !=
+            part(restored.oracle, section))
+            fail(std::string("joined report Oracle section differs: ") +
+                 section);
+    const auto& targetManagers = part(target.oracle, "contact.managers");
+    const auto& currentManagers = part(restored.oracle, "contact.managers");
+    if (targetManagers.size() != 12u * 14u ||
+        currentManagers.size() != targetManagers.size())
+        fail("joined contact manager Oracle row layout differs");
+    for (PxU32 i = 0; i < 12; ++i)
+        for (PxU32 word = 0; word < 3; ++word)
+            if (targetManagers[i * 14u + word] !=
+                currentManagers[i * 14u + word])
+                fail("joined contact manager report/status words differ at " +
+                     std::to_string(i));
+    std::string difference;
+    if (target.oracle.equals(restored.oracle, difference))
+        fail("report-only stage unexpectedly restored the full Oracle");
+    std::cout << "JOINED_REPORT_ORACLE_FIRST_REMAINING "
+              << difference << '\n';
+}
+
+void requireReportReject(
+    World& world, Sc::NPhaseCore& nphase,
+    const StoppedImage& baseline,
+    const physx333_offline::JoinedReportPlanV1& invalid,
+    const char* name, PxU32 expectedResult)
+{
+    const PxU32 result =
+        physx333_offline::oc2_physx333_joined_report_restore_v1(
+            &nphase, &invalid);
+    if (result != expectedResult)
+        fail(std::string(name) + " report rejection code " +
+             std::to_string(result) + " expected " +
+             std::to_string(expectedResult));
+    const StoppedImage current = captureTopology(world);
+    std::string difference;
+    if (!baseline.oracle.equals(current.oracle, difference) ||
+        !baseline.aux.equals(current.aux, difference) ||
+        !(baseline.actorPair == current.actorPair) ||
+        !(baseline.graph == current.graph))
+        fail(std::string(name) + " mutated joined topology: " + difference);
+    std::cout << "JOINED_REPORT_REJECT " << name << " code=" << result
+              << '\n';
+}
+
 void requireReject(World& world, const Snapshot& b,
                    Sc::NPhaseCore& nphase,
                    const physx333_offline::JoinedTopologyPlanV1& invalid,
@@ -455,9 +691,14 @@ void runScenario(const char* name, bool warm)
     }
     const Snapshot a = world.step(0.0f);
     verify(a, false);
+    const physx333_offline::JoinedContactImage contactA =
+        captureContact(world);
     const Snapshot b = world.step(-0.2f);
     verify(b, true);
+    const physx333_offline::JoinedContactImage contactB =
+        captureContact(world);
     const auto plan = makePlan(world, a, b);
+    const auto reportPlan = makeReportPlan(a, contactA, contactB, plan);
     const auto& bManagerFree = part(b.oracle, "contact.pool.free_order");
     const auto& bEdgeFree = part(b.oracle, "island.edges.free_order");
     if (bManagerFree.size() < 4 || bEdgeFree.size() < 4)
@@ -558,11 +799,35 @@ void runScenario(const char* name, bool warm)
     // boundary. No simulation is authorized in this topology-only gate.
     const StoppedImage restored = captureTopology(world);
     verifyTopologyReadback(a, b, restored);
+    const StoppedImage reportBaseline = captureTopology(world);
+    auto invalidReport = reportPlan;
+    invalidReport.roles[0].shapeCore0 = NULL;
+    requireReportReject(world, nphase, reportBaseline, invalidReport,
+        "null report endpoint", physx333_offline::JoinedReportPairMismatch);
+    invalidReport = reportPlan;
+    invalidReport.roles[reportPlan.createRoles[0]].reportPoolSlot = 31;
+    requireReportReject(world, nphase, reportBaseline, invalidReport,
+        "wrong report pool slot", physx333_offline::JoinedReportPoolMismatch);
+    invalidReport = reportPlan;
+    invalidReport.persistentRoles[0] = invalidReport.persistentRoles[1];
+    requireReportReject(world, nphase, reportBaseline, invalidReport,
+        "duplicate persistent event", physx333_offline::JoinedReportInvalidInput);
+    invalidReport = reportPlan;
+    invalidReport.managerUse.expectedStorage = NULL;
+    requireReportReject(world, nphase, reportBaseline, invalidReport,
+        "wrong bitmap storage", physx333_offline::JoinedReportUnsupportedScene);
+    const PxU32 reportResult =
+        physx333_offline::oc2_physx333_joined_report_restore_v1(
+            &nphase, &reportPlan);
+    if (reportResult != physx333_offline::JoinedReportSuccess)
+        fail("joined source report stage rejected valid plan, code " +
+             std::to_string(reportResult));
+    verifyReportReadback(contactA, captureContact(world));
     if (runtime.errors.count) fail("PhysX reported an error");
     std::cout << "PASS joined " << name
-              << " 12/4/2 topology reconstruction from 8/2/2 "
-                 "with nine atomic prewrite rejection controls; "
-                 "contact reports/payload and full rewind remain unrestored\n";
+              << " 12/4/2 topology and ten/eight report ownership "
+                 "reconstruction with thirteen prewrite rejection controls; "
+                 "contact payload and full rewind remain unrestored\n";
 }
 
 int main()

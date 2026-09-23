@@ -29,6 +29,8 @@ add_executable(physx333_joined_topology
   ../query_image/QueryImage.cpp
   ../aux_interactions/AuxInteractionImage.cpp
   ../actor_pair_graph/ActorPairGraphImage.cpp)
+target_sources(physx333_joined_topology PRIVATE
+  ../joined_contact_image/JoinedContactImage.cpp)
 target_compile_features(physx333_joined_topology PRIVATE cxx_std_11)
 target_compile_definitions(physx333_joined_topology PRIVATE
   WIN32 NDEBUG _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)

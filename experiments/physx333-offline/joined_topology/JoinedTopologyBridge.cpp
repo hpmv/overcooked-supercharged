@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <set>
 #include <vector>
 
 #define private public
@@ -29,6 +30,7 @@
 #include "PxsContext.h"
 #include "PxsContactManager.h"
 #include "PxsIslandManager.h"
+#include "CmBitMap.h"
 #undef protected
 #undef private
 
@@ -39,6 +41,8 @@ static_assert(sizeof(physx333_offline::JoinedTopologyActorOrderV1) == 80,
               "Unexpected joined actor ABI");
 static_assert(sizeof(physx333_offline::JoinedTopologyPlanV1) == 2288,
               "Unexpected joined plan ABI");
+
+extern "C" void __cdecl oc2_physx333_joined_lazy_report(void* actorPair);
 
 namespace {
 using namespace physx;
@@ -343,6 +347,42 @@ bool validPermutation(const PxU32* values, PxU32 count,
         seen[values[i]] = true;
     }
     return true;
+}
+
+template<class T, class Pool>
+bool exactFreeOrder(const Pool& pool, const PxU32* expected,
+                    PxU32 count)
+{
+    if (count > kPoolSize || pool.mSlabs.size() != 1 ||
+        pool.mElementsPerSlab != kPoolSize ||
+        count != kPoolSize - pool.mUsed)
+        return false;
+    const typename Pool::FreeList* node = pool.mFreeElement;
+    bool seen[kPoolSize] = {};
+    for (PxU32 i = 0; i < count; ++i)
+    {
+        if (!node || expected[i] >= kPoolSize || seen[expected[i]] ||
+            physicalSlot<T>(pool, node) != expected[i])
+            return false;
+        seen[expected[i]] = true;
+        node = node->mNext;
+    }
+    return !node;
+}
+
+bool bitmapStorage(const Cm::BitMap& bitmap,
+                   const JoinedReportBitmapV1& target)
+{
+    return target.count <= 64 && bitmap.getWordCount() == target.count &&
+           bitmap.getWords() == target.expectedStorage &&
+           (!target.count || bitmap.getWords());
+}
+
+void copyBitmap(Cm::BitMap& bitmap, const JoinedReportBitmapV1& target)
+{
+    if (target.count)
+        std::memcpy(bitmap.getWords(), target.words,
+                    target.count * sizeof(PxU32));
 }
 
 bool sameActorPair(const ResolvedRole& a, const ResolvedRole& b)
@@ -745,4 +785,230 @@ oc2_physx333_joined_topology_recreate_v1(void* nphaseCore,
                 failStop();
     }
     return JoinedTopologySuccess;
+}
+
+extern "C" OC2_JOINED_TOPOLOGY_API std::uint32_t __cdecl
+oc2_physx333_joined_report_restore_v1(void* nphaseCore,
+    const JoinedReportPlanV1* plan)
+{
+    if (!nphaseCore || !plan || plan->currentReportFreeCount != 24 ||
+        plan->targetReportFreeCount != 22 ||
+        plan->targetNextPersistent != 10 ||
+        plan->reportBufferIndex != 0 ||
+        plan->reportBufferAllocationLocked > 1)
+        return JoinedReportInvalidInput;
+
+    Sc::NPhaseCore& nphase = *static_cast<Sc::NPhaseCore*>(nphaseCore);
+    Sc::InteractionScene& interactions =
+        nphase.getScene().getInteractionScene();
+    if (interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_OVERLAP) != 12 ||
+        interactions.getActiveInteractionCount(
+            Sc::PX_INTERACTION_TYPE_OVERLAP) != 12 ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_TRIGGER) != 4 ||
+        interactions.getInteractionCount(Sc::PX_INTERACTION_TYPE_MARKER) != 2 ||
+        !interactions.getLowLevelContext() ||
+        nphase.mPersistentContactEventPairList.size() != 8 ||
+        nphase.mNextFramePersistentContactEventPairIndex != 8 ||
+        nphase.mPersistentContactEventPairList.capacity() < 10 ||
+        !nphase.mForceThresholdContactEventPairList.empty() ||
+        !nphase.mContactReportActorPairSet.empty() ||
+        !validPool<Sc::ActorPairContactReportData>(
+            nphase.mActorPairContactReportDataPool, 8) ||
+        !exactFreeOrder<Sc::ActorPairContactReportData>(
+            nphase.mActorPairContactReportDataPool,
+            plan->currentReportFreeOrder, plan->currentReportFreeCount))
+        return JoinedReportUnsupportedScene;
+
+    Sc::ContactReportBuffer& buffer = nphase.mContactReportBuffer;
+    if (buffer.mCurrentBufferIndex != plan->reportBufferIndex ||
+        buffer.mCurrentBufferSize != plan->reportBufferSize ||
+        buffer.mDefaultBufferSize != plan->reportBufferDefaultSize ||
+        static_cast<PxU32>(buffer.mAllocationLocked) !=
+            plan->reportBufferAllocationLocked)
+        return JoinedReportUnsupportedScene;
+
+    PxsContext& context = *interactions.getLowLevelContext();
+    if (!bitmapStorage(context.mContactManagerPool.mUseBitmap,
+                       plan->managerUse) ||
+        !bitmapStorage(context.mActiveContactManager,
+                       plan->activeManagers) ||
+        !bitmapStorage(context.mModifiableContactManager,
+                       plan->modifiableManagers) ||
+        !bitmapStorage(context.mContactManagerTouchEvent,
+                       plan->touchEventManagers) ||
+        (plan->managerUse.count && std::memcmp(
+            context.mContactManagerPool.mUseBitmap.getWords(),
+            plan->managerUse.words,
+            plan->managerUse.count * sizeof(PxU32))))
+        return JoinedReportUnsupportedScene;
+
+    Sc::ShapeInstancePairLL* sip[12] = {};
+    Sc::ActorPair* actorPair[12] = {};
+    bool targetReported[12] = {};
+    bool liveReported[12] = {};
+    std::set<Sc::ActorPair*> uniquePairs;
+    PxU32 targetReportCount = 0, liveReportCount = 0;
+    for (PxU32 i = 0; i < 12; ++i)
+    {
+        const JoinedReportRoleV1& row = plan->roles[i];
+        Sc::Interaction* item = interactions.mInteractions[
+            Sc::PX_INTERACTION_TYPE_OVERLAP][i];
+        if (!item || item->getType() != Sc::PX_INTERACTION_TYPE_OVERLAP)
+            return JoinedReportPairMismatch;
+        sip[i] = static_cast<Sc::ShapeInstancePairLL*>(item);
+        actorPair[i] = sip[i]->getActorPair();
+        if (!actorPair[i] || !uniquePairs.insert(actorPair[i]).second ||
+            sip[i]->mSceneId != i ||
+            &sip[i]->getShape0().getCore() != row.shapeCore0 ||
+            &sip[i]->getShape1().getCore() != row.shapeCore1 ||
+            physicalSlot<Sc::ShapeInstancePairLL>(nphase.mLLSipPool,
+                sip[i]) != row.sipSlot ||
+            physicalSlot<Sc::ActorPair>(nphase.mActorPairPool,
+                actorPair[i]) != row.actorPairSlot ||
+            !sip[i]->mManager ||
+            sip[i]->mManager->getIndex() != row.managerSlot ||
+            actorPair[i]->mRefCount != row.refCount ||
+            row.refCount != 1 || row.actorPairFlags > 0xffffu ||
+            row.touchCount > 0xffffu || row.reportStreamIndex > 0xffffu ||
+            row.managerStatusFlags > 0xffffu)
+            return JoinedReportPairMismatch;
+        targetReported[i] = row.reportPoolSlot != kNoSlot;
+        liveReported[i] = actorPair[i]->hasReportData() != NULL;
+        targetReportCount += targetReported[i] ? 1u : 0u;
+        liveReportCount += liveReported[i] ? 1u : 0u;
+        if (targetReported[i])
+        {
+            if (row.reportPoolSlot >= kPoolSize ||
+                row.reportStreamSize != sizeof(Sc::ContactStreamManager) ||
+                row.reportStreamSize > sizeof(row.reportStreamBytes) ||
+                row.reportActorAId != actorPair[i]->getActorA().getID() ||
+                row.reportActorBId != actorPair[i]->getActorB().getID())
+                return JoinedReportInvalidInput;
+            if (liveReported[i])
+            {
+                Sc::ActorPairContactReportData* report =
+                    actorPair[i]->mReportData;
+                if (physicalSlot<Sc::ActorPairContactReportData>(
+                        nphase.mActorPairContactReportDataPool, report) !=
+                        row.reportPoolSlot ||
+                    report->mActorAID != row.reportActorAId ||
+                    report->mActorBID != row.reportActorBId)
+                    return JoinedReportPoolMismatch;
+            }
+        }
+        else if (liveReported[i] || row.reportStreamSize ||
+                 row.reportResetStamp || row.reportActorAId ||
+                 row.reportActorBId || row.touchCount)
+            return JoinedReportPairMismatch;
+    }
+    if (targetReportCount != 10 || liveReportCount != 8)
+        return JoinedReportPairMismatch;
+
+    bool createSeen[12] = {};
+    for (PxU32 i = 0; i < 2; ++i)
+    {
+        const PxU32 role = plan->createRoles[i];
+        if (role >= 12 || createSeen[role] || !targetReported[role] ||
+            liveReported[role] ||
+            plan->roles[role].reportPoolSlot !=
+                plan->currentReportFreeOrder[i])
+            return JoinedReportPoolMismatch;
+        createSeen[role] = true;
+    }
+    for (PxU32 i = 0; i < 12; ++i)
+        if (targetReported[i] != liveReported[i] && !createSeen[i])
+            return JoinedReportPoolMismatch;
+    for (PxU32 i = 0; i < plan->targetReportFreeCount; ++i)
+        if (plan->targetReportFreeOrder[i] !=
+            plan->currentReportFreeOrder[i + 2])
+            return JoinedReportPoolMismatch;
+
+    bool eventSeen[12] = {};
+    for (PxU32 i = 0; i < 10; ++i)
+    {
+        const PxU32 role = plan->persistentRoles[i];
+        if (role >= 12 || eventSeen[role] || !targetReported[role])
+            return JoinedReportInvalidInput;
+        eventSeen[role] = true;
+    }
+    for (PxU32 i = 0; i < 12; ++i)
+        if (eventSeen[i] != targetReported[i])
+            return JoinedReportInvalidInput;
+    bool currentEventSeen[12] = {};
+    for (PxU32 i = 0; i < 8; ++i)
+    {
+        Sc::ShapeInstancePairLL* event =
+            nphase.mPersistentContactEventPairList[i];
+        PxU32 role = 12;
+        for (PxU32 j = 0; j < 12; ++j)
+            if (sip[j] == event) role = j;
+        if (role >= 12 || currentEventSeen[role] || !liveReported[role])
+            return JoinedReportUnsupportedScene;
+        currentEventSeen[role] = true;
+    }
+    for (PxU32 i = 0; i < 12; ++i)
+        if (currentEventSeen[i] != liveReported[i])
+            return JoinedReportUnsupportedScene;
+
+    // Preflight is complete. Only the two missing owners enter the original
+    // source lazy path; the two non-touching contacts stay report-free.
+    for (PxU32 i = 0; i < 2; ++i)
+    {
+        const PxU32 role = plan->createRoles[i];
+        oc2_physx333_joined_lazy_report(actorPair[role]);
+        if (!actorPair[role]->hasReportData() ||
+            physicalSlot<Sc::ActorPairContactReportData>(
+                nphase.mActorPairContactReportDataPool,
+                actorPair[role]->mReportData) !=
+                plan->roles[role].reportPoolSlot)
+            failStop();
+    }
+    nphase.mPersistentContactEventPairList.clear();
+    for (PxU32 i = 0; i < 10; ++i)
+        nphase.mPersistentContactEventPairList.pushBack(
+            sip[plan->persistentRoles[i]]);
+    nphase.mNextFramePersistentContactEventPairIndex =
+        plan->targetNextPersistent;
+    for (PxU32 i = 0; i < 12; ++i)
+    {
+        const JoinedReportRoleV1& row = plan->roles[i];
+        Sc::ShapeInstancePairLL& pair = *sip[i];
+        Sc::ActorPair& owner = *actorPair[i];
+        pair.mFlags = row.sipFlags;
+        pair.mContactReportStamp = row.reportStamp;
+        pair.mReportPairIndex = row.reportPairIndex;
+        pair.mReportStreamIndex = static_cast<PxU16>(row.reportStreamIndex);
+        owner.mInternalFlags = static_cast<PxU16>(row.actorPairFlags);
+        owner.mTouchCount = static_cast<PxU16>(row.touchCount);
+        if (targetReported[i])
+        {
+            if (!owner.mReportData ||
+                owner.mReportData->mActorAID != row.reportActorAId ||
+                owner.mReportData->mActorBID != row.reportActorBId)
+                failStop();
+            owner.mReportData->mStrmResetStamp = row.reportResetStamp;
+            std::memcpy(&owner.mReportData->mContactStreamManager,
+                        row.reportStreamBytes, row.reportStreamSize);
+        }
+        pair.mManager->mFlags = row.managerFlags;
+        pair.mManager->getWorkUnit().statusFlags =
+            static_cast<PxU16>(row.managerStatusFlags);
+    }
+    buffer.mLastBufferIndex = plan->reportBufferLastIndex;
+    copyBitmap(context.mActiveContactManager, plan->activeManagers);
+    copyBitmap(context.mModifiableContactManager, plan->modifiableManagers);
+    copyBitmap(context.mContactManagerTouchEvent,
+               plan->touchEventManagers);
+
+    if (!exactFreeOrder<Sc::ActorPairContactReportData>(
+            nphase.mActorPairContactReportDataPool,
+            plan->targetReportFreeOrder, plan->targetReportFreeCount) ||
+        nphase.mPersistentContactEventPairList.size() != 10 ||
+        nphase.mNextFramePersistentContactEventPairIndex != 10)
+        failStop();
+    for (PxU32 i = 0; i < 10; ++i)
+        if (nphase.mPersistentContactEventPairList[i] !=
+            sip[plan->persistentRoles[i]])
+            failStop();
+    return JoinedReportSuccess;
 }

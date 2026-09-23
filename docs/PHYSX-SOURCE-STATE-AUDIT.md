@@ -85,8 +85,12 @@ that joins contact and auxiliary interactions remains open. The
 [joined topology bridge](../experiments/physx333-offline/joined_topology/README.md)
 is the first source-native step toward it: all four deleted contacts and
 two deleted triggers return among the level-shaped survivors with correct
-physical pool slots, manager/edge bindings, and mixed interaction order,
-while nine malformed plans leave B unchanged. Contact payload/report,
+physical pool slots, manager/edge bindings, and mixed interaction order.
+A second guarded stage restores exactly two missing report objects plus all
+twelve pairs' touch/report metadata and persistent event order, matching
+the complete A ActorPair/report graph in cold and warm scenes. Thirteen
+malformed plans across both stages leave their respective prewrite state
+unchanged. Contact-manager WorkUnit/PCM payload,
 the complete island image, SAP, and other
 component restoration and next-step replay remain open.
 The [read-only joined contact image](../experiments/physx333-offline/joined_contact_image/README.md)

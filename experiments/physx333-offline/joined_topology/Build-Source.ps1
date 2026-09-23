@@ -31,6 +31,7 @@ if (-not (Test-Path -LiteralPath $mirror)) {
 $destination = Join-Path $mirror 'Source\SimulationController\src'
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JoinedTopologyBridge.cpp') -Destination $destination -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JoinedTopologyBridge.h') -Destination $destination -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JoinedReportLazy.cpp') -Destination $destination -Force
 
 $simulationProject = Join-Path $mirror 'Source\compiler\vc12win32\SimulationController.vcxproj'
 $simulationText = [System.IO.File]::ReadAllText($simulationProject)
@@ -43,6 +44,14 @@ if (-not $simulationText.Contains($compileEntry)) {
     [System.IO.File]::WriteAllText($simulationProject, $simulationText,
         (New-Object System.Text.UTF8Encoding($false)))
 }
+$lazyEntry = '<ClCompile Include="..\..\SimulationController\src\JoinedReportLazy.cpp" />'
+if (-not $simulationText.Contains($lazyEntry)) {
+    if (-not $simulationText.Contains($compileAnchor)) { throw 'SimulationController anchor absent' }
+    $simulationText = $simulationText.Replace($compileAnchor,
+        $lazyEntry + "`r`n`t`t" + $compileAnchor)
+    [System.IO.File]::WriteAllText($simulationProject, $simulationText,
+        (New-Object System.Text.UTF8Encoding($false)))
+}
 
 $physxProject = Join-Path $mirror 'Source\compiler\vc12win32\PhysX.vcxproj'
 $physxText = [System.IO.File]::ReadAllText($physxProject)
@@ -51,6 +60,14 @@ if (-not $physxText.Contains($force)) {
     $anchor = '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO'
     if (-not $physxText.Contains($anchor)) { throw 'PhysX linker anchor absent' }
     $physxText = $physxText.Replace($anchor, $anchor + ' ' + $force)
+    [System.IO.File]::WriteAllText($physxProject, $physxText,
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+$reportForce = '/INCLUDE:_oc2_physx333_joined_report_restore_v1'
+if (-not $physxText.Contains($reportForce)) {
+    $anchor = '/DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO'
+    if (-not $physxText.Contains($anchor)) { throw 'PhysX linker anchor absent' }
+    $physxText = $physxText.Replace($anchor, $anchor + ' ' + $reportForce)
     [System.IO.File]::WriteAllText($physxProject, $physxText,
         (New-Object System.Text.UTF8Encoding($false)))
 }
