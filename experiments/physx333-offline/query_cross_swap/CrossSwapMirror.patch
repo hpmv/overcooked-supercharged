@@ -1,0 +1,24 @@
+diff --git a/Source/compiler/vc12win32/SceneQuery.vcxproj b/Source/compiler/vc12win32/SceneQuery.vcxproj
+--- a/Source/compiler/vc12win32/SceneQuery.vcxproj
++++ b/Source/compiler/vc12win32/SceneQuery.vcxproj
+@@ -230,6 +230,8 @@
+ 	<ItemGroup>
+ 		<ClCompile Include="..\..\SceneQuery\SqAABBPruner.cpp">
+ 		</ClCompile>
++		<ClCompile Include="..\..\SceneQuery\CrossSwapBridge.cpp" />
++		<ClCompile Include="..\..\SceneQuery\QueryTreeBridge.cpp" />
+ 		<ClCompile Include="..\..\SceneQuery\SqAABBTree.cpp">
+ 		</ClCompile>
+ 		<ClCompile Include="..\..\SceneQuery\SqAABBTreeUpdateMap.cpp">
+diff --git a/Source/compiler/vc12win32/PhysX.vcxproj b/Source/compiler/vc12win32/PhysX.vcxproj
+--- a/Source/compiler/vc12win32/PhysX.vcxproj
++++ b/Source/compiler/vc12win32/PhysX.vcxproj
+@@ -226,7 +226,7 @@
+ 			<DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+ 		</ClCompile>
+ 		<Link>
+-			<AdditionalOptions>/DELAYLOAD:nvcuda.dll /MAP /MACHINE:x86 /DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO</AdditionalOptions>
++			<AdditionalOptions>/DELAYLOAD:nvcuda.dll /MAP /MACHINE:x86 /DELAYLOAD:PhysX3Common_x86.dll /INCREMENTAL:NO /INCLUDE:_oc2_physx333_query_release_cold_v1 /INCLUDE:_oc2_physx333_query_tree_create_v1 /INCLUDE:_oc2_physx333_query_tree_destroy_v1 /INCLUDE:_oc2_physx333_query_alloc_copy_v1 /INCLUDE:_oc2_physx333_query_free_v1</AdditionalOptions>
+ 			<AdditionalDependencies>./../../../externals/nvToolsExt/1/lib/Win32/nvToolsExt32_1.lib;./../../../Lib/vc12win32/PhysX3Gpu_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+ 			<OutputFile>$(OutDir)PhysX3_x86.dll</OutputFile>
+ 			<AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>

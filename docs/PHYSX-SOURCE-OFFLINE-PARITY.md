@@ -156,7 +156,14 @@ dereferencing the stale builder input pointer or freed cached-box storage.
 Its fixed-storage test passes 20 restores and query replays and atomically
 rejects attempts to rewind across refit allocation, build restart, or a
 second swap. Reconstructing deleted tree allocations across a swap remains
-open.
+open in the ordinary component. An isolated
+[one-swap source bridge](../experiments/physx333-offline/query_cross_swap/README.md)
+now rehydrates the deleted active tree and cached bounds in a private PhysX
+build, rebinds them transactionally, and passes 20 BUILD_INIT→post-swap
+rewind/replay cycles with raycast/overlap, live allocation count/byte, and
+forced rollback checks. It compares initialized tree-node bits while ignoring
+four proven unwritten padding bytes per node. This is a narrow source-built
+positive path, not general query-lifecycle or shipped-Unity ABI parity.
 A [joined actor-lifetime negative control](../experiments/physx333-offline/joined_actor_lifetime/README.md)
 releases and recreates an interacting static actor/shape with the same public
 construction inputs. All five measured native addresses are reused, but the
