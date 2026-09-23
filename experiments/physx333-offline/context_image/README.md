@@ -15,8 +15,10 @@ imaged; capacity tails are included because `resizeArrays` uses
 raw object copy, then handled with explicit allocation checks.
 
 The image records the exact scene, actor enumeration, context, and allocation
-addresses. Restore checks all identities, capacities, schema, and threshold
-table layout before writing. It verifies the result and rolls back the
+addresses. Restore checks all identities, including every array's live backing
+pointer, capacities, schema, and threshold table layout before writing. A
+matching capacity alone cannot make a saved pointer safe after reallocation.
+It verifies the result and rolls back the
 component bytes if verification fails. It does not own topology changes.
 
 `PxsContext::beginUpdate` only clears `mSimStats`; it does not clear the
@@ -43,7 +45,8 @@ must retain the same backing address and capacity for this component restore.
 Run `Build-Check.cmd` after the pinned Win32 Release source build. The check
 uses the six-box scene, confirms duplicate captures, performs 100 A/B/A
 component restorations, and verifies that corrupt capacity/table/binding
-images, cached-thread counters, and header masks are rejected before writes.
+images, a stale array backing pointer, cached-thread counters, and header
+masks are rejected before writes.
 It does not simulate after a partial
 component restore.
 

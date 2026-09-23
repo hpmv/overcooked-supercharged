@@ -357,7 +357,8 @@ bool preflight(const ContextImage& target, const ContextImage& live,
         const ContextImage::Array& a = target.arrays[i];
         const ContextImage::Array& b = live.arrays[i];
         if (a.name != b.name || a.object != b.object ||
-            a.sizeAddress != b.sizeAddress || a.capacity != b.capacity ||
+            a.data != b.data || a.sizeAddress != b.sizeAddress ||
+            a.capacity != b.capacity ||
             a.elementBytes != b.elementBytes ||
             a.objectBytes != b.objectBytes || a.size > a.capacity ||
             a.fullCapacityBytes != b.fullCapacityBytes ||

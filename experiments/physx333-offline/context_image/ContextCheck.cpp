@@ -196,6 +196,14 @@ int main()
             before.equals(after, error),
             "corrupt image changed the context");
     corrupt = warm;
+    require(!corrupt.arrays.empty(), "context fixture has no arrays");
+    corrupt.arrays[0].data = UINTPTR_MAX;
+    require(!RestoreContextImage(*fixture.scene, corrupt, error),
+            "stale context array backing accepted");
+    require(CaptureContextImage(*fixture.scene, after, error) &&
+            before.equals(after, error),
+            "stale array image changed the context");
+    corrupt = warm;
     corrupt.thresholdTable.hashSize = corrupt.thresholdTable.hashCapacity + 1;
     require(!RestoreContextImage(*fixture.scene, corrupt, error),
             "corrupt threshold table accepted");
