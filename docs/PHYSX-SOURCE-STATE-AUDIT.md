@@ -89,6 +89,11 @@ physical pool slots, manager/edge bindings, and mixed interaction order,
 while nine malformed plans leave B unchanged. Contact payload/report,
 the complete island image, SAP, and other
 component restoration and next-step replay remain open.
+The [read-only joined contact image](../experiments/physx333-offline/joined_contact_image/README.md)
+captures native-oriented SIP/ActorPair/report and WorkUnit/PCM state at both
+boundaries. It confirms that the first remaining Oracle mismatch is
+`frictionPatchCount` in a surviving contact manager, so payload restoration
+must cover survivors as well as recreated pairs.
 
 ## Retained-state inventory
 

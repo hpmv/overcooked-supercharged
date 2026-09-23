@@ -35,6 +35,8 @@ call "%~dp0trigger_rewind\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_topology\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0joined_contact_image\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 call "%~dp0arena_snapshot\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0level_arena\Build-Check.cmd"

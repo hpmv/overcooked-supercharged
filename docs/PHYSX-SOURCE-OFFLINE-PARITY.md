@@ -79,6 +79,14 @@ free-pool allocation order before writing. Nine malformed plans reject
 without changing B. This is topology only: the full Oracle still first differs at
 `contact.managers[48]`, and no restored successor step is attempted. Actor
 and shape lifetime, CCD, and several other native-state families remain gated.
+A [read-only joined contact image](../experiments/physx333-offline/joined_contact_image/README.md)
+now captures all twelve A and eight B contact rows by native-oriented
+actor/shape endpoints, including report ownership, contact-manager work
+units, and used PCM payload. Same-scene exact recapture and a portable
+fresh-scene comparison pass. It identifies `contact.managers[48]` as
+`frictionPatchCount` on a **surviving** chef/static pair, changing 2→1;
+therefore the eventual contact payload restore must cover all twelve A
+managers, not just the four recreated contacts.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.

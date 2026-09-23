@@ -180,6 +180,11 @@ neutral adjustment to the main fixture or proof of game-state equality.
 The joined topology bridge now reaches the first postwrite gap: the full
 Oracle differs at `contact.managers[48]`, which is the fourth contact
 manager's `PxcNpWorkUnit::frictionPatchCount`, rather than a missing pair.
+The [joined contact image](../experiments/physx333-offline/joined_contact_image/README.md)
+maps this to surviving chef `9:0`/static `1:0`, manager slot 3: its count is
+2 at A and 1 at B. Its graph-keyed A/B capture and portable fresh-scene
+comparison pass, but it does not restore any state. Restoring only the four
+recreated contacts would leave at least this surviving manager wrong.
 The existing `InteractionImage` cannot simply be invoked on this graph: it
 keys rows by one mover's shape index, requires zero triggers/markers, and
 assumes one shape on each static actor. The joined graph has four contact
