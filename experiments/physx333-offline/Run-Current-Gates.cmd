@@ -5,6 +5,8 @@ rem claim of complete PhysX parity. Stop at the first failing fixture.
 
 call "%~dp0harness\Build-Harness.cmd" --joined-replay-probe
 if errorlevel 1 exit /b 1
+call "%~dp0harness\Build-Harness.cmd"
+if errorlevel 1 exit /b 1
 
 call "%~dp0partial_contacts\Build-Check.cmd" --subset-probe
 if errorlevel 1 exit /b 1

@@ -1368,6 +1368,32 @@ int main(int argc, char** argv)
             die("rejected island image changed live state: " +
                 (islandError.empty() ? islandDifference : islandError));
         std::cout << "PASS corrupt island image rejected atomically\n";
+        corruptIsland = islandCheckpoint;
+        bool foundIslandObjects = false;
+        for (auto& entry : corruptIsland.buffers)
+            if (entry.name == "islandObjects")
+            {
+                if (entry.bytes.size() < sizeof(std::uintptr_t))
+                    die("island objects image is too short");
+                std::uintptr_t bodies = 0;
+                std::memcpy(&bodies, entry.bytes.data(), sizeof(bodies));
+                if (!bodies) die("island bodies pointer is absent");
+                ++bodies; // Still inside mBuffer, but not a typed array start.
+                std::memcpy(entry.bytes.data(), &bodies, sizeof(bodies));
+                foundIslandObjects = true;
+                break;
+            }
+        if (!foundIslandObjects)
+            die("island objects image is absent");
+        if (oc2::offline::RestoreIsland(*source.scene,
+                                        corruptIsland, islandError))
+            die("misaligned island solver pointer was accepted");
+        if (!oc2::offline::CaptureIsland(*source.scene,
+                                         islandAfterReject, islandError) ||
+            !islandCheckpoint.equals(islandAfterReject, islandDifference))
+            die("rejected island solver pointer changed live state: " +
+                (islandError.empty() ? islandDifference : islandError));
+        std::cout << "PASS malformed island solver pointer rejected atomically\n";
 
         source.step(true);
         deletion = source.capture();

@@ -22,8 +22,9 @@ cmd /c experiments\physx333-offline\scene_clock\Build-Check.cmd
 
 The check passes duplicate capture; 100 A↔B restores after two different
 time-step/gravity states; exact next shape/rigid LIFO ID reuse; malformed ID
-and field-address atomic rejection; and 100 A↔B component restores at the
-warm/away six-contact boundary. It deliberately does **not** step the scene
+and field-address atomic rejection; live-BodyCore membership checks and
+atomic rejection of malformed sleep/wake pointers; and 100 A↔B component
+restores at the warm/away six-contact boundary. It deliberately does **not** step the scene
 after restoring only this component.
 
 Integration calls are `CaptureSceneClock(PxScene&, SceneClockImage&, error)`

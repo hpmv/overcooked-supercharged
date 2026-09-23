@@ -271,11 +271,56 @@ void checkSixContactBoundary()
     std::cout << "PASS six-contact scene-clock A/B component image x100\n";
 }
 
+void checkBodyListPointerRejection()
+{
+    Fixture fixture;
+    fixture.makeSixContacts();
+    fixture.stepPose(false);
+    fixture.mover->putToSleep();
+
+    std::string error;
+    SceneClockImage sleeping;
+    require(CaptureSceneClock(*fixture.scene, sleeping, error),
+            "sleep-list capture: " + error);
+    require(sleeping.arrays.size() >= 2 &&
+            !sleeping.arrays[0].values.empty(),
+            "putToSleep did not populate the sleep BodyCore list");
+    require(RestoreSceneClock(*fixture.scene, sleeping, error),
+            "valid sleep-list restore: " + error);
+    SceneClockImage corrupt = sleeping;
+    corrupt.arrays[0].values[0] += 1;
+    require(!RestoreSceneClock(*fixture.scene, corrupt, error),
+            "non-BodyCore sleep-list pointer was accepted");
+    SceneClockImage after;
+    require(CaptureSceneClock(*fixture.scene, after, error) &&
+            sleeping.equals(after, error),
+            "rejected sleep-list pointer mutated scene");
+
+    fixture.mover->wakeUp();
+    SceneClockImage waking;
+    require(CaptureSceneClock(*fixture.scene, waking, error),
+            "wake-list capture: " + error);
+    require(!waking.arrays[1].values.empty(),
+            "wakeUp did not populate the wake BodyCore list");
+    require(RestoreSceneClock(*fixture.scene, waking, error),
+            "valid wake-list restore: " + error);
+    corrupt = waking;
+    corrupt.arrays[1].values[0] += 1;
+    require(!RestoreSceneClock(*fixture.scene, corrupt, error),
+            "non-BodyCore wake-list pointer was accepted");
+    require(CaptureSceneClock(*fixture.scene, after, error) &&
+            waking.equals(after, error),
+            "rejected wake-list pointer mutated scene");
+    std::cout << "PASS scene-clock sleep/wake BodyCore identity and "
+                 "atomic pointer rejection\n";
+}
+
 } // namespace
 
 int main()
 {
     check();
     checkSixContactBoundary();
+    checkBodyListPointerRejection();
     return 0;
 }

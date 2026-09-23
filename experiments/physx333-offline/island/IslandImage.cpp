@@ -822,18 +822,76 @@ bool validateSavedPointers(const IslandImage& image,
         error = "island work allocation address wraps";
         return false;
     }
-    const void* pointers[] = {
-        objects.bodies, objects.articulations, objects.articulationOwners,
-        objects.contactManagers, objects.constraints
-    };
-    for (const void* pointer : pointers)
+    if (!begin)
     {
-        const std::uintptr_t value = reinterpret_cast<std::uintptr_t>(pointer);
-        if (value && (!begin || value < begin || value > end))
+        if (!live.mBufferSize && !objects.bodies &&
+            !objects.articulations && !objects.articulationOwners &&
+            !objects.contactManagers && !objects.constraints)
+            return true;
+        error = "saved solver island pointers require a work allocation";
+        return false;
+    }
+    PxU32 nodes = 0, rigid = 0, articulations = 0, kinematic = 0;
+    PxU32 edges[PxsIslandManager::MAX_NUM_EDGE_TYPES] = {};
+    if (!readScalar(image, "nodes.capacity", nodes) ||
+        !readScalar(image, "numRigidBodies", rigid) ||
+        !readScalar(image, "numArticulations", articulations) ||
+        !readScalar(image, "numRequiredKinematicDuplicates", kinematic))
+    {
+        error = "saved solver island layout counts are missing";
+        return false;
+    }
+    for (PxU32 i = 0; i < PxsIslandManager::MAX_NUM_EDGE_TYPES; ++i)
+        if (!readScalar(image, ("numEdges" + std::to_string(i)).c_str(),
+                        edges[i]))
         {
-            error = "saved solver island pointer is outside the same work allocation";
+            error = "saved solver island edge count is missing";
             return false;
         }
+    const auto aligned = [](std::uint64_t bytes) {
+        return (bytes + 15u) & ~std::uint64_t(15u);
+    };
+    // Reproduce the five typed array starts in PxsIslandManager::resizeArrays.
+    // A pointer merely inside mBuffer (or exactly at its end) is not safe:
+    // the next solver update treats each field as an array of its own type.
+    const std::uint64_t nodeBytes = aligned(std::uint64_t(nodes) *
+                                            sizeof(NodeType));
+    const std::uint64_t edgeCount = std::uint64_t(edges[0]) + edges[1] +
+                                    edges[2];
+    std::uint64_t offset = 3u * nodeBytes;
+    offset += aligned((std::uint64_t(rigid) + articulations) *
+                      sizeof(PxU8*));
+    offset += aligned(edgeCount * sizeof(NarrowPhaseContactManager));
+    offset += nodeBytes;
+    offset += aligned(std::uint64_t(kinematic) * sizeof(PxsRigidBody*));
+    const std::uint64_t bodyOffset = offset;
+    offset += aligned(std::uint64_t(rigid) * sizeof(PxsRigidBody*));
+    const std::uint64_t articulationOffset = offset;
+    offset += aligned(std::uint64_t(articulations) * sizeof(PxsArticulation*));
+    const std::uint64_t ownerOffset = offset;
+    offset += aligned(std::uint64_t(articulations) * sizeof(void*));
+    const std::uint64_t contactOffset = offset;
+    offset += aligned(std::uint64_t(
+        edges[PxsIslandManager::EDGE_TYPE_CONTACT_MANAGER]) *
+        sizeof(PxsIndexedContactManager));
+    const std::uint64_t constraintOffset = offset;
+    offset += aligned(std::uint64_t(
+        edges[PxsIslandManager::EDGE_TYPE_CONSTRAINT]) *
+        sizeof(PxsIndexedConstraint));
+    if (offset > live.mBufferSize ||
+        reinterpret_cast<std::uintptr_t>(objects.bodies) !=
+            begin + bodyOffset ||
+        reinterpret_cast<std::uintptr_t>(objects.articulations) !=
+            begin + articulationOffset ||
+        reinterpret_cast<std::uintptr_t>(objects.articulationOwners) !=
+            begin + ownerOffset ||
+        reinterpret_cast<std::uintptr_t>(objects.contactManagers) !=
+            begin + contactOffset ||
+        reinterpret_cast<std::uintptr_t>(objects.constraints) !=
+            begin + constraintOffset)
+    {
+        error = "saved solver island pointers do not match typed work-buffer layout";
+        return false;
     }
     return true;
 }

@@ -111,6 +111,12 @@ contacts reacquire their original slots in two independent synthetic scenes,
 and the same-scene pool image returns exactly to A. This is read-only evidence
 for the restore plan, not a joined contact-payload restorer or proof for an
 arbitrary Unity allocation history.
+The component safety pass now rejects malformed saved island-object pointers
+unless they match the source-computed typed work-buffer starts, and rejects
+sleep/wake list entries that are not live same-scene BodyCore pointers.
+Focused negative tests prove both failures leave the scene unchanged.
+These guards do not solve allocation-address reuse (ABA) or establish that a
+different live body belongs in a saved sleep/wake list.
 The level-arena build also has a separate public-API cache-history check that
 reaches the shipped cache ledger `currentId=13`, ten live IDs, 24 references,
 and free-ID order `[12,11,10]` while retaining the semantic 12/4/2 graph.

@@ -14,6 +14,7 @@
 #include "CmIDPool.h"
 #include "ScObjectIDTracker.h"
 #include "NpScene.h"
+#include "NpRigidDynamic.h"
 #include "ScSimStats.h"
 #undef protected
 #undef private
@@ -135,7 +136,7 @@ bool validTrackerImage(const SceneClockImage::IDTracker& row,
 }
 
 bool preflight(const SceneClockImage& target, const SceneClockImage& live,
-               std::string& error)
+                std::string& error)
 {
     if (target.npScene != live.npScene ||
         target.scScene != live.scScene ||
@@ -172,6 +173,56 @@ bool preflight(const SceneClockImage& target, const SceneClockImage& live,
     }
     return validTrackerImage(target.shapeIds, live.shapeIds, error) &&
            validTrackerImage(target.rigidIds, live.rigidIds, error);
+}
+
+bool validBodyListPointers(PxScene& scene, const SceneClockImage& target,
+                           std::string& error)
+{
+    if (target.arrays.size() < 2 ||
+        target.arrays[0].name != "Sc.sleepBodies" ||
+        target.arrays[1].name != "Sc.wokeBodies")
+    {
+        error = "scene clock sleep/wake list schema changed";
+        return false;
+    }
+    // Sc::Scene stores BodyCore*, not BodySim*, in these two lists. Array
+    // storage identity does not establish entry identity, so require every
+    // saved entry to name a current dynamic actor core before writing it.
+    if (target.arrays[0].values.empty() && target.arrays[1].values.empty())
+        return true;
+    const PxActorTypeFlags dynamics = PxActorTypeFlag::eRIGID_DYNAMIC;
+    const PxU32 count = scene.getNbActors(dynamics);
+    std::vector<PxActor*> actors(count);
+    if (count && scene.getActors(dynamics, actors.data(), count) != count)
+    {
+        error = "dynamic actor enumeration changed during clock preflight";
+        return false;
+    }
+    std::set<std::uintptr_t> liveCores;
+    for (PxActor* actor : actors)
+    {
+        if (!actor || actor->getType() != PxActorType::eRIGID_DYNAMIC)
+        {
+            error = "dynamic actor inventory is malformed";
+            return false;
+        }
+        Sc::BodyCore& core = static_cast<NpRigidDynamic*>(actor)
+            ->getScbBodyFast().getScBody();
+        if (core.Sc::ActorCore::getSim())
+            liveCores.insert(reinterpret_cast<std::uintptr_t>(&core));
+    }
+    for (std::size_t list = 0; list < 2; ++list)
+    {
+        std::set<std::uintptr_t> seen;
+        for (std::uintptr_t pointer : target.arrays[list].values)
+            if (!liveCores.count(pointer) || !seen.insert(pointer).second)
+            {
+                error = target.arrays[list].name +
+                    " has an absent or duplicate live BodyCore";
+                return false;
+            }
+    }
+    return true;
 }
 
 template <typename T>
@@ -354,7 +405,8 @@ bool RestoreSceneClock(PxScene& scene, const SceneClockImage& image,
 {
     SceneClockImage live;
     if (!CaptureSceneClock(scene, live, error)) return false;
-    if (!preflight(image, live, error)) return false;
+    if (!preflight(image, live, error) ||
+        !validBodyListPointers(scene, image, error)) return false;
     writeImage(scene, image);
     SceneClockImage observed;
     std::string verification;
