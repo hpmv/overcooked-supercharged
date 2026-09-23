@@ -52,7 +52,11 @@ component images at each settled boundary and checks their immediate
 same-scene recapture. It is still a fresh-scene control:
 its deletion order and TransformCache allocation history differ from the
 shipped observation. Graph-aware contact/trigger reconstruction and joined
-component next-step rewind remain open. A separate
+component next-step rewind remain open. The
+[opt-in SAP-order variant](../experiments/physx333-offline/level_graph/README.md)
+keeps the semantic graph but changes static creation order and reproduces
+the shipped six-deletion **type** sequence `C,C,C,T,C,T`. It does not prove
+the shipped actor insertion history or whole native image. A separate
 [whole-allocation diagnostic](../experiments/physx333-offline/level_arena/README.md)
 does rewind this synthetic level-shaped source scene: it replays a five-step
 leave/return suffix and a second non-adjacent checkpoint's suffix 100 times,

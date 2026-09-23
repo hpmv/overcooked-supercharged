@@ -195,15 +195,22 @@ is:
 
 1. Before writing, image and validate graph-keyed contact/SIP/ActorPair/CM
    identities and free slots, including the four missing CM slots and their
-   island-edge targets. Key contacts by oriented shape pair and ActorPairs
-   separately by unordered actor pair.
+   island-edge targets. Also inventory the large PCM manifold pool: source
+   contact-manager creation allocates one manifold per recreated capsule/box
+   pair, and the current topology bridge does not yet preflight those four
+   physical slots/free heads. Key contacts by oriented shape pair and
+   ActorPairs separately by unordered actor pair.
 2. After native lifecycle and mixed-order restoration, recreate only the two
    missing report objects (A has ten, B has eight; two missing contacts were
    non-touching), then restore touch/report metadata, event order, and CM
    bitmaps. Assert the full A ActorPair/report image before proceeding.
 3. Install saved WorkUnit and contact-stream bindings for **all twelve**
    pairs, not only the four recreated pairs. This must precede memory-block
-   restoration because that component validates live contact bindings.
+   restoration because that component validates live contact bindings. Each
+   PCM manifold owns a self-pointer to its inline contacts; retain the live
+   newly allocated manifold object and restore validated fields/used points,
+   rather than raw-copying an old object's pointer. For exact same-scene
+   parity, first require the saved/live physical manifold slots to match.
 4. Restore memory-block ownership and payload, then the WorkUnit/PCM
    manifold payload. Restore island state while allowing the pending
    onOverlapCreated journals, then SAP, TransformCache, shape-cache bindings,

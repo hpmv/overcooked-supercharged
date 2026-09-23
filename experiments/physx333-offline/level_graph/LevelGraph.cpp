@@ -618,7 +618,7 @@ struct World
     std::vector<PxRigidActor*> actors;
     physx333_offline::MemBlockIdentityRegistry memBlockRegistry;
 
-    explicit World(Runtime& rt) : runtime(rt)
+    explicit World(Runtime& rt, bool shippedSapOrder = false) : runtime(rt)
     {
         PxSceneDesc desc(rt.physics->getTolerancesScale());
         desc.gravity = PxVec3(0.0f);
@@ -635,11 +635,24 @@ struct World
         addStatic(kCommonA, Common, -3.3f, 0.0f, 4.5f, false);
         addStatic(kCommonB, Common, -3.3f, 0.0f, 4.5f, false);
         addStatic(3, ExtraPlainNoTouch, 1.2f, 0.85f, 0.5f, false);
-        addStatic(4, ExtraMarkerTouch, 0.0f, 0.85f, 0.5f, false);
-        addStatic(5, ExtraMarkerNoTouch, 1.2f, 0.85f, 0.5f, false);
-        addStatic(6, ExtraPlainTouch, 0.0f, 0.85f, 0.5f, false);
-        addStatic(kTriggerA, Trigger, 0.0f, 0.85f, 0.5f, true);
-        addStatic(kTriggerB, Trigger, 0.0f, 0.85f, 0.5f, true);
+        if (shippedSapOrder)
+        {
+            // Keep every semantic endpoint and transform unchanged. Only the
+            // public-API creation order differs from the baseline fixture.
+            addStatic(5, ExtraMarkerNoTouch, 1.2f, 0.85f, 0.5f, false);
+            addStatic(kTriggerA, Trigger, 0.0f, 0.85f, 0.5f, true);
+            addStatic(4, ExtraMarkerTouch, 0.0f, 0.85f, 0.5f, false);
+            addStatic(kTriggerB, Trigger, 0.0f, 0.85f, 0.5f, true);
+            addStatic(6, ExtraPlainTouch, 0.0f, 0.85f, 0.5f, false);
+        }
+        else
+        {
+            addStatic(4, ExtraMarkerTouch, 0.0f, 0.85f, 0.5f, false);
+            addStatic(5, ExtraMarkerNoTouch, 1.2f, 0.85f, 0.5f, false);
+            addStatic(6, ExtraPlainTouch, 0.0f, 0.85f, 0.5f, false);
+            addStatic(kTriggerA, Trigger, 0.0f, 0.85f, 0.5f, true);
+            addStatic(kTriggerB, Trigger, 0.0f, 0.85f, 0.5f, true);
+        }
 
         const PxReal x[4] = {0.0f, -2.2f, -4.4f, -6.6f};
         for (PxU32 i = 0; i < 4; ++i)
@@ -1221,10 +1234,14 @@ void print(const char* name, const Snapshot& s)
 } // namespace
 
 #ifndef OC2_LEVEL_GRAPH_NO_MAIN
-int main()
+int main(int argc, char** argv)
 {
+    const bool shippedSapOrder = argc == 2 &&
+        std::string(argv[1]) == "--sap-shipped-order";
+    if (argc != 1 && !shippedSapOrder)
+        fail("usage: physx333_level_graph [--sap-shipped-order]");
     Runtime runtime;
-    World first(runtime);
+    World first(runtime, shippedSapOrder);
     first.step(0.0f);
     const Snapshot a = first.step(0.0f);
     print("A", a);
@@ -1232,9 +1249,21 @@ int main()
     const Snapshot b = first.step(-0.2f);
     print("B", b);
     verify(b, true);
+    if (shippedSapOrder)
+    {
+        const PxU32 expectedStatics[] = {5, 3, 6, 8, 4, 7};
+        const PxU32 expectedTypes[] = {0, 0, 0, 2, 0, 2};
+        if (b.deletedOverlaps.size() != 6)
+            fail("shipped-order variant did not delete six SAP pairs");
+        for (PxU32 i = 0; i < 6; ++i)
+            if (b.deletedOverlaps[i].a.actor != expectedStatics[i] ||
+                b.deletedOverlaps[i].b.actor != kMover ||
+                b.deletedOverlaps[i].type != expectedTypes[i])
+                fail("shipped-order variant SAP semantic order differs");
+    }
     verifyAuxTransition(a, b);
     verifyActorPairTransition(a, b);
-    World fresh(runtime);
+    World fresh(runtime, shippedSapOrder);
     fresh.step(0.0f);
     const Snapshot freshA = fresh.step(0.0f);
     const Snapshot freshB = fresh.step(-0.2f);
@@ -1268,6 +1297,9 @@ int main()
     if (runtime.errors.count) fail("PhysX issued an error");
     std::cout << "PASS level-like shared-endpoint 12/4/2 -> 8/2/2 graph, "
                  "six SAP deletions, full same-scene component capture, "
-                 "and fresh-scene Oracle/auxiliary/ActorPair equality\n";
+                 "and fresh-scene Oracle/auxiliary/ActorPair equality";
+    if (shippedSapOrder)
+        std::cout << "; shipped C,C,C,T,C,T deletion order";
+    std::cout << '\n';
 }
 #endif

@@ -29,6 +29,8 @@ call "%~dp0trigger_marker\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0level_graph\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0level_graph\Build-Check.cmd" --sap-shipped-order
+if errorlevel 1 exit /b 1
 call "%~dp0actor_pair_graph\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0trigger_rewind\Build-Check.cmd"

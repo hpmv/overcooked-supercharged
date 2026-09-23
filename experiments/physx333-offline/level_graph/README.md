@@ -6,6 +6,27 @@ Run from the framework root after building the pinned Win32 source mirror:
 cmd /c experiments\physx333-offline\level_graph\Build-Check.cmd
 ```
 
+An opt-in, independently checked SAP-order variant keeps the same semantic
+actors, shapes, filters, transforms, and A/B interaction sets:
+
+```bat
+cmd /c experiments\physx333-offline\level_graph\Build-Check.cmd --sap-shipped-order
+```
+
+The default fixture and its gate remain unchanged. The variant changes only
+the public-API creation order of extra static actors from `3,4,5,6,7,8` to
+`3,5,7,4,8,6`. It verifies the full A/B semantic graph and the ordered B SAP
+deletions `contact 5, contact 3, contact 6, trigger 8, contact 4, trigger 7`.
+Their type pattern `C,C,C,T,C,T` matches the shipped six-deletion sequence;
+the synthetic actor IDs map to, but are **not**, shipped checkpoint labels
+`A10,A9,A8,A12,A7,A11`. PhysX `ComputeCreatedDeletedPairsLists` walks its
+internal pair-work array rather than sorting by interaction type. Reordering
+creation also changes broadphase handles and may change ActorPair, trigger,
+cache, island, callback, and pool allocation histories. This is a separate
+diagnostic fixture, not evidence that the whole shipped native image is
+reconstructed or that this public-API order is the game's actual insertion
+history.
+
 This is a **fresh-scene control, not a rewind test**. It uses the PhysX public
 API to create a synthetic Story 1-1 f444→f445-shaped scene. No Unity or game
 binary is loaded, no source mirror is rebuilt, and no shared restorer is
