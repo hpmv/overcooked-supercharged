@@ -97,6 +97,13 @@ fresh-scene comparison pass. It identifies `contact.managers[48]` as
 `frictionPatchCount` on a **surviving** chef/static pair, changing 2→1;
 therefore the eventual contact payload restore must cover all twelve A
 managers, not just the four recreated contacts.
+A separate [joined WorkUnit stage](../experiments/physx333-offline/joined_workunit_restore/README.md)
+now restores all twelve checkpoint WorkUnits, their used PCM manifold payloads,
+and the tracked contact-memory blocks after topology/report reconstruction.
+Cold and warm tests pass in both baseline and shipped-like SAP deletion order;
+six malformed checkpoint images reject without changing the contact image.
+The first remaining full Oracle difference is `island.change_queues`.
+This is still a partial restore: the fixture does not simulate after it.
 A separate [joined manifold-pool image](../experiments/physx333-offline/joined_manifold_pool/README.md)
 checks all twelve keyed PCM bindings and the physical used/free large-manifold
 pool partition across A, B, and a public-API return to A. The four deleted

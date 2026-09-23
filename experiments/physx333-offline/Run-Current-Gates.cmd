@@ -39,6 +39,8 @@ call "%~dp0trigger_rewind\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_topology\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0joined_workunit_restore\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 call "%~dp0joined_contact_image\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_manifold_pool\Build-Check.cmd"
