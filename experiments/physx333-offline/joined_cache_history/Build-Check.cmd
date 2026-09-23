@@ -21,4 +21,6 @@ if errorlevel 1 exit /b 1
 "%~dp0out-ninja\physx333_joined_cache_history.exe"
 if errorlevel 1 exit /b 1
 "%~dp0out-ninja\physx333_joined_cache_history.exe" --no-input
+if errorlevel 1 exit /b 1
+"%~dp0out-ninja\physx333_joined_cache_history.exe" --combined
 exit /b %errorlevel%

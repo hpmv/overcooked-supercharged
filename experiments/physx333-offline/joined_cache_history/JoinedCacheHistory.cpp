@@ -186,7 +186,20 @@ void restoreCheckpoint(
         std::cout << "JOINED_CACHE_HISTORY_A_READBACK passed\n";
 }
 
-void run(bool noInput)
+PxU32 queryWord(const oc2::offline::QueryImage& image, const char* name)
+{
+    for (const auto& field : image.fields)
+        if (field.name == name && field.bytes.size() == sizeof(PxU32))
+        {
+            PxU32 value = 0;
+            std::memcpy(&value, field.bytes.data(), sizeof(value));
+            return value;
+        }
+    fail(std::string("missing query word ") + name);
+    return 0;
+}
+
+void run(bool noInput, bool combined)
 {
     Runtime runtime;
     World world(runtime);
@@ -203,9 +216,8 @@ void run(bool noInput)
         *world.scene, checkpointRegistry, blockA, error),
         "A memory-block capture", error, true);
 
-    // The no-input branch is a separate fresh-process trace. It cannot be
-    // taken after 100 direct A/B cycles: that later public-API history puts
-    // the dynamic query pruner in a phase this component image rejects.
+    // The first no-input branch is an independent fresh-process replay. The
+    // combined mode below also probes it after 100 direct cycles in one scene.
     Snapshot natural;
     if (noInput) natural = world.advanceWithoutInputs();
     const Snapshot b = world.step(-0.2f);
@@ -230,15 +242,46 @@ void run(bool noInput)
     std::cout << "PASS joined cache-history "
               << (noInput ? "A->no-input->B" : "direct A/B")
               << " x100\n";
+    if (!combined) return;
+
+    restoreCheckpoint(world, a, b, contactA, contactB, blockA, true);
+    const Snapshot laterNatural = world.advanceWithoutInputs();
+    const Snapshot laterB = world.step(-0.2f);
+    const physx333_offline::JoinedContactImage laterContactB =
+        captureContact(world);
+    std::cout << "JOINED_CACHE_HISTORY_COMBINED_QUERY A_phase="
+              << queryWord(a.query, "dynamic.progress")
+              << " natural_phase="
+              << queryWord(laterNatural.query, "dynamic.progress")
+              << " B_phase=" << queryWord(laterB.query, "dynamic.progress")
+              << " A_tree=" << queryWord(a.query, "dynamic.currentTree")
+              << " B_tree=" << queryWord(laterB.query, "dynamic.currentTree")
+              << '\n';
+    for (unsigned cycle = 0; cycle != 100; ++cycle)
+    {
+        restoreCheckpoint(world, a, laterB, contactA, laterContactB, blockA,
+                          cycle == 0);
+        equalStopped(laterNatural, world.advanceWithoutInputs(),
+                     "combined cache-history no-input successor");
+        equalStopped(laterB, world.step(-0.2f),
+                     "combined cache-history deletion successor");
+        if (runtime.errors.count)
+            fail("PhysX reported a combined cache-history replay error");
+    }
+    std::cout << "PASS joined cache-history combined direct-then-no-input "
+                 "x100+100\n";
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (argc == 1) run(false);
+    if (argc == 1) run(false, false);
     else if (argc == 2 && std::strcmp(argv[1], "--no-input") == 0)
-        run(true);
+        run(true, false);
+    else if (argc == 2 &&
+             std::strcmp(argv[1], "--combined") == 0)
+        run(false, true);
     else fail("unknown joined cache-history option");
     return 0;
 }

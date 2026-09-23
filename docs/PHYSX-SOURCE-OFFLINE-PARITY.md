@@ -120,10 +120,11 @@ uses public PhysX shape attachments and detachments to reach the observed
 transform-cache ledger (`currentId=13`, ten live IDs, 24 references, and free
 IDs `[12,11,10]`) before its joined checkpoint. In independent fresh-process
 traces, complete component restoration and exact successor comparisons pass
-100 direct A→B cycles and 100 A→no-input→B cycles. Its other native histories
-and geometry remain synthetic. A longer trajectory after 100 direct cycles
-currently reaches a query-pruner phase rejected by the existing guarded
-capture; this test does not silently bypass that phase.
+100 direct A→B cycles and 100 A→no-input→B cycles. A third same-process trace
+now also passes 100 direct cycles followed by 100 no-input/B cycles from the
+same original A. Its dynamic query build phase and active-tree address do not
+change across that combined trace; it is not a cross-swap test. Its other
+native histories and geometry remain synthetic.
 A [fixed-address joined arena differential](../experiments/physx333-offline/joined_arena_diff/README.md)
 compares the same component restore against a raw allocator checkpoint. In
 four cold/warm and SAP-order variants, component A/B and direct/no-input
