@@ -124,3 +124,95 @@ and matching native PDB audit.
 
 The full findings and evidence map are in
 [`docs/UNITY-2017-PHYSICS-REPRO.md`](../../docs/UNITY-2017-PHYSICS-REPRO.md).
+
+## Same-object physics replay canary (2026-09-22)
+
+Pass `--physicsReplayReset` to run `PhysicsSceneReplay` instead of the older
+freeze/pose-restore test. The existing `PhysicsRepro` runtime initializer routes
+the flag explicitly; this matters when replacing a player's managed assembly,
+because a newly added `[RuntimeInitializeOnLoadMethod]` may not be present in
+the already-built player's registration metadata. Without the flag, the older
+test is unchanged.
+
+The canary disables automatic simulation, constructs an inactive floor and
+capsule, inserts them in a fixed order, and calls `Physics.Simulate(0.02f)` for
+24 scripted steps. It then removes **all** physics participants by deactivating
+their GameObjects, resets their public state, reactivates the *same* managed
+GameObjects/Rigidbody/Colliders in the original order, and repeats the same
+mutations and simulation steps. It compares raw Rigidbody/Transform/bounds
+float bits, sleep state, raycast and overlap results including order, and
+ordered collision callbacks including relative-velocity bits. Step 12 is an
+explicit reported checkpoint. The optional `--lateSpawn true` variant keeps a
+box Rigidbody/Collider allocated but inactive until step 7; it tests late
+**activation**, not creation of a new Unity object during replay.
+
+The Unity Editor's batch build was blocked by its legacy license check on this
+machine. The evidence player instead copies the existing 32-bit 2017.4.8f1
+development player and recompiles only `Assembly-CSharp.dll` with the same
+editor's bundled Mono compiler. `UnityPlayer.dll` is unchanged. To reproduce,
+choose a destination that does not already exist:
+
+```powershell
+$src = 'M:\projects\game-test-2\artifacts\unity-2017-physics-repro\win32-story11-scene-v5'
+$dst = 'M:\projects\game-test-2\framework\artifacts\unity2017-replay-reset-new'
+if (Test-Path -LiteralPath $dst) { throw 'Choose a new destination; do not overwrite evidence.' }
+New-Item -ItemType Directory -Path $dst | Out-Null
+Copy-Item -Path (Join-Path $src '*') -Destination $dst -Recurse -Force
+$managed = Join-Path $dst 'PhysicsRepro_Data\Managed'
+$mono = 'C:\Program Files\Unity\Hub\Editor\2017.4.8f1\Editor\Data\Mono\bin\mono.exe'
+$gmcs = 'C:\Program Files\Unity\Hub\Editor\2017.4.8f1\Editor\Data\Mono\lib\mono\2.0\gmcs.exe'
+$assets = 'M:\projects\game-test-2\framework\experiments\unity-2017-physics-repro\Assets'
+$refs = @(Get-ChildItem -LiteralPath $managed -Filter 'UnityEngine*.dll' |
+    ForEach-Object { '-r:' + $_.FullName })
+$compilerArgs = @('-target:library', '-debug+', '-nowarn:649',
+    ('-out:' + (Join-Path $managed 'Assembly-CSharp.dll'))) + $refs + @(
+    (Join-Path $assets 'PhysicsRepro.cs'),
+    (Join-Path $assets 'PhysicsSceneReplay.cs'),
+    (Join-Path $assets 'PhysicsReplayEventRecorder.cs'))
+& $mono $gmcs @compilerArgs
+if ($LASTEXITCODE -ne 0) { throw 'Managed compilation failed' }
+```
+
+Run the simple and late-activation cases with unique output paths:
+
+```powershell
+$exe = Join-Path $dst 'PhysicsRepro.exe'
+$out = Join-Path $dst 'late-reverse-noempty.json'
+$log = Join-Path $dst 'late-reverse-noempty-player.log'
+$playerArgs = @('-batchmode', '-nographics', '--physicsReplayReset',
+    '--out', ('"' + $out + '"'), '--lateSpawn', 'true',
+    '--resetRemovalOrder', 'reverse', '--emptyResetStep', 'false',
+    '-logFile', ('"' + $log + '"'))
+Start-Process -FilePath $exe -ArgumentList $playerArgs -Wait -WindowStyle Hidden
+```
+
+Set `--lateSpawn false` for the simple capsule/floor case. The reset-order
+flag accepts `forward` or `reverse`; `--emptyResetStep true` adds one manual
+physics step after all objects have been deactivated and before reactivation.
+
+The simple capsule/floor case **passed**: all 24 per-step samples and 24
+ordered callbacks matched, including the known `0 -> 0.05` contact-correction
+staircase; the same object/component instance IDs survived reset. Its report is
+[`capsule-floor-r2.json`](../../artifacts/unity2017-replay-reset-r1/capsule-floor-r2.json).
+
+The late-activation case **failed** in all four reset variations (forward or
+reverse removal, with or without an empty step). All 24 per-step numeric body
+and floor bit arrays still matched, and the step-12 checkpoint sample matched.
+However, the first callback at step 7 switched from late-box→capsule to
+capsule→late-box. There were 28 differing ordered callback records out of 52;
+the per-step callback payload *multiset* also differs because some callback
+relative-velocity components changed `+0` to `-0`. `Physics.OverlapSphere`
+returned the same colliders in a different order at step 13. This is a strict
+observable mismatch even though the bodies' numeric motion agreed. Repeating
+the default late-activation run in a fresh process produced the same mismatch.
+The four receipts are under
+[`artifacts/unity2017-replay-reset-r1`](../../artifacts/unity2017-replay-reset-r1/),
+named `late-{reverse,forward}-{noempty,empty}.json`.
+
+Reset took about 0.9–1.3 ms and replaying 24 steps with queries/callback
+recording took about 7.6–8.5 ms in the late-activation runs. Those are small
+synthetic scenes, not a Story 1-1 speed estimate. Even the passing simple case
+is only a **behavioral canary**: matching public outputs does not prove private
+PhysX scene, pool, or query-tree state parity. The late failure demonstrates
+that preserving managed object identities and removing/reinserting their
+physics participants is not, by itself, a complete scene reset.

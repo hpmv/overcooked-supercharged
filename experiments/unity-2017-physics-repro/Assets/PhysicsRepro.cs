@@ -132,6 +132,13 @@ public sealed class PhysicsRepro : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void StartReproduction()
     {
+        if (PhysicsSceneReplay.IsRequested())
+        {
+            GameObject replayRoot = new GameObject("PhysicsSceneReplay");
+            DontDestroyOnLoad(replayRoot);
+            replayRoot.AddComponent<PhysicsSceneReplay>();
+            return;
+        }
         GameObject root = new GameObject("PhysicsRepro");
         DontDestroyOnLoad(root);
         root.AddComponent<PhysicsRepro>();
