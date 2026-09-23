@@ -124,6 +124,16 @@ traces, complete component restoration and exact successor comparisons pass
 and geometry remain synthetic. A longer trajectory after 100 direct cycles
 currently reaches a query-pruner phase rejected by the existing guarded
 capture; this test does not silently bypass that phase.
+A [fixed-address joined arena differential](../experiments/physx333-offline/joined_arena_diff/README.md)
+compares the same component restore against a raw allocator checkpoint. In
+four cold/warm and SAP-order variants, component A/B and direct/no-input
+successors match. The warm successor allocation ledger and all non-padding
+bytes converge exactly, but restored warm A retains 121–123 differing native
+bytes. Most lie in unused array capacity or task scratch; one is the
+immediately readable `Sc::SimStats::numTriggerPairs`, so complete native
+checkpoint parity is **not** yet established. Cold histories also retain five
+allocator-ledger entries after component rewind and allocate five new blocks
+on replay, although component and tested output comparisons pass.
 A separate [joined manifold-pool image](../experiments/physx333-offline/joined_manifold_pool/README.md)
 checks all twelve keyed PCM bindings and the physical used/free large-manifold
 pool partition across A, B, and a public-API return to A. The four deleted
