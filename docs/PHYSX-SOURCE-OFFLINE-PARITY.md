@@ -157,6 +157,14 @@ Its fixed-storage test passes 20 restores and query replays and atomically
 rejects attempts to rewind across refit allocation, build restart, or a
 second swap. Reconstructing deleted tree allocations across a swap remains
 open.
+A [joined actor-lifetime negative control](../experiments/physx333-offline/joined_actor_lifetime/README.md)
+releases and recreates an interacting static actor/shape with the same public
+construction inputs. All five measured native addresses are reused, but the
+shape ID, native actor order, interaction order, and allocation ledger change.
+The scene-clock, shape-binding, and SAP images independently reject the old
+checkpoint before writing. A fixed-address raw-arena return reproduces A as
+an offline reference; the component path does **not** yet support this
+lifetime change.
 A [joined motion fixture](../experiments/physx333-offline/joined_motion/README.md)
 now stresses the same 12/4/2→8/2/2 component transaction under gravity,
 solver-generated nonzero velocity, and ten live friction records. It passes

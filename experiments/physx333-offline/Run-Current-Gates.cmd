@@ -55,6 +55,8 @@ call "%~dp0joined_cache_history\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_arena_diff\Build-Check.cmd"
 if errorlevel 1 exit /b 1
+call "%~dp0joined_actor_lifetime\Build-Check.cmd"
+if errorlevel 1 exit /b 1
 call "%~dp0joined_contact_image\Build-Check.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0joined_manifold_pool\Build-Check.cmd"
