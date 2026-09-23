@@ -148,9 +148,11 @@ neutral adjustment to the main fixture or proof of game-state equality.
    two trigger deletions, plus the shared 10-shape/24-reference contact
    topology. **Fresh-scene baseline now passes** in
    [level_graph](../experiments/physx333-offline/level_graph/README.md).
-   Its full component images also pass immediate same-scene recapture. A
+   Its component-defined image payloads also pass immediate same-scene
+   recapture. A
    separate fixed-address arena diagnostic replays this graph's five-step
-   suffix and a non-adjacent suffix with full image equality, but the
+   suffix and a non-adjacent suffix with comparator-defined image equality
+   plus fixed-address arena bytes, but the
    component restorer has not been joined. The main fixture does not yet
    reproduce the game's historical TransformCache free-ID chain or ordered
    SAP deletions. Drive new restore logic against this graph; keep the
@@ -172,6 +174,47 @@ neutral adjustment to the main fixture or proof of game-state equality.
    rewinds. Reject bad identities, geometry/filter flags, pool slots, and
    free-chain requests before mutation. Keep fail-stop behavior for any
    postwrite mismatch.
+
+## Post-topology restore dependencies
+
+The joined topology bridge now reaches the first postwrite gap: the full
+Oracle differs at `contact.managers[48]`, which is the fourth contact
+manager's `PxcNpWorkUnit::frictionPatchCount`, rather than a missing pair.
+The existing `InteractionImage` cannot simply be invoked on this graph: it
+keys rows by one mover's shape index, requires zero triggers/markers, and
+assumes one shape on each static actor. The joined graph has four contact
+chefs, shared static endpoints, and mixed auxiliary interactions.
+
+The source-backed dependency order for the remaining component transaction
+is:
+
+1. Before writing, image and validate graph-keyed contact/SIP/ActorPair/CM
+   identities and free slots, including the four missing CM slots and their
+   island-edge targets. Key contacts by oriented shape pair and ActorPairs
+   separately by unordered actor pair.
+2. After native lifecycle and mixed-order restoration, recreate only the two
+   missing report objects (A has ten, B has eight; two missing contacts were
+   non-touching), then restore touch/report metadata, event order, and CM
+   bitmaps. Assert the full A ActorPair/report image before proceeding.
+3. Install saved WorkUnit and contact-stream bindings for **all twelve**
+   pairs, not only the four recreated pairs. This must precede memory-block
+   restoration because that component validates live contact bindings.
+4. Restore memory-block ownership and payload, then the WorkUnit/PCM
+   manifold payload. Restore island state while allowing the pending
+   onOverlapCreated journals, then SAP, TransformCache, shape-cache bindings,
+   Body, SceneClock, Context, and Query in that order. The cache must precede
+   shape binding, and the current body helper assumes sleep/wake membership
+   has not changed before SceneClock restores it.
+5. Require complete stopped A readback before any simulation, then exact
+   next-B images and callback order. Allocation growth, address rebases,
+   actor/shape lifetime, CCD, and Unity's static binary layout remain
+   separate gates.
+
+Each existing component helper has its own allocation/identity preflight;
+none has yet been demonstrated on this joined graph. In particular, the
+island, memory-block, SAP, transform-cache, body, clock, context, and query
+guards may reject the B→A allocation history even after NPhase is correct.
+This list is a test order, not an assertion that these restores already work.
 
 This still would not establish unrestricted PhysX-only parity. Actor/shape
 lifetime in the component restorer, CCD, multi-manifold contacts, other pair

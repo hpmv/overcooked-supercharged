@@ -86,6 +86,30 @@ Unity integration is separate: the user independently confirmed that Unity
 2017.4.8.f1 uses PhysX 3.3.3, but Unity's statically linked binary layout and
 game-side ABI have not been proven from the source-built fixtures.
 
+### Why a rebuilt PhysX DLL is not a drop-in game replacement
+
+The shipped x86 `UnityPlayer.dll` matches the installed 2017.4.8f1 PDB by
+CodeView GUID `638D1878-FE24-4B65-B675-A2C146E30E24` and age 1. That PDB
+lists `ScNPhaseCore.obj`, `ScScene.obj`, and low-level PhysX objects linked
+from Unity's `vs2015/release` static archives. The player's normal and delay
+import tables contain no PhysX DLL, and its only export is `UnityMain`.
+See the [shipped-player/PDB identity audit](../../artifacts/unity-2017-physics-repro/native-debugger-symbol-audit-v1.json)
+and [Unity reproduction notes](UNITY-2017-PHYSICS-REPRO.md). Thus compiling
+the matching PhysX release into `PhysX3_x86.dll` cannot replace the code
+already embedded in UnityPlayer.
+
+Our source-built test DLLs can add rewind exports for **their own** PhysX
+scenes. A future sidecar native module could, in principle, call or inspect
+Unity-owned PhysX objects, but would need verified x86 layouts, calling
+conventions, vtables/function addresses, allocator ownership, and settled
+phase guards for that exact Unity binary. The installed PDB is stripped of
+private type records, and our offline build uses a different compiler/toolset;
+the shared 3.3.3 version does not prove those ABI details. Adding fields to a
+rebuilt PhysX class would not add them to Unity's already-compiled objects.
+External shadow bookkeeping would need complete, early hooks for object
+lifetime and relevant state changes. These are possible research directions,
+not a current game-side rewind implementation.
+
 ## Source and existing evidence
 
 The local upstream source is the `3.3.3-1.3.3` tag of
